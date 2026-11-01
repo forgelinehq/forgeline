@@ -1,6 +1,6 @@
 # 022: Console redesign
 
-Status: **Step 1 and step 3 built; steps 2 and 4 need their own notes.** Date: 2026-11-01.
+Status: **Steps 1 and 3 built; steps 2 and 4 designed in notes 023 and 024, not built.** Date: 2026-11-01.
 
 ## Question
 
@@ -38,13 +38,13 @@ not code, and is not part of the repository.
 
 1. **Shell and colour (built).** Grouped navigation and the ember palette. No page behaviour
    changes.
-2. **Infrastructure map and logs (needs a note).** Open questions: which log source (CloudWatch
+2. **Infrastructure map and logs (designed in [note 023](023-infrastructure-map-and-logs.md); not built).** Open questions: which log source (CloudWatch
    Logs through the existing read-only AWS access, or container logs for Forgeline's own
    steps), how a live tail is paged and bounded, and what is redacted (`internal/redact`).
 3. **Markdown editor (built).** `ui/lib/markdown.js` (parser and checks, no DOM),
    `ui/lib/mdview.js` (rendering), `ui/lib/mdeditor.js` (editor). Used for agent instructions
    and skill steps, and to show them on the detail pages with a raw-text toggle.
-4. **Agent surface (needs a note).** Open questions: one server-sent-event endpoint and its
+4. **Agent surface (designed in [note 024](024-assistant-agent-surface.md); not built).** Open questions: one server-sent-event endpoint and its
    event types, the card types (plan, tool call, chart, proposal), how an approval card refers
    to a proposal, and how a run that is waiting for approval resumes.
 
