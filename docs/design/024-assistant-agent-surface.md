@@ -57,13 +57,13 @@ Those are **not** in the first version:
 4. `TEXT_MESSAGE_START`, `TEXT_MESSAGE_CONTENT`, `TEXT_MESSAGE_END`.
 5. `RUN_FINISHED`, or `RUN_ERROR` with the same message the JSON endpoint would return.
 
-## Needs a decision
+## Decisions made (2026-11-01)
 
-1. **Adopt the AG-UI names, or our own?** Recommended: the AG-UI names for the events listed above.
-2. **Token streaming** for the `api` backend only, later. Recommended: not in the first version.
-3. **May the assistant read logs?** If note 023 lands, log lines are untrusted input that could carry
-   instructions. Recommended: not until there is a reviewed answer to that, and never by loosening
-   `call_aws`.
+1. **Event names:** the AG-UI names listed above.
+2. **Token streaming** for the `api` backend only, later; not in the first version.
+3. **May the assistant read logs?** Yes in principle, **later**. Log lines are untrusted input that could
+   carry instructions, so it waits for a reviewed answer to that (its own note), and it is never done by
+   loosening `call_aws`.
 
 ## Order of work
 

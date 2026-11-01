@@ -6,6 +6,14 @@ section in the pull request that makes the change; a release moves it under its 
 
 ## [Unreleased]
 
+### Added
+- **AWS map** (design note 023, step 1). The AWS explorer opens on a Map: resources sit inside the VPC their
+  own VPC field names, the rest are grouped by category, and a strip lists what needs a look (a failing or
+  changing state, a security group open to the internet, an unattached or unencrypted volume, a database that
+  is publicly accessible or unencrypted). Selecting a resource shows its detail beside the map. The list view
+  is one click away. No lines are drawn between resources, because the inventory does not say what talks to
+  what. No new API.
+
 ### Changed
 - **Console redesign, first steps** (design note 022). The sidebar groups pages into Ship, Cloud, AI and
   Govern, and the brand colour is now ember instead of indigo. Agent instructions and skill steps are

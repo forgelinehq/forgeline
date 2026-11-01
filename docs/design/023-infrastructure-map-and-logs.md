@@ -1,6 +1,6 @@
 # 023: Infrastructure map and logs
 
-Status: **Design only. Nothing here is built.** Date: 2026-11-01.
+Status: **Order of work step 1 (the map from the inventory) is built; the rest is design only.** Date: 2026-11-01.
 Builds on notes 006 (console), 015 (AWS access for the assistant), 017 (more than one account) and
 022 (console redesign, step 2). Facts about the code are from `origin/main` at `f927cad`.
 
@@ -39,13 +39,11 @@ defend?
 | Audit | Every read records who, account, group, window, the length of the filter and the number of events. Never the text. Allowlist changes are recorded | Matches how the assistant is audited (note 008) |
 | The assistant | **Not wired.** `call_aws` still refuses log events. The "Ask agent" button sends no log text | Log lines are untrusted input. Whether the assistant may read them is its own decision (see note 024) |
 
-## Needs a decision
+## Decisions made (2026-11-01)
 
-1. **Developers or administrators only?** Recommended: developers and administrators on allowlisted
-   groups, because the administrator already chose what is readable. The stricter option is
-   administrators only, like `call_aws`.
-2. **Where the allowlist lives.** Recommended: the AWS account record (note 017), so each account has
-   its own list.
+1. **Who can read logs:** developers and administrators, only on groups an administrator allowlisted.
+   (The stricter option was administrators only, like `call_aws`.)
+2. **Where the allowlist lives:** on the AWS account record (note 017), so each account has its own list.
 
 ## IAM
 
@@ -56,8 +54,14 @@ missing, the panel must say which one, per group, instead of showing an empty li
 
 ## Order of work (each its own pull request)
 
-1. **Map from the inventory.** New page content only: category groups, a resource drawer built from
-   `fields`, links to the Guard findings for the resource. No new endpoint.
+1. **Map from the inventory (built).** A Map view is the default in the AWS explorer, with the old list
+   as a switch. Resources sit inside the VPC their own `VPC` field names (a placeholder container when that
+   VPC is not in the VPC list); the rest are grouped by category and labelled as not placed. A strip lists
+   what needs a look, from state and fields only: failing or changing state, a security group open to the
+   internet, an unattached or unencrypted volume, a publicly accessible or unencrypted database. A stopped
+   instance is not flagged. A side panel shows the resource's detail. Kubernetes keeps the list. No new
+   endpoint. **Not done:** links to Guard findings for a resource (Guard's findings are not keyed by
+   resource in the inventory; a later change).
 2. **Alarms and health.**
 3. **Logs.** The endpoint, the allowlist, masking, audit and the log panel.
 4. **Metrics.**
