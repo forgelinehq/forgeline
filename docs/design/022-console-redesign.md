@@ -1,6 +1,6 @@
 # 022: Console redesign
 
-Status: **Steps 1 and 3 built; steps 2 and 4 designed in notes 023 and 024, not built.** Date: 2026-11-01.
+Status: **Steps 1 and 3 built. Step 2 started (the map); the rest of steps 2 and 4 are designed in notes 023 and 024.** Date: 2026-11-01.
 
 ## Question
 

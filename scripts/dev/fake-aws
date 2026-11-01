@@ -94,7 +94,9 @@ if key == "cloudformation delete-stack":
     save(st); out({})
 
 if key == "ec2 describe-vpcs":
-    out({"Vpcs": [{"VpcId": "vpc-0def0def0def0def0", "IsDefault": True}]})
+    out({"Vpcs": [{"VpcId": "vpc-0def0def0def0def0", "IsDefault": True, "CidrBlock": "172.31.0.0/16", "State": "available"},
+                  {"VpcId": "vpc-0prod0prod0prod0", "IsDefault": False, "CidrBlock": "10.0.0.0/16", "State": "available",
+                   "Tags": [{"Key": "Name", "Value": "prod"}]}]})
 
 if key == "ec2 describe-subnets":
     out({"Subnets": [{"SubnetId": "subnet-0aaa0aaa0aaa0aaa0"}, {"SubnetId": "subnet-0bbb0bbb0bbb0bbb0"}]})
@@ -111,7 +113,12 @@ if key == "ec2 describe-instances":
         if want and want != iid: continue
         tags = [{"Key": "Name", "Value": v["name"]}] + ([{"Key": "aws:cloudformation:stack-name", "Value": v["stack"]}] if v["stack"] else [])
         res.append({"Instances": [{"InstanceId": iid, "InstanceType": v["type"], "Architecture": "arm64", "PrivateIpAddress": v["ip"],
-                                   "State": {"Name": v["state"]}, "Tags": tags}]})
+                                   "VpcId": "vpc-0def0def0def0def0", "State": {"Name": v["state"]}, "Tags": tags}]})
+    if not want:  # fixed extras so the map has something in the second VPC
+        res.append({"Instances": [{"InstanceId": "i-0prodapi1", "InstanceType": "t4g.small", "Architecture": "arm64", "PrivateIpAddress": "10.0.1.11",
+                                   "VpcId": "vpc-0prod0prod0prod0", "SubnetId": "subnet-0prodaaa", "State": {"Name": "running"}, "Tags": [{"Key": "Name", "Value": "api-1"}]}]})
+        res.append({"Instances": [{"InstanceId": "i-0prodbatch", "InstanceType": "t4g.medium", "Architecture": "arm64", "PrivateIpAddress": "10.0.2.7",
+                                   "VpcId": "vpc-0prod0prod0prod0", "SubnetId": "subnet-0prodbbb", "State": {"Name": "stopped"}, "Tags": [{"Key": "Name", "Value": "batch-1"}]}]})
     if not res: err("InvalidInstanceID.NotFound")
     out({"Reservations": res})
 
@@ -147,8 +154,31 @@ if key == "ecs describe-services":
     out({"services": SERVICES, "failures": []})
 
 if key == "ec2 describe-security-groups":
-    out({"SecurityGroups": [{"GroupId": "sg-0web", "GroupName": "payments-web", "Description": "web tier", "IpPermissions": [
+    out({"SecurityGroups": [{"GroupId": "sg-0web", "GroupName": "payments-web", "Description": "web tier", "VpcId": "vpc-0prod0prod0prod0", "IpPermissions": [
         {"IpProtocol": "tcp", "FromPort": 443, "ToPort": 443, "IpRanges": [{"CidrIp": "0.0.0.0/0"}]},
-        {"IpProtocol": "tcp", "FromPort": 22, "ToPort": 22, "IpRanges": [{"CidrIp": "0.0.0.0/0"}]}]}]})
+        {"IpProtocol": "tcp", "FromPort": 22, "ToPort": 22, "IpRanges": [{"CidrIp": "0.0.0.0/0"}]}]},
+        {"GroupId": "sg-0internal", "GroupName": "internal", "Description": "private", "VpcId": "vpc-0def0def0def0def0", "IpPermissions": []}]})
+
+if key == "ec2 describe-volumes":
+    out({"Volumes": [
+        {"VolumeId": "vol-0inuse", "State": "in-use", "Size": 50, "VolumeType": "gp3", "Encrypted": True, "AvailabilityZone": "ap-south-1a"},
+        {"VolumeId": "vol-0spare", "State": "available", "Size": 200, "VolumeType": "gp2", "Encrypted": False, "AvailabilityZone": "ap-south-1b"}]})
+
+if key == "rds describe-db-instances":
+    out({"DBInstances": [{"DBInstanceIdentifier": "orders-db", "DBInstanceStatus": "available", "Engine": "postgres", "EngineVersion": "16.4",
+        "DBInstanceClass": "db.t4g.medium", "AllocatedStorage": 100, "MultiAZ": False, "PubliclyAccessible": True, "StorageEncrypted": True,
+        "DBInstanceArn": "arn:aws:rds:ap-south-1:%s:db:orders-db" % ACCOUNT}]})
+
+if key == "elbv2 describe-load-balancers":
+    out({"LoadBalancers": [{"LoadBalancerName": "web-alb", "State": {"Code": "active"}, "Type": "application", "Scheme": "internet-facing",
+        "DNSName": "web-alb-123.ap-south-1.elb.amazonaws.com", "VpcId": "vpc-0prod0prod0prod0",
+        "LoadBalancerArn": "arn:aws:elasticloadbalancing:ap-south-1:%s:loadbalancer/app/web-alb/abc" % ACCOUNT}]})
+
+if key == "lambda list-functions":
+    out({"Functions": [{"FunctionName": "image-resize", "Runtime": "python3.13", "MemorySize": 512, "Timeout": 30, "Handler": "app.handler", "CodeSize": 20480, "State": "Active",
+        "FunctionArn": "arn:aws:lambda:ap-south-1:%s:function:image-resize" % ACCOUNT}]})
+
+if key == "s3api list-buckets":
+    out({"Buckets": [{"Name": "media-assets-demo"}, {"Name": "build-cache-demo"}]})
 
 err("fake-aws: unsupported call: " + key)

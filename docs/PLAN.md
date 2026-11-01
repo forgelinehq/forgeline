@@ -329,11 +329,13 @@ with a recommendation, and do something else meanwhile.
    the 5000 most recent events when filtering. Say in note 005 which T-rows this closes.
 4. **M3 slice 5, limits and capability drop.** **Needs a decision** on how much compatibility to
    trade (note 005, decision 2). Then memory, PID and CPU limits and `--cap-drop`.
-5a. **Console redesign (note 022).** Steps 1 and 3 are built: grouped navigation, the ember palette
-   and the Markdown editor for agent and skill text. **Still to do, designed but not built:**
-   step 2, an Infrastructure map and a read-only log viewer ([note 023](design/023-infrastructure-map-and-logs.md),
-   with two open decisions); step 4, an assistant that shows lookups, proposals and answers from an event
-   stream ([note 024](design/024-assistant-agent-surface.md), with three open decisions). The screenshots in `docs/console` still show the old look.
+5a. **Console redesign (note 022).** Built: grouped navigation, the ember palette, the Markdown editor for
+   agent and skill text, and the AWS map ([note 023](design/023-infrastructure-map-and-logs.md) step 1).
+   **Still to do, designed with the decisions made:** alarms and health, then the log viewer with its
+   per-account allowlist, then metrics (note 023 steps 2 to 4; the log endpoint needs the IAM check noted
+   there first); and the assistant as an agent surface ([note 024](design/024-assistant-agent-surface.md)).
+   The assistant reading logs is deferred until its own note answers the prompt-injection question. The
+   screenshots in `docs/console` still show the old look.
 5. **Console hardening.** Postgres advisory locks (or a `SELECT ... FOR UPDATE`) for the
    in-process locks; a list of active sessions with revoke; a master-key rotation command;
    a committed browser test (the scripted checks in `docs/console/README.md` were done by hand

@@ -2,6 +2,8 @@
 // changed there, and a detail view per resource. Read-only; changes go through Proposals.
 import { h, icon, mount, pill, relTime, absTime, spinner, errorBox, notice, modal, emptyState, copyButton } from '../lib/dom.js';
 import { get } from '../lib/api.js';
+import { stateKind } from '../lib/awsmap.js';
+import { mapView, keyOf } from './aws_map.js';
 
 const CATEGORIES = ['Compute', 'Containers', 'Storage', 'Databases', 'Network', 'Messaging', 'Management'];
 const DOT = { Compute: 'bg-sky-500', Containers: 'bg-violet-500', Storage: 'bg-emerald-500', Databases: 'bg-amber-500', Network: 'bg-cyan-500', Messaging: 'bg-pink-500', Management: 'bg-slate-500' };
@@ -10,10 +12,7 @@ const PAGE = 50;
 /** A resource state as a coloured pill. AWS names states differently per service, so match by meaning. */
 function stateBadge(state) {
   if (!state) return h('span', { class: 'muted' }, '–');
-  const s = state.toLowerCase();
-  const cls = /^(running|active|available|in-use|in_use|enabled|healthy|.*_complete|create_complete|update_complete)$/.test(s) && !/rollback|delete/.test(s) ? 'pill-ok'
-    : /fail|error|rollback|impaired|deleted|inactive|incompatible/.test(s) ? 'pill-bad'
-    : /pending|creating|provisioning|modifying|starting|updating|stopping|in_progress|in-progress|backing/.test(s) ? 'pill-wait' : 'pill-idle';
+  const cls = { ok: 'pill-ok', bad: 'pill-bad', wait: 'pill-wait', idle: 'pill-idle' }[stateKind(state)];
   return h('span', { class: cls }, h('span', { class: 'size-1.5 rounded-full bg-current' }), state);
 }
 
@@ -32,6 +31,9 @@ function touchedBy(res, proposals) {
 export function explorer({ dev, account = 'primary', url = '', scope = 'region' }) {
   const root = h('section', { class: 'card', id: 'aws-explorer' }, spinner());
   let inv = null, proposals = [], selected = '', query = '', shown = PAGE;
+  // The map is the default view for AWS; Kubernetes (which passes a url) keeps the list.
+  let view = url ? 'list' : 'map', selRes = '';
+  const expanded = new Set();
 
   async function load(refresh) {
     mount(root, spinner());
@@ -53,25 +55,31 @@ export function explorer({ dev, account = 'primary', url = '', scope = 'region' 
     const denied = inv.services.filter(s => s.error);
     const total = withStuff.reduce((n, s) => n + s.count, 0);
     const applied = proposals.filter(p => p.status === 'applied');
+    const mapOn = view === 'map' && !url;
 
     const search = h('input', { id: 'explorer-search', class: 'input w-56', type: 'search', placeholder: 'Search name, id, tag…', value: query, 'aria-label': 'Search resources',
-      oninput: (e) => { query = e.target.value; shown = PAGE; drawTable(); } });
+      oninput: (e) => { query = e.target.value; shown = PAGE; if (mapOn) drawMap(false); else drawTable(); } });
     const ordered = CATEGORIES.flatMap(cat => withStuff.filter(s => s.category === cat));
-    const tiles = h('div', { class: 'space-y-3 px-5 py-4' },
+    const notes = () => empty.length || denied.length ? h('div', { class: 'space-y-1 border-t border-slate-200 pt-3 text-xs dark:border-slate-800' },
+      empty.length ? h('p', { class: 'muted' }, 'Nothing in: ' + empty.map(s => s.label).join(', ')) : null,
+      denied.length ? h('p', { class: 'text-amber-700 dark:text-amber-400' }, 'Could not list: ' + denied.map(s => `${s.label} (${s.error})`).join('; ')) : null) : null;
+    const switcher = url ? null : h('div', { class: 'inline-flex overflow-hidden rounded-lg border border-slate-300 text-xs dark:border-slate-700', role: 'group', 'aria-label': 'View' },
+      [['map', 'Map'], ['list', 'List']].map(([k, label]) => h('button', { type: 'button', 'data-view': k, 'aria-pressed': String(view === k),
+        class: 'px-2.5 py-1 ' + (view === k ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900' : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'),
+        onclick: () => { view = k; draw(); } }, label)));
+    const tiles = mapOn ? null : h('div', { class: 'space-y-3 px-5 py-4' },
       ordered.length ? h('div', { class: 'grid gap-3 sm:grid-cols-2 lg:grid-cols-4' }, ordered.map(tile)) : emptyState('cloud', 'Nothing found in this region', 'Global services such as S3 are listed too. Check the region in Change connection.'),
-      empty.length || denied.length ? h('div', { class: 'space-y-1 border-t border-slate-200 pt-3 text-xs dark:border-slate-800' },
-        empty.length ? h('p', { class: 'muted' }, 'Nothing in: ' + empty.map(s => s.label).join(', ')) : null,
-        denied.length ? h('p', { class: 'text-amber-700 dark:text-amber-400' }, 'Could not list: ' + denied.map(s => `${s.label} (${s.error})`).join('; ')) : null) : null);
+      notes());
 
     const tableBox = h('div', { id: 'explorer-table' });
     mount(root,
       h('div', { class: 'flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-3 dark:border-slate-800' },
         h('div', {}, h('h2', { class: 'h-section' }, 'Resources'),
           h('p', { class: 'muted mt-0.5 text-xs', title: absTime(inv.fetched_at) }, `${total} in ${withStuff.length} service${withStuff.length === 1 ? '' : 's'} · ${scope} ${inv.region} · read ${relTime(inv.fetched_at)}`)),
-        h('div', { class: 'flex items-center gap-2' }, search,
+        h('div', { class: 'flex flex-wrap items-center gap-2' }, switcher, search,
           h('button', { class: 'btn-secondary btn-sm', type: 'button', id: 'explorer-refresh', onclick: () => load(true) }, icon('refresh', 'size-3.5'), 'Refresh'))),
-      tiles, tableBox, changesPanel(applied));
-    drawTable();
+      ...(mapOn ? [h('div', { id: 'explorer-map' }), h('div', { class: 'px-5 pb-4' }, notes())] : [tiles, tableBox]), changesPanel(applied));
+    if (mapOn) drawMap(false); else drawTable();
   }
 
   function tile(svc) {
@@ -88,6 +96,28 @@ export function explorer({ dev, account = 'primary', url = '', scope = 'region' 
     if (!query) return true;
     const q = query.toLowerCase();
     return [r.name, r.id, r.state, r.arn, ...(r.fields || []).map(f => f.value), ...Object.entries(r.tags || {}).flat()].some(v => v && String(v).toLowerCase().includes(q));
+  }
+
+  function findRes(key) {
+    for (const sv of inv.services) for (const r of sv.resources) if (keyOf(sv, r) === key) return { svc: sv, r };
+    return null;
+  }
+
+  /** The map with the selected resource's details beside it. `focus` is true after a click, so a keyboard user keeps their place. */
+  function drawMap(focus) {
+    const box = root.querySelector('#explorer-map');
+    if (!box) return;
+    const pick = (k) => { selRes = k; drawMap(true); };
+    const found = selRes ? findRes(selRes) : null;
+    if (selRes && !found) selRes = ''; // it was removed by a refresh
+    mount(box, h('div', { class: 'grid gap-4 px-5 py-4 ' + (found ? 'lg:grid-cols-[minmax(0,1fr)_22rem]' : '') },
+      mapView(inv, { query, selected: selRes, expanded, onSelect: pick, onExpand: (k) => { expanded.add(k); drawMap(false); } }),
+      found ? h('aside', { class: 'lg:sticky lg:top-20 lg:self-start', 'aria-label': 'Resource details' },
+        h('div', { class: 'rounded-xl border border-slate-200 p-4 dark:border-slate-800' },
+          h('div', { class: 'mb-3 flex items-start justify-between gap-2' }, h('h3', { class: 'min-w-0 break-all font-medium' }, found.r.name),
+            h('button', { type: 'button', class: 'btn-ghost btn-sm', 'aria-label': 'Close details', onclick: () => pick('') }, icon('x', 'size-4'))),
+          detailBody(found.svc, found.r, null))) : null));
+    if (focus && selRes) box.querySelector('button[aria-pressed="true"]')?.focus({ preventScroll: true });
   }
 
   function drawTable() {
@@ -124,16 +154,20 @@ export function explorer({ dev, account = 'primary', url = '', scope = 'region' 
         h('span', { class: 'flex flex-wrap gap-1' }, (p.ran_calls?.length ? p.ran_calls : p.calls).map(c => h('code', { class: 'rounded bg-slate-100 px-1.5 py-0.5 text-xs dark:bg-slate-800' }, `${c.service}.${c.operation}`)))))));
   }
 
-  function detail(svc, r) {
+  function detailBody(svc, r, closeModal) {
     const by = touchedBy(r, proposals);
-    modal(r.name, (close) => h('div', { class: 'space-y-4', id: 'resource-detail' },
+    return h('div', { class: 'space-y-4', id: 'resource-detail' },
       h('div', { class: 'flex flex-wrap items-center gap-3' }, stateBadge(r.state), h('span', { class: 'muted text-sm' }, svc.label + (r.created ? ' · created ' + relTime(r.created) : ''))),
       r.fields?.length ? h('dl', { class: 'grid grid-cols-[auto_1fr] gap-x-6 gap-y-1.5 text-sm' }, r.fields.map(f => [h('dt', { class: 'muted' }, f.label), h('dd', { class: 'break-all font-mono text-xs leading-5' }, f.value)])) : null,
       h('div', {}, h('div', { class: 'h-section mb-1' }, 'Identifier'), h('div', { class: 'flex items-center gap-2' }, h('code', { class: 'break-all text-xs' }, r.arn || r.id), copyButton(r.arn || r.id, 'Copy'))),
       r.tags ? h('div', {}, h('div', { class: 'h-section mb-1' }, 'Tags'), h('div', { class: 'flex flex-wrap gap-1.5' }, Object.entries(r.tags).map(([k, v]) => h('span', { class: 'rounded-md bg-slate-100 px-2 py-0.5 text-xs dark:bg-slate-800' }, h('span', { class: 'muted' }, k + ': '), v)))) : null,
       by.length ? h('div', {}, h('div', { class: 'h-section mb-1' }, 'Changed through Forgeline'),
-        h('ul', { class: 'space-y-1 text-sm' }, by.map(p => h('li', {}, h('a', { href: '#/proposals/' + encodeURIComponent(p.id), class: 'font-medium hover:underline', onclick: () => close() }, p.title), h('span', { class: 'muted text-xs' }, ` · ${relTime(p.finished_at || p.decided_at)}`))))) : null,
-      dev && h('div', { class: 'flex justify-end' }, h('button', { class: 'btn-secondary btn-sm', type: 'button', onclick: () => { close(); ask(svc, r); } }, icon('sparkle', 'size-3.5'), 'Ask the assistant about this'))), { wide: true });
+        h('ul', { class: 'space-y-1 text-sm' }, by.map(p => h('li', {}, h('a', { href: '#/proposals/' + encodeURIComponent(p.id), class: 'font-medium hover:underline', onclick: () => closeModal && closeModal() }, p.title), h('span', { class: 'muted text-xs' }, ` · ${relTime(p.finished_at || p.decided_at)}`))))) : null,
+      dev && h('div', { class: 'flex justify-end' }, h('button', { class: 'btn-secondary btn-sm', type: 'button', onclick: () => { if (closeModal) closeModal(); ask(svc, r); } }, icon('sparkle', 'size-3.5'), 'Ask the assistant about this'))  );
+  }
+
+  function detail(svc, r) {
+    modal(r.name, (close) => detailBody(svc, r, close), { wide: true });
   }
 
   /** Open the assistant with a question about this resource filled in, for the person to send. */
