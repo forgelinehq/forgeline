@@ -3,6 +3,9 @@ import { get, post, del, atLeast } from '../lib/api.js';
 import { navigate } from '../lib/router.js';
 import { session } from '../app.js';
 import { workflowList, workflowForm } from './workflows.js';
+import { mdEditor } from '../lib/mdeditor.js';
+import { markdownBox } from '../lib/mdview.js';
+import { checkInstructions } from '../lib/markdown.js';
 
 // Agents and skills. Every save is a new version; old versions are never edited, and a rollback is
 // a copy of an old version saved as the newest one.
@@ -99,7 +102,7 @@ export async function skillPage({ params }) {
       } }, icon('trash', 'size-3.5'), 'Delete')),
       h('div', { class: 'space-y-4' },
         h('section', { class: 'card card-pad' }, h('div', { class: 'mb-2 flex items-center justify-between' }, h('h2', { class: 'h-section' }, 'Version ' + v.n), shortHash(v.hash)),
-          h('pre', { class: 'whitespace-pre-wrap rounded-lg bg-slate-50 p-3 text-sm dark:bg-slate-900', id: 'skill-body' }, v.body)),
+          markdownBox(v.body, 'skill-body')),
         prev && h('section', { class: 'card card-pad' }, h('h2', { class: 'h-section mb-2' }, `Changes from v${prev.n}`), diffView(prev.body, v.body)),
         h('section', { class: 'card' }, h('div', { class: 'border-b border-slate-200 px-5 py-3 dark:border-slate-800' }, h('h2', { class: 'h-section' }, 'History')),
           versionTable(sk.versions, sk.current, selected, (n) => { selected = n; draw(); }, admin && rollback))));
@@ -118,19 +121,19 @@ function skillForm(sk, after) {
     const cur = sk && sk.versions.find(v => v.n === sk.current);
     const name = h('input', { id: 'skill-name', class: 'input', maxlength: '60', value: sk ? sk.name : '', placeholder: 'ECS right-sizing' });
     const desc = h('input', { id: 'skill-desc', class: 'input', maxlength: '300', value: sk ? sk.description : '', placeholder: 'One line: when to use it' });
-    const body = h('textarea', { id: 'skill-body-input', class: 'input h-56 font-mono text-xs', maxlength: '8192', placeholder: 'Numbered steps the agent should follow. Say what to look at, what to compare, and when to stop and ask.' }, cur ? cur.body : '');
+    const body = mdEditor({ id: 'skill-body-input', value: cur ? cur.body : '', maxlength: 8192, placeholder: 'Numbered steps the agent should follow. Say what to look at, what to compare, and when to stop and ask.', check: (t) => checkInstructions(t, { max: 8192 }) });
     const note = h('input', { id: 'skill-note', class: 'input', maxlength: '200', placeholder: sk ? 'What changed and why' : 'First version' });
     const err = h('div', { class: 'hidden' });
     const go = h('button', { class: 'btn-primary', type: 'button', id: 'skill-save', onclick: async () => {
       err.classList.add('hidden'); go.disabled = true;
       try {
-        const out = await post(sk ? '/v1/ai/skills/' + sk.id + '/versions' : '/v1/ai/skills', { name: name.value, description: desc.value, body: body.value, note: note.value });
+        const out = await post(sk ? '/v1/ai/skills/' + sk.id + '/versions' : '/v1/ai/skills', { name: name.value, description: desc.value, body: body.input.value, note: note.value });
         toast(sk ? 'Saved v' + out.current : 'Skill created', 'ok'); close();
         if (sk) after(false); else navigate('/skills/' + out.id);
       } catch (e) { mount(err, errorBox(e.message)); err.classList.remove('hidden'); go.disabled = false; }
     } }, sk ? 'Save as a new version' : 'Create skill');
     return h('div', { class: 'space-y-4' }, h('div', { class: 'grid gap-4 sm:grid-cols-2' }, field('Name', name, null, 'skill-name'), field('When to use it', desc, null, 'skill-desc')),
-      field('Steps', body, 'Skills are trusted text, like the assistant\'s own instructions. Write only what you would be happy for an agent to follow.', 'skill-body-input'), field('Note', note, null, 'skill-note'), err,
+      field('Steps', body.el, 'Write in Markdown. Skills are trusted text, like the assistant\'s own instructions. Write only what you would be happy for an agent to follow.', 'skill-body-input'), field('Note', note, null, 'skill-note'), err,
       h('div', { class: 'flex justify-end gap-2' }, h('button', { class: 'btn-secondary', type: 'button', onclick: () => close() }, 'Cancel'), go));
   }, { wide: true });
 }
@@ -162,7 +165,7 @@ export async function agentPage({ params }) {
         h('div', { class: 'space-y-4 lg:col-span-2' },
           h('section', { class: 'card card-pad' },
             h('div', { class: 'mb-3 flex flex-wrap items-center justify-between gap-2' }, h('h2', { class: 'h-section' }, 'Version ' + v.n + (v.n === ag.current ? ' (current)' : '')), h('div', { class: 'flex items-center gap-2' }, tierPill(v.tier), shortHash(v.hash))),
-            h('div', { class: 'h-section mb-1' }, 'Instructions'), h('pre', { class: 'mb-4 whitespace-pre-wrap rounded-lg bg-slate-50 p-3 text-sm dark:bg-slate-900', id: 'agent-instructions' }, v.instructions),
+            h('div', { class: 'h-section mb-1' }, 'Instructions'), h('div', { class: 'mb-4' }, markdownBox(v.instructions, 'agent-instructions')),
             h('div', { class: 'h-section mb-1' }, 'Skills (pinned)'),
             v.skills.length ? h('ul', { class: 'mb-4 space-y-1 text-sm' }, v.skills.map(p => h('li', {}, h('a', { class: 'font-medium text-brand-700 hover:underline dark:text-brand-200', href: '#/skills/' + p.id }, pinLabel(p)),
               newer(p) ? h('span', { class: 'pill-wait ml-2', title: 'A newer version exists. Save a new version of this agent to use it.' }, 'v' + newer(p) + ' available') : null))) : h('p', { class: 'muted mb-4 text-sm' }, 'None.'),
@@ -220,8 +223,8 @@ function agentForm(ag, skills, tools, after, base) {
     const cur = base || (ag && ag.versions.find(v => v.n === ag.current));
     const name = h('input', { id: 'agent-name', class: 'input', maxlength: '60', value: ag ? ag.name : '', placeholder: 'Cost watcher' });
     const desc = h('input', { id: 'agent-desc', class: 'input', maxlength: '300', value: ag ? ag.description : '', placeholder: 'What it is for, in one line' });
-    const ins = h('textarea', { id: 'agent-ins', class: 'input h-32 text-sm', maxlength: '4096', placeholder: 'You look for idle or oversized resources and propose the smallest safe change. Ask before assuming.' }, cur ? cur.instructions : '');
-    const tier = h('select', { id: 'agent-tier', class: 'input' }, [['T0', 'T0: reads and advises'], ['T1', 'T1: may also file proposals and ask for environments']].map(([v, l]) => h('option', { value: v, selected: cur?.tier === v }, l)));
+    const tier = h('select', { id: 'agent-tier', class: 'input', onchange: () => ins.refresh() }, [['T0', 'T0: reads and advises'], ['T1', 'T1: may also file proposals and ask for environments']].map(([v, l]) => h('option', { value: v, selected: cur?.tier === v }, l)));
+    const ins = mdEditor({ id: 'agent-ins', value: cur ? cur.instructions : '', maxlength: 4096, placeholder: 'You look for idle or oversized resources and propose the smallest safe change. Ask before assuming.', check: (t) => checkInstructions(t, { tier: tier.value, max: 4096 }) });
     const picked = new Set((cur?.skills || []).map(p => p.id));
     const pins = Object.fromEntries((cur?.skills || []).map(p => [p.id, p.n]));
     const skillBoxes = skills.length ? skills.map(s => h('label', { class: 'flex items-center gap-2 text-sm' }, h('input', { type: 'checkbox', 'data-skill': s.id, checked: picked.has(s.id), onchange: (e) => { if (!e.target.checked) delete pins[s.id]; } }), s.name, h('span', { class: 'muted text-xs' }, picked.has(s.id) ? `pinned v${pins[s.id]}, latest v${s.current}` : `latest v${s.current}`))) : [h('p', { class: 'muted text-sm' }, 'No skills yet. Create some under Skills.')];
@@ -232,7 +235,7 @@ function agentForm(ag, skills, tools, after, base) {
     const form = h('div', {});
     const go = h('button', { class: 'btn-primary', type: 'button', id: 'agent-save', onclick: async () => {
       err.classList.add('hidden'); go.disabled = true;
-      const body = { name: name.value, description: desc.value, instructions: ins.value, tier: tier.value, note: note.value,
+      const body = { name: name.value, description: desc.value, instructions: ins.input.value, tier: tier.value, note: note.value,
         // A skill already pinned stays at its pinned version; a newly ticked one takes the latest.
         skills: [...form.querySelectorAll('[data-skill]:checked')].map(b => ({ id: b.dataset.skill, n: pins[b.dataset.skill] || 0 })),
         tools: [...form.querySelectorAll('[data-tool]:checked')].map(b => b.dataset.tool) };
@@ -243,7 +246,7 @@ function agentForm(ag, skills, tools, after, base) {
       } catch (e) { mount(err, errorBox(e.message)); err.classList.remove('hidden'); go.disabled = false; }
     } }, ag ? 'Save as a new version' : 'Create agent');
     form.append(h('div', { class: 'space-y-4' }, h('div', { class: 'grid gap-4 sm:grid-cols-2' }, field('Name', name, null, 'agent-name'), field('Tier', tier, 'T1 may file proposals. A person still approves every change.', 'agent-tier')),
-      field('Description', desc, null, 'agent-desc'), field('Instructions', ins, null, 'agent-ins'),
+      field('Description', desc, null, 'agent-desc'), field('Instructions', ins.el, 'Write in Markdown. The model receives exactly this text.', 'agent-ins'),
       h('div', {}, h('div', { class: 'h-section mb-1' }, 'Skills'), h('div', { class: 'space-y-1' }, skillBoxes), ag && h('p', { class: 'muted mt-1 text-xs' }, 'Skills stay on the version they were pinned to. Untick and tick one to take its latest version.')),
       h('div', {}, h('div', { class: 'h-section mb-1' }, 'Tools'), h('div', { class: 'grid gap-1.5 sm:grid-cols-2' }, toolBoxes), h('p', { class: 'muted mt-1 text-xs' }, 'Pick the fewest it needs. Every tool still runs as the person asking.')),
       field('Note', note, null, 'agent-note'), err,

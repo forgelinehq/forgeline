@@ -26,21 +26,21 @@ import { assistantButton } from './lib/assistant.js';
 const root = document.getElementById('root');
 export const session = { role: 'viewer', name: '', user: null };
 
-const NAV = [
+const NAV = [ // `group` is the sidebar heading; Overview has none and sits at the top
   { path: '/', label: 'Overview', icon: 'home', min: 'viewer' },
-  { path: '/pipelines', label: 'Pipelines', icon: 'flow', min: 'viewer', also: ['/pipelines/', '/runs/'] },
-  { path: '/actions', label: 'Actions', icon: 'bolt', min: 'developer' },
-  { path: '/infrastructure', label: 'Infrastructure', icon: 'server', min: 'viewer' },
-  { path: '/environments', label: 'Environments', icon: 'clock', min: 'developer' },
-  { path: '/kubernetes', label: 'Kubernetes', icon: 'box', min: 'viewer', also: ['/kubernetes/'] },
-  { path: '/guard', label: 'Guard', icon: 'shield', min: 'viewer' },
-  { path: '/agents', label: 'Agents', icon: 'sparkle', min: 'developer', also: ['/agents/', '/skills/', '/workflows/', '/workflow-runs/'] },
-  { path: '/marketplace', label: 'Marketplace', icon: 'plug', min: 'developer' },
-  { path: '/proposals', label: 'Proposals', icon: 'check', min: 'viewer' },
-  { path: '/integrations', label: 'Integrations', icon: 'plug', min: 'developer' },
-  { path: '/secrets', label: 'Secrets', icon: 'key', min: 'developer' },
-  { path: '/people', label: 'People', icon: 'users', min: 'admin' },
-  { path: '/audit', label: 'Audit log', icon: 'shield', min: 'admin' },
+  { group: 'Ship', path: '/pipelines', label: 'Pipelines', icon: 'flow', min: 'viewer', also: ['/pipelines/', '/runs/'] },
+  { group: 'Ship', path: '/actions', label: 'Actions', icon: 'bolt', min: 'developer' },
+  { group: 'Ship', path: '/environments', label: 'Environments', icon: 'clock', min: 'developer' },
+  { group: 'Cloud', path: '/infrastructure', label: 'Infrastructure', icon: 'server', min: 'viewer' },
+  { group: 'Cloud', path: '/kubernetes', label: 'Kubernetes', icon: 'box', min: 'viewer', also: ['/kubernetes/'] },
+  { group: 'Cloud', path: '/guard', label: 'Guard', icon: 'shield', min: 'viewer' },
+  { group: 'Cloud', path: '/integrations', label: 'Integrations', icon: 'plug', min: 'developer' },
+  { group: 'AI', path: '/agents', label: 'Agents', icon: 'sparkle', min: 'developer', also: ['/agents/', '/skills/', '/workflows/', '/workflow-runs/'] },
+  { group: 'AI', path: '/marketplace', label: 'Marketplace', icon: 'plug', min: 'developer' },
+  { group: 'Govern', path: '/proposals', label: 'Proposals', icon: 'check', min: 'viewer' },
+  { group: 'Govern', path: '/secrets', label: 'Secrets', icon: 'key', min: 'developer' },
+  { group: 'Govern', path: '/people', label: 'People', icon: 'users', min: 'admin' },
+  { group: 'Govern', path: '/audit', label: 'Audit log', icon: 'shield', min: 'admin' },
 ];
 
 function setTheme(dark) {
@@ -57,14 +57,24 @@ function isActive(item) {
 function shell() {
   const outlet = h('main', { id: 'main', tabindex: '-1', class: 'mx-auto w-full max-w-7xl flex-1 px-4 py-6 outline-none sm:px-6 lg:px-8' });
   const nav = h('nav', { class: 'flex flex-col gap-0.5 px-3', 'aria-label': 'Main' });
-  const renderNav = () => mount(nav, NAV.filter(i => atLeast(session.role, i.min)).map(i =>
+  const navLink = i =>
     h('a', {
       href: '#' + i.path, onclick: () => sidebar.classList.add('hidden'),
       class: 'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ' + (isActive(i)
         ? 'bg-brand-50 text-brand-700 dark:bg-brand-500/15 dark:text-brand-200'
         : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'),
       'aria-current': isActive(i) ? 'page' : null,
-    }, icon(i.icon, 'size-[18px]'), i.label)));
+    }, icon(i.icon, 'size-[18px]'), i.label);
+  const renderNav = () => {
+    const out = [];
+    let last;
+    for (const i of NAV.filter(x => atLeast(session.role, x.min))) {
+      if (i.group && i.group !== last) out.push(h('div', { class: 'h-section mb-1 mt-4 px-3' }, i.group));
+      last = i.group;
+      out.push(navLink(i));
+    }
+    mount(nav, out);
+  };
 
   const sidebar = h('aside', { class: 'fixed inset-y-0 left-0 z-40 hidden w-64 flex-col border-r border-slate-200 bg-white pt-4 lg:flex dark:border-slate-800 dark:bg-slate-900' },
     h('a', { href: '#/', class: 'mb-5 flex items-center gap-2.5 px-6' },
