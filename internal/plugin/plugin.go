@@ -9,6 +9,8 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"log/slog"
+	"net"
 	"os"
 	"os/exec"
 	"regexp"
@@ -31,7 +33,8 @@ var (
 type Spec struct {
 	ID      string
 	Image   string            // name@sha256:digest or sha256:id; a tag alone is refused
-	Network bool              // false is --network none
+	Network bool              // false is --network none; true is the whole network (not with Hosts)
+	Hosts   []string          // if set, only these hosts (name, *.suffix, optional :port) through Forgeline's proxy; no other route out
 	Env     map[string]string // granted secrets, passed for one call and never put on a command line
 }
 
@@ -60,21 +63,41 @@ func (s Spec) Check() error {
 			return fmt.Errorf("%q is not a valid environment variable name", k)
 		}
 	}
+	if len(s.Hosts) > 0 {
+		if s.Network {
+			return errors.New("a plugin gets either the whole network or a list of hosts, not both")
+		}
+		if _, err := ParseHosts(s.Hosts); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
 // Argv is the whole docker command line for one call. Secret values are not in it: `-e NAME` makes
 // docker read the value from its own environment, which keeps them out of the process list.
-func Argv(s Spec, l Limits, name string) []string {
+func Argv(s Spec, l Limits, name string) []string { return argv(s, l, name, "", nil) }
+
+// argv is Argv for a call whose network and proxy settings were prepared: net is the private network
+// to attach to (empty means none, or bridge when the spec has Network). proxyEnv entries are
+// "NAME=value" (not secret, passed as given) or a bare "NAME" (its value is in the docker client's
+// environment, which keeps the proxy credential out of the process list, like a granted secret).
+func argv(s Spec, l Limits, name, net string, proxyEnv []string) []string {
 	a := []string{"run", "--rm", "-i", "--name", name,
 		"--read-only", "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
 		"--user", "65534:65534", "--init",
 		"--pids-limit", fmt.Sprint(l.Pids), "--memory", l.Memory, "--cpus", l.CPUs,
 		"--tmpfs", "/tmp:rw,noexec,nosuid,size=16m", "--pull", "never"}
-	if s.Network {
+	switch {
+	case net != "":
+		a = append(a, "--network", net)
+	case s.Network:
 		a = append(a, "--network", "bridge")
-	} else {
+	default:
 		a = append(a, "--network", "none")
+	}
+	for _, e := range proxyEnv {
+		a = append(a, "-e", e)
 	}
 	keys := make([]string, 0, len(s.Env))
 	for k := range s.Env {
@@ -93,6 +116,16 @@ type Runner struct {
 	Limits Limits
 	// ExtraEnv is added to the docker client's environment (settings it needs to reach its daemon).
 	ExtraEnv []string
+	// Report, when set, is told what the egress proxy did after each call that had a host list.
+	Report func(s Spec, r EgressReport)
+
+	sweepOnce  sync.Once
+	sweepKick  chan struct{}
+	sweepEvery time.Duration   // 0 means every 5 minutes
+	active     map[string]bool // private networks of calls in flight; the sweeper leaves them alone
+	// allowPrivate lets the proxy reach loopback; set only by tests that need a server on this machine.
+	allowPrivate bool
+	testResolve  func(ctx context.Context, host string) ([]net.IP, error)
 
 	mu    sync.Mutex
 	locks map[string]*sync.Mutex
@@ -147,8 +180,17 @@ func (r *Runner) session(ctx context.Context, s Spec, fn func(context.Context, *
 	b := make([]byte, 6)
 	rand.Read(b)
 	name := "forgeline-plugin-" + hex.EncodeToString(b)
-	cmd := exec.Command(r.Docker, Argv(s, l, name)...)
-	cmd.Env = append(cleanEnv(s.Env), r.ExtraEnv...)
+	netName, proxyEnv, hidden := "", []string(nil), []string(nil)
+	if len(s.Hosts) > 0 {
+		eg, err := r.startEgress(ctx, s)
+		if err != nil {
+			return err
+		}
+		defer eg.stop()
+		netName, proxyEnv, hidden = eg.network, eg.env, eg.hidden
+	}
+	cmd := exec.Command(r.Docker, argv(s, l, name, netName, proxyEnv)...)
+	cmd.Env = append(append(cleanEnv(s.Env), hidden...), r.ExtraEnv...)
 	c, err := mcp.Start(ctx, cmd)
 	if err != nil {
 		r.kill(name)
@@ -156,6 +198,206 @@ func (r *Runner) session(ctx context.Context, s Spec, fn func(context.Context, *
 	}
 	defer func() { c.Close(); r.kill(name) }()
 	return fn(ctx, c, l)
+}
+
+// egress is the private network and proxy set up for one call.
+type egress struct {
+	r       *Runner
+	s       Spec
+	network string
+	env     []string // for argv: NO_PROXY=... as given, the proxy URLs by name only
+	hidden  []string // NAME=value for the docker client's environment (the URLs carry the call's credential)
+	proxy   *egressProxy
+	cancel  context.CancelFunc
+	ln      net.Listener
+}
+
+// startEgress creates an internal network for one call, finds its gateway and listens there. If any
+// step fails the call is refused: there is no fallback to an open network.
+func (r *Runner) startEgress(ctx context.Context, s Spec) (*egress, error) {
+	allow, err := ParseHosts(s.Hosts)
+	if err != nil {
+		return nil, err
+	}
+	r.StartSweeper(context.Background()) // does not wait: the sweep runs in the background
+	b := make([]byte, 6)
+	rand.Read(b)
+	name := "forgeline-plg-" + hex.EncodeToString(b)
+	r.setActive(name, true)
+	if out, err := r.docker(ctx, "network", "create", "--internal", "--driver", "bridge", "--label", sweepLabel, name); err != nil {
+		r.setActive(name, false)
+		return nil, fmt.Errorf("could not set up the plugin's private network: %s", strings.TrimSpace(string(out)))
+	}
+	e := &egress{r: r, s: s, network: name}
+	fail := func(format string, a ...any) (*egress, error) {
+		e.stop()
+		return nil, fmt.Errorf(format, a...)
+	}
+	out, err := r.docker(ctx, "network", "inspect", name, "--format", "{{range .IPAM.Config}}{{.Gateway}} {{end}}")
+	gw := ""
+	for _, f := range strings.Fields(string(out)) {
+		if ip := net.ParseIP(f); ip != nil && ip.To4() != nil {
+			gw = f
+			break
+		}
+	}
+	if err != nil || gw == "" {
+		return fail("could not find the private network's gateway address")
+	}
+	ln, err := net.Listen("tcp", net.JoinHostPort(gw, "0"))
+	if err != nil {
+		return fail("Forgeline cannot listen on the plugin network's gateway (%s), so a host list cannot be enforced here (is the server itself running in a container?): %v", gw, err)
+	}
+	e.ln = ln
+	pctx, cancel := context.WithCancel(context.Background())
+	e.cancel = cancel
+	e.proxy = newEgressProxy(allow)
+	e.proxy.allowPrivate = r.allowPrivate
+	if r.testResolve != nil {
+		e.proxy.resolve = r.testResolve
+	}
+	e.proxy.serve(pctx, ln)
+	// The credential is this call's alone; the proxy refuses every request without it (407), so another
+	// container that can reach the gateway address cannot use the proxy or be mistaken for the plugin.
+	url := "http://forgeline:" + e.proxy.token + "@" + ln.Addr().String()
+	e.hidden = []string{"HTTP_PROXY=" + url, "HTTPS_PROXY=" + url, "http_proxy=" + url, "https_proxy=" + url}
+	e.env = []string{"HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy", "NO_PROXY=", "no_proxy="}
+	return e, nil
+}
+
+// stop ends the proxy (closing every tunnel and waiting for them, so nothing moves after the call and
+// the report is complete), reports what it did and removes the network. The container is already
+// gone by then (it is removed before this runs), so the network is free to go.
+func (e *egress) stop() {
+	if e.cancel != nil {
+		e.cancel()
+	}
+	if e.ln != nil {
+		e.ln.Close()
+	}
+	if e.proxy != nil {
+		e.proxy.shutdown()
+		if e.r.Report != nil {
+			e.r.Report(e.s, e.proxy.report())
+		}
+	}
+	if e.r.removeNetwork(e.network) {
+		e.r.setActive(e.network, false)
+		return
+	}
+	// Still there: leave it to the background sweeper, which is told now.
+	e.r.setActive(e.network, false)
+	e.r.kickSweep()
+}
+
+// removeNetwork removes a network, retrying with a short backoff, and logs what it could not do.
+func (r *Runner) removeNetwork(name string) bool {
+	var last error
+	var out []byte
+	delay := 100 * time.Millisecond
+	for i := 0; i < 5; i++ {
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		var err error
+		out, err = r.docker(ctx, "network", "rm", name)
+		cancel()
+		if err == nil {
+			return true
+		}
+		last = err
+		time.Sleep(delay)
+		delay *= 2
+	}
+	slog.Warn("could not remove a plugin's private network; the sweeper will retry", "network", name, "err", last, "output", strings.TrimSpace(string(out)))
+	return false
+}
+
+func (r *Runner) setActive(name string, on bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.active == nil {
+		r.active = map[string]bool{}
+	}
+	if on {
+		r.active[name] = true
+	} else {
+		delete(r.active, name)
+	}
+}
+
+func (r *Runner) isActive(name string) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.active[name]
+}
+
+const sweepLabel = "forgeline.plugin-egress=1"
+
+// StartSweeper removes leftover private networks in the background: now, then every few minutes, and
+// whenever a removal failed. It returns at once and starts only once; the server calls it at start
+// and a call that uses a host list calls it too, so a call never waits for a sweep.
+func (r *Runner) StartSweeper(ctx context.Context) {
+	r.sweepOnce.Do(func() {
+		r.mu.Lock()
+		r.sweepKick = make(chan struct{}, 1)
+		kick := r.sweepKick
+		every := r.sweepEvery
+		r.mu.Unlock()
+		if every == 0 {
+			every = 5 * time.Minute
+		}
+		go func() {
+			t := time.NewTicker(every)
+			defer t.Stop()
+			for {
+				r.Sweep(ctx)
+				select {
+				case <-ctx.Done():
+					return
+				case <-t.C:
+				case <-kick:
+					time.Sleep(time.Second) // let a failing removal settle
+				}
+			}
+		}()
+	})
+}
+
+func (r *Runner) kickSweep() {
+	r.mu.Lock()
+	k := r.sweepKick
+	r.mu.Unlock()
+	if k != nil {
+		select {
+		case k <- struct{}{}:
+		default:
+		}
+	}
+}
+
+// Sweep removes private networks left behind by a call that was cut short, such as a server that was
+// killed, or whose removal failed. Networks of calls in flight are left alone.
+func (r *Runner) Sweep(ctx context.Context) {
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	out, err := r.docker(ctx, "network", "ls", "--filter", "label="+sweepLabel, "--format", "{{.Name}}")
+	if err != nil {
+		slog.Warn("could not list leftover plugin networks", "err", err)
+		return
+	}
+	for _, n := range strings.Fields(string(out)) {
+		if strings.HasPrefix(n, "forgeline-plg-") && !r.isActive(n) {
+			if o, err := r.docker(ctx, "network", "rm", n); err != nil {
+				slog.Warn("could not remove a leftover plugin network", "network", n, "err", err, "output", strings.TrimSpace(string(o)))
+			}
+		}
+	}
+}
+
+// docker runs one docker client command with the clean environment.
+func (r *Runner) docker(ctx context.Context, args ...string) ([]byte, error) {
+	cmd := exec.CommandContext(ctx, r.Docker, args...)
+	cmd.Env = append(cleanEnv(nil), r.ExtraEnv...)
+	return cmd.CombinedOutput()
 }
 
 // kill removes a container that may still be running after a timeout. Failing is fine: --rm

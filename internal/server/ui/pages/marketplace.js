@@ -64,19 +64,23 @@ export async function marketplacePage() {
       const err = h('div', { class: 'hidden' });
       const grants = {};
       const pluginBlock = (pl) => {
-        const g = grants[pl.key] = { network: false, secrets: {} };
+        const g = grants[pl.key] = { network: false, hosts: [], secrets: {} };
         const prev = inst?.plugins?.[pl.key];
-        const changed = !!prev && (prev.image !== pl.image || prev.wants_network !== !!pl.network || JSON.stringify(prev.wants_secrets || []) !== JSON.stringify([...(pl.secrets || [])].sort()));
+        const changed = !!prev && (prev.image !== pl.image || prev.wants_network !== !!pl.network || JSON.stringify(prev.wants_hosts || []) !== JSON.stringify([...(pl.hosts || [])].sort()) || JSON.stringify(prev.wants_secrets || []) !== JSON.stringify([...(pl.secrets || [])].sort()));
         const old = changed ? null : prev;
         return h('div', { class: 'mb-3 rounded-lg border border-slate-200 p-3 dark:border-slate-800', 'data-plugin': pl.key },
           h('div', { class: 'font-medium' }, pl.name), h('div', { class: 'muted text-sm' }, pl.description),
           h('div', { class: 'mt-2 break-all text-xs' }, h('span', { class: 'muted' }, 'Image: '), h('code', {}, pl.image)),
           h('div', { class: 'mt-1 text-xs' }, h('span', { class: 'muted' }, 'Tools: '), pl.tools.map(t => h('code', { class: 'mr-1.5', title: t.description }, t.name))),
           h('div', { class: 'mt-1 text-xs muted' }, 'Runs in a container for each call: read-only, no extra privileges, no network unless you allow it. What it returns is treated as data.'),
-          old && admin ? h('div', { class: 'mt-2 text-xs muted' }, `Approved earlier: network ${old.network ? 'allowed' : 'off'}${Object.keys(old.secrets || {}).length ? ', secrets ' + Object.keys(old.secrets).join(', ') : ''}. An update keeps this unless the plugin asks for something different.`) : null,
-          changed ? notice('warn', 'This update asks for something different from what you approved (image, network or secrets). Grant it again below.') : null,
+          old && admin ? h('div', { class: 'mt-2 text-xs muted' }, `Approved earlier: network ${old.network ? 'allowed' : (old.hosts || []).length ? 'only ' + old.hosts.join(', ') : 'off'}${Object.keys(old.secrets || {}).length ? ', secrets ' + Object.keys(old.secrets).join(', ') : ''}. An update keeps this unless the plugin asks for something different.`) : null,
+          changed ? notice('warn', 'This update asks for something different from what you approved (image, network, hosts or secrets). Grant it again below.') : null,
           admin && !old ? h('div', { class: 'mt-2 space-y-2 text-sm' },
-            pl.network ? h('label', { class: 'flex items-center gap-2' }, h('input', { type: 'checkbox', 'data-grant-network': pl.key, onchange: (e) => { g.network = e.target.checked; } }), 'Allow it to use the network (it asks for this)') : h('div', { class: 'muted text-xs' }, 'It does not ask for network access.'),
+            pl.network ? h('label', { class: 'flex items-center gap-2' }, h('input', { type: 'checkbox', 'data-grant-network': pl.key, onchange: (e) => { g.network = e.target.checked; } }), 'Allow it to use the whole network (it asks for this)') : null,
+            (pl.hosts || []).length ? h('div', { class: 'space-y-1' },
+              h('div', { class: 'text-xs muted' }, 'It asks to reach only these hosts. Each goes through Forgeline\'s proxy, which allows only the names you tick, only to public addresses; the plugin has no other route out and no DNS of its own.'),
+              pl.hosts.map(host => h('label', { class: 'flex items-center gap-2' }, h('input', { type: 'checkbox', 'data-grant-host': pl.key + ':' + host, onchange: (e) => { g.hosts = e.target.checked ? [...g.hosts, host] : g.hosts.filter(x => x !== host); } }), h('code', { class: 'text-xs' }, host)))) : null,
+            !pl.network && !(pl.hosts || []).length ? h('div', { class: 'muted text-xs' }, 'It does not ask for network access.') : null,
             (pl.secrets || []).map(env => h('label', { class: 'flex flex-wrap items-center gap-2' }, h('code', { class: 'text-xs' }, env), h('span', { class: 'muted' }, 'give it'),
               h('select', { class: 'input w-auto', 'data-grant-secret': env, onchange: (e) => { if (e.target.value) g.secrets[env] = e.target.value; else delete g.secrets[env]; } },
                 h('option', { value: '' }, 'nothing'), secretNames.map(n => h('option', { value: n }, n)))))) : null);

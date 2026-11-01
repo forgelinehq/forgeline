@@ -247,3 +247,194 @@ func TestUpgradeNeedsAFreshGrantWhenThePluginAsksForMore(t *testing.T) {
 		t.Errorf("new grant = %+v", in.Plugins["wx"])
 	}
 }
+
+func hostsPkg(version int, hosts ...string) MarketPackage {
+	p := pluginPkg(version)
+	p.Plugins[0].Network = false
+	p.Plugins[0].Hosts = hosts
+	return p
+}
+
+func TestAPluginAsksForHostsAndTheAdministratorGrantsSome(t *testing.T) {
+	m, f := pluginHarness(t)
+	m.admin.expect(200, "PUT", "/v1/plugins/settings", map[string]any{"enabled": true})
+	publish(t, hostsPkg(1, "api.weather.example", "*.cdn.weather.example", "files.weather.example:8443"))
+	e := listMarket(t, m.admin)[0]
+
+	// A host that was not asked for, and the open network when only hosts were asked for, are refused.
+	installPlugin(m, e.SHA256, 400, map[string]any{"wx": map[string]any{"hosts": []string{"evil.example.com"}}})
+	installPlugin(m, e.SHA256, 400, map[string]any{"wx": map[string]any{"hosts": []string{"api.weather.example:8443"}}}) // another port than asked
+	installPlugin(m, e.SHA256, 400, map[string]any{"wx": map[string]any{"network": true}})
+	var in MarketInstall
+	json.Unmarshal(installPlugin(m, e.SHA256, 201, map[string]any{"wx": map[string]any{"hosts": []string{"files.weather.example:8443", "api.weather.example"}}}), &in)
+	g := in.Plugins["wx"]
+	if g.Network || strings.Join(g.Hosts, ",") != "api.weather.example,files.weather.example:8443" || len(g.WantsHosts) != 3 {
+		t.Fatalf("grant = %+v", g)
+	}
+	// The plugin runs with exactly the granted hosts and never the open network.
+	dev := Principal{Name: "dev", Role: "developer"}
+	if _, err := m.srv.runLookup(context.Background(), dev, lookupCall{Tool: "plugin_weather_pack_wx_forecast", Args: json.RawMessage(`{"city":"Pune"}`)}); err != nil {
+		t.Fatal(err)
+	}
+	if spec := f.calls[0]; spec.Network || strings.Join(spec.Hosts, ",") != "api.weather.example,files.weather.example:8443" {
+		t.Errorf("spec = %+v", spec)
+	}
+	// The listing shows what is allowed.
+	var list struct{ Plugins []struct{ Hosts []string } }
+	json.Unmarshal(m.dev.expect(200, "GET", "/v1/plugins", nil), &list)
+	if len(list.Plugins) != 1 || len(list.Plugins[0].Hosts) != 2 {
+		t.Errorf("listing = %+v", list)
+	}
+	// Granting none is allowed, and leaves the plugin with no network at all.
+	m.admin.expect(200, "DELETE", "/v1/market/install/weather-pack", nil)
+	json.Unmarshal(installPlugin(m, e.SHA256, 201, nil), &in)
+	if g := in.Plugins["wx"]; g.Network || len(g.Hosts) != 0 {
+		t.Errorf("a grant of nothing = %+v", g)
+	}
+	if _, err := m.srv.runLookup(context.Background(), dev, lookupCall{Tool: "plugin_weather_pack_wx_forecast", Args: json.RawMessage(`{"city":"Pune"}`)}); err != nil {
+		t.Fatal(err)
+	}
+	if spec := f.calls[len(f.calls)-1]; spec.Network || len(spec.Hosts) != 0 {
+		t.Errorf("spec = %+v", spec)
+	}
+}
+
+func TestAPackageThatMixesNetworkAndHostsOrListsBadHostsIsDamaged(t *testing.T) {
+	for name, mut := range map[string]func(*MarketPlugin){
+		"both":         func(p *MarketPlugin) { p.Network = true; p.Hosts = []string{"a.example.com"} },
+		"an ip":        func(p *MarketPlugin) { p.Hosts = []string{"10.0.0.1"} },
+		"a star":       func(p *MarketPlugin) { p.Hosts = []string{"*"} },
+		"a url":        func(p *MarketPlugin) { p.Hosts = []string{"https://a.example.com"} },
+		"a bare label": func(p *MarketPlugin) { p.Hosts = []string{"localhost"} },
+		"a repeat":     func(p *MarketPlugin) { p.Hosts = []string{"a.example.com", "a.example.com"} },
+		"too many":     func(p *MarketPlugin) { p.Hosts = manyHosts(21) },
+	} {
+		p := hostsPkg(1)
+		mut(&p.Plugins[0])
+		p.SHA256 = p.contentHash()
+		if p.check() == nil {
+			t.Errorf("%s: accepted", name)
+		}
+	}
+	p := hostsPkg(1, "a.example.com", "*.b.example.com:8443")
+	p.SHA256 = p.contentHash()
+	if err := p.check(); err != nil {
+		t.Errorf("good hosts refused: %v", err)
+	}
+}
+
+func manyHosts(n int) []string {
+	var out []string
+	for i := 0; i < n; i++ {
+		out = append(out, "h"+strings.Repeat("x", i%5)+string(rune('a'+i%26))+".example.com")
+	}
+	return out
+}
+
+func TestAnUpgradeThatAsksForDifferentHostsNeedsAFreshGrant(t *testing.T) {
+	m, _ := pluginHarness(t)
+	m.admin.expect(200, "PUT", "/v1/plugins/settings", map[string]any{"enabled": true})
+	publish(t, hostsPkg(1, "api.weather.example"))
+	e1 := listMarket(t, m.admin)[0]
+	installPlugin(m, e1.SHA256, 201, map[string]any{"wx": map[string]any{"hosts": []string{"api.weather.example"}}})
+
+	// The same ask in a new version keeps the grant.
+	p2 := hostsPkg(2, "api.weather.example")
+	p2.Skills[0].Body = "Steps v2."
+	publish(t, p2)
+	e2 := listMarket(t, m.admin)[0]
+	var in MarketInstall
+	json.Unmarshal(installPlugin(m, e2.SHA256, 201, nil), &in)
+	if strings.Join(in.Plugins["wx"].Hosts, ",") != "api.weather.example" {
+		t.Fatalf("grant lost: %+v", in.Plugins["wx"])
+	}
+	// One more host is a different ask: refused until the administrator grants again.
+	p3 := hostsPkg(3, "api.weather.example", "tracker.example.net")
+	publish(t, p3)
+	e3 := listMarket(t, m.admin)[0]
+	installPlugin(m, e3.SHA256, 409, nil)
+	json.Unmarshal(installPlugin(m, e3.SHA256, 201, map[string]any{"wx": map[string]any{"hosts": []string{"api.weather.example"}}}), &in)
+	if strings.Join(in.Plugins["wx"].Hosts, ",") != "api.weather.example" || len(in.Plugins["wx"].WantsHosts) != 2 {
+		t.Errorf("new grant = %+v", in.Plugins["wx"])
+	}
+	// A plugin that moves from hosts to the open network is also a different ask.
+	p4 := pluginPkg(4)
+	p4.Plugins[0].Network = true
+	publish(t, p4)
+	e4 := listMarket(t, m.admin)[0]
+	installPlugin(m, e4.SHA256, 409, nil)
+}
+
+func TestWhatAPluginsProxyDidIsAudited(t *testing.T) {
+	m, _ := pluginHarness(t)
+	m.srv.reportEgress(plugin.Spec{ID: "weather-pack-wx"}, plugin.EgressReport{Allowed: map[string]int{"api.weather.example": 2}, Denied: map[string]int{"evil.example.com": 1}, Bytes: 900})
+	log := string(m.admin.expect(200, "GET", "/v1/audit?limit=20", nil))
+	if !strings.Contains(log, "plugin.egress") || !strings.Contains(log, "evil.example.com×1") || !strings.Contains(log, "plugin:weather-pack-wx") {
+		t.Errorf("audit: %s", log)
+	}
+}
+
+func TestOnlyPolicyRefusalsMakeTheEgressAuditEntryNotOK(t *testing.T) {
+	m, _ := pluginHarness(t)
+	allowedOf := func(id string) bool {
+		var evs struct{ Events []AuditEvent }
+		json.Unmarshal(m.admin.expect(200, "GET", "/v1/audit?limit=50", nil), &evs)
+		for _, e := range evs.Events {
+			if e.Action == "plugin.egress" && e.Target == "plugin/"+id {
+				return e.Allowed
+			}
+		}
+		t.Fatalf("no audit entry for %s", id)
+		return false
+	}
+	m.srv.reportEgress(plugin.Spec{ID: "failing"}, plugin.EgressReport{Allowed: map[string]int{}, Denied: map[string]int{}, Failed: map[string]int{"api.weather.example": 3}})
+	m.srv.reportEgress(plugin.Spec{ID: "denied"}, plugin.EgressReport{Denied: map[string]int{"evil.example.com": 1}})
+	m.srv.reportEgress(plugin.Spec{ID: "foreign"}, plugin.EgressReport{Unauthorized: 2})
+	if !allowedOf("failing") {
+		t.Error("an upstream failure for an allowed host marked the audit entry as a refusal")
+	}
+	if allowedOf("denied") || allowedOf("foreign") {
+		t.Error("a refusal left the audit entry ok")
+	}
+}
+
+func TestGrantedHostsAreNormalisedAndDeduplicatedSoACallNeverFailsTheCheck(t *testing.T) {
+	m, f := pluginHarness(t)
+	m.admin.expect(200, "PUT", "/v1/plugins/settings", map[string]any{"enabled": true})
+	publish(t, hostsPkg(1, "api.weather.example", "files.weather.example:8443"))
+	e := listMarket(t, m.admin)[0]
+
+	// Not valid hosts, whatever the plugin asked for.
+	for _, bad := range []string{"API.weather.example", "api.weather.example:0", "10.0.0.1", "*", "https://api.weather.example", ""} {
+		installPlugin(m, e.SHA256, 400, map[string]any{"wx": map[string]any{"hosts": []string{bad}}})
+	}
+	// The same host written three ways is one grant, in normal form.
+	var in MarketInstall
+	json.Unmarshal(installPlugin(m, e.SHA256, 201, map[string]any{"wx": map[string]any{"hosts": []string{
+		"api.weather.example", "api.weather.example:443", "api.weather.example", "files.weather.example:8443"}}}), &in)
+	g := in.Plugins["wx"]
+	if strings.Join(g.Hosts, ",") != "api.weather.example,files.weather.example:8443" {
+		t.Fatalf("hosts = %v", g.Hosts)
+	}
+	// Only the explicit-port spelling of a default-port host is stored in normal form too.
+	m.admin.expect(200, "DELETE", "/v1/market/install/weather-pack", nil)
+	json.Unmarshal(installPlugin(m, e.SHA256, 201, map[string]any{"wx": map[string]any{"hosts": []string{"api.weather.example:443"}}}), &in)
+	if h := in.Plugins["wx"].Hosts; len(h) != 1 || h[0] != "api.weather.example" {
+		t.Fatalf("hosts = %v", h)
+	}
+	m.admin.expect(200, "DELETE", "/v1/market/install/weather-pack", nil)
+	json.Unmarshal(installPlugin(m, e.SHA256, 201, map[string]any{"wx": map[string]any{"hosts": []string{
+		"api.weather.example", "api.weather.example:443", "api.weather.example", "files.weather.example:8443"}}}), &in)
+	g = in.Plugins["wx"]
+	spec := plugin.Spec{ID: "weather-pack-wx", Image: g.Image, Hosts: g.Hosts}
+	if err := spec.Check(); err != nil {
+		t.Errorf("a stored grant fails the check on every call: %v", err)
+	}
+	dev := Principal{Name: "dev", Role: "developer"}
+	if _, err := m.srv.runLookup(context.Background(), dev, lookupCall{Tool: "plugin_weather_pack_wx_forecast", Args: json.RawMessage(`{"city":"Pune"}`)}); err != nil {
+		t.Fatal(err)
+	}
+	if got := f.calls[len(f.calls)-1].Hosts; strings.Join(got, ",") != "api.weather.example,files.weather.example:8443" {
+		t.Errorf("hosts at call time = %v", got)
+	}
+}

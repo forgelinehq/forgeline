@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -26,13 +27,49 @@ func TestMain(m *testing.M) {
 
 func fakeDocker() {
 	log := os.Getenv("FAKE_LOG")
+	if len(os.Args) > 1 && os.Args[1] == "network" {
+		f, _ := os.OpenFile(log, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+		fmt.Fprintln(f, "NET "+strings.Join(os.Args[2:], " "))
+		f.Close()
+		switch os.Args[2] {
+		case "inspect":
+			gw := os.Getenv("FAKE_GATEWAY")
+			if gw == "" {
+				gw = "127.0.0.1"
+			}
+			if gw != "none" {
+				fmt.Print(gw + " ")
+			}
+		case "ls":
+			if d := os.Getenv("FAKE_LS_SLEEP"); d != "" {
+				dur, _ := time.ParseDuration(d)
+				time.Sleep(dur)
+			}
+			fmt.Print(os.Getenv("FAKE_NETS"))
+		case "rm":
+			// FAKE_RM_FAILS=n makes the first n removals fail (counted by the number of NET rm lines so far).
+			if n, _ := strconv.Atoi(os.Getenv("FAKE_RM_FAILS")); n > 0 {
+				b, _ := os.ReadFile(log)
+				if strings.Count(string(b), "NET rm ") <= n {
+					fmt.Println("network is in use")
+					os.Exit(1)
+				}
+			}
+		case "create":
+			if os.Getenv("FAKE_CREATE_FAILS") == "1" {
+				fmt.Println("network could not be created")
+				os.Exit(1)
+			}
+		}
+		return
+	}
 	if len(os.Args) > 1 && os.Args[1] == "rm" {
 		f, _ := os.OpenFile(log, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 		fmt.Fprintln(f, "RM "+strings.Join(os.Args[2:], " "))
 		f.Close()
 		return
 	}
-	rec, _ := json.Marshal(map[string]any{"argv": os.Args[1:], "secret": os.Getenv("API_KEY"), "leak": os.Getenv("FORGELINE_TOKEN")})
+	rec, _ := json.Marshal(map[string]any{"argv": os.Args[1:], "secret": os.Getenv("API_KEY"), "leak": os.Getenv("FORGELINE_TOKEN"), "proxy": os.Getenv("HTTPS_PROXY")})
 	f, _ := os.OpenFile(log, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 	fmt.Fprintln(f, string(rec))
 	f.Close()
@@ -71,13 +108,19 @@ func runner(t *testing.T, mode string) (*Runner, string) {
 	log := filepath.Join(t.TempDir(), "log")
 	t.Setenv("FORGELINE_TOKEN", "server-secret")
 	return &Runner{Docker: os.Args[0], Limits: Limits{Timeout: 3 * time.Second, MaxOutput: 1000},
-		ExtraEnv: []string{"FAKE_DOCKER=1", "FAKE_LOG=" + log, "FAKE_MODE=" + mode}}, log
+		ExtraEnv: []string{"FAKE_DOCKER=1", "FAKE_LOG=" + log, "FAKE_MODE=" + mode, "GORACE=atexit_sleep_ms=0"}}, log
 }
 
 func argvOf(t *testing.T, log string) (argv []string, secret, leak string) {
 	t.Helper()
 	b, _ := os.ReadFile(log)
-	line := strings.Split(strings.TrimSpace(string(b)), "\n")[0]
+	line := ""
+	for _, l := range strings.Split(strings.TrimSpace(string(b)), "\n") {
+		if strings.HasPrefix(l, "{") { // the first `docker run`, after any network commands
+			line = l
+			break
+		}
+	}
 	var rec struct {
 		Argv         []string
 		Secret, Leak string

@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/forgelinehq/forgeline/internal/authn"
 	"github.com/forgelinehq/forgeline/internal/docstore"
 	"github.com/forgelinehq/forgeline/internal/mcp"
 	"github.com/forgelinehq/forgeline/internal/plugin"
@@ -47,11 +48,58 @@ func (s *Server) pluginRunner() pluginRunner {
 	if s.plugins != nil {
 		return s.plugins
 	}
-	docker := os.Getenv("FORGELINE_DOCKER")
-	if docker == "" {
-		docker = "docker"
+	// One runner for the server's life: it serialises calls to a plugin and sweeps leftover networks once.
+	s.runnerOnce.Do(func() {
+		docker := os.Getenv("FORGELINE_DOCKER")
+		if docker == "" {
+			docker = "docker"
+		}
+		s.realRunner = &plugin.Runner{Docker: docker, Report: s.reportEgress}
+	})
+	return s.realRunner
+}
+
+// reportEgress records what a plugin's proxy let through and refused during one call.
+func (s *Server) reportEgress(spec plugin.Spec, r plugin.EgressReport) {
+	_ = s.audit(context.Background(), Principal{Name: "plugin:" + spec.ID, Role: authn.Viewer}, "", "plugin.egress", "plugin/"+spec.ID,
+		truncate(r.String(), 600), !r.Refused())
+}
+
+// grantedHosts validates the hosts an administrator allows for a plugin against what it asked for. A
+// name is compared in its normal form ("a.example.com:443" is "a.example.com"), repeats collapse, and
+// the stored list is sorted, so what is kept always passes plugin.Spec.Check on every later call.
+func grantedHosts(pl MarketPlugin, requested []string) ([]string, int, string) {
+	asked, err := plugin.ParseHosts(pl.Hosts)
+	if err != nil {
+		return nil, http.StatusBadRequest, fmt.Sprintf("plugin %q asks for hosts that are not valid: %v", pl.Name, err)
 	}
-	return &plugin.Runner{Docker: docker}
+	wanted := map[string]bool{}
+	for _, a := range asked {
+		wanted[a.String()] = true
+	}
+	seen := map[string]bool{}
+	out := []string{}
+	for _, h := range requested {
+		one, err := plugin.ParseHosts([]string{h})
+		if err != nil {
+			return nil, http.StatusBadRequest, fmt.Sprintf("plugin %q: the host %q cannot be granted: %v", pl.Name, h, err)
+		}
+		k := one[0].String()
+		if !wanted[k] {
+			return nil, http.StatusBadRequest, fmt.Sprintf("plugin %q does not ask for the host %q", pl.Name, h)
+		}
+		if !seen[k] {
+			seen[k] = true
+			out = append(out, k)
+		}
+	}
+	if len(out) > 0 {
+		if _, err := plugin.ParseHosts(out); err != nil {
+			return nil, http.StatusBadRequest, fmt.Sprintf("plugin %q: %v", pl.Name, err)
+		}
+	}
+	sort.Strings(out)
+	return out, 0, ""
 }
 
 // MarketPluginTool is one tool a plugin offers; Schema is a small JSON Schema that the arguments
@@ -68,7 +116,8 @@ type MarketPlugin struct {
 	Name        string             `json:"name"`
 	Description string             `json:"description"`
 	Image       string             `json:"image"`
-	Network     bool               `json:"network,omitempty"` // wants outbound network
+	Network     bool               `json:"network,omitempty"` // wants the whole network (open egress)
+	Hosts       []string           `json:"hosts,omitempty"`   // or only these hosts (name, *.suffix, :port), through Forgeline's proxy; not both
 	Secrets     []string           `json:"secrets,omitempty"` // environment variables it wants
 	Tools       []MarketPluginTool `json:"tools"`
 }
@@ -76,6 +125,7 @@ type MarketPlugin struct {
 // PluginGrantRequest is what an administrator allows at install.
 type PluginGrantRequest struct {
 	Network bool              `json:"network"`
+	Hosts   []string          `json:"hosts"`   // the ones to allow, from what the plugin asked for
 	Secrets map[string]string `json:"secrets"` // environment variable to vault secret name
 }
 
@@ -85,8 +135,10 @@ type PluginGrant struct {
 	Name         string             `json:"name"`
 	Image        string             `json:"image"`
 	WantsNetwork bool               `json:"wants_network"`
+	WantsHosts   []string           `json:"wants_hosts,omitempty"`
 	WantsSecrets []string           `json:"wants_secrets"`
 	Network      bool               `json:"network"`
+	Hosts        []string           `json:"hosts,omitempty"`
 	Secrets      map[string]string  `json:"secrets"`
 	Tools        []MarketPluginTool `json:"tools"`
 	By           string             `json:"by"`
@@ -114,7 +166,7 @@ func (p MarketPackage) checkPlugins() ([]string, error) {
 		if m := checkNameDesc(pl.Name, pl.Description); m != "" {
 			return nil, fmt.Errorf("plugin %q: %s", pl.Key, m)
 		}
-		if err := (plugin.Spec{ID: pluginSpecID(p.ID, pl.Key), Image: pl.Image}).Check(); err != nil {
+		if err := (plugin.Spec{ID: pluginSpecID(p.ID, pl.Key), Image: pl.Image, Network: pl.Network, Hosts: pl.Hosts}).Check(); err != nil {
 			return nil, fmt.Errorf("plugin %q: %w", pl.Key, err)
 		}
 		for _, e := range pl.Secrets {
@@ -246,6 +298,7 @@ func (s *Server) handleGetPlugins(w http.ResponseWriter, r *http.Request) {
 		Name    string   `json:"name"`
 		Image   string   `json:"image"`
 		Network bool     `json:"network"`
+		Hosts   []string `json:"hosts"`
 		Secrets []string `json:"secrets"`
 		Tools   []string `json:"tools"`
 	}
@@ -257,7 +310,7 @@ func (s *Server) handleGetPlugins(w http.ResponseWriter, r *http.Request) {
 	}
 	for _, in := range installs {
 		for key, g := range in.Plugins {
-			x := row{Package: in.ID, Key: key, Name: g.Name, Image: g.Image, Network: g.Network, Secrets: []string{}, Tools: []string{}}
+			x := row{Package: in.ID, Key: key, Name: g.Name, Image: g.Image, Network: g.Network, Hosts: append([]string{}, g.Hosts...), Secrets: []string{}, Tools: []string{}}
 			for env := range g.Secrets {
 				x.Secrets = append(x.Secrets, env)
 			}
@@ -315,18 +368,25 @@ func (s *Server) approvePlugins(ctx context.Context, pkg MarketPackage, old map[
 	for _, pl := range pkg.Plugins {
 		wants := append([]string{}, pl.Secrets...)
 		sort.Strings(wants)
-		g := PluginGrant{Name: pl.Name, Image: pl.Image, WantsNetwork: pl.Network, WantsSecrets: wants, Secrets: map[string]string{}, Tools: pl.Tools, By: by, At: now}
-		if o, ok := old[pl.Key]; ok && o.Image == pl.Image && o.WantsNetwork == pl.Network && strings.Join(o.WantsSecrets, ",") == strings.Join(wants, ",") {
-			g.Network, g.Secrets, g.By, g.At = o.Network, o.Secrets, o.By, o.At
+		wantHosts := append([]string{}, pl.Hosts...)
+		sort.Strings(wantHosts)
+		g := PluginGrant{Name: pl.Name, Image: pl.Image, WantsNetwork: pl.Network, WantsHosts: wantHosts, WantsSecrets: wants, Secrets: map[string]string{}, Tools: pl.Tools, By: by, At: now}
+		if o, ok := old[pl.Key]; ok && o.Image == pl.Image && o.WantsNetwork == pl.Network && strings.Join(o.WantsHosts, ",") == strings.Join(wantHosts, ",") && strings.Join(o.WantsSecrets, ",") == strings.Join(wants, ",") {
+			g.Network, g.Hosts, g.Secrets, g.By, g.At = o.Network, o.Hosts, o.Secrets, o.By, o.At
 		} else {
 			rq, given := req[pl.Key]
 			if _, had := old[pl.Key]; had && !given {
-				return nil, http.StatusConflict, fmt.Sprintf("plugin %q changed what it asks for (image, network or secrets); review and grant it again", pl.Name)
+				return nil, http.StatusConflict, fmt.Sprintf("plugin %q changed what it asks for (image, network, hosts or secrets); review and grant it again", pl.Name)
 			}
 			if rq.Network && !pl.Network {
 				return nil, http.StatusBadRequest, fmt.Sprintf("plugin %q does not ask for network access", pl.Name)
 			}
+			granted, status, msg := grantedHosts(pl, rq.Hosts)
+			if status != 0 {
+				return nil, status, msg
+			}
 			g.Network = rq.Network
+			g.Hosts = granted
 			for env, name := range rq.Secrets {
 				if !contains(wants, env) {
 					return nil, http.StatusBadRequest, fmt.Sprintf("plugin %q does not ask for %s", pl.Name, env)
@@ -457,7 +517,7 @@ func (s *Server) runPluginLookup(ctx context.Context, c lookupCall) (string, err
 			}
 			env[e] = v
 		}
-		spec := plugin.Spec{ID: pluginSpecID(t.pkg, t.key), Image: t.grant.Image, Network: t.grant.Network, Env: env}
+		spec := plugin.Spec{ID: pluginSpecID(t.pkg, t.key), Image: t.grant.Image, Network: t.grant.Network, Hosts: t.grant.Hosts, Env: env}
 		out, err := s.pluginRunner().Call(ctx, spec, t.tool, args)
 		if err != nil {
 			return "", err

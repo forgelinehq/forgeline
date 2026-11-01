@@ -83,5 +83,5 @@ is on by default.
   hash included). It is set by whoever runs the server, never by the console. A duplicate id is shown
   as a damaged "duplicate" entry and cannot stand in for the first package.
 
-Not built: egress allowlists, long-lived plugins, signed third-party manifests, a published plugin
+Egress allowlists by host were built afterwards: see note 021. Not built: long-lived plugins, signed third-party manifests, a published plugin
 image (the sample is built locally and referenced by its image id).
