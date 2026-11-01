@@ -6,6 +6,13 @@ section in the pull request that makes the change; a release moves it under its 
 
 ## [Unreleased]
 
+### Changed
+- **Console redesign, first steps** (design note 022). The sidebar groups pages into Ship, Cloud, AI and
+  Govern, and the brand colour is now ember instead of indigo. Agent instructions and skill steps are
+  edited as Markdown, with a toolbar, a live preview and advisory checks (for example a T0 agent told to
+  delete things, a missing stop rule, or text that looks like a credential). The detail pages show them
+  formatted, with a switch to the exact stored text. The stored text and the API are unchanged.
+
 ## [0.1.0] - 2026-11-01
 
 First tagged release. Everything below was built and tested in development; see `docs/PLAN.md` and the design notes under `docs/design/` for what each part does and what is not yet verified against real infrastructure (Kubernetes against a real cluster, new environment templates on real AWS, plugin images from a real registry).

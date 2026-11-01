@@ -58,8 +58,12 @@ what to do next**. The project is pre-alpha and maintained by one person.
   (`git -c user.name=<login> -c user.email=<id>+<login>@users.noreply.github.com commit`; the
   maintainer's login is `cstripathy`). Do not put cloud account numbers, hostnames, usernames or
   local paths in the repository or in screenshots.
-- Never push to `main`. Work on a branch, open a pull request, and merge only when the maintainer
-  says so.
+- Never push to `main`. Work on a branch and open a pull request. The maintainer has said (2026-11-01)
+  that you may merge pull requests yourself, without asking each time, once CI passes: squash merge
+  (`gh pr merge <n> --squash`). Never merge with a failing or pending check, or a conflict. Merge a
+  stack of pull requests from the bottom: after each merge, rebase the next branch onto the new `main`,
+  force-push that feature branch only (never `main`), retarget its pull request to `main`, and wait for
+  its CI. Say in your reply what you merged.
 - The console builds all markup from text nodes (`ui/lib/dom.js`). Never use `innerHTML` or inline
   styles; a test enforces it, and the CSP would block the latter.
 - Security rules are tested by breaking them: after adding a check, remove it and confirm a test
