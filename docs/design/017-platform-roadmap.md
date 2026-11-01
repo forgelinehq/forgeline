@@ -1,6 +1,6 @@
 # 017: accounts, agents, workflows, environments, guard, marketplace
 
-Status: slices 1 (accounts), 2 (skills and agents, with versions) 3 (workflows), 4 (guard) and 5 (Kubernetes, read-only) 6 (environments) and 7 (marketplace, skills and agents) built; the rest planned. Builds on 013 (AI use cases), 014 (missions
+Status: slices 1 (accounts), 2 (skills and agents, with versions) 3 (workflows), 4 (guard) and 5 (Kubernetes, read-only) 6 (environments) and 7 (marketplace) built and released in 0.1.0; Kubernetes proposals on hold; the rest planned (see "Status after v0.1.0"). Builds on 013 (AI use cases), 014 (missions
 and autonomy tiers), 015 and 016 (AWS access and the AWS MCP Server).
 
 ## The one rule everything keeps
@@ -124,6 +124,30 @@ forces approval by a different administrator regardless of the self-service poli
 (no person) and viewers can't ask; the per-person limit applies. Three templates were added (Lambda
 sandbox, event pipeline, workflow sandbox), linted with cfn-lint and exercised through the fake CLI;
 **not deployed to a real account** (no AWS access in the build that added them).
+
+## Status after v0.1.0 (2026-11-01)
+
+Released as v0.1.0 (six binaries and `SHA256SUMS`). Built since the slices above: pipeline guard and
+run failure summary (#31), assistant and agents requesting environments (#32), signed third-party
+packages from a git source plus workflow and environment-template packages (#33), per-account
+writes (#34), the Forgeline MCP server (#35, note 020), plugin network allowlists (#37, note 021).
+
+Pending:
+
+- **Kubernetes change proposals (#30)**: built and CI green, on hold by the owner. Not in 0.1.0.
+  Proposals through the assistant, agents and MCP are tied to it.
+- **Real AWS checks not yet done**: a dev box and the three newer environment templates (Lambda
+  sandbox, event pipeline, workflow sandbox) have never been deployed to a real account. The dev-box
+  request on the :8086 test console awaits a second administrator, because a proposer cannot approve.
+- **Owner action**: turn on MFA for the root user of account 982740124073 (the top Guard finding).
+- **Not verified**: plugin egress on Docker Desktop, rootless Docker, IPv6-only hosts and a server
+  inside a container; signed packages against a public https repository; the Kubernetes read side
+  against a real cluster; plugin images pulled by digest from a real registry; MCP proposals against
+  live AWS.
+- **Not built**: MCP resources, prompts and OAuth; a revocation list for package signing keys; more
+  catalogue templates; kubeconfig import, logs and exec for Kubernetes; the ranked list below
+  (cost anomaly watch, drift, canary deploys, approval policies, SSO and SCIM, preview environments,
+  run insights).
 
 ## Slice 2 sketch (so slice 1 does not paint us into a corner)
 
