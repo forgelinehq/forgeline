@@ -87,6 +87,7 @@ In the console: Kubernetes → Add cluster → Token, server `http://127.0.0.1:1
 ## sample-plugin
 
 `sample-plugin/build.sh` builds a tiny MCP server image (`FROM scratch`) and prints its image id.
-Put that id in a manifest under a directory, set `FORGELINE_MARKET_DIR` to it, and install it from
+Its `probe` tool also takes `{"connect": "host:port"}` and asks the proxy in `HTTPS_PROXY` for a tunnel
+there (see note 021). Put that id in a manifest under a directory, set `FORGELINE_MARKET_DIR` to it, and install it from
 the Marketplace to try plugins for real. `FORGELINE_SAMPLE_PLUGIN_IMAGE=<id> go test ./internal/plugin
 -run RealDocker` runs it in a real container and checks what it can and cannot do.

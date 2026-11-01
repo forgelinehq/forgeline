@@ -144,12 +144,12 @@ A run's `status` is one of `queued`, `running`, `succeeded`, `failed`, `canceled
 | `POST /v1/ai/agents/{id}/rollback` | admin | Copy an old version forward as the current one. |
 | `POST /v1/ai/agents/{id}/disable` | admin | Turn an agent off (it cannot run or be listed). |
 | `POST /v1/ai/agents/{id}/enable` | admin | Turn it back on. |
-| `GET /v1/plugins` | developer | Whether plugins are on, and the installed plugins with their tools, network grant and secret names (never values). |
+| `GET /v1/plugins` | developer | Whether plugins are on, and the installed plugins with their tools, network and host grants and secret names (never values). |
 | `PUT /v1/plugins/settings` | admin | Turn plugins on or off. Turning on checks that Docker answers. |
 | `GET /v1/market/packages` | developer | The catalogue: each package with its skills, agents, workflows, environment templates, tools, tiers, sha256, source (`built-in`, `local` or `git`), signer, and what is installed; `git` describes the signed git source (url, ref, trusted key ids, last commit and fetch, error). |
 | `POST /v1/market/refresh` | admin | Fetch the signed git source now. |
 | `DELETE /v1/market/seen/{id}` | admin | Make the server forget which signed versions of a package it has seen from git, so an older one is accepted again (for a version signed by mistake or a replaced key). Audited. |
-| `POST /v1/market/install` | admin | Install or upgrade a package. Needs the sha256 that was reviewed; an upgrade never raises the tier. `grants` gives each plugin its network and secrets; nothing is granted by default. |
+| `POST /v1/market/install` | admin | Install or upgrade a package. Needs the sha256 that was reviewed; an upgrade never raises the tier. `grants` gives each plugin its network (`network`, or `hosts`: a subset of the hosts the plugin asked for) and secrets; nothing is granted by default. |
 | `DELETE /v1/market/install/{id}` | admin | Forget an install and disable its agents. Skills and agents stay with their history. |
 | `POST /v1/ai/agents/{id}/chat` | developer | Talk to an agent (`version` optional). It uses only its own tools, as the asker. |
 | `GET /v1/aws/accounts` | viewer | The connected AWS accounts: the primary one and any added. |

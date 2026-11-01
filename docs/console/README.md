@@ -253,3 +253,21 @@ publisher's cost estimate; always approved by an administrator, never self-servi
 stacks, custom resources or macros). The review shows both in full, including the template body.
 
 ![A package with a workflow and an environment template](61-package-workflow-template.png)
+
+**Only some hosts.** A plugin can ask for named hosts (`api.example.com`, `*.example.com`, optionally
+`:port`; 443 by default) instead of the whole network, and you tick the ones to allow. Each call then
+runs on its own Docker network with no route out; the one address it can reach is a small proxy that
+Forgeline runs for that call. The proxy tunnels only to a listed name on a listed port, resolves the
+name itself and refuses anything that resolves to a private, loopback, link-local (including the
+cloud metadata address) or other reserved address, and counts what it let through and refused into
+the audit log (`plugin.egress`). Because the proxy's address is reachable by other containers on the
+host, every request must carry a random token made for that call (given to the plugin in its proxy
+settings); a request without it is turned away and counted, and marks the audit entry as a refusal.
+The byte budget (64 MiB per call) cuts a transfer visibly and counts as a refusal, while a host that
+is down is recorded as a failure, not a refusal. The plugin has no DNS of its own, and one that ignores the proxy
+settings simply reaches nothing. It does not stop an allowed host from passing data on, it does not
+look inside TLS (a host is trusted by name), and it needs Forgeline to run on the Docker host
+itself: if the proxy cannot listen on the network's gateway the call is refused, never opened up. An
+update that asks for different hosts needs a fresh grant.
+
+![Choosing which hosts a plugin may reach](62-plugin-hosts.png)

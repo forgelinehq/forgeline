@@ -12,6 +12,15 @@ section in the pull request that makes the change; a release moves it under its 
 - A cloud change canceled while its preview was still being prepared came back as waiting for approval when the preview finished; the cancellation now stays.
 
 ### Added
+- **Plugins can reach only some hosts.** A plugin may ask for named hosts instead of the whole network,
+  and the administrator ticks the ones to allow. Each call runs on a private Docker network with no
+  route out and no DNS; the only address it reaches is a per-call proxy that tunnels to a listed name
+  and port, resolves the name itself and refuses private, loopback, link-local and other reserved
+  addresses. The proxy answers only to a random per-call credential (so another container that can reach
+  its address cannot use it), caps a call at 64 MiB shared across tunnels, closes every tunnel when the
+  call ends, and tells upstream failures from refusals. What it allowed and refused is in the audit log.
+  A changed host list needs a fresh grant.
+  (note 021)
 - **Environments from the assistant, and three more templates.** The assistant, review-tier agents
   and workflow steps can request a temporary environment in a person's name (`environment_templates`,
   `request_environment`). The request never starts on its own, even under the self-service policy; a

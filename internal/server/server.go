@@ -21,6 +21,7 @@ import (
 
 	"github.com/forgelinehq/forgeline/internal/docstore"
 	"github.com/forgelinehq/forgeline/internal/executor"
+	"github.com/forgelinehq/forgeline/internal/plugin"
 	"github.com/forgelinehq/forgeline/internal/store"
 	"github.com/forgelinehq/forgeline/internal/vault"
 )
@@ -101,15 +102,17 @@ type Server struct {
 	aiBusy   bool                                                       // an approved AI change is being applied
 	mcpStart func(ctx context.Context, st awsSettings) (mcpConn, error) // replaced in tests
 
-	started  time.Time
-	run      cmdRunner // runs docker and aws; replaced in tests
-	awsCache awsCache
-	awsInv   invCache
-	wf       wfEngine
-	guard    guardEngine
-	k8s      k8sEngine
-	envs     envEngine
-	plugins  pluginRunner // container runner for plugins; replaced in tests
+	started    time.Time
+	run        cmdRunner // runs docker and aws; replaced in tests
+	awsCache   awsCache
+	awsInv     invCache
+	wf         wfEngine
+	guard      guardEngine
+	k8s        k8sEngine
+	envs       envEngine
+	plugins    pluginRunner // container runner for plugins; replaced in tests
+	runnerOnce sync.Once
+	realRunner *plugin.Runner
 
 	ghApp     ghAppRegistry // GitHub App setups waiting for GitHub
 	ghTokens  sync.Map      // "appID/installationID" -> *ghTokenCache
@@ -239,6 +242,12 @@ func (s *Server) Start(ctx context.Context) error {
 	s.baseCtx = ctx
 	for _, r := range interrupted {
 		s.reportFinished(r, store.RunFailed, "server restarted")
+	}
+	if s.plugins == nil && s.loadPluginSettings(ctx).Enabled {
+		// Remove private networks a killed server left behind, in the background.
+		if r, ok := s.pluginRunner().(*plugin.Runner); ok {
+			r.StartSweeper(ctx)
+		}
 	}
 	s.startWorkflows(ctx)
 	s.startMarketGit(ctx)
