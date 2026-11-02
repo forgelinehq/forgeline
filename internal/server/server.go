@@ -106,6 +106,7 @@ type Server struct {
 	run        cmdRunner // runs docker and aws; replaced in tests
 	awsCache   awsCache
 	awsInv     invCache
+	integTests integTestStore // the last test of each integration, kept in memory
 	wf         wfEngine
 	guard      guardEngine
 	k8s        k8sEngine
