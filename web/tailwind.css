@@ -19,6 +19,7 @@
   --color-brand-700: #9a3412;
   --color-brand-800: #7c2d12;
   --color-brand-900: #5f240f;
+  --color-brand-950: #431407;
   --animate-pulse-dot: pulse-dot 1.6s ease-in-out infinite;
   @keyframes pulse-dot {
     0%, 100% { opacity: 1; transform: scale(1); }

@@ -21,6 +21,11 @@ section in the pull request that makes the change; a release moves it under its 
   what. No new API.
 
 ### Changed
+- **Selected items unreadable in dark mode, and a narrow page on big screens.** The selected tile on the AWS map and
+  other selected cards used a colour shade (`brand-950`) that was never defined, so in dark mode they stayed pale
+  under light text and the text could not be read. The shade is defined, and a test now fails when the console uses a
+  brand shade the theme lacks. The page was capped at 1280 px; it now grows to 1536 px from 1800 px wide screens and
+  1920 px from 2300 px.
 - **Console fixes.** The server version no longer shows a doubled `v` (`vv0.1.0-...`) when the build comes from git. The audit log table wraps its columns to fit instead of scrolling sideways at 1440px.
 - **Docs site.** The console tour, the AWS guide, the assistant guide and the status page now describe the redesign, with new pictures. The console pictures used by the guides were retaken after the redesign. They say plainly that logs, alarms and the assistant event stream are designed but not built.
 - **Console redesign, first steps** (design note 022). The sidebar groups pages into Ship, Cloud, AI and

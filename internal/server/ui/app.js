@@ -55,7 +55,7 @@ function isActive(item) {
 }
 
 function shell() {
-  const outlet = h('main', { id: 'main', tabindex: '-1', class: 'mx-auto w-full max-w-7xl flex-1 px-4 py-6 outline-none sm:px-6 lg:px-8' });
+  const outlet = h('main', { id: 'main', tabindex: '-1', class: 'mx-auto w-full max-w-7xl flex-1 px-4 py-6 outline-none sm:px-6 lg:px-8 min-[1800px]:max-w-[96rem] min-[2300px]:max-w-[120rem]' });
   const nav = h('nav', { class: 'flex flex-col gap-0.5 px-3', 'aria-label': 'Main' });
   const navLink = i =>
     h('a', {
