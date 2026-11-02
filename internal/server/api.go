@@ -122,6 +122,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("PATCH /v1/aws/accounts/{id}", s.requireRole(authn.Admin, s.handleUpdateAWSAccount))
 	mux.Handle("DELETE /v1/aws/accounts/{id}", s.requireRole(authn.Admin, s.handleDeleteAWSAccount))
 	mux.Handle("GET /v1/infra/aws/resources", s.requireRole(authn.Viewer, s.handleAWSInventory))
+	mux.Handle("GET /v1/infra/aws/alarms", s.requireRole(authn.Viewer, s.handleAWSAlarms))
 	mux.Handle("GET /v1/infra/aws/cost", s.requireRole(authn.Developer, s.handleAWSCost))
 	mux.Handle("GET /v1/integrations/aws", s.requireRole(authn.Developer, s.handleGetAWSSettings))
 	mux.Handle("PUT /v1/integrations/aws", s.requireRole(authn.Admin, s.handlePutAWSSettings))

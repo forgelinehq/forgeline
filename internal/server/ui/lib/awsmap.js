@@ -26,9 +26,50 @@ export function field(r, label) {
   return f ? f.value : '';
 }
 
-/** Reasons a resource deserves a look, from its state and fields only. Level is 'bad' or 'warn'. */
-export function attention(svcId, r) {
+// Which alarm dimensions name a resource (design note 023, step 2). An alarm belongs to a resource only
+// when its namespace and its own dimensions say so; nothing is matched by similar names.
+const ALARM_KEYS = {
+  ec2: [['AWS/EC2'], r => ({ InstanceId: r.id })],
+  ebs: [['AWS/EBS'], r => ({ VolumeId: r.id })],
+  rds: [['AWS/RDS'], r => ({ DBInstanceIdentifier: r.id })],
+  lambda: [['AWS/Lambda'], r => ({ FunctionName: r.id })],
+  dynamodb: [['AWS/DynamoDB'], r => ({ TableName: r.name })],
+  sqs: [['AWS/SQS'], r => ({ QueueName: r.name })],
+  s3: [['AWS/S3'], r => ({ BucketName: r.id })],
+  elb: [['AWS/ApplicationELB', 'AWS/NetworkELB'], r => { const i = (r.arn || '').indexOf('loadbalancer/'); return i < 0 ? null : { LoadBalancer: r.arn.slice(i + 13) }; }],
+  'ecs-services': [['AWS/ECS'], r => ({ ServiceName: r.name, ClusterName: field(r, 'Cluster') })],
+  ecs: [['AWS/ECS'], r => ({ ClusterName: r.name }), ['ServiceName']],
+};
+
+/** The alarms whose own dimensions name this resource. */
+export function alarmsFor(alarms, svcId, r) {
+  const k = ALARM_KEYS[svcId];
+  if (!k || !alarms || !alarms.length) return [];
+  const want = k[1](r);
+  if (!want || Object.values(want).some(v => !v)) return [];
+  const absent = k[2] || [];
+  return alarms.filter(a => {
+    if (!k[0].includes(a.namespace)) return false;
+    const dims = new Map((a.dimensions || []).map(d => [d.name, d.value]));
+    return Object.entries(want).every(([n, v]) => dims.get(n) === v) && absent.every(n => !dims.has(n));
+  });
+}
+
+/**
+ * What the alarms say about a resource: 'alarm' (one is in ALARM), 'nodata', 'ok' (it has alarms and
+ * every one is OK) or 'none' (no alarm names it). 'none' is not healthy: nothing was measured.
+ */
+export function health(alarms, svcId, r) {
+  const mine = alarmsFor(alarms, svcId, r);
+  let kind = 'none';
+  if (mine.length) kind = mine.some(a => a.state === 'ALARM') ? 'alarm' : mine.some(a => a.state !== 'OK') ? 'nodata' : 'ok';
+  return { kind, alarms: mine };
+}
+
+/** Reasons a resource deserves a look, from its state, its fields and (when given) its alarms. Level is 'bad' or 'warn'. */
+export function attention(svcId, r, alarms = null) {
   const out = [];
+  for (const a of alarmsFor(alarms, svcId, r)) if (a.state === 'ALARM') out.push({ level: 'bad', text: `Alarm: ${a.name}` });
   const kind = stateKind(r.state);
   if (kind === 'bad') out.push({ level: 'bad', text: `State: ${r.state}` });
   else if (kind === 'wait') out.push({ level: 'warn', text: `State: ${r.state}` });
@@ -62,7 +103,7 @@ function addTo(groups, svc, r) {
  *   attention: flagged resources, failing ones first
  * Services that could not be listed or are empty are left out; the caller reports those itself.
  */
-export function buildMap(inv, query = '') {
+export function buildMap(inv, query = '', alarms = null) {
   const services = (inv.services || []).filter(s => s.count > 0 && !s.error);
   const vpcs = [];
   const byId = new Map();
@@ -79,7 +120,7 @@ export function buildMap(inv, query = '') {
     for (const r of svc.resources) {
       if (!matches(r, query)) continue;
       total++;
-      const why = attention(svc.id, r);
+      const why = attention(svc.id, r, alarms);
       if (why.length) flagged.push({ svc, r, why });
       if (svc.id === 'vpc') continue; // a VPC is the container, not an item in one
       const vid = field(r, 'VPC');

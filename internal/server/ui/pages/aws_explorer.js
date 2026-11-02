@@ -2,7 +2,7 @@
 // changed there, and a detail view per resource. Read-only; changes go through Proposals.
 import { h, icon, mount, pill, relTime, absTime, spinner, errorBox, notice, modal, emptyState, copyButton } from '../lib/dom.js';
 import { get } from '../lib/api.js';
-import { stateKind } from '../lib/awsmap.js';
+import { stateKind, health } from '../lib/awsmap.js';
 import { mapView, keyOf } from './aws_map.js';
 
 const CATEGORIES = ['Compute', 'Containers', 'Storage', 'Databases', 'Network', 'Messaging', 'Management'];
@@ -30,7 +30,7 @@ function touchedBy(res, proposals) {
 
 export function explorer({ dev, account = 'primary', url = '', scope = 'region' }) {
   const root = h('section', { class: 'card', id: 'aws-explorer' }, spinner());
-  let inv = null, proposals = [], selected = '', query = '', shown = PAGE;
+  let inv = null, alarmData = null, proposals = [], selected = '', query = '', shown = PAGE;
   // The map is the default view for AWS; Kubernetes (which passes a url) keeps the list.
   let view = url ? 'list' : 'map', selRes = '';
   const expanded = new Set();
@@ -38,10 +38,12 @@ export function explorer({ dev, account = 'primary', url = '', scope = 'region' 
   async function load(refresh) {
     mount(root, spinner());
     try {
-      [inv, proposals] = await Promise.all([
+      [inv, proposals, alarmData] = await Promise.all([
         get(url ? url + (refresh ? '?refresh=1' : '') : '/v1/infra/aws/resources?account=' + encodeURIComponent(account) + (refresh ? '&refresh=1' : '')),
         // Proposals are for the primary account, so only it can show "changed through Forgeline".
         account === 'primary' && !url ? get('/v1/ai/proposals').then(r => r.proposals).catch(() => []) : [],
+        // Alarms are optional: a role that cannot read them still gets the map, and says so.
+        url ? null : get('/v1/infra/aws/alarms?account=' + encodeURIComponent(account)).catch(e => ({ enabled: true, error: e.message, alarms: [] })),
       ]);
     } catch (e) { return mount(root, h('div', { class: 'p-5' }, errorBox(e.message))); }
     draw();
@@ -78,8 +80,16 @@ export function explorer({ dev, account = 'primary', url = '', scope = 'region' 
           h('p', { class: 'muted mt-0.5 text-xs', title: absTime(inv.fetched_at) }, `${total} in ${withStuff.length} service${withStuff.length === 1 ? '' : 's'} · ${scope} ${inv.region} · read ${relTime(inv.fetched_at)}`)),
         h('div', { class: 'flex flex-wrap items-center gap-2' }, switcher, search,
           h('button', { class: 'btn-secondary btn-sm', type: 'button', id: 'explorer-refresh', onclick: () => load(true) }, icon('refresh', 'size-3.5'), 'Refresh'))),
+      ...(alarmData && alarmData.enabled && !url ? [alarmLine()] : []),
       ...(mapOn ? [h('div', { id: 'explorer-map' }), h('div', { class: 'px-5 pb-4' }, notes())] : [tiles, tableBox]), changesPanel(applied));
     if (mapOn) drawMap(false); else drawTable();
+  }
+
+  function alarmLine() {
+    if (alarmData.error) return h('p', { class: 'border-b border-slate-200 px-5 py-2 text-xs text-amber-700 dark:border-slate-800 dark:text-amber-400', id: 'alarm-line' }, 'Alarms could not be read: ' + alarmData.error);
+    const n = alarmData.alarms.filter(a => a.state === 'ALARM').length;
+    return h('p', { class: 'muted border-b border-slate-200 px-5 py-2 text-xs dark:border-slate-800', id: 'alarm-line' },
+      `${alarmData.count} CloudWatch alarm${alarmData.count === 1 ? '' : 's'}, ${n} in alarm.` + (alarmData.truncated ? ' Only the first 500 are used.' : '') + ' A resource with no alarm is not shown as healthy.');
   }
 
   function tile(svc) {
@@ -98,6 +108,9 @@ export function explorer({ dev, account = 'primary', url = '', scope = 'region' 
     return [r.name, r.id, r.state, r.arn, ...(r.fields || []).map(f => f.value), ...Object.entries(r.tags || {}).flat()].some(v => v && String(v).toLowerCase().includes(q));
   }
 
+  /** The alarms to match against, or null when they could not be read (so nothing is claimed from them). */
+  const alarmList = () => (alarmData && !alarmData.error ? alarmData.alarms : null);
+
   function findRes(key) {
     for (const sv of inv.services) for (const r of sv.resources) if (keyOf(sv, r) === key) return { svc: sv, r };
     return null;
@@ -111,7 +124,7 @@ export function explorer({ dev, account = 'primary', url = '', scope = 'region' 
     const found = selRes ? findRes(selRes) : null;
     if (selRes && !found) selRes = ''; // it was removed by a refresh
     mount(box, h('div', { class: 'grid gap-4 px-5 py-4 ' + (found ? 'lg:grid-cols-[minmax(0,1fr)_22rem]' : '') },
-      mapView(inv, { query, selected: selRes, expanded, onSelect: pick, onExpand: (k) => { expanded.add(k); drawMap(false); } }),
+      mapView(inv, { query, alarms: alarmList(), selected: selRes, expanded, onSelect: pick, onExpand: (k) => { expanded.add(k); drawMap(false); } }),
       found ? h('aside', { class: 'lg:sticky lg:top-20 lg:self-start', 'aria-label': 'Resource details' },
         h('div', { class: 'rounded-xl border border-slate-200 p-4 dark:border-slate-800' },
           h('div', { class: 'mb-3 flex items-start justify-between gap-2' }, h('h3', { class: 'min-w-0 break-all font-medium' }, found.r.name),
@@ -154,10 +167,24 @@ export function explorer({ dev, account = 'primary', url = '', scope = 'region' 
         h('span', { class: 'flex flex-wrap gap-1' }, (p.ran_calls?.length ? p.ran_calls : p.calls).map(c => h('code', { class: 'rounded bg-slate-100 px-1.5 py-0.5 text-xs dark:bg-slate-800' }, `${c.service}.${c.operation}`)))))));
   }
 
+  /** What alarms say about this resource. No alarm is stated as "no alarms", never as healthy. */
+  function healthSection(svc, r) {
+    if (url || !alarmData || !alarmData.enabled) return null;
+    if (alarmData.error) return h('p', { class: 'muted text-xs' }, 'Alarms: ' + alarmData.error);
+    const hl = health(alarmData.alarms, svc.id, r);
+    if (hl.kind === 'none') return h('p', { class: 'muted text-xs', id: 'resource-health' }, 'No CloudWatch alarm names this resource, so its health is not measured here.');
+    return h('div', { id: 'resource-health' }, h('div', { class: 'h-section mb-1' }, 'Alarms'),
+      h('ul', { class: 'space-y-1.5 text-sm' }, hl.alarms.map(a => h('li', { class: 'flex flex-wrap items-baseline gap-x-2' },
+        h('span', { class: a.state === 'OK' ? 'pill-ok' : a.state === 'ALARM' ? 'pill-bad' : 'pill-wait' }, a.state === 'INSUFFICIENT_DATA' ? 'no data' : a.state.toLowerCase()),
+        h('span', { class: 'font-medium' }, a.name), a.metric && h('span', { class: 'muted text-xs' }, a.metric),
+        a.reason && a.state !== 'OK' ? h('span', { class: 'muted block w-full text-xs' }, a.reason) : null))));
+  }
+
   function detailBody(svc, r, closeModal) {
     const by = touchedBy(r, proposals);
     return h('div', { class: 'space-y-4', id: 'resource-detail' },
       h('div', { class: 'flex flex-wrap items-center gap-3' }, stateBadge(r.state), h('span', { class: 'muted text-sm' }, svc.label + (r.created ? ' · created ' + relTime(r.created) : ''))),
+      healthSection(svc, r),
       r.fields?.length ? h('dl', { class: 'grid grid-cols-[auto_1fr] gap-x-6 gap-y-1.5 text-sm' }, r.fields.map(f => [h('dt', { class: 'muted' }, f.label), h('dd', { class: 'break-all font-mono text-xs leading-5' }, f.value)])) : null,
       h('div', {}, h('div', { class: 'h-section mb-1' }, 'Identifier'), h('div', { class: 'flex items-center gap-2' }, h('code', { class: 'break-all text-xs' }, r.arn || r.id), copyButton(r.arn || r.id, 'Copy'))),
       r.tags ? h('div', {}, h('div', { class: 'h-section mb-1' }, 'Tags'), h('div', { class: 'flex flex-wrap gap-1.5' }, Object.entries(r.tags).map(([k, v]) => h('span', { class: 'rounded-md bg-slate-100 px-2 py-0.5 text-xs dark:bg-slate-800' }, h('span', { class: 'muted' }, k + ': '), v)))) : null,

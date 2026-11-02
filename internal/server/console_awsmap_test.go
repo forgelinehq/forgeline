@@ -11,7 +11,7 @@ import (
 // Skipped where Node is not installed. Each case says what it protects: the map must state only
 // what the inventory states.
 const awsMapCases = `
-import { stateKind, attention, buildMap, matches } from './awsmap.mjs';
+import { stateKind, attention, buildMap, matches, alarmsFor, health } from './awsmap.mjs';
 
 let failed = 0;
 const eq = (name, got, want) => {
@@ -77,6 +77,47 @@ const sorted = buildMap({ services: [
   svc('cfn', 'Management', [res('stack-bad', { state: 'ROLLBACK_COMPLETE' })]),
 ] });
 eq('bad before warn', sorted.attention.map(a => a.r.id), ['stack-bad', 'sg-w']);
+
+// Alarms (note 023, step 2). An alarm belongs to a resource only when namespace and dimensions say so.
+const al = (name, state, namespace, dims) => ({ name, state, namespace, dimensions: Object.entries(dims).map(([n, v]) => ({ name: n, value: v })) });
+const alarms = [
+  al('cpu-hot', 'ALARM', 'AWS/EC2', { InstanceId: 'i-1' }),
+  al('cpu-fine', 'OK', 'AWS/EC2', { InstanceId: 'i-2' }),
+  al('quiet', 'INSUFFICIENT_DATA', 'AWS/EC2', { InstanceId: 'i-3' }),
+  al('db-cpu', 'ALARM', 'AWS/RDS', { DBInstanceIdentifier: 'orders' }),
+  al('wrong-ns', 'ALARM', 'Custom/Thing', { InstanceId: 'i-4' }),
+  al('web-5xx', 'ALARM', 'AWS/ApplicationELB', { LoadBalancer: 'app/web-alb/abc' }),
+  al('svc-web', 'ALARM', 'AWS/ECS', { ClusterName: 'payments', ServiceName: 'web' }),
+  al('cluster-cpu', 'OK', 'AWS/ECS', { ClusterName: 'payments' }),
+];
+const names = (svcId, r) => alarmsFor(alarms, svcId, r).map(a => a.name);
+eq('alarm by instance id', names('ec2', res('i-1')), ['cpu-hot']);
+eq('no alarm for an instance nobody named', names('ec2', res('i-9')), []);
+eq('a similar id is not a match', names('ec2', res('i')), []);
+eq('namespace must match', names('ec2', res('i-4')), []);
+eq('alarm by db identifier', names('rds', res('orders')), ['db-cpu']);
+eq('same id under another service type is not matched', names('ec2', res('orders')), []);
+eq('load balancer by arn suffix', names('elb', res('web-alb', { arn: 'arn:aws:elasticloadbalancing:ap-south-1:1:loadbalancer/app/web-alb/abc' })), ['web-5xx']);
+eq('load balancer without an arn matches nothing', names('elb', res('web-alb')), []);
+eq('ecs service needs its cluster too', names('ecs-services', res('web', { fields: [f('Cluster', 'payments')] })), ['svc-web']);
+eq('ecs service in another cluster', names('ecs-services', res('web', { fields: [f('Cluster', 'other')] })), []);
+eq('ecs cluster alarm excludes service alarms', names('ecs', res('payments')), ['cluster-cpu']);
+eq('a resource without an id matches nothing, even an alarm that lacks the dimension', alarmsFor([al('bare', 'ALARM', 'AWS/EC2', { Other: 'x' })], 'ec2', {}), []);
+eq('no alarms given', alarmsFor(null, 'ec2', res('i-1')), []);
+eq('unknown service type', alarmsFor(alarms, 'vpc', res('i-1')), []);
+
+eq('health alarm', health(alarms, 'ec2', res('i-1')).kind, 'alarm');
+eq('health ok', health(alarms, 'ec2', res('i-2')).kind, 'ok');
+eq('health no data is not ok', health(alarms, 'ec2', res('i-3')).kind, 'nodata');
+eq('no alarm is none, never ok', health(alarms, 'ec2', res('i-9')).kind, 'none');
+eq('an alarm in ALARM wins over an OK one', health([...alarms, al('x', 'OK', 'AWS/EC2', { InstanceId: 'i-1' })], 'ec2', res('i-1')).kind, 'alarm');
+
+eq('alarm flags the resource as bad', attention('ec2', res('i-1', { state: 'running' }), alarms).map(x => x.level + ':' + x.text), ['bad:Alarm: cpu-hot']);
+eq('an OK alarm flags nothing', attention('ec2', res('i-2', { state: 'running' }), alarms), []);
+eq('no data flags nothing', attention('ec2', res('i-3', { state: 'running' }), alarms), []);
+eq('alarms not read flags nothing', attention('ec2', res('i-1', { state: 'running' }), null), []);
+const am = buildMap({ services: [svc('ec2', 'Compute', [res('i-1', { state: 'running' }), res('i-2', { state: 'running' })])] }, '', alarms);
+eq('map lists the alarmed resource', am.attention.map(a => a.r.id), ['i-1']);
 
 if (failed) process.exit(1);
 console.log('ok');

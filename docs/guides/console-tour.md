@@ -40,7 +40,7 @@ Start, watch and re-run GitHub Actions workflows of your allowed repositories. S
 ## Infrastructure
 Three tabs: **Platform** (the Forgeline server, Docker host and running steps), **AWS account** (the resources in the account) and **Cloud changes** (proposals and approvals). See [Connect AWS]({{ '/guides/connect-aws/' | relative_url }}).
 
-The AWS tab opens on a **Map**. Each resource sits inside the VPC its own record names; the rest are grouped by kind (compute, storage, databases and so on). A strip at the top lists what **needs a look**: a failing or changing state, a security group open to the internet, an unattached or unencrypted volume, a database that is publicly accessible or not encrypted. Click any resource to see its detail beside the map. **List** is one click away, and the search box filters both.
+The AWS tab opens on a **Map**. Each resource sits inside the VPC its own record names; the rest are grouped by kind (compute, storage, databases and so on). A strip at the top lists what **needs a look**: a failing or changing state, a security group open to the internet, an unattached or unencrypted volume, a database that is publicly accessible or not encrypted, or a CloudWatch alarm that is in alarm. Click any resource to see its detail beside the map. **List** is one click away, and the search box filters both.
 
 ![AWS map]({{ '/console/70-aws-map.png' | relative_url }})
 

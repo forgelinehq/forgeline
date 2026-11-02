@@ -134,6 +134,11 @@ func (a *awsStub) run(_ context.Context, name string, args ...string) ([]byte, s
 		return []byte(`{"serviceArns":["arn:aws:ecs:ap-south-1:111122223333:service/payments/web"]}`), "", nil
 	case strings.HasPrefix(key, "ecs describe-services"):
 		return []byte(`{"services":[{"serviceName":"web","status":"ACTIVE","desiredCount":3,"runningCount":3,"pendingCount":0,"launchType":"FARGATE","taskDefinition":"arn:aws:ecs:ap-south-1:111122223333:task-definition/web:7"}]}`), "", nil
+	case strings.HasPrefix(key, "cloudwatch describe-alarms"):
+		return []byte(`{"MetricAlarms":[
+{"AlarmName":"b-ok","StateValue":"OK","Namespace":"AWS/EC2","MetricName":"CPUUtilization","Dimensions":[{"Name":"InstanceId","Value":"i-1"}]},
+{"AlarmName":"c-nodata","StateValue":"INSUFFICIENT_DATA"},
+{"AlarmName":"a-hot","StateValue":"ALARM","StateReason":"Threshold Crossed","StateUpdatedTimestamp":"2026-11-01T10:00:00Z","Namespace":"AWS/RDS","MetricName":"CPUUtilization","Dimensions":[{"Name":"DBInstanceIdentifier","Value":"orders-db"}]}]}`), "", nil
 	case strings.HasPrefix(key, "s3api list-buckets"):
 		return []byte(`{"Buckets":[{"Name":"assets-111122223333","CreationDate":"2026-01-01T00:00:00Z"}]}`), "", nil
 	}

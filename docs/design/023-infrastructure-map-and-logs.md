@@ -1,6 +1,6 @@
 # 023: Infrastructure map and logs
 
-Status: **Order of work step 1 (the map from the inventory) is built; the rest is design only.** Date: 2026-11-01.
+Status: **Order of work steps 1 (the map) and 2 (alarms) are built; logs and metrics are design only.** Date: 2026-11-01.
 Builds on notes 006 (console), 015 (AWS access for the assistant), 017 (more than one account) and
 022 (console redesign, step 2). Facts about the code are from `origin/main` at `f927cad`.
 
@@ -62,7 +62,15 @@ missing, the panel must say which one, per group, instead of showing an empty li
    instance is not flagged. A side panel shows the resource's detail. Kubernetes keeps the list. No new
    endpoint. **Not done:** links to Guard findings for a resource (Guard's findings are not keyed by
    resource in the inventory; a later change).
-2. **Alarms and health.**
+2. **Alarms and health (built).** `GET /v1/infra/aws/alarms` makes one `cloudwatch describe-alarms` call (viewer
+   role, at most 500 alarms, ALARM first). The console matches an alarm to a resource only when the alarm's
+   namespace and its own dimensions name it: EC2 `InstanceId`, EBS `VolumeId`, RDS `DBInstanceIdentifier`, Lambda
+   `FunctionName`, DynamoDB `TableName`, SQS `QueueName`, S3 `BucketName`, load balancers by the ARN suffix, ECS
+   services by cluster and service name, ECS clusters by cluster name. An alarm in ALARM flags the resource;
+   "no data" and OK flag nothing. A resource with no alarm shows "no alarm names this resource", never
+   "healthy". If the role cannot call `cloudwatch:DescribeAlarms` the console says so and the map still works.
+   **Not done:** composite alarms (the default call returns metric alarms only), alarms on metric math
+   expressions (no dimensions, so they match nothing), and a list of all alarms apart from the resources.
 3. **Logs.** The endpoint, the allowlist, masking, audit and the log panel.
 4. **Metrics.**
 

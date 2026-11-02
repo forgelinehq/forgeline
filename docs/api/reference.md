@@ -158,6 +158,7 @@ A run's `status` is one of `queued`, `running`, `succeeded`, `failed`, `canceled
 | `DELETE /v1/aws/accounts/{id}` | admin | Remove an added account and cancel the proposals waiting for it. Changes nothing in AWS. |
 | `GET /v1/infra/aws` | viewer | Identity, stacks, instances. `?account=<id>` reads an added account. |
 | `GET /v1/infra/aws/resources` | viewer | Every resource in the account by service (ECS, EC2, S3, Lambda, RDS and more), read-only; `?account=<id>` picks the account; `?refresh=1` skips the 60 s cache. |
+| `GET /v1/infra/aws/alarms` | viewer | The account's CloudWatch metric alarms (name, state, reason, namespace, dimensions), alarms in ALARM first, at most 500; read-only, one `describe-alarms` call. `?account=<id>` picks the account. If the role may not read them, `error` names the missing permission (`cloudwatch:DescribeAlarms`). |
 | `GET /v1/infra/aws/cost` | developer | Spend for 30 days (each call is billed by AWS). |
 | `GET /v1/infra/runtime` | viewer | The Forgeline server, Docker host, running steps, disk. |
 
