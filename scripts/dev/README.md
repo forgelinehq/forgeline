@@ -56,6 +56,19 @@ address, and open the link the page shows (it is served by this script) to appro
 of the two demo accounts. The server refuses `FORGELINE_DEV_SSO_BASE` unless it is a loopback
 address. Role credentials are fake, so use it together with `fake-aws`.
 
+## `fake-gcloud`: a stand-in for the gcloud command
+
+Answers the three read commands the console runs for Google Cloud (`asset search-all-resources`, `auth list`,
+`config get-value project`) with made-up resources, including Vertex AI and a kind the console does not know.
+Put it first on `PATH` as `gcloud`:
+
+```sh
+mkdir -p /tmp/fake-gcloud/bin && ln -sf $PWD/scripts/dev/fake-gcloud /tmp/fake-gcloud/bin/gcloud
+PATH=/tmp/fake-gcloud/bin:$PATH FORGELINE_TOKEN=a-long-dev-token-123 ./bin/forgeline server --listen 127.0.0.1:8081 --data-dir /tmp/fl-sim
+```
+
+`FAKE_GCLOUD_DENY=1` makes the search fail with a permission error; `FAKE_GCLOUD_NOAUTH=1` makes `auth list` print nothing.
+
 ## `fake-aws-mcp`: a stand-in for the AWS MCP Server's signing proxy
 
 Speaks MCP over stdio like `uvx mcp-proxy-for-aws`, offers the same tool names, and answers

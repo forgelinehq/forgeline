@@ -1,0 +1,46 @@
+#!/usr/bin/env python3
+# A stand-in for the gcloud command, for trying the Google Cloud explorer without a Google account.
+# It answers only the three read commands the console runs: `asset search-all-resources`, `auth list`
+# and `config get-value project`. The assets are made up. See README.md.
+import json, os, sys
+
+args = [a for a in sys.argv[1:] if a != "--quiet"]
+if os.environ.get("FAKE_GCLOUD_NOAUTH") and args[:1] == ["auth"]:
+    print(); sys.exit(0)
+
+def flag(prefix):
+    for a in args:
+        if a.startswith(prefix): return a[len(prefix):]
+    return ""
+
+if args[:2] == ["config", "get-value"]:
+    print("shop-prod"); sys.exit(0)
+if args[:2] == ["auth", "list"]:
+    print("ada@example.com"); sys.exit(0)
+if args[:2] == ["asset", "search-all-resources"]:
+    scope = flag("--scope=")
+    if os.environ.get("FAKE_GCLOUD_DENY"):
+        sys.stderr.write("ERROR: (gcloud.asset.search-all-resources) PERMISSION_DENIED: The caller does not have permission\n"); sys.exit(1)
+    p = scope.split("/")[-1]
+    def asset(kind, name, loc, state="", labels=None, display=None):
+        return {"name": "//%s/projects/%s/%s" % (kind.split("/")[0], p, name), "assetType": kind, "displayName": display or name.split("/")[-1],
+                "location": loc, "state": state, "project": "projects/123456", "createTime": "2026-10-01T10:00:00Z", **({"labels": labels} if labels else {})}
+    items = [
+        asset("compute.googleapis.com/Instance", "zones/asia-south1-a/instances/web-1", "asia-south1-a", "RUNNING", {"env": "prod", "team": "payments"}),
+        asset("compute.googleapis.com/Instance", "zones/asia-south1-a/instances/web-2", "asia-south1-a", "RUNNING", {"env": "prod"}),
+        asset("compute.googleapis.com/Instance", "zones/asia-south1-b/instances/batch-1", "asia-south1-b", "TERMINATED"),
+        asset("compute.googleapis.com/Disk", "zones/asia-south1-a/disks/web-1", "asia-south1-a", "READY"),
+        asset("compute.googleapis.com/Network", "global/networks/main", "global"),
+        asset("compute.googleapis.com/Firewall", "global/firewalls/allow-ssh", "global"),
+        {"name": "//storage.googleapis.com/shop-assets-" + p, "assetType": "storage.googleapis.com/Bucket", "displayName": "shop-assets-" + p, "location": "ASIA-SOUTH1", "project": "projects/123456"},
+        asset("container.googleapis.com/Cluster", "locations/asia-south1/clusters/main", "asia-south1", "RUNNING"),
+        asset("run.googleapis.com/Service", "locations/asia-south1/services/checkout", "asia-south1", "READY"),
+        asset("sqladmin.googleapis.com/Instance", "instances/orders", "asia-south1", "RUNNABLE"),
+        asset("pubsub.googleapis.com/Topic", "topics/orders-created", "global"),
+        asset("aiplatform.googleapis.com/Endpoint", "locations/asia-south1/endpoints/4242", "asia-south1", "", None, "recommender"),
+        asset("aiplatform.googleapis.com/Model", "locations/asia-south1/models/77", "asia-south1", "", None, "ranker-v3"),
+        asset("newservice.googleapis.com/Thing", "things/t1", "global", "", None, "a resource of a kind the console does not know yet"),
+    ]
+    limit = flag("--limit=")
+    print(json.dumps(items[:int(limit)] if limit.isdigit() else items)); sys.exit(0)
+sys.stderr.write("fake-gcloud: unsupported command: %s\n" % " ".join(args)); sys.exit(2)

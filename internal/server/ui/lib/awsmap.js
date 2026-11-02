@@ -5,7 +5,7 @@
 // resource is placed inside a VPC when its own "VPC" field names one, and a resource is flagged
 // when its state or one of its fields says so. It never infers a relationship or a health.
 
-export const CATEGORIES = ['Compute', 'Containers', 'Storage', 'Databases', 'Network', 'Messaging', 'Management'];
+export const CATEGORIES = ['Compute', 'Containers', 'Storage', 'Databases', 'Network', 'Messaging', 'AI', 'Management'];
 
 /**
  * What a resource state means. AWS names states differently per service, so match by meaning.

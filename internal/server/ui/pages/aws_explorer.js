@@ -5,8 +5,8 @@ import { get } from '../lib/api.js';
 import { stateKind, health } from '../lib/awsmap.js';
 import { mapView, keyOf } from './aws_map.js';
 
-const CATEGORIES = ['Compute', 'Containers', 'Storage', 'Databases', 'Network', 'Messaging', 'Management'];
-const DOT = { Compute: 'bg-sky-500', Containers: 'bg-violet-500', Storage: 'bg-emerald-500', Databases: 'bg-amber-500', Network: 'bg-cyan-500', Messaging: 'bg-pink-500', Management: 'bg-slate-500' };
+const CATEGORIES = ['Compute', 'Containers', 'Storage', 'Databases', 'Network', 'Messaging', 'AI', 'Management'];
+const DOT = { Compute: 'bg-sky-500', Containers: 'bg-violet-500', Storage: 'bg-emerald-500', Databases: 'bg-amber-500', Network: 'bg-cyan-500', Messaging: 'bg-pink-500', AI: 'bg-fuchsia-500', Management: 'bg-slate-500' };
 const PAGE = 50;
 
 /** A resource state as a coloured pill. AWS names states differently per service, so match by meaning. */
@@ -81,7 +81,8 @@ export function explorer({ dev, account = 'primary', url = '', scope = 'region' 
         h('div', { class: 'flex flex-wrap items-center gap-2' }, switcher, search,
           h('button', { class: 'btn-secondary btn-sm', type: 'button', id: 'explorer-refresh', onclick: () => load(true) }, icon('refresh', 'size-3.5'), 'Refresh'))),
       ...(alarmData && alarmData.enabled && !url ? [alarmLine()] : []),
-      ...(mapOn ? [h('div', { id: 'explorer-map' }), h('div', { class: 'px-5 pb-4' }, notes())] : [tiles, tableBox]), changesPanel(applied));
+      ...(mapOn ? [h('div', { id: 'explorer-map' }), h('div', { class: 'px-5 pb-4' }, notes())] : [tiles, tableBox]),
+      url ? null : changesPanel(applied)); // a read-only explorer (Kubernetes, Google Cloud) has no changes to list
     if (mapOn) drawMap(false); else drawTable();
   }
 

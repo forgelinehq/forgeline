@@ -106,6 +106,7 @@ type Server struct {
 	run        cmdRunner // runs docker and aws; replaced in tests
 	awsCache   awsCache
 	awsInv     invCache
+	gcpInv     invCache       // Google Cloud inventories, by scope
 	integTests integTestStore // the last test of each integration, kept in memory
 	wf         wfEngine
 	guard      guardEngine

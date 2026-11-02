@@ -113,9 +113,6 @@ func plannedIntegrations() []IntegrationJSON {
 			ReadOnlyBy: roBy, ReadOnlyNote: roNote, Summary: map[string]string{intNext: "Coming soon, next", intLater: "Coming soon, later"}[status]}
 	}
 	return []IntegrationJSON{
-		p("gcp", "Google Cloud", "Cloud", "built-in", intNext, 1,
-			"Read-only explorer, map, Guard and assistant over a project, folder or organization, using one Cloud Asset Inventory call. Vertex AI models, endpoints and agents appear under an AI group.",
-			"The gcloud login of the server first; workload identity federation later.", "provider", "Google, through the Cloud Asset Viewer role"),
 		p("azure", "Microsoft Azure", "Cloud", "built-in", intNext, 2,
 			"Read-only explorer, map, Guard and assistant through one Resource Graph query over the subscriptions the identity can read, paged past 1,000 rows. AI Foundry deployments appear under an AI group.",
 			"Device code sign-in; a service principal with a certificate later.", "provider", "Azure, through the Reader role"),
@@ -166,7 +163,7 @@ func firstSentence(s string) string {
 func (s *Server) handleListIntegrations(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	out := []IntegrationJSON{}
-	for _, f := range []func(context.Context, *http.Request) []IntegrationJSON{s.integGitHub, s.integAWS, s.integAWSMCP, s.integDocker, s.integK8s, s.integClaude} {
+	for _, f := range []func(context.Context, *http.Request) []IntegrationJSON{s.integGitHub, s.integAWS, s.integGCP, s.integAWSMCP, s.integDocker, s.integK8s, s.integClaude} {
 		out = append(out, f(ctx, r)...)
 	}
 	out = append(out, s.detectedIntegrations(ctx)...)
@@ -376,6 +373,8 @@ func (s *Server) handleTestIntegration(w http.ResponseWriter, r *http.Request) {
 		checks = s.testGitHub(ctx)
 	case "aws":
 		checks = s.testAWS(ctx)
+	case "gcp":
+		checks = s.testGCP(ctx)
 	case "aws-mcp":
 		checks = s.testAWSMCP(ctx)
 	case "docker":
@@ -544,4 +543,41 @@ func (s *Server) testClaude(ctx context.Context) []IntegrationCheckJSON {
 		return append(cs, checkOf("A test question is answered", "fail", truncate(err.Error(), 240), "Check the key, the login or the program.", t))
 	}
 	return append(cs, checkOf("A test question is answered", "ok", "It sent one short question and stored nothing. Reply: "+truncate(strings.TrimSpace(reply), 40), "", t))
+}
+
+func (s *Server) integGCP(ctx context.Context, _ *http.Request) []IntegrationJSON {
+	st := s.loadGCP(ctx)
+	it := IntegrationJSON{ID: "gcp", Name: "Google Cloud", Blurb: "A read-only explorer of a project, folder or organization.", Category: "Cloud", Tier: "built-in", Testable: true, Manage: "/infrastructure?tab=gcp",
+		ReadOnlyBy: "provider", ReadOnlyNote: "Google, through the Cloud Asset Viewer role of the server's gcloud login. Forgeline only runs read commands"}
+	if !st.Enabled {
+		it.Status, it.Summary = intOff, "Not connected"
+		return []IntegrationJSON{it}
+	}
+	it.Status, it.Summary = intConnected, "Connected, "+st.Scope
+	it.Details = append(it.Details, AWSFieldJSON{Label: "Scope", Value: st.Scope}, AWSFieldJSON{Label: "Sign-in", Value: "The gcloud login of the server's user"})
+	return []IntegrationJSON{it}
+}
+
+func (s *Server) testGCP(ctx context.Context) []IntegrationCheckJSON {
+	t := time.Now()
+	st := s.loadGCP(ctx)
+	if !st.Enabled {
+		return []IntegrationCheckJSON{checkOf("Google Cloud is connected", "fail", "Not connected.", "Connect it under Infrastructure, Google Cloud.", t)}
+	}
+	cs := []IntegrationCheckJSON{checkOf("A scope is chosen", "ok", st.Scope, "", t)}
+	t = time.Now()
+	out, err := s.gcloud(ctx, "auth", "list", "--filter=status:ACTIVE", "--format=value(account)")
+	if err != nil {
+		return append(cs, checkOf("The server has a Google login", "fail", err.Error(), "Run `gcloud auth login` as the server's user.", t))
+	}
+	acct := strings.TrimSpace(string(out))
+	if acct == "" {
+		return append(cs, checkOf("The server has a Google login", "fail", "No account is signed in.", "Run `gcloud auth login` as the server's user.", t))
+	}
+	cs = append(cs, checkOf("The server has a Google login", "ok", "Signed in as "+acct+".", "", t))
+	t = time.Now()
+	if _, err := s.searchGCP(ctx, st.Scope, 1); err != nil {
+		return append(cs, checkOf("Resources can be searched", "fail", err.Error(), "Grant the login roles/cloudasset.viewer on the scope and enable the Cloud Asset API.", t))
+	}
+	return append(cs, checkOf("Resources can be searched", "ok", fmt.Sprintf("Cloud Asset Inventory answered for %s.", st.Scope), "", t), checkOf("Created nothing, changed nothing", "ok", "The test only searched.", "", time.Now()))
 }
