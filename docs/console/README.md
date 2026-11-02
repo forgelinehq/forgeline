@@ -283,6 +283,8 @@ update that asks for different hosts needs a fresh grant.
 
 ## Which pictures are current
 
+The sidebar changed again with the Settings area (note 025): Integrations, Secrets, People and the Audit log moved behind the gear and Proposals is now Approvals. Pictures taken before that still show the earlier sidebar; 72 and 73 show the hub before the Settings area.
+
 Retaken after the redesign (grouped menu, ember colour), on stand-ins for AWS, GitHub and AWS sign-in with demo data: 01, 04, 05, 07, 08, 10, 11, 12, 15, 23 (sign-in code and deploy preview), 24, 25 (change succeeded), 26 (audit log), 28 (overview dark and GitHub App connected), 30, 31, 32, 33, 34 to 38, 70 and 71.
 
 Not retaken, so they still show the earlier indigo colour and flat menu: 20, 21 and 22 (they need a real Claude login), and 39 onward (Kubernetes, Guard, environments, marketplace, plugins, signed packages, account writes, API tokens). They are listed above and used only here, not in the guides.

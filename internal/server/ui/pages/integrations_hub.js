@@ -66,7 +66,7 @@ export async function integrationsHubPage({ params }) {
     const g = group(list.filter(i => matches(i, { status, category, query })));
     mount(box, g.length ? g.map(({ category: c, items }) => h('section', { class: 'mb-6', 'aria-label': c },
       h('h2', { class: 'h-section mb-2' }, c),
-      h('div', { class: 'grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4', role: 'list' }, items.map(card))))
+      h('div', { class: 'grid gap-3 sm:grid-cols-2 xl:grid-cols-3 min-[1900px]:grid-cols-4', role: 'list' }, items.map(card))))
       : emptyState('plug', 'Nothing matches', 'Try another word, or clear the filters.'));
   }
 
