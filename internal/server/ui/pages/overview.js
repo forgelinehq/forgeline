@@ -1,4 +1,5 @@
 import { h, icon, mount, pill, sparkline, relTime, absTime, fmtSeconds, duration, pct, kpi, pageHeader, emptyState, spinner, errorBox, toast, bytes } from '../lib/dom.js';
+import { versionLabel } from '../lib/version.js';
 import { get, post, atLeast } from '../lib/api.js';
 import { navigate } from '../lib/router.js';
 import { session } from '../app.js';
@@ -81,7 +82,7 @@ export async function overviewPage() {
       h('span', { class: 'size-2 rounded-full ' + (ok ? 'bg-emerald-500' : 'bg-rose-500') }), h('span', { class: 'font-medium' }, label), h('span', { class: 'muted' }, detail));
     return h('a', { href: '#/infrastructure', class: 'card mt-4 flex flex-wrap items-center gap-x-8 gap-y-2 px-5 py-3 transition-colors hover:border-brand-300 dark:hover:border-brand-500/50' },
       item(d.available, 'Docker', d.available ? `${d.version} · ${rt.steps.length} step container${rt.steps.length === 1 ? '' : 's'} running` : (d.error || 'not reachable')),
-      item(true, 'Server', `v${s.version} · ${s.running} run${s.running === 1 ? '' : 's'} active, ${s.queued} queued · ${s.max_runs} worker${s.max_runs === 1 ? '' : 's'}`),
+      item(true, 'Server', `${versionLabel(s.version)} · ${s.running} run${s.running === 1 ? '' : 's'} active, ${s.queued} queued · ${s.max_runs} worker${s.max_runs === 1 ? '' : 's'}`),
       s.disk_total_bytes ? item(s.disk_free_bytes / s.disk_total_bytes > 0.1, 'Disk', bytes(s.disk_free_bytes) + ' free') : null,
       h('span', { class: 'muted ml-auto flex items-center gap-1 text-xs' }, 'Infrastructure', icon('chevron', 'size-3')));
   }

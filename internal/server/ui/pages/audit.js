@@ -21,7 +21,7 @@ export async function auditPage() {
         h('td', { class: 'muted whitespace-nowrap text-sm', title: absTime(e.time) }, relTime(e.time)),
         h('td', { class: 'whitespace-nowrap font-medium' }, e.actor, e.role && h('span', { class: 'muted ml-1 text-xs' }, e.role)),
         h('td', {}, h('span', { class: (e.allowed ? 'pill-idle' : 'pill-bad') + ' font-mono' }, e.allowed ? e.action : e.action + ' · refused')),
-        h('td', { class: 'font-mono text-xs' }, e.target || ''), h('td', { class: 'max-w-md text-sm' }, e.detail || ''), h('td', { class: 'muted font-mono text-xs' }, e.ip || ''))))
+        h('td', { class: 'break-all font-mono text-xs' }, e.target || ''), h('td', { class: 'min-w-48 max-w-xs text-sm' }, e.detail || ''), h('td', { class: 'muted whitespace-nowrap font-mono text-xs' }, e.ip || ''))))
     ) : emptyState('shield', 'Nothing matches', 'Try fewer filters.')));
   }
 
