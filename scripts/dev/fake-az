@@ -1,0 +1,55 @@
+#!/usr/bin/env python3
+# A stand-in for the az command, for trying the Azure explorer without an Azure account. It answers only
+# the read commands the console runs: `account show`, `account list` and `graph query`. The resources are
+# made up. See README.md.
+import json, os, sys
+
+args = [a for a in sys.argv[1:] if a not in ("--only-show-errors",)]
+# drop "--output json" and its value
+if "--output" in args:
+    i = args.index("--output"); del args[i:i + 2]
+
+if os.environ.get("FAKE_AZ_NOLOGIN") and args[:1] in (["account"], ["graph"]):
+    sys.stderr.write("Please run 'az login' to set up an account.\n"); sys.exit(1)
+
+PROD, STAGE = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+
+if args[:2] == ["account", "show"]:
+    print(json.dumps("ada@example.com")); sys.exit(0)
+if args[:2] == ["account", "list"]:
+    print(json.dumps([{"id": PROD, "name": "Production", "state": "Enabled"}, {"id": STAGE, "name": "Staging", "state": "Enabled"}])); sys.exit(0)
+if args[:2] == ["graph", "query"]:
+    if os.environ.get("FAKE_AZ_DENY"):
+        sys.stderr.write("(AuthorizationFailed) The client does not have authorization to perform action\n"); sys.exit(1)
+    def opt(name, default=""):
+        return args[args.index(name) + 1] if name in args else default
+    first, skip = int(opt("--first", "1000")), int(opt("--skip", "0"))
+    subs = []
+    if "--subscriptions" in args:
+        for a in args[args.index("--subscriptions") + 1:]:
+            if a.startswith("--"): break
+            subs.append(a)
+    def res(typ, name, sub, **kw):
+        base = {"id": "/subscriptions/%s/resourceGroups/rg-shop/providers/%s/%s" % (sub, typ, name), "name": name, "type": typ,
+                "location": "centralindia", "resourceGroup": "rg-shop", "subscriptionId": sub}
+        base.update(kw); return base
+    rows = [
+        res("Microsoft.Compute/virtualMachines", "web-1", PROD, state="Succeeded", tags={"env": "prod", "team": "payments"}),
+        res("Microsoft.Compute/virtualMachines", "web-2", PROD, state="Succeeded", tags={"env": "prod"}),
+        res("Microsoft.Compute/virtualMachines", "batch-1", STAGE, state="Succeeded"),
+        res("Microsoft.Compute/disks", "web-1-osdisk", PROD),
+        res("Microsoft.Network/virtualNetworks", "vnet-main", PROD),
+        res("Microsoft.Network/networkSecurityGroups", "nsg-web", PROD),
+        res("Microsoft.Storage/storageAccounts", "shopassets", PROD, kind="StorageV2"),
+        res("Microsoft.ContainerService/managedClusters", "aks-main", PROD, state="Succeeded"),
+        res("Microsoft.Web/sites", "checkout-api", PROD, kind="functionapp"),
+        res("Microsoft.Sql/servers", "orders-sql", PROD, state="Succeeded"),
+        res("Microsoft.KeyVault/vaults", "shop-kv", PROD),
+        res("Microsoft.CognitiveServices/accounts", "shop-openai", PROD, kind="OpenAI", state="Succeeded"),
+        res("Microsoft.MachineLearningServices/workspaces", "foundry-hub", STAGE, kind="Hub"),
+        res("Microsoft.NewThing/things", "a-resource-of-a-kind-the-console-does-not-know", PROD),
+    ]
+    if subs: rows = [r for r in rows if r["subscriptionId"] in subs]
+    page = rows[skip:skip + first]
+    print(json.dumps({"data": page, "count": len(page), "total_records": len(rows)})); sys.exit(0)
+sys.stderr.write("fake-az: unsupported command: %s\n" % " ".join(args)); sys.exit(2)

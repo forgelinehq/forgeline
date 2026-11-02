@@ -75,8 +75,11 @@ func TestHubListsEverySystemWithAStatusAndPlannedOnesHaveNoTest(t *testing.T) {
 	if g := h["gcp"]; g.Status != intOff || g.Order != 0 || !g.Testable || g.ReadOnlyBy != "provider" || g.Manage != "/infrastructure?tab=gcp" {
 		t.Errorf("gcp is built now, so it is no longer planned: %+v", g)
 	}
-	if !(h["azure"].Order < h["lambda"].Order && h["lambda"].Order < h["datadog"].Order) {
-		t.Errorf("order = azure %d lambda %d datadog %d", h["azure"].Order, h["lambda"].Order, h["datadog"].Order)
+	if az := h["azure"]; az.Status != intOff || az.Order != 0 || !az.Testable || az.ReadOnlyBy != "provider" || az.Manage != "/infrastructure?tab=azure" {
+		t.Errorf("azure is built now, so it is no longer planned: %+v", az)
+	}
+	if !(h["cloud-models"].Order < h["lambda"].Order && h["lambda"].Order < h["datadog"].Order) {
+		t.Errorf("order = cloud models %d lambda %d datadog %d", h["cloud-models"].Order, h["lambda"].Order, h["datadog"].Order)
 	}
 	// Who enforces read-only is stated, and for Lambda it is Forgeline, because the provider has no read-only keys.
 	if h["lambda"].ReadOnlyBy != "forgeline" || h["gcp"].ReadOnlyBy != "provider" || h["runpod"].ReadOnlyBy != "forgeline" {
@@ -184,7 +187,7 @@ func TestIntegrationTestOnlyReadsAndSaysWhatToFix(t *testing.T) {
 	m.admin.expect(200, "PUT", "/v1/integrations/aws", map[string]any{"enabled": true, "profile": "dev", "region": "ap-south-1"})
 	m.dev.expect(403, "POST", "/v1/integrations/aws/checks", nil) // a test is for administrators
 	m.admin.expect(404, "POST", "/v1/integrations/nope/checks", nil)
-	m.admin.expect(404, "POST", "/v1/integrations/azure/checks", nil) // planned: nothing to test
+	m.admin.expect(404, "POST", "/v1/integrations/lambda/checks", nil) // planned: nothing to test
 
 	var res IntegrationTestJSON
 	if err := json.Unmarshal(m.admin.expect(200, "POST", "/v1/integrations/aws/checks", nil), &res); err != nil {
@@ -240,7 +243,7 @@ func TestIntegrationTestsForDockerGitHubAndNotConnected(t *testing.T) {
 		t.Errorf("docker down = %+v", res)
 	}
 	// Systems that are not connected fail with what to do, rather than pretending to pass.
-	for _, id := range []string{"github", "aws", "gcp", "aws-mcp", "kubernetes"} {
+	for _, id := range []string{"github", "aws", "gcp", "azure", "aws-mcp", "kubernetes"} {
 		json.Unmarshal(m.admin.expect(200, "POST", "/v1/integrations/"+id+"/checks", nil), &res)
 		if res.Failed == 0 || res.Passed != 0 {
 			t.Errorf("%s not connected: %+v", id, res)

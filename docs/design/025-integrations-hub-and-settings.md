@@ -1,6 +1,6 @@
 # 025: Integrations hub, settings area, and the next clouds
 
-Status: **Decided 2026-11-02. Built: S1 (the hub, popups and read-only tests), S2 (the Settings area) and S5 (Google Cloud, read-only). The rest is design only.** Builds on notes
+Status: **Decided 2026-11-02. Built: S1 (the hub, popups and read-only tests), S2 (the Settings area) and S5 (Google Cloud, read-only) and S6 (Azure, read-only). The rest is design only.** Builds on notes
 006 (console), 009/010 (AWS and GitHub sign-in), 015/016 (AWS access for the assistant), 017 (accounts,
 agents, environments, marketplace), 018/019 (plugins and signed packages), 022 (redesign), 023 and 024.
 Facts about the code are from `origin/main` at `0c143e6`. The visual plan with a clickable prototype was

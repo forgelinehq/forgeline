@@ -81,6 +81,7 @@ export function explorer({ dev, account = 'primary', url = '', scope = 'region' 
         h('div', { class: 'flex flex-wrap items-center gap-2' }, switcher, search,
           h('button', { class: 'btn-secondary btn-sm', type: 'button', id: 'explorer-refresh', onclick: () => load(true) }, icon('refresh', 'size-3.5'), 'Refresh'))),
       ...(alarmData && alarmData.enabled && !url ? [alarmLine()] : []),
+      ...(inv.notice ? [h('p', { class: 'border-b border-slate-200 px-5 py-2 text-xs text-amber-700 dark:border-slate-800 dark:text-amber-400', id: 'inventory-notice' }, inv.notice)] : []),
       ...(mapOn ? [h('div', { id: 'explorer-map' }), h('div', { class: 'px-5 pb-4' }, notes())] : [tiles, tableBox]),
       url ? null : changesPanel(applied)); // a read-only explorer (Kubernetes, Google Cloud) has no changes to list
     if (mapOn) drawMap(false); else drawTable();

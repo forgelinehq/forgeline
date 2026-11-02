@@ -6,8 +6,9 @@ import { session } from '../app.js';
 import { ssoWizard } from './aws_sso.js';
 import { explorer } from './aws_explorer.js';
 import { gcpTab } from './gcp.js';
+import { azureTab } from './azure.js';
 
-const TABS = [['platform', 'Platform'], ['aws', 'AWS account'], ['gcp', 'Google Cloud'], ['changes', 'Cloud changes']];
+const TABS = [['platform', 'Platform'], ['aws', 'AWS account'], ['gcp', 'Google Cloud'], ['azure', 'Azure'], ['changes', 'Cloud changes']];
 
 export async function infraPage({ query }) {
   const tab = TABS.some(t => t[0] === query.tab) ? query.tab : 'platform';
@@ -22,7 +23,7 @@ export async function infraPage({ query }) {
 
   mount(el, pageHeader('Infrastructure', 'The Forgeline server, the machines it runs steps on, and the cloud account under it.'), tabs, body);
   mount(body, spinner());
-  const cleanup = await ({ platform, aws, gcp: gcpTab, changes })[tab](body);
+  const cleanup = await ({ platform, aws, gcp: gcpTab, azure: azureTab, changes })[tab](body);
   if (cleanup) el.cleanup = cleanup;
   refreshBadge();
   async function refreshBadge() {

@@ -7,6 +7,15 @@ section in the pull request that makes the change; a release moves it under its 
 ## [Unreleased]
 
 ### Added
+- **Azure, read-only** (design note 025, slice S6). Infrastructure has an Azure tab. Forgeline uses the server user's
+  `az` login and one Azure Resource Graph query (a fixed one: nothing a person types is in it) over the subscriptions the
+  login can read, or the ones an administrator ticks, read in pages of 1000 up to 3000 resources. Virtual machines, App
+  Service, AKS, storage, SQL, networks, Key Vaults (names only) and **Azure OpenAI, AI services, AI Search and AI Foundry
+  workspaces** under the AI group are listed; an unknown type goes under Other resources. Connecting first proves the
+  login can query and says what to fix (no login, no permission, the Resource Graph extension missing, unknown
+  subscription). It is a card on the Integrations hub with a read-only test. The explorer now says when a read reached
+  its limit (for Google Cloud too). Tried only against a stand-in `az` (`scripts/dev/fake-az`). Not built: the map, Guard
+  rules, assistant lookups, spend, changes.
 - **Google Cloud, read-only** (design note 025, slice S5). Infrastructure has a Google Cloud tab. Forgeline uses the
   server user's `gcloud` login and one Cloud Asset Inventory call to list the resources in a project, folder or
   organization: VMs, Cloud Run, GKE, Cloud Storage, disks, Cloud SQL, BigQuery, networks, firewall rules, Pub/Sub, Secret

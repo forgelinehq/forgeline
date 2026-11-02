@@ -236,6 +236,9 @@ func (s *Server) fetchGCP(ctx context.Context, st gcpSettings) AWSInventoryJSON 
 		return d
 	}
 	d.Services = gcpServices(as)
+	if len(as) >= gcpAssetMax {
+		d.Notice = fmt.Sprintf("Only the first %d resources were read, so counts may be low. Choose a narrower scope to see the rest.", gcpAssetMax)
+	}
 	return d
 }
 

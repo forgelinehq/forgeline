@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"sort"
@@ -113,9 +114,6 @@ func plannedIntegrations() []IntegrationJSON {
 			ReadOnlyBy: roBy, ReadOnlyNote: roNote, Summary: map[string]string{intNext: "Coming soon, next", intLater: "Coming soon, later"}[status]}
 	}
 	return []IntegrationJSON{
-		p("azure", "Microsoft Azure", "Cloud", "built-in", intNext, 2,
-			"Read-only explorer, map, Guard and assistant through one Resource Graph query over the subscriptions the identity can read, paged past 1,000 rows. AI Foundry deployments appear under an AI group.",
-			"Device code sign-in; a service principal with a certificate later.", "provider", "Azure, through the Reader role"),
 		p("cloud-models", "Bedrock, Vertex AI and Foundry", "AI infrastructure", "built-in", intNext, 3,
 			"Models, endpoints and agents of each cloud appear in its explorer, and the same identity serves the models to Forgeline agents with no extra key.",
 			"The cloud connection. No new key.", "provider", "The cloud, through the same role as the connection"),
@@ -163,7 +161,7 @@ func firstSentence(s string) string {
 func (s *Server) handleListIntegrations(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	out := []IntegrationJSON{}
-	for _, f := range []func(context.Context, *http.Request) []IntegrationJSON{s.integGitHub, s.integAWS, s.integGCP, s.integAWSMCP, s.integDocker, s.integK8s, s.integClaude} {
+	for _, f := range []func(context.Context, *http.Request) []IntegrationJSON{s.integGitHub, s.integAWS, s.integGCP, s.integAzure, s.integAWSMCP, s.integDocker, s.integK8s, s.integClaude} {
 		out = append(out, f(ctx, r)...)
 	}
 	out = append(out, s.detectedIntegrations(ctx)...)
@@ -375,6 +373,8 @@ func (s *Server) handleTestIntegration(w http.ResponseWriter, r *http.Request) {
 		checks = s.testAWS(ctx)
 	case "gcp":
 		checks = s.testGCP(ctx)
+	case "azure":
+		checks = s.testAzure(ctx)
 	case "aws-mcp":
 		checks = s.testAWSMCP(ctx)
 	case "docker":
@@ -580,4 +580,51 @@ func (s *Server) testGCP(ctx context.Context) []IntegrationCheckJSON {
 		return append(cs, checkOf("Resources can be searched", "fail", err.Error(), "Grant the login roles/cloudasset.viewer on the scope and enable the Cloud Asset API.", t))
 	}
 	return append(cs, checkOf("Resources can be searched", "ok", fmt.Sprintf("Cloud Asset Inventory answered for %s.", st.Scope), "", t), checkOf("Created nothing, changed nothing", "ok", "The test only searched.", "", time.Now()))
+}
+
+func (s *Server) integAzure(ctx context.Context, _ *http.Request) []IntegrationJSON {
+	st := s.loadAzure(ctx)
+	it := IntegrationJSON{ID: "azure", Name: "Microsoft Azure", Blurb: "A read-only explorer of your subscriptions.", Category: "Cloud", Tier: "built-in", Testable: true, Manage: "/infrastructure?tab=azure",
+		ReadOnlyBy: "provider", ReadOnlyNote: "Azure, through the Reader role of the server's az login. Forgeline only runs read commands"}
+	if !st.Enabled {
+		it.Status, it.Summary = intOff, "Not connected"
+		return []IntegrationJSON{it}
+	}
+	scope := "every subscription the login can read"
+	if n := len(st.Subscriptions); n > 0 {
+		scope = fmt.Sprintf("%d subscription%s", n, map[bool]string{true: "", false: "s"}[n == 1])
+	}
+	it.Status, it.Summary = intConnected, "Connected, "+scope
+	it.Details = append(it.Details, AWSFieldJSON{Label: "Scope", Value: scope}, AWSFieldJSON{Label: "Sign-in", Value: "The az login of the server's user"})
+	return []IntegrationJSON{it}
+}
+
+func (s *Server) testAzure(ctx context.Context) []IntegrationCheckJSON {
+	t := time.Now()
+	st := s.loadAzure(ctx)
+	if !st.Enabled {
+		return []IntegrationCheckJSON{checkOf("Azure is connected", "fail", "Not connected.", "Connect it under Infrastructure, Azure.", t)}
+	}
+	out, err := s.az(ctx, "account", "show", "--query", "user.name")
+	if err != nil {
+		return []IntegrationCheckJSON{checkOf("The server has an Azure login", "fail", err.Error(), "Run `az login --use-device-code` as the server's user.", t)}
+	}
+	var who string
+	_ = json.Unmarshal(out, &who)
+	if who == "" {
+		return []IntegrationCheckJSON{checkOf("The server has an Azure login", "fail", "No account is signed in.", "Run `az login --use-device-code` as the server's user.", t)}
+	}
+	cs := []IntegrationCheckJSON{checkOf("The server has an Azure login", "ok", "Signed in as "+who+".", "", t)}
+	t = time.Now()
+	subs := s.azureAvailable(ctx)
+	if len(subs) == 0 {
+		cs = append(cs, checkOf("Subscriptions can be listed", "warn", "The login can see no subscription.", "Give the login the Reader role on a subscription.", t))
+	} else {
+		cs = append(cs, checkOf("Subscriptions can be listed", "ok", fmt.Sprintf("%d visible to the login.", len(subs)), "", t))
+	}
+	t = time.Now()
+	if _, err := s.queryAzure(ctx, st.Subscriptions, 1); err != nil {
+		return append(cs, checkOf("Resources can be queried", "fail", err.Error(), "Give the login the Reader role on the subscriptions, and install the Resource Graph extension.", t))
+	}
+	return append(cs, checkOf("Resources can be queried", "ok", "Azure Resource Graph answered.", "", t), checkOf("Created nothing, changed nothing", "ok", "The test only queried.", "", time.Now()))
 }
