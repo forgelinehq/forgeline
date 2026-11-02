@@ -6,7 +6,7 @@ nav_order: 1
 
 # Console tour
 
-Everything below is done from the web console. Pictures were taken from a running server in a real browser. Some older pictures still show the previous indigo colour and flat menu; the pages work the same.
+Everything below is done from the web console. Pictures were taken from a running server in a real browser, after the redesign, on stand-ins for AWS and GitHub with demo data. The agent-step and assistant pictures are older and still show the previous indigo colour; those pages work the same.
 
 The sidebar groups pages by the job you are doing: **Ship** (Pipelines, Actions, Environments), **Cloud** (Infrastructure, Kubernetes, Guard, Integrations), **AI** (Agents, Marketplace) and **Govern** (Proposals, Secrets, People, Audit log). What you see depends on your role.
 
