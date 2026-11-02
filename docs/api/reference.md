@@ -202,6 +202,7 @@ Only repositories on the GitHub allow list. A workflow can only be started on a 
 | `POST /v1/ai/proposals/{id}/reject` | admin | Rejects a waiting proposal. |
 | `POST /v1/ai/proposals/{id}/cancel` | developer | The proposer or an administrator withdraws a waiting proposal. |
 | `POST /v1/assistant/chat` | developer | Body: `message`, `history`, `context` (the page: run, pipeline, infra or overview). Returns `reply`, the read-only `lookups` it ran any `proposals` it filed and any `environments` it asked for (requested, never started: a different administrator approves). 20 a minute per person. |
+| `POST /v1/assistant/runs` | developer | The same body, checks, limits and audit entries as `/v1/assistant/chat`, answered as server-sent events that follow the [AG-UI](https://docs.ag-ui.com/) vocabulary: `RUN_STARTED`, `CUSTOM forgeline.context`, then for each lookup `TOOL_CALL_START`, `TOOL_CALL_ARGS`, `TOOL_CALL_END`, `TOOL_CALL_RESULT` (a result cut at 2 KB, or the reason it was refused) and `CUSTOM forgeline.tool_status`; `CUSTOM forgeline.proposal` or `forgeline.environment` when one was filed; `TEXT_MESSAGE_START/CONTENT/END` with the whole answer in one piece; and `RUN_FINISHED` or `RUN_ERROR`. Checks that fail first (rate limit, bad body, assistant off) are ordinary JSON errors. Closing the connection cancels the model call. |
 
 ## The pipeline schema
 

@@ -28,7 +28,7 @@ Set it up under **Integrations → Assistant**:
 
 ![Settings]({{ '/console/33-assistant-token.png' | relative_url }})
 
-The assistant is still a side panel that sends one question and shows one text answer. A richer view that shows each lookup and each proposal as it happens is designed ([note 024](https://github.com/forgelinehq/forgeline/blob/main/docs/design/024-assistant-agent-surface.md)) but not built.
+The assistant is a panel that docks at the side (drag its edge, or use the wide button) or floats as a window you can move and resize; it remembers your choice. While it works you see each lookup as a card: what it asked and a cut of what came back (open a card to read it). The answer then appears as cards, with tables shown as tables, and a change it filed appears as a proposal card that follows the proposal's status. A **Stop** button cancels the question. The answer arrives in one piece, not word by word, and it was checked against a stand-in for the `claude` program, not a real model. See [note 024](https://github.com/forgelinehq/forgeline/blob/main/docs/design/024-assistant-agent-surface.md).
 
 Questions are rate limited (20 a minute per person) and audited by page and length, not by text.
 

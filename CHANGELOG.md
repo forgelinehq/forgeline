@@ -7,6 +7,12 @@ section in the pull request that makes the change; a release moves it under its 
 ## [Unreleased]
 
 ### Added
+- **The assistant shows its work as it happens** (design note 024). New `POST /v1/assistant/runs` answers with
+  server-sent events (AG-UI vocabulary) from the same lookup loop, limits and audit as `/v1/assistant/chat`. The
+  panel shows each lookup as a card while it runs (what it asked, a cut of what came back, opened on demand), then
+  the answer as cards, a proposal it filed as a card that follows the proposal's status, and a Stop button that
+  cancels the model call. The proposal card has no Approve button: the asker is the proposer and cannot approve,
+  so approval stays on the Proposals page. The answer still arrives in one piece, not word by word.
 - **Assistant panel you can resize, dock or float, with answers shown as cards.** Answers used to be plain text, so
   tables showed as `|---|` rows and `**bold**` showed its stars. Markdown tables now render as tables, and an answer
   is split by its headings into cards (a summary, then one card per section), with code blocks that keep Copy and
