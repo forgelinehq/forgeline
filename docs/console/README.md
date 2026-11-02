@@ -283,6 +283,7 @@ update that asks for different hosts needs a fresh grant.
 | [74-gcp-explorer](74-gcp-explorer.png) | The Google Cloud tab: connected scope, and the explorer grouped by kind with Vertex AI under an AI group, from a stand-in `gcloud` (made-up resources) |
 | [75-azure-explorer](75-azure-explorer.png) | The Azure tab: one subscription chosen, and the explorer grouped by kind with Azure OpenAI under the AI group, from a stand-in `az` (made-up resources) |
 | [76-connect-wizard](76-connect-wizard.png) | The Google Cloud connect wizard at its last step: the three steps, and the checks of the test with what each found |
+| [77-access-policy](77-access-policy.png) | The Access tab of AWS: each tool with Allow or Blocked (a proposal tool shows Needs approval and cannot be allowed), and what each agent can do with the result, from stand-in AWS and two example agents |
 
 ## Which pictures are current
 

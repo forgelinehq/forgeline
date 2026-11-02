@@ -127,6 +127,8 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /v1/integrations", s.requireRole(authn.Developer, s.handleListIntegrations))
 	mux.Handle("POST /v1/integrations/{id}/checks", s.requireRole(authn.Admin, s.handleTestIntegration)) // not /test: the GitHub and assistant tests already own those paths
 	mux.Handle("GET /v1/integrations/{id}/activity", s.requireRole(authn.Admin, s.handleIntegrationActivity))
+	mux.Handle("GET /v1/integrations/{id}/policy", s.requireRole(authn.Developer, s.handleGetPolicy))
+	mux.Handle("PUT /v1/integrations/{id}/policy", s.requireRole(authn.Admin, s.handlePutPolicy))
 	mux.Handle("GET /v1/integrations/azure", s.requireRole(authn.Developer, s.handleGetAzure))
 	mux.Handle("PUT /v1/integrations/azure", s.requireRole(authn.Admin, s.handlePutAzure))
 	mux.Handle("GET /v1/infra/azure/resources", s.requireRole(authn.Viewer, s.handleAzureInventory))

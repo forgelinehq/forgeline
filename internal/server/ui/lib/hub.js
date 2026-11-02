@@ -130,3 +130,39 @@ export function normalizeAzureSubs(list) {
   if (out.length > 20) return { error: 'Choose at most 20 subscriptions, or none to read every subscription the login can see.' };
   return { subs: out.sort() };
 }
+
+/**
+ * What the Access tab shows for one tool. A read tool is Allow or Blocked ("Needs approval" for a read needs a
+ * person present to approve each call, which is not built yet). A tool that asks for a change is never Allow:
+ * when it is not blocked it is a proposal, which the tab calls "Needs approval".
+ */
+export function toolChoice(tool) {
+  const write = tool.kind === 'write';
+  const shown = tool.level === 'block' ? 'block' : write ? 'ask' : 'allow';
+  return {
+    shown,
+    options: [
+      { key: 'allow', label: 'Allow', enabled: !write, why: write ? 'A change is always a proposal that a different administrator approves, so it cannot be allowed to run on its own.' : '' },
+      { key: 'ask', label: 'Needs approval', enabled: write, why: write ? '' : 'Not built yet: it would need a person to approve each call.' },
+      { key: 'block', label: 'Blocked', enabled: true, why: '' },
+    ],
+  };
+}
+
+/**
+ * The request body after one click. Only blocks are stored, so it lists the tools that will be blocked and leaves
+ * the rest out (a tool that is left out is allowed, and a tool that asks for a change is never sent as "allow",
+ * which the server refuses).
+ */
+export function policyRequest(tools, name, key) {
+  const out = {};
+  for (const t of tools) {
+    const blocked = t.name === name ? key === 'block' : t.level === 'block';
+    if (blocked) out[t.name] = 'block';
+  }
+  return { tools: out };
+}
+
+export function agentStateText(state) {
+  return { allowed: 'Allowed', blocked: 'Blocked', not_listed: 'Not listed' }[state] || state;
+}

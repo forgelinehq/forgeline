@@ -75,10 +75,14 @@ func needsMCP(name string) bool {
 
 func (s *Server) lookupHelp(ctx context.Context, role authn.Role) string {
 	mcpOn := s.loadAWSMCP(ctx).Enabled
+	blocked := s.blockedTools(ctx)
 	var b strings.Builder
 	for _, t := range assistantLookups() {
 		if sc := scopeFrom(ctx); sc != nil && (!sc.allows(t.name) || t.name == askAgentTool) {
 			continue // a running agent sees only its own tools, and never other agents
+		}
+		if blocked(t.name) {
+			continue // blocked by the access policy: the model is not shown it, and cannot run it anyway
 		}
 		if needsMCP(t.name) && !mcpOn || t.name == "call_aws" && mcpOn && !s.hasAddedAccounts(ctx) {
 			continue // one way to reach the primary account at a time: the MCP server when it is on, the CLI otherwise
@@ -144,6 +148,9 @@ func (s *Server) runLookup(ctx context.Context, p Principal, c lookupCall) (stri
 		}
 		if sc := scopeFrom(ctx); !sc.allows(t.name) || sc != nil && t.name == askAgentTool {
 			return "", fmt.Errorf("%s is not one of this agent's tools", t.name)
+		}
+		if err := s.policyGate(ctx, p, t.name); err != nil {
+			return "", err
 		}
 		if needsMCP(t.name) && !s.loadAWSMCP(ctx).Enabled {
 			return "", fmt.Errorf("%s needs the AWS MCP Server, which is not turned on", t.name)

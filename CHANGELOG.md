@@ -7,6 +7,15 @@ section in the pull request that makes the change; a release moves it under its 
 ## [Unreleased]
 
 ### Added
+- **Access policy for integration tools** (design note 026, slice 1). The popup of AWS, the AWS MCP Server and Kubernetes
+  has an Access tab where an administrator sets each tool to Allow (the default) or Blocked. A blocked tool is refused for
+  everyone, whatever an agent's own tool list says, and never reaches a command line or proxy; it is hidden from the
+  model and from MCP clients; each refusal is audited and shown in the integration's Activity. A tool that asks for a
+  change (`propose_aws_change`, `propose_cloud_change`) can never be set to Allow, because a change is always a proposal
+  that a different administrator approves; it can be blocked. A table shows what each agent can do: allowed, blocked by the
+  connection, or not in its tool list. An unreadable stored policy fails closed. API: `GET` and `PUT
+  /v1/integrations/{id}/policy`. Not built: Needs approval for reads (it needs an approval card in the assistant), and
+  Google Cloud and Azure tools.
 - **Connect wizard and Activity tab in the integrations popup** (design note 025, slice S1). Google Cloud and Azure
   connect inside the popup in three steps: choose what to read (a scope is checked in the browser the way the server
   checks it), connect (the server proves the login can read it first and, if not, says which role or command is

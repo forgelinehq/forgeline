@@ -156,8 +156,9 @@ var anyObject = map[string]any{"type": "object", "additionalProperties": true}
 func (s *Server) mcpTools(ctx context.Context, role authn.Role) []mcpToolDef {
 	var out []mcpToolDef
 	mcpOn := s.loadAWSMCP(ctx).Enabled
+	blocked := s.blockedTools(ctx)
 	for _, t := range assistantLookups() {
-		if !mcpReadTools[t.name] && t.name != toolProposeAWS || !role.AtLeast(t.min) {
+		if !mcpReadTools[t.name] && t.name != toolProposeAWS || !role.AtLeast(t.min) || blocked(t.name) {
 			continue
 		}
 		if needsMCP(t.name) && !mcpOn {
@@ -165,7 +166,7 @@ func (s *Server) mcpTools(ctx context.Context, role authn.Role) []mcpToolDef {
 		}
 		out = append(out, mcpToolDef{Name: t.name, Description: t.help, InputSchema: anyObject})
 	}
-	if role.AtLeast(authn.Developer) {
+	if role.AtLeast(authn.Developer) && !blocked(toolProposeCloud) {
 		out = append(out, mcpToolDef{Name: toolProposeCloud, Description: "files a change proposal for a stack deploy, stack deletion or instance start/stop/reboot; nothing runs until a different administrator approves it in the console",
 			InputSchema: map[string]any{"type": "object", "additionalProperties": false, "required": []string{"kind", "reason"}, "properties": map[string]any{
 				"kind":        map[string]any{"type": "string", "enum": []string{kindStackDeploy, kindStackDelete, kindInstanceAction}},
@@ -368,7 +369,9 @@ func (s *Server) mcpCall(ctx context.Context, w http.ResponseWriter, req rpcRequ
 	var err error
 	switch in.Name {
 	case toolProposeCloud:
-		out, err = s.lookupProposeCloud(cctx, args)
+		if err = s.policyGate(cctx, p, toolProposeCloud); err == nil {
+			out, err = s.lookupProposeCloud(cctx, args)
+		}
 	case "run_failure":
 		out, err = s.lookupRunFailure(cctx, args)
 	default:

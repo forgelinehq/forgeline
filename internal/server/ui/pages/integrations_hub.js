@@ -8,6 +8,7 @@ import { navigate } from '../lib/router.js';
 import { group, matches, summaryLine, statusPill, statusText, tierText, readOnlyText, logo, attentionList, isPlanned, activityLabel } from '../lib/hub.js';
 import { renderChecks } from './integration_parts.js';
 import { connectWizard, wizardFor } from './integrations_wizard.js';
+import { accessPane } from './integration_access.js';
 
 const STATUS_CHIPS = [['all', 'All'], ['connected', 'Connected'], ['attention', 'Needs attention'], ['detected', 'Found here'], ['soon', 'Coming soon']];
 
@@ -82,15 +83,19 @@ export async function integrationsHubPage({ params }) {
     const wrap = h('div', { class: 'space-y-4', id: 'integration-popup', 'data-integration': it.id });
     const pane = h('div', { class: 'space-y-4' });
     let tab = 'overview';
-    const showTabs = admin && !planned && it.status !== 'detected';
+    const names = [['overview', 'Overview']];
+    if (!planned && it.status !== 'detected') {
+      if (it.has_policy) names.push(['access', 'Access']);
+      if (admin) names.push(['activity', 'Activity']);
+    }
     const draw = () => {
       if (tab === 'activity') return mount(pane, activityPane(it));
-      mount(pane, overview(it, close, (el) => mount(pane, el)));
+      if (tab === 'access') return mount(pane, accessPane(it, admin, () => { load0(); }));
+      mount(pane, overview(list.find(x => x.id === it.id) || it, close, (el) => mount(pane, el))); // the refreshed copy, so a change made in another tab shows
     };
-    const tabs = showTabs ? h('div', { class: 'flex gap-1 border-b border-slate-200 dark:border-slate-800', role: 'tablist' }, ['overview', 'activity'].map(t => h('button', { type: 'button', role: 'tab', 'data-tab': t, 'aria-selected': String(tab === t),
-      class: '-mb-px border-b-2 px-3 py-2 text-sm font-medium ' + (tab === t ? 'border-brand-600 text-brand-700 dark:border-brand-400 dark:text-brand-200' : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400'),
-      onclick: (e) => { tab = t; tabs.querySelectorAll('button').forEach(b2 => { const on = b2.dataset.tab === t; b2.setAttribute('aria-selected', String(on)); b2.className = '-mb-px border-b-2 px-3 py-2 text-sm font-medium ' + (on ? 'border-brand-600 text-brand-700 dark:border-brand-400 dark:text-brand-200' : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400'); }); draw(); } },
-      t === 'overview' ? 'Overview' : 'Activity'))) : null;
+    const cls = (on) => '-mb-px border-b-2 px-3 py-2 text-sm font-medium ' + (on ? 'border-brand-600 text-brand-700 dark:border-brand-400 dark:text-brand-200' : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400');
+    const tabs = names.length > 1 ? h('div', { class: 'flex gap-1 border-b border-slate-200 dark:border-slate-800', role: 'tablist' }, names.map(([k, label]) => h('button', { type: 'button', role: 'tab', 'data-tab': k, 'aria-selected': String(tab === k), class: cls(tab === k),
+      onclick: () => { tab = k; tabs.querySelectorAll('button').forEach(b2 => { const on = b2.dataset.tab === k; b2.setAttribute('aria-selected', String(on)); b2.className = cls(on); }); draw(); } }, label))) : null;
     wrap.append(...[tabs, pane].filter(Boolean));
     draw();
     wrap.append(h('div', { class: 'flex justify-end pt-1' }, h('button', { type: 'button', class: 'btn-ghost btn-sm', onclick: () => close() }, 'Close')));
@@ -156,7 +161,7 @@ export async function integrationsHubPage({ params }) {
   }
 
   /** Refresh the cards after something changed behind the popup (a connection made in the wizard). */
-  async function load0() { try { list = (await get('/v1/integrations')).integrations; draw(); } catch { /* the wizard still shows its own result */ } }
+  async function load0() { try { list = (await get('/v1/integrations')).integrations; draw(); } catch { /* the popup still shows its own result */ } }
 
   await load();
   return el;
