@@ -6,13 +6,26 @@ import { githubAppCard } from './github_app.js';
 
 const OUTCOME = { ok: 'pill-ok', 'run started': 'pill-ok', accepted: 'pill-run', ignored: 'pill-idle', rejected: 'pill-bad', failed: 'pill-bad', busy: 'pill-wait' };
 
-export async function integrationsPage() {
+/** GitHub's settings, opened from the hub (the hub card's "Open settings"). */
+export const githubSettingsPage = () => settingsPage('github');
+/** The Claude assistant's settings, opened from the hub. */
+export const claudeSettingsPage = () => settingsPage('claude');
+
+const backLink = () => h('a', { href: '#/integrations', class: 'mb-3 inline-block text-sm text-brand-600 hover:underline dark:text-brand-300' }, '← All integrations');
+
+async function settingsPage(section) {
   const el = h('div', {});
   const admin = atLeast(session.role, 'admin');
   mount(el, spinner());
   let rules = [];
 
   async function load() {
+    if (section === 'claude') {
+      mount(el, backLink(), pageHeader('Claude', 'Which model answers the assistant and agents, and how Forgeline signs in to it.'),
+        !admin && h('div', { class: 'mb-4' }, notice('info', 'Only administrators can change integrations.')), h('div', { id: 'assistant-card' }));
+      assistantSettings(el.querySelector('#assistant-card'), admin);
+      return;
+    }
     let gh;
     try { gh = await get('/v1/integrations/github'); } catch (e) { return mount(el, errorBox(e.message)); }
     rules = gh.rules.map(r => ({ repo: r.repo, branches: r.branches.join(', ') }));
@@ -83,7 +96,7 @@ export async function integrationsPage() {
 
     const hookUrl = gh.webhook_url;
     mount(el,
-      pageHeader('Integrations', 'Connect Forgeline to the systems around it.'),
+      backLink(), pageHeader('GitHub', 'Pushes to chosen branches start runs, and the result is posted back as a commit status.'),
       h('div', { class: 'mb-4 flex flex-wrap items-center gap-3' },
         h('span', { class: 'flex items-center gap-2 text-lg font-semibold' }, icon('git', 'size-5'), 'GitHub'),
         gh.active ? h('span', { class: 'pill-ok' }, 'Active') : gh.problem ? h('span', { class: 'pill-bad' }, 'Needs attention') : h('span', { class: 'pill-idle' }, 'Not active'),
@@ -106,8 +119,7 @@ export async function integrationsPage() {
               h('div', { class: 'mt-1 text-xs' }, h('span', { class: 'font-medium' }, d.event), d.repo && h('span', { class: 'font-mono' }, ' ' + d.repo), d.sha && h('span', { class: 'font-mono muted' }, ' @' + d.sha.slice(0, 7))),
               d.detail && h('div', { class: 'muted text-xs' }, d.detail), d.run_id && h('a', { href: '#/runs/' + d.run_id, class: 'text-xs text-brand-600 hover:underline dark:text-brand-300' }, 'Open run')))
             ) : emptyState('plug', 'No deliveries yet', 'They appear here once GitHub starts sending events.')))),
-      h('div', { id: 'assistant-card', class: 'mt-10' }));
-    assistantSettings(el.querySelector('#assistant-card'), admin);
+      );
   }
 
   function showSecret(out) {

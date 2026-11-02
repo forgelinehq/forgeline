@@ -278,6 +278,8 @@ update that asks for different hosts needs a fresh grant.
 | --- | --- |
 | [70-aws-map](70-aws-map.png) | The AWS map on a fake account: grouped navigation, ember colour, resources inside their VPC, and the "needs a look" strip. A stand-in AWS CLI supplied the data |
 | [71-agent-markdown-editor](71-agent-markdown-editor.png) | An agent's instructions in the Markdown editor: toolbar, live preview, advisory checks |
+| [72-integrations-hub](72-integrations-hub.png) | The integrations hub (note 025): cards grouped by category with a status, AWS profiles found on the server by name, and planned systems shown dashed. Stand-in AWS and Claude |
+| [73-integration-test](73-integration-test.png) | The popup of a connected system with the result of a read-only test: each check, what it found, how long it took, and "created nothing, changed nothing" |
 
 ## Which pictures are current
 

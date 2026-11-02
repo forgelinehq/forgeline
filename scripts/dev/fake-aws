@@ -37,6 +37,10 @@ def flag(name):
 st = load()
 key = " ".join(a[:2])
 
+if key == "configure list-profiles":
+    # names only, as the real command prints them; the console lists the ones it is not using
+    sys.stdout.write("default\nstaging\nold\n"); sys.exit(0)
+
 if key == "sts get-caller-identity":
     out({"Account": ACCOUNT, "Arn": "arn:aws:sts::%s:assumed-role/Admin/ada" % ACCOUNT, "UserId": "AROASIM:ada"})
 

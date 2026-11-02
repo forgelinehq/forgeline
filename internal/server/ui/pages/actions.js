@@ -29,7 +29,7 @@ export async function actionsPage() {
   if (!repos.connected || !repos.repos.length) {
     return mount(el, pageHeader('GitHub Actions', 'Start, watch and re-run workflows of your repositories.'),
       h('div', { class: 'card' }, emptyState('plug', 'Connect GitHub first', 'Actions are limited to the repositories on the GitHub allow list.',
-        h('a', { class: 'btn-primary', href: '#/integrations' }, 'Open Integrations'))));
+        h('a', { class: 'btn-primary', href: '#/integrations/github/settings' }, 'Open GitHub settings'))));
   }
   repo = repos.repos[0].repo;
   const rule = () => repos.repos.find(r => r.repo === repo);

@@ -38,6 +38,7 @@ type IntegrationJSON struct {
 	// Summary is one plain sentence about the state. Problem says what is wrong and what to do.
 	// Warnings are things that do not stop it working.
 	Summary  string         `json:"summary"`
+	Blurb    string         `json:"blurb"` // what the system is for, one short sentence
 	Problem  string         `json:"problem,omitempty"`
 	Warnings []string       `json:"warnings,omitempty"`
 	Details  []AWSFieldJSON `json:"details,omitempty"`
@@ -108,7 +109,7 @@ func (t *integTestStore) get(id string) *IntegrationTestJSON {
 // that does nothing is worse than a label that says "later".
 func plannedIntegrations() []IntegrationJSON {
 	p := func(id, name, cat, tier, status string, order int, plan, auth, roBy, roNote string) IntegrationJSON {
-		return IntegrationJSON{ID: id, Name: name, Category: cat, Tier: tier, Status: status, Order: order, Plan: plan, Auth: auth,
+		return IntegrationJSON{ID: id, Name: name, Category: cat, Tier: tier, Status: status, Order: order, Plan: plan, Auth: auth, Blurb: firstSentence(plan),
 			ReadOnlyBy: roBy, ReadOnlyNote: roNote, Summary: map[string]string{intNext: "Coming soon, next", intLater: "Coming soon, later"}[status]}
 	}
 	return []IntegrationJSON{
@@ -154,6 +155,14 @@ func plannedIntegrations() []IntegrationJSON {
 	}
 }
 
+// firstSentence is a plan up to its first full stop, for a card.
+func firstSentence(s string) string {
+	if i := strings.Index(s, ". "); i > 0 {
+		return s[:i+1]
+	}
+	return s
+}
+
 func (s *Server) handleListIntegrations(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	out := []IntegrationJSON{}
@@ -180,7 +189,7 @@ func ago(d time.Duration) string {
 
 func (s *Server) integGitHub(ctx context.Context, r *http.Request) []IntegrationJSON {
 	v := s.githubView(ctx, r)
-	it := IntegrationJSON{ID: "github", Name: "GitHub", Category: "Source and CI", Tier: "built-in", Testable: true, Manage: "/integrations",
+	it := IntegrationJSON{ID: "github", Name: "GitHub", Blurb: "Runs on push, commit statuses and the Actions page.", Category: "Source and CI", Tier: "built-in", Testable: true, Manage: "/integrations/github/settings",
 		ReadOnlyBy: "provider", ReadOnlyNote: "GitHub, through the permissions of the app or token"}
 	switch {
 	case !v.Configured:
@@ -214,7 +223,7 @@ func (s *Server) integGitHub(ctx context.Context, r *http.Request) []Integration
 
 func (s *Server) integAWS(ctx context.Context, _ *http.Request) []IntegrationJSON {
 	st := s.loadAWS(ctx)
-	it := IntegrationJSON{ID: "aws", Name: "AWS", Category: "Cloud", Tier: "built-in", Testable: true, Manage: "/infrastructure?tab=aws",
+	it := IntegrationJSON{ID: "aws", Name: "AWS", Blurb: "Explorer, map, alarms, Guard and spend.", Category: "Cloud", Tier: "built-in", Testable: true, Manage: "/infrastructure?tab=aws",
 		ReadOnlyBy: "provider", ReadOnlyNote: "AWS, through the role you sign in with"}
 	if !st.Enabled {
 		it.Status, it.Summary = intOff, "Not connected"
@@ -247,7 +256,7 @@ func (s *Server) integAWS(ctx context.Context, _ *http.Request) []IntegrationJSO
 
 func (s *Server) integAWSMCP(ctx context.Context, _ *http.Request) []IntegrationJSON {
 	m := s.loadAWSMCP(ctx)
-	it := IntegrationJSON{ID: "aws-mcp", Name: "AWS MCP Server", Category: "AI", Tier: "built-in", Testable: true, Manage: "/infrastructure?tab=aws",
+	it := IntegrationJSON{ID: "aws-mcp", Name: "AWS MCP Server", Blurb: "Lets the assistant read AWS and file change proposals.", Category: "AI", Tier: "built-in", Testable: true, Manage: "/infrastructure?tab=aws",
 		ReadOnlyBy: "provider", ReadOnlyNote: "AWS, through the same role as the AWS connection. Changes apply only after approval"}
 	switch {
 	case !m.Enabled:
@@ -264,7 +273,7 @@ func (s *Server) integDocker(ctx context.Context, _ *http.Request) []Integration
 	ctx, cancel := context.WithTimeout(ctx, 4*time.Second)
 	defer cancel()
 	d := s.dockerInfo(ctx)
-	it := IntegrationJSON{ID: "docker", Name: "Docker host", Category: "Containers", Tier: "built-in", Testable: true, Manage: "/infrastructure?tab=platform",
+	it := IntegrationJSON{ID: "docker", Name: "Docker host", Blurb: "Where pipeline steps run as containers.", Category: "Containers", Tier: "built-in", Testable: true, Manage: "/infrastructure?tab=platform",
 		ReadOnlyBy: "", ReadOnlyNote: "Steps run as containers with the permissions each pipeline declares. This host is not an agent tool"}
 	if !d.Available {
 		it.Status, it.Summary, it.Problem = intAttention, "Not reachable", "Forgeline cannot reach Docker, so steps cannot run. "+d.Error
@@ -276,7 +285,7 @@ func (s *Server) integDocker(ctx context.Context, _ *http.Request) []Integration
 
 func (s *Server) integK8s(ctx context.Context, _ *http.Request) []IntegrationJSON {
 	cs, err := s.listK8sClusters(ctx)
-	it := IntegrationJSON{ID: "kubernetes", Name: "Kubernetes", Category: "Containers", Tier: "built-in", Testable: true, Manage: "/kubernetes",
+	it := IntegrationJSON{ID: "kubernetes", Name: "Kubernetes", Blurb: "A read-only cluster explorer.", Category: "Containers", Tier: "built-in", Testable: true, Manage: "/kubernetes",
 		ReadOnlyBy: "provider", ReadOnlyNote: "Kubernetes, through RBAC on the token or role"}
 	switch {
 	case err != nil:
@@ -291,7 +300,7 @@ func (s *Server) integK8s(ctx context.Context, _ *http.Request) []IntegrationJSO
 
 func (s *Server) integClaude(ctx context.Context, _ *http.Request) []IntegrationJSON {
 	v := s.assistantView(ctx)
-	it := IntegrationJSON{ID: "claude", Name: "Claude", Category: "AI", Tier: "built-in", Testable: true, Manage: "/integrations",
+	it := IntegrationJSON{ID: "claude", Name: "Claude", Blurb: "The model behind the assistant and agents.", Category: "AI", Tier: "built-in", Testable: true, Manage: "/integrations/claude/settings",
 		ReadOnlyBy: "", ReadOnlyNote: "A model is not a tool. What it controls is which agents may use it and how much"}
 	switch {
 	case v.Backend == "" || v.Backend == assistOff:
@@ -342,7 +351,7 @@ func (s *Server) detectedIntegrations(ctx context.Context) []IntegrationJSON {
 	sort.Strings(names)
 	var res []IntegrationJSON
 	for _, n := range names {
-		res = append(res, IntegrationJSON{ID: "aws-profile:" + n, Name: `AWS profile "` + n + `"`, Category: "Cloud", Tier: "built-in", Status: intDetected,
+		res = append(res, IntegrationJSON{ID: "aws-profile:" + n, Name: `AWS profile "` + n + `"`, Blurb: "Found on this server. Connect it as a second AWS account.", Category: "Cloud", Tier: "built-in", Status: intDetected,
 			Summary: "Found on this server, not connected", Manage: "/infrastructure?tab=aws",
 			Found:      `An AWS profile named "` + n + `" is configured for the server's user. Forgeline read only its name, never a credential, and has not used it.`,
 			ReadOnlyBy: "provider", ReadOnlyNote: "AWS, through the profile's role"})
