@@ -18,9 +18,28 @@ export function parseInline(s) {
   return out;
 }
 
+const TABLE_ROW = /^\s*\|.*\|\s*$/;
+const TABLE_SEP = /^\s*\|?\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)*\|?\s*$/;
+
+/** The cells of one table row: outer pipes dropped, `\|` kept as a literal pipe. */
+function splitRow(ln) {
+  let s = ln.trim();
+  if (s.startsWith('|')) s = s.slice(1);
+  if (s.endsWith('|') && !s.endsWith('\\|')) s = s.slice(0, -1);
+  const cells = [];
+  let cur = '';
+  for (let i = 0; i < s.length; i++) {
+    if (s[i] === '\\' && s[i + 1] === '|') { cur += '|'; i++; }
+    else if (s[i] === '|') { cells.push(cur.trim()); cur = ''; }
+    else cur += s[i];
+  }
+  cells.push(cur.trim());
+  return cells;
+}
+
 /**
  * Parses text into blocks: h (level 1-3), p, ul, ol (items with an optional task state), quote,
- * code and hr. Line breaks inside a paragraph are kept, so plain text written before this editor
+ * code, table (head, align, rows; a header row, a `|---|---|` line and rows) and hr. Line breaks inside a paragraph are kept, so plain text written before this editor
  * existed still reads the way it was written.
  */
 export function parseBlocks(src) {
@@ -39,6 +58,21 @@ export function parseBlocks(src) {
       while (i < lines.length && !/^```/.test(lines[i])) buf.push(lines[i++]);
       i++; // the closing fence, or the end of the text
       blocks.push({ t: 'code', lang, text: buf.join('\n') });
+      continue;
+    }
+    if (TABLE_ROW.test(ln) && i + 1 < lines.length && lines[i + 1].includes('|') && TABLE_SEP.test(lines[i + 1])) {
+      flush();
+      const head = splitRow(ln), n = head.length;
+      const align = splitRow(lines[i + 1]).slice(0, n).map(c => (c.startsWith(':') && c.endsWith(':') ? 'center' : c.endsWith(':') ? 'right' : ''));
+      while (align.length < n) align.push('');
+      const rows = [];
+      i += 2;
+      while (i < lines.length && TABLE_ROW.test(lines[i])) {
+        const cells = splitRow(lines[i++]).slice(0, n);
+        while (cells.length < n) cells.push('');
+        rows.push(cells);
+      }
+      blocks.push({ t: 'table', head, align, rows });
       continue;
     }
     if ((m = ln.match(/^(#{1,3})\s+(.*)$/))) { flush(); blocks.push({ t: 'h', level: m[1].length, text: m[2] }); i++; continue; }
@@ -69,6 +103,20 @@ export function parseBlocks(src) {
   }
   flush();
   return blocks;
+}
+
+/**
+ * Groups parsed blocks for a card layout: what comes before the first heading (intro), then one
+ * section per level 1 or 2 heading with the blocks under it. Deeper structure stays inside.
+ */
+export function splitSections(blocks) {
+  const intro = [], sections = [];
+  let cur = null;
+  for (const b of blocks) {
+    if (b.t === 'h' && b.level <= 2) { cur = { title: b.text, blocks: [] }; sections.push(cur); }
+    else (cur ? cur.blocks : intro).push(b);
+  }
+  return { intro, sections };
 }
 
 // Words that describe changing things. Tier T0 agents only read and advise.

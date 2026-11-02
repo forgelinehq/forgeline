@@ -106,7 +106,7 @@ function shell() {
 
   renderUser(); renderNav();
   addEventListener('hashchange', renderNav);
-  mount(root, sidebar, top, h('div', { class: 'flex min-h-[calc(100vh-3.5rem)] flex-col lg:pl-64' }, outlet));
+  mount(root, sidebar, top, h('div', { class: 'flex min-h-[calc(100vh-3.5rem)] flex-col lg:pl-64 lg:pr-[var(--assistant-w,0px)]' }, outlet));
   fetch('/healthz').catch(() => {});
   return outlet;
 }

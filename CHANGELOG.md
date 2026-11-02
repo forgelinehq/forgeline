@@ -7,6 +7,14 @@ section in the pull request that makes the change; a release moves it under its 
 ## [Unreleased]
 
 ### Added
+- **Assistant panel you can resize, dock or float, with answers shown as cards.** Answers used to be plain text, so
+  tables showed as `|---|` rows and `**bold**` showed its stars. Markdown tables now render as tables, and an answer
+  is split by its headings into cards (a summary, then one card per section), with code blocks that keep Copy and
+  "Open as a new pipeline". What the assistant looked up is shown as chips above the answer, and a proposal it filed
+  is a highlighted card. The panel docks at the right and the page makes room for it instead of being covered: drag
+  its left edge or use the arrow keys, or the wide button (up to 70% of the window). Or float it as a window that
+  you drag by its header and resize from its corner. The mode and size are remembered per browser. Tool calls
+  streaming in as they happen, and the answer streaming word by word, are not built yet.
 - **CloudWatch alarms on the AWS map** (design note 023, step 2). New `GET /v1/infra/aws/alarms` (viewer, one
   read-only `describe-alarms` call). An alarm in ALARM marks the resource it names as needing a look, and the
   resource's detail lists its alarms. An alarm belongs to a resource only when its namespace and its own
