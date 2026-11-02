@@ -10,7 +10,7 @@ import (
 // The Markdown editor's parser and checks are plain functions with no DOM, so they run under
 // Node. Skipped where Node is not installed. Each case states what it protects.
 const markdownCases = `
-import { parseBlocks, parseInline, checkInstructions } from './markdown.mjs';
+import { parseBlocks, parseInline, checkInstructions, splitSections } from './markdown.mjs';
 
 let failed = 0;
 const eq = (name, got, want) => {
@@ -35,6 +35,25 @@ eq('quote', parseBlocks('> never delete\n> anything'), [{ t: 'quote', text: 'nev
 eq('inline spans', parseInline('a **b** and ` + "`c`" + `'), [{ t: 'text', text: 'a ' }, { t: 'b', text: 'b' }, { t: 'text', text: ' and ' }, { t: 'code', text: 'c' }]);
 eq('CRLF', parseBlocks('a\r\nb'), [{ t: 'p', text: 'a\nb' }]);
 eq('empty', parseBlocks(''), []);
+
+// Tables, as an assistant writes them.
+eq('table', parseBlocks('| Setting | Value |\n|---|---|\n| Tag | IMMUTABLE |\n| Scan | Off |'),
+  [{ t: 'table', head: ['Setting', 'Value'], align: ['', ''], rows: [['Tag', 'IMMUTABLE'], ['Scan', 'Off']] }]);
+eq('table after a heading with no blank line', parseBlocks('## Config\n| A | B |\n|---|---|\n| 1 | 2 |').map(b => b.t), ['h', 'table']);
+eq('table alignment', parseBlocks('| a | b | c |\n|:---|:---:|---:|\n| 1 | 2 | 3 |')[0].align, ['', 'center', 'right']);
+eq('short rows are padded and long rows cut', parseBlocks('| a | b |\n|---|---|\n| 1 |\n| 1 | 2 | 3 |')[0].rows, [['1', ''], ['1', '2']]);
+eq('escaped pipe stays in the cell', parseBlocks('| a | b |\n|---|---|\n| x \\| y | z |')[0].rows, [['x | y', 'z']]);
+eq('a table ends at the first line without pipes', parseBlocks('| a |\n|---|\n| 1 |\nafter').map(b => b.t), ['table', 'p']);
+eq('a lone pipe line is a paragraph', parseBlocks('| not a table |').map(b => b.t), ['p']);
+eq('a rule after a pipe line is not a table', parseBlocks('| a |\n---').map(b => b.t), ['p', 'hr']);
+eq('pipes inside a code fence stay code', parseBlocks('` + "```" + `\n| a |\n|---|\n` + "```" + `').map(b => b.t), ['code']);
+
+// Card sections.
+const sec = splitSections(parseBlocks('Intro line\n\n## One\ntext\n\n### Deeper\nmore\n\n## Two\n- a'));
+eq('intro before the first heading', sec.intro.map(b => b.t), ['p']);
+eq('sections by level 1 and 2 headings', sec.sections.map(x => [x.title, x.blocks.map(b => b.t)]), [['One', ['p', 'h', 'p']], ['Two', ['ul']]]);
+eq('deeper headings stay inside their section', sec.sections[0].blocks.map(b => b.level || 0), [0, 3, 0]);
+eq('no headings means no sections', splitSections(parseBlocks('just text')).sections, []);
 
 // Checks.
 eq('empty text warns', levels(checkInstructions('  ')), ['warn']);
