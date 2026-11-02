@@ -1,4 +1,5 @@
 import { h, icon, mount, pill, pageHeader, relTime, absTime, bytes, spinner, errorBox, notice, toast, modal, confirmDialog, field, emptyState, kpi } from '../lib/dom.js';
+import { versionLabel } from '../lib/version.js';
 import { get, put, post, patch, del, atLeast } from '../lib/api.js';
 import { navigate } from '../lib/router.js';
 import { session } from '../app.js';
@@ -53,7 +54,7 @@ async function platform(body) {
         kpi('Uptime', uptime(s.uptime_seconds), 'since ' + new Date(s.started_at).toLocaleString())),
       h('div', { class: 'mt-6 grid gap-4 lg:grid-cols-2' },
         h('section', { class: 'card card-pad' }, h('h2', { class: 'h-section mb-2' }, 'Forgeline server'),
-          h('dl', { class: 'divide-y divide-slate-100 dark:divide-slate-800' }, row('Version', 'v' + s.version), row('Platform', s.platform + ' · ' + s.go), row('Run history', s.store === 'postgres' ? 'PostgreSQL' : 'In memory (lost on restart)'),
+          h('dl', { class: 'divide-y divide-slate-100 dark:divide-slate-800' }, row('Version', versionLabel(s.version)), row('Platform', s.platform + ' · ' + s.go), row('Run history', s.store === 'postgres' ? 'PostgreSQL' : 'In memory (lost on restart)'),
             row('Steps in parallel per run', s.parallelism), row('Data directory', h('code', { class: 'font-mono text-xs' }, s.data_dir))),
           s.disk_total_bytes ? h('div', { class: 'mt-4' }, h('div', { class: 'mb-1.5 flex justify-between text-xs' }, h('span', { class: 'muted' }, 'Disk holding workspaces'), h('span', {}, `${bytes(s.disk_free_bytes)} free of ${bytes(s.disk_total_bytes)}`)), bar(diskUsed, diskUsed > 0.9)) : null),
         h('section', { class: 'card card-pad' }, h('div', { class: 'mb-2 flex items-center justify-between' }, h('h2', { class: 'h-section' }, 'Docker host'), d.available ? h('span', { class: 'pill-ok' }, 'Reachable') : h('span', { class: 'pill-bad' }, 'Not reachable')),
