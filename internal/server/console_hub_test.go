@@ -10,7 +10,7 @@ import (
 // The hub's filtering, sorting and wording (ui/lib/hub.js) are plain functions, so they run under Node.
 // Skipped where Node is not installed.
 const hubCases = `
-import { matches, group, counts, summaryLine, logo, testSummary, statusPill, statusText, tierText, readOnlyText, attentionList, isPlanned, CATEGORIES, activityLabel, normalizeGcpScope, normalizeAzureSubs } from './hub.mjs';
+import { matches, group, counts, summaryLine, logo, testSummary, statusPill, statusText, tierText, readOnlyText, attentionList, isPlanned, CATEGORIES, activityLabel, normalizeGcpScope, normalizeAzureSubs, toolChoice, policyRequest, agentStateText } from './hub.mjs';
 
 let failed = 0;
 const eq = (name, got, want) => {
@@ -97,6 +97,24 @@ eq('no subscriptions means all', normalizeAzureSubs([]), { subs: [] });
 eq('not a guid', 'error' in normalizeAzureSubs(['prod']), true);
 eq('a flag in front of a guid', 'error' in normalizeAzureSubs(['--x ' + A]), true);
 eq('more than twenty', 'error' in normalizeAzureSubs(Array.from({ length: 21 }, (_, i) => String(i + 1).padStart(8, '0') + '-0000-0000-0000-000000000000')), true);
+
+// The Access tab.
+const rd = (name, level = 'allow') => ({ name, kind: 'read', level }), wr = (name, level = 'allow') => ({ name, kind: 'write', level });
+eq('a read tool shows Allow', toolChoice(rd('a')).shown, 'allow');
+eq('a blocked read tool shows Blocked', toolChoice(rd('a', 'block')).shown, 'block');
+eq('a write tool that is not blocked shows Needs approval, never Allow', toolChoice(wr('p')).shown, 'ask');
+eq('a blocked write tool shows Blocked', toolChoice(wr('p', 'block')).shown, 'block');
+eq('a write tool cannot be set to Allow, but can go back to Needs approval after being blocked', toolChoice(wr('p', 'block')).options.map(o => [o.key, o.enabled]), [['allow', false], ['ask', true], ['block', true]]);
+eq('a read tool can be Allow or Blocked, but not Needs approval yet', toolChoice(rd('a')).options.map(o => [o.key, o.enabled]), [['allow', true], ['ask', false], ['block', true]]);
+eq('every disabled option says why', ['read', 'write'].every(k => toolChoice({ kind: k, level: 'allow' }).options.filter(o => !o.enabled).every(o => o.why.length > 10)), true);
+const tl = [rd('a'), rd('b', 'block'), wr('p')];
+eq('blocking one keeps the others as shown', policyRequest(tl, 'a', 'block'), { tools: { a: 'block', b: 'block' } });
+eq('allowing one removes only its block', policyRequest(tl, 'b', 'allow'), { tools: {} });
+eq('a write tool is never sent as allow, even when nothing is blocked', Object.values(policyRequest([wr('p')], 'p', 'allow').tools), []);
+eq('a blocked write tool is sent as a block', policyRequest([wr('p')], 'p', 'block'), { tools: { p: 'block' } });
+eq('unblocking a write tool sends nothing for it', policyRequest([wr('p', 'block'), rd('a')], 'p', 'ask'), { tools: {} });
+eq('Needs approval is not a request for a read tool', policyRequest(tl, 'a', 'ask').tools.a, undefined);
+eq('agent state words', ['allowed', 'blocked', 'not_listed', 'x'].map(agentStateText), ['Allowed', 'Blocked', 'Not listed', 'x']);
 
 if (failed) process.exit(1);
 console.log('ok');

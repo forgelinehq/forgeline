@@ -50,11 +50,12 @@ type IntegrationJSON struct {
 	ReadOnlyNote string               `json:"read_only_note,omitempty"`
 	Testable     bool                 `json:"testable"`
 	LastTest     *IntegrationTestJSON `json:"last_test,omitempty"`
-	Manage       string               `json:"manage,omitempty"` // console path of the existing settings
-	Order        int                  `json:"order,omitempty"`  // build order for planned systems
-	Plan         string               `json:"plan,omitempty"`   // what a planned system will do
-	Auth         string               `json:"auth,omitempty"`   // how a planned system will sign in
-	Found        string               `json:"found,omitempty"`  // what was seen on this server (names only)
+	Manage       string               `json:"manage,omitempty"`     // console path of the existing settings
+	HasPolicy    bool                 `json:"has_policy,omitempty"` // its tools can be allowed or blocked (note 026)
+	Order        int                  `json:"order,omitempty"`      // build order for planned systems
+	Plan         string               `json:"plan,omitempty"`       // what a planned system will do
+	Auth         string               `json:"auth,omitempty"`       // how a planned system will sign in
+	Found        string               `json:"found,omitempty"`      // what was seen on this server (names only)
 }
 
 // IntegrationCheckJSON is one line of a test.
@@ -167,8 +168,18 @@ func (s *Server) handleListIntegrations(w http.ResponseWriter, r *http.Request) 
 	}
 	out = append(out, s.detectedIntegrations(ctx)...)
 	out = append(out, plannedIntegrations()...)
+	pol, perr := s.loadPolicy(ctx)
 	for i := range out {
 		out[i].LastTest = s.integTests.get(out[i].ID)
+		if len(policyTools(out[i].ID)) == 0 || out[i].Status == intNext || out[i].Status == intLater {
+			continue
+		}
+		out[i].HasPolicy = true
+		if perr != nil {
+			out[i].Warnings = append(out[i].Warnings, "The access policy cannot be read, so this integration's tools are refused until it can")
+		} else if n := len(blockedOf(pol, out[i].ID)); n > 0 {
+			out[i].Warnings = append(out[i].Warnings, fmt.Sprintf("%d tool%s blocked by the access policy", n, map[bool]string{true: " is", false: "s are"}[n == 1]))
+		}
 	}
 	writeJSON(w, http.StatusOK, IntegrationsJSON{Integrations: out})
 }
