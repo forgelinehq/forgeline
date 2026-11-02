@@ -142,6 +142,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /v1/cloud/changes/{id}/cancel", s.requireRole(authn.Developer, s.handleCancelChange))
 	mux.Handle("GET /v1/assistant", s.requireRole(authn.Developer, s.handleGetAssistant))
 	mux.Handle("POST /v1/assistant/chat", s.requireRole(authn.Developer, s.handleChat))
+	mux.Handle("POST /v1/assistant/runs", s.requireRole(authn.Developer, s.handleAssistantRun))
 	mux.Handle("GET /v1/integrations/aws/mcp", s.requireRole(authn.Admin, s.handleGetAWSMCP))
 	mux.Handle("PUT /v1/integrations/aws/mcp", s.requireRole(authn.Admin, s.handlePutAWSMCP))
 	mux.Handle("GET /v1/ai/proposals", s.requireRole(authn.Viewer, s.handleListProposals))

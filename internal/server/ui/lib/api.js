@@ -1,4 +1,5 @@
 // Forgeline web console: API client.
+import { sseParser } from './sse.js';
 
 export class ApiError extends Error {
   constructor(status, message, body) {
@@ -35,6 +36,36 @@ export async function api(method, path, body) {
     throw new ApiError(resp.status, (data && data.error) || resp.status + ' ' + resp.statusText, data);
   }
   return data;
+}
+
+/**
+ * POST and read the answer as a server-sent event stream, calling onEvent for each event. Checks that
+ * fail before the stream starts come back as ordinary JSON errors and are thrown as ApiError, the
+ * same as api(). Aborting through `signal` throws an AbortError.
+ */
+export async function streamPost(path, body, onEvent, signal) {
+  let resp;
+  try {
+    resp = await fetch(path, { method: 'POST', credentials: 'same-origin', signal, body: JSON.stringify(body === undefined ? {} : body),
+      headers: { 'X-Forgeline-Request': '1', 'Content-Type': 'application/json', Accept: 'text/event-stream' } });
+  } catch (e) {
+    if (e && e.name === 'AbortError') throw e;
+    throw new ApiError(0, 'Cannot reach the server. Check that it is running and try again.');
+  }
+  if (!resp.ok) {
+    let data = null;
+    try { data = JSON.parse(await resp.text()); } catch { /* not JSON */ }
+    if (resp.status === 401) listeners.forEach(fn => fn());
+    throw new ApiError(resp.status, (data && data.error) || resp.status + ' ' + resp.statusText, data);
+  }
+  const reader = resp.body.getReader();
+  const decoder = new TextDecoder();
+  const parser = sseParser(onEvent);
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    parser.push(decoder.decode(value, { stream: true }));
+  }
 }
 
 export const get = (p) => api('GET', p);

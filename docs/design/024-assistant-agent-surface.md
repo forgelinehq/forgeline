@@ -1,6 +1,6 @@
 # 024: The assistant as an agent surface
 
-Status: **Design only. Nothing here is built.** Date: 2026-11-01.
+Status: **Steps 1 to 3 built, with two changes (below). Word-by-word streaming, plan and chart cards are not built.** Date: 2026-11-01, built 2026-11-02.
 Builds on notes 008 (assistant), 015 (AWS lookups), 006 (proposals) and 022 (step 4). Facts about the
 code are from `origin/main` at `f927cad`.
 
@@ -36,6 +36,24 @@ allowed to do?
 | **Approval** | A `CUSTOM forgeline.proposal` event with the proposal id. The card loads the proposal with the existing `GET /v1/cloud/changes/{id}`, shows its preview and status, and its Approve and Reject buttons call the existing approve and reject endpoints. The server still refuses an approver who is the proposer and anyone below administrator | The card is a view of the proposal. There is no second approval path, and the run does not wait: it ends when the proposal is filed, and the card follows the proposal's status by reading it, including "expired" (a proposal older than 24 hours is refused) |
 | Context | The chips above the thread show what the page gave the assistant (the context note it already returns) and the person's role | Makes "what does it see" visible |
 | Rate limit and audit | Unchanged: 20 questions a minute per person; one `assistant.chat` entry and one `assistant.lookup` per lookup | |
+
+## What was built, and what changed from the design
+
+- `POST /v1/assistant/runs` streams AG-UI style events from the same lookup loop as `/chat`; the existing
+  assistant tests pass unchanged and share one validation function (`prepareChat`) with the new endpoint.
+  Event shapes follow the AG-UI SDK reference as recalled when building; they were **not** checked against an
+  AG-UI client library.
+- The console reads the stream with `fetch` (`ui/lib/sse.js`, `runstate.js`, both tested under Node) and shows
+  each lookup as a card (name, arguments, state, result cut at 2 KB, opened on demand), then the answer as cards,
+  and a **Stop** button that cancels the run (and so the model call).
+- **Changed: the proposal card has no Approve or Reject button.** The assistant files a proposal as the person
+  who asked, and the server refuses the proposer as approver, so the asker could never use such a button. The
+  card shows the proposal and follows its status (it re-reads it every 5 seconds while it is open), and links to
+  the Proposals page, where a different administrator approves. This also keeps one approval path.
+- **Changed: a lookup a role may not run is shown, as failed.** The model asks for it, so the card says it was
+  refused ("not available to your role") with no data; nothing of what it would have returned is sent.
+- Not built: token streaming (the answer arrives in one `TEXT_MESSAGE_CONTENT`), plan and chart cards, and a
+  conversation that survives a page reload.
 
 ## What this note does not promise
 
@@ -84,7 +102,9 @@ Node: the SSE frame parser as a pure function. Then remove each rule in turn and
 ## What was checked, and what was not
 
 Checked: the facts above, by reading the code, and the AG-UI event names against its published SDK
-reference. Nothing is built.
+reference. Steps 1 to 3 are built and tested (Go tests with a scripted model; Node tests for the parser and run
+state; a browser run against a stand-in `claude` program).
 
-Not checked: how each backend behaves when its request is cancelled, whether the proxy in front of a
+Not checked: how the real `claude` program and the API behave when their request is cancelled (the test uses a
+scripted model that honours a cancelled context), whether the proxy in front of a
 real deployment buffers server-sent events, and the card layout in a browser.

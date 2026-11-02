@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/forgelinehq/forgeline/internal/authn"
@@ -171,6 +172,7 @@ func (s *Server) runLookup(ctx context.Context, p Principal, c lookupCall) (stri
 // final answer and the names of the lookups that ran.
 func (s *Server) askWithLookups(ctx context.Context, p Principal, turns []chatTurn, ctxText string, audit func(detail string, ok bool)) (string, []string, error) {
 	var used []string
+	obs := lookupObserver(ctx)
 	for i := 0; ; i++ {
 		reply, err := s.askAssistant(ctx, p.Role, turns, ctxText)
 		if err != nil {
@@ -192,6 +194,10 @@ func (s *Server) askWithLookups(ctx context.Context, p Principal, turns []chatTu
 			}
 			return reply, used, nil
 		}
+		id := "call-" + strconv.Itoa(len(used)+1)
+		if obs != nil {
+			obs(assistEvent{Kind: evToolStart, ID: id, Tool: call.Tool, Args: argsPreview(call)})
+		}
 		out, lerr := s.runLookup(ctx, p, call)
 		audit(lookupDetail(call), lerr == nil)
 		used = append(used, call.Tool)
@@ -200,6 +206,9 @@ func (s *Server) askWithLookups(ctx context.Context, p Principal, turns []chatTu
 			msg = "The lookup failed: " + lerr.Error()
 		} else {
 			msg = truncate(out, maxLookupResult)
+		}
+		if obs != nil {
+			obs(assistEvent{Kind: evToolResult, ID: id, Tool: call.Tool, Content: truncate(msg, previewMax), OK: lerr == nil})
 		}
 		// A closing tag inside the data must not be able to end the block early.
 		msg = strings.ReplaceAll(msg, "</lookup_result>", "</lookup_result_>")

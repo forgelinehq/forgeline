@@ -1,9 +1,10 @@
 // The assistant panel: a read-only helper that answers questions about the page you are on.
 // It cannot change anything; a pipeline it drafts is text until you save it yourself.
-import { h, icon, mount, errorBox, notice, copyButton, toast } from './dom.js';
-import { get, post, atLeast } from './api.js';
+import { h, icon, mount, errorBox, notice, copyButton, toast, pill } from './dom.js';
+import { get, atLeast, streamPost } from './api.js';
 import { currentPath, navigate } from './router.js';
 import { renderReply } from './mdview.js';
+import { newRun, applyEvent, progressLabel } from './runstate.js';
 import { dockWidth, wideDockWidth, floatRect, readPrefs } from './panelgeom.js';
 
 const DRAFT_KEY = 'forgeline-draft';
@@ -80,19 +81,72 @@ function build(close, role) {
 
   const amber = 'flex items-start gap-2 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2.5 text-xs text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200';
 
-  /** One answer: what it looked at, the answer as cards, and anything it filed for review. */
-  function answerTurn(r) {
-    const lookups = r.lookups || [];
-    return h('div', { class: 'space-y-3', 'data-turn': 'assistant' },
-      lookups.length ? h('div', { class: 'flex flex-wrap items-center gap-1.5 text-xs', 'aria-label': 'What the assistant looked up' },
-        h('span', { class: 'muted' }, 'Looked up'),
-        lookups.map(n => h('span', { class: 'inline-flex items-center gap-1 rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 font-mono text-[11px] dark:border-slate-700 dark:bg-slate-800' }, icon('tool', 'size-3'), n))) : null,
-      renderReply(r.reply, { codeBlock }),
-      (r.proposals || []).length ? h('div', { class: amber, 'data-filed': 'proposal' }, icon('shield', 'mt-0.5 size-4 shrink-0'), h('div', {}, 'Filed for review. Nothing has run: ',
-        ...r.proposals.map(id => h('a', { href: '#/proposals/' + id, class: 'font-semibold underline', onclick: close }, 'proposal ' + id)))) : null,
-      (r.environments || []).length ? h('div', { class: amber, 'data-filed': 'environment' }, icon('server', 'mt-0.5 size-4 shrink-0'), h('div', {}, 'Environment requested. Nothing exists until an administrator approves: ',
+  const STEP_ICON = {
+    running: () => h('span', { class: 'size-3.5 shrink-0 animate-spin rounded-full border-2 border-slate-300 border-t-brand-600', 'aria-hidden': 'true' }),
+    done: () => icon('check', 'size-3.5 shrink-0 text-emerald-600 dark:text-emerald-400'),
+    failed: () => icon('alert', 'size-3.5 shrink-0 text-rose-600 dark:text-rose-400'),
+  };
+  const STEP_WORD = { running: 'running', done: 'done', failed: 'failed' };
+
+  /** One lookup: its name, what it was asked, its state, and the cut of the result on demand. */
+  function stepCard(st, opened) {
+    return h('details', { class: 'rounded-lg border border-slate-200 bg-slate-50 text-xs dark:border-slate-700 dark:bg-slate-800/60', 'data-step': st.name, 'data-status': st.status, open: opened.has(st.id),
+      ontoggle: (e) => { if (e.target.open) opened.add(st.id); else opened.delete(st.id); } },
+      h('summary', { class: 'flex cursor-pointer items-center gap-2 px-2.5 py-1.5' },
+        STEP_ICON[st.status](), h('span', { class: 'sr-only' }, STEP_WORD[st.status]),
+        icon('tool', 'size-3 shrink-0 text-slate-400'), h('span', { class: 'shrink-0 font-mono font-medium' }, st.name),
+        st.args ? h('span', { class: 'muted min-w-0 truncate font-mono' }, st.args) : null),
+      st.result ? h('pre', { class: 'max-h-60 overflow-auto whitespace-pre-wrap break-words border-t border-slate-200 p-2.5 font-mono text-[11px] leading-relaxed dark:border-slate-700' }, st.result) : null);
+  }
+
+  /**
+   * A change the assistant filed, as a card that follows the proposal. It has no Approve button on
+   * purpose: the assistant files a proposal as the person who asked, and the server refuses the
+   * proposer as approver, so approval is always another administrator's, on the Proposals page.
+   */
+  function proposalCard(id) {
+    const box = h('div', { class: 'overflow-hidden rounded-xl border border-amber-300 bg-amber-50/60 dark:border-amber-500/40 dark:bg-amber-500/5', 'data-proposal': id }, h('div', { class: 'p-3 text-xs muted' }, 'Loading the proposal…'));
+    let timer = null;
+    async function load() {
+      let p;
+      try { p = await get('/v1/ai/proposals/' + encodeURIComponent(id)); } catch (e) { return mount(box, h('div', { class: 'p-3' }, errorBox(e.message))); }
+      const calls = p.calls || [];
+      const open = p.status === 'proposed' || p.status === 'applying';
+      const who = p.account_name || p.target || 'the connected account';
+      mount(box,
+        h('div', { class: 'flex flex-wrap items-center gap-2 border-b border-amber-200 px-3 py-2 dark:border-amber-500/30' },
+          icon('shield', 'size-4 shrink-0 text-amber-700 dark:text-amber-300'), h('span', { class: 'min-w-0 flex-1 text-sm font-semibold' }, p.title),
+          pill(p.status), h('span', { class: 'pill-idle' }, 'risk ' + p.risk)),
+        h('div', { class: 'space-y-2 p-3 text-xs' },
+          h('p', { class: 'whitespace-pre-wrap text-slate-700 dark:text-slate-300' }, p.reason),
+          calls.length ? h('ul', { class: 'space-y-0.5 font-mono' }, calls.slice(0, 6).map(c => h('li', { class: 'truncate' }, h('span', { class: 'font-semibold' }, c.service + ' ' + c.operation), c.args ? h('span', { class: 'muted' }, ' ' + c.args) : null)),
+            calls.length > 6 ? h('li', { class: 'muted' }, `and ${calls.length - 6} more`) : null) : null,
+          h('p', { class: 'muted' }, p.status === 'proposed'
+            ? `Drafted for ${who}. Nothing has run. A different administrator must approve it on the Proposals page.`
+            : p.decided_by ? `${p.status === 'rejected' ? 'Rejected' : p.status === 'cancelled' ? 'Withdrawn' : 'Approved'} by ${p.decided_by}.` : `Status: ${p.status}.`),
+          h('a', { href: '#/proposals/' + encodeURIComponent(id), class: 'inline-block font-semibold underline' }, 'Open the full proposal')));
+      clearInterval(timer);
+      if (open) timer = setInterval(() => { if (!box.isConnected) clearInterval(timer); else load(); }, 5000);
+    }
+    load();
+    return box;
+  }
+
+  /** The run so far: its lookups as cards, what it is doing, the answer as cards, and anything it filed. */
+  function runNode(run, opened, cards, stop) {
+    const cardFor = (id) => { if (!cards.has(id)) cards.set(id, proposalCard(id)); return cards.get(id); };
+    const label = progressLabel(run);
+    return h('div', { class: 'space-y-3' },
+      run.steps.length ? h('div', { class: 'space-y-1.5', 'aria-label': 'What the assistant looked up' }, run.steps.map(st => stepCard(st, opened))) : null,
+      label ? h('div', { class: 'flex items-center gap-2 text-sm muted', role: 'status' }, h('span', { class: 'size-2 animate-pulse-dot rounded-full bg-brand-500' }), label,
+        h('button', { class: 'btn-ghost btn-sm ml-auto', type: 'button', id: 'assistant-stop', onclick: stop }, icon('stop', 'size-3'), 'Stop')) : null,
+      run.status === 'stopped' ? h('p', { class: 'muted text-xs' }, 'Stopped. Nothing more was looked up.') : null,
+      run.text ? renderReply(run.text, { codeBlock }) : null,
+      run.error ? errorBox(run.error) : null,
+      run.proposals.map(cardFor),
+      run.environments.length ? h('div', { class: amber, 'data-filed': 'environment' }, icon('server', 'mt-0.5 size-4 shrink-0'), h('div', {}, 'Environment requested. Nothing exists until an administrator approves: ',
         h('a', { href: '#/environments', class: 'font-semibold underline', onclick: close }, 'see Environments'))) : null,
-      h('div', { class: 'muted text-[11px]' }, 'Based on: ' + r.context));
+      run.status === 'finished' && run.context ? h('div', { class: 'muted text-[11px]' }, 'Based on: ' + run.context) : null);
   }
 
   function empty() {
@@ -108,18 +162,26 @@ function build(close, role) {
     if (!q || busy) return;
     if (!history.length) list.replaceChildren();
     busy = true; sendBtn.disabled = true; input.value = '';
-    list.append(userBubble(q));
-    const wait = h('div', { class: 'flex items-center gap-2 text-sm muted', role: 'status' }, h('span', { class: 'size-2 animate-pulse-dot rounded-full bg-brand-500' }), 'Thinking…');
-    list.append(wait); list.scrollTop = list.scrollHeight;
+    const run = newRun(), opened = new Set(), cards = new Map(), ctl = new AbortController();
+    const host = h('div', { 'data-turn': 'assistant' });
+    list.append(userBubble(q), host);
+    const draw = () => {
+      const near = list.scrollHeight - list.scrollTop - list.clientHeight < 120;
+      mount(host, runNode(run, opened, cards, () => ctl.abort()));
+      if (near) list.scrollTop = list.scrollHeight;
+    };
+    draw(); list.scrollTop = list.scrollHeight;
     const c = pageContext();
     try {
-      const r = await post('/v1/assistant/chat', { message: q, history, context: { kind: c.kind, id: c.id } });
-      history.push({ role: 'user', content: q }, { role: 'assistant', content: r.reply });
-      wait.replaceWith(answerTurn(r));
+      await streamPost('/v1/assistant/runs', { message: q, history, context: { kind: c.kind, id: c.id } }, (ev) => { applyEvent(run, ev); draw(); }, ctl.signal);
+      if (run.status === 'running') { run.status = 'error'; run.error = 'The connection closed before the assistant finished.'; }
     } catch (e) {
-      wait.replaceWith(h('div', {}, errorBox(e.message)));
+      if (e && e.name === 'AbortError') run.status = 'stopped';
+      else { run.status = 'error'; run.error = e.message; }
     }
-    busy = false; sendBtn.disabled = false; list.scrollTop = list.scrollHeight; input.focus();
+    draw();
+    if (run.status === 'finished') history.push({ role: 'user', content: q }, { role: 'assistant', content: run.text });
+    busy = false; sendBtn.disabled = false; input.focus();
   }
 
   const form = h('form', { class: 'flex items-end gap-2 border-t border-slate-200 p-3 dark:border-slate-800', onsubmit: (e) => { e.preventDefault(); ask(); } }, input, sendBtn);
