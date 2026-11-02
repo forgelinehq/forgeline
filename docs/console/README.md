@@ -271,3 +271,10 @@ itself: if the proxy cannot listen on the network's gateway the call is refused,
 update that asks for different hosts needs a fresh grant.
 
 ![Choosing which hosts a plugin may reach](62-plugin-hosts.png)
+
+## After the redesign (note 022 and 023)
+
+| Picture | What it shows |
+| --- | --- |
+| [70-aws-map](70-aws-map.png) | The AWS map on a fake account: grouped navigation, ember colour, resources inside their VPC, and the "needs a look" strip. A stand-in AWS CLI supplied the data |
+| [71-agent-markdown-editor](71-agent-markdown-editor.png) | An agent's instructions in the Markdown editor: toolbar, live preview, advisory checks |

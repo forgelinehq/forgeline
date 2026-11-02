@@ -28,7 +28,13 @@ Set it up under **Integrations → Assistant**:
 
 ![Settings]({{ '/console/33-assistant-token.png' | relative_url }})
 
+The assistant is still a side panel that sends one question and shows one text answer. A richer view that shows each lookup and each proposal as it happens is designed ([note 024](https://github.com/forgelinehq/forgeline/blob/main/docs/design/024-assistant-agent-surface.md)) but not built.
+
 Questions are rate limited (20 a minute per person) and audited by page and length, not by text.
+
+## Agents you define
+
+Under **Agents** you can define named agents with instructions, skills and a short list of tools. The instructions are written in Markdown, with a live preview and advisory checks; the model receives exactly the text you wrote. See the [Console tour]({{ '/guides/console-tour/' | relative_url }}#agents).
 
 ## Agent steps
 

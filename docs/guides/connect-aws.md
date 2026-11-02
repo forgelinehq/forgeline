@@ -37,3 +37,7 @@ already has credentials (for example an instance role). Sign in on the server wi
 ![Done]({{ '/console/25-change-succeeded.png' | relative_url }})
 
 **Verified:** reading a real account, the real device-code sign-in and the real credential step, and rejecting a change on a real account. Executing an approved change was run on a real account: a deploy and a delete of the demo stack, each approved by a second actor in the browser. Design: [note 009](https://github.com/forgelinehq/forgeline/blob/main/docs/design/009-aws-signin.md).
+
+## What you see once connected
+
+The **AWS account** tab shows the account's resources as a map, grouped by VPC, with a list of what needs a look. See the [Console tour]({{ '/guides/console-tour/' | relative_url }}#infrastructure). It is read-only and uses the same connection; it adds no permissions.
