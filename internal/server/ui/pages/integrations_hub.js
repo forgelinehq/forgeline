@@ -5,10 +5,11 @@ import { h, icon, mount, pageHeader, relTime, absTime, spinner, errorBox, notice
 import { get, post, atLeast } from '../lib/api.js';
 import { session } from '../app.js';
 import { navigate } from '../lib/router.js';
-import { group, matches, summaryLine, statusPill, statusText, tierText, readOnlyText, logo, testSummary, attentionList, isPlanned } from '../lib/hub.js';
+import { group, matches, summaryLine, statusPill, statusText, tierText, readOnlyText, logo, attentionList, isPlanned, activityLabel } from '../lib/hub.js';
+import { renderChecks } from './integration_parts.js';
+import { connectWizard, wizardFor } from './integrations_wizard.js';
 
 const STATUS_CHIPS = [['all', 'All'], ['connected', 'Connected'], ['attention', 'Needs attention'], ['detected', 'Found here'], ['soon', 'Coming soon']];
-const MARK = { ok: ['check', 'text-emerald-600 dark:text-emerald-400'], warn: ['alert', 'text-amber-600 dark:text-amber-400'], fail: ['x', 'text-rose-600 dark:text-rose-400'] };
 
 export async function integrationsHubPage({ params }) {
   const el = h('div', {});
@@ -75,9 +76,30 @@ export async function integrationsHubPage({ params }) {
     modal(it.name, (close) => body(it, close), { wide: true }).then(() => { if (params && params.id) navigate('/integrations'); });
   }
 
+  /** The popup: Overview, and for administrators Activity. Planned and detected systems have no tabs. */
   function body(it, close) {
     const planned = isPlanned(it);
-    const out = h('div', { class: 'space-y-4', id: 'integration-popup', 'data-integration': it.id });
+    const wrap = h('div', { class: 'space-y-4', id: 'integration-popup', 'data-integration': it.id });
+    const pane = h('div', { class: 'space-y-4' });
+    let tab = 'overview';
+    const showTabs = admin && !planned && it.status !== 'detected';
+    const draw = () => {
+      if (tab === 'activity') return mount(pane, activityPane(it));
+      mount(pane, overview(it, close, (el) => mount(pane, el)));
+    };
+    const tabs = showTabs ? h('div', { class: 'flex gap-1 border-b border-slate-200 dark:border-slate-800', role: 'tablist' }, ['overview', 'activity'].map(t => h('button', { type: 'button', role: 'tab', 'data-tab': t, 'aria-selected': String(tab === t),
+      class: '-mb-px border-b-2 px-3 py-2 text-sm font-medium ' + (tab === t ? 'border-brand-600 text-brand-700 dark:border-brand-400 dark:text-brand-200' : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400'),
+      onclick: (e) => { tab = t; tabs.querySelectorAll('button').forEach(b2 => { const on = b2.dataset.tab === t; b2.setAttribute('aria-selected', String(on)); b2.className = '-mb-px border-b-2 px-3 py-2 text-sm font-medium ' + (on ? 'border-brand-600 text-brand-700 dark:border-brand-400 dark:text-brand-200' : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400'); }); draw(); } },
+      t === 'overview' ? 'Overview' : 'Activity'))) : null;
+    wrap.append(...[tabs, pane].filter(Boolean));
+    draw();
+    wrap.append(h('div', { class: 'flex justify-end pt-1' }, h('button', { type: 'button', class: 'btn-ghost btn-sm', onclick: () => close() }, 'Close')));
+    return wrap;
+  }
+
+  function overview(it, close, replacePane) {
+    const planned = isPlanned(it);
+    const out = h('div', { class: 'space-y-4' });
     const testBox = h('div', { class: 'space-y-1.5', 'aria-live': 'polite', id: 'integration-test' });
     out.append(h('div', { class: 'flex flex-wrap items-center gap-2' }, h('span', { class: statusPill(it.status) }, h('span', { class: 'size-1.5 rounded-full bg-current' }), statusText(it)),
       h('span', { class: 'pill-idle' }, tierText(it.tier)), planned && it.order ? h('span', { class: 'muted text-xs' }, 'Build order ' + it.order) : null));
@@ -96,35 +118,45 @@ export async function integrationsHubPage({ params }) {
     if (planned) out.append(h('p', { class: 'muted text-xs' }, 'Not available yet, so there is no Connect button. When it ships it opens this same popup, and every tool it adds starts at Needs approval.'));
 
     const actions = h('div', { class: 'flex flex-wrap items-center gap-2' });
-    if (it.testable && admin) {
+    const wizard = admin && it.status === 'off' && wizardFor(it.id);
+    if (wizard) {
+      actions.append(h('button', { type: 'button', class: 'btn-primary', id: 'integration-connect', onclick: () => replacePane(connectWizard(it, { close, onDone: () => { load0(); } })) }, icon('plug', 'size-4'), 'Connect'));
+    }
+    if (it.testable && admin && !wizard) {
       const btn = h('button', { type: 'button', class: 'btn-primary', id: 'integration-test-run', onclick: async () => {
         btn.disabled = true; mount(testBox, spinner());
         try {
           const res = await post('/v1/integrations/' + encodeURIComponent(it.id) + '/checks');
-          showTest(testBox, res); it.last_test = res; drawGrid(); // the card behind the popup shows "Tested just now" at once
+          renderChecks(testBox, res); it.last_test = res; drawGrid(); // the card behind the popup shows "Tested just now" at once
         } catch (e) { mount(testBox, errorBox(e.message)); }
         btn.disabled = false;
       } }, icon('bolt', 'size-4'), 'Test connection');
       actions.append(btn);
     }
-    if (it.manage && !planned) actions.append(h('a', { class: 'btn-secondary', href: '#' + it.manage, onclick: () => close() }, it.status === 'off' || it.status === 'detected' ? 'Connect' : 'Open settings'));
+    if (it.manage && !planned && !wizard) actions.append(h('a', { class: 'btn-secondary', href: '#' + it.manage, onclick: () => close() }, it.status === 'off' || it.status === 'detected' ? 'Connect' : 'Open settings'));
+    if (wizard) actions.append(h('a', { class: 'btn-ghost btn-sm', href: '#' + it.manage, onclick: () => close() }, 'Or use the full page'));
     if (actions.children.length) out.append(actions);
     if (it.testable && !admin) out.append(h('p', { class: 'muted text-xs' }, 'Only administrators can run a test.'));
     out.append(testBox);
-    if (it.last_test) showTest(testBox, it.last_test, true);
-    out.append(h('div', { class: 'flex justify-end pt-1' }, h('button', { type: 'button', class: 'btn-ghost btn-sm', onclick: () => close() }, 'Close')));
+    if (it.last_test) renderChecks(testBox, it.last_test, true);
     return out;
   }
 
-  /** The checks of a test, one line each: what it checked, what it found, and the fix when there is one. */
-  function showTest(box, res, earlier = false) {
-    const rows = res.checks.map(c => h('div', { class: 'flex items-start gap-3 rounded-lg border px-3 py-2 text-sm ' + (c.result === 'fail' ? 'border-transparent bg-rose-50 dark:bg-rose-500/10' : c.result === 'warn' ? 'border-transparent bg-amber-50 dark:bg-amber-500/10' : 'border-slate-200 dark:border-slate-800'), 'data-result': c.result },
-      icon(MARK[c.result][0], 'mt-0.5 size-4 shrink-0 ' + MARK[c.result][1]),
-      h('div', { class: 'min-w-0 flex-1' }, h('div', { class: 'font-medium' }, c.name), c.detail ? h('div', { class: 'muted text-xs' }, c.detail) : null,
-        c.fix ? h('div', { class: 'mt-0.5 text-xs font-medium text-slate-700 dark:text-slate-300' }, 'To fix: ' + c.fix) : null),
-      h('span', { class: 'muted shrink-0 text-xs tabular-nums' }, (c.took_ms / 1000).toFixed(1) + ' s')));
-    mount(box, earlier ? h('div', { class: 'muted text-xs' }, 'Last test, ' + relTime(res.at) + (res.by ? ' by ' + res.by : '') + ':') : null, ...rows, h('p', { class: 'muted text-xs', id: 'integration-test-summary' }, testSummary(res)));
+  /** What was done to this integration and by whom, from the audit log (administrators only). Refusals are marked. */
+  function activityPane(it) {
+    const box = h('div', { class: 'space-y-1.5', id: 'integration-activity' }, spinner());
+    get('/v1/integrations/' + encodeURIComponent(it.id) + '/activity').then(({ events }) => {
+      mount(box, events.length ? h('ul', { class: 'divide-y divide-slate-100 rounded-lg border border-slate-200 dark:divide-slate-800 dark:border-slate-800' }, events.map(e => h('li', { class: 'flex items-start gap-3 px-3 py-2 text-sm', 'data-allowed': String(e.allowed) },
+        h('div', { class: 'min-w-0 flex-1' }, h('div', { class: 'font-medium' }, activityLabel(e.action), e.allowed ? null : h('span', { class: 'pill-bad ml-2' }, 'Refused')),
+          e.detail ? h('div', { class: 'muted break-words text-xs' }, e.detail) : null),
+        h('div', { class: 'muted shrink-0 text-right text-xs' }, e.actor, h('div', { title: absTime(e.time) }, relTime(e.time))))))
+        : h('p', { class: 'muted text-sm' }, 'Nothing has been recorded for this integration yet. Connecting, changing and testing it all appear here.'));
+    }).catch(e => mount(box, errorBox(e.message)));
+    return box;
   }
+
+  /** Refresh the cards after something changed behind the popup (a connection made in the wizard). */
+  async function load0() { try { list = (await get('/v1/integrations')).integrations; draw(); } catch { /* the wizard still shows its own result */ } }
 
   await load();
   return el;

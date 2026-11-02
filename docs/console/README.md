@@ -282,6 +282,7 @@ update that asks for different hosts needs a fresh grant.
 | [73-integration-test](73-integration-test.png) | The popup of a connected system with the result of a read-only test: each check, what it found, how long it took, and "created nothing, changed nothing" |
 | [74-gcp-explorer](74-gcp-explorer.png) | The Google Cloud tab: connected scope, and the explorer grouped by kind with Vertex AI under an AI group, from a stand-in `gcloud` (made-up resources) |
 | [75-azure-explorer](75-azure-explorer.png) | The Azure tab: one subscription chosen, and the explorer grouped by kind with Azure OpenAI under the AI group, from a stand-in `az` (made-up resources) |
+| [76-connect-wizard](76-connect-wizard.png) | The Google Cloud connect wizard at its last step: the three steps, and the checks of the test with what each found |
 
 ## Which pictures are current
 

@@ -18,7 +18,7 @@ On the server, as the user Forgeline runs as:
 
 ## Connect
 
-Go to **Infrastructure → Azure**. An administrator sees the subscriptions the login can see; tick the ones Forgeline may read, or tick none to read every subscription the login can see (narrower is safer). Choose **Connect**. Before it saves anything, Forgeline proves the login can query, and says what to fix if not: no login, no permission, the extension missing, or an unknown subscription.
+Go to **Integrations → Azure → Connect** (a short wizard), or **Infrastructure → Azure**. An administrator sees the subscriptions the login can see; tick the ones Forgeline may read, or tick none to read every subscription the login can see (narrower is safer). Choose **Connect**. Before it saves anything, Forgeline proves the login can query, and says what to fix if not: no login, no permission, the extension missing, or an unknown subscription.
 
 You can also find it under **Integrations**, where **Test connection** runs the checks again at any time. It only reads.
 

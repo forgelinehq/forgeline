@@ -376,3 +376,15 @@ func TestGCPHubStatusAndTest(t *testing.T) {
 		t.Errorf("no gcloud = %+v", res)
 	}
 }
+
+// The console checks a scope before asking, with the same pattern. If the two drift apart, a person would be
+// told a good scope is wrong, or sent a bad one.
+func TestTheConsoleChecksAGoogleScopeWithTheSamePattern(t *testing.T) {
+	js, err := uiFiles.ReadFile("ui/lib/hub.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(strings.ReplaceAll(string(js), `\/`, `/`), gcpScopeRE.String()) {
+		t.Errorf("ui/lib/hub.js does not contain the server's scope pattern %s", gcpScopeRE)
+	}
+}

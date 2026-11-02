@@ -90,3 +90,43 @@ export function testSummary(res) {
 export function attentionList(list) {
   return list.filter(i => i.status === 'attention');
 }
+
+/** Plain words for an audit action, for an integration's Activity tab. Unknown actions fall back to their own name. */
+export function activityLabel(action) {
+  const known = {
+    'integration.test': 'Test run', 'integration.github.test': 'Test run', 'integration.assistant.test': 'Test run',
+    'integration.gcp.update': 'Connection changed', 'integration.azure.update': 'Connection changed', 'integration.aws.update': 'Connection changed',
+    'integration.awsmcp.update': 'Turned on or off', 'integration.assistant.update': 'Settings changed', 'integration.github.update': 'Settings changed',
+    'integration.github.delete': 'Removed', 'integration.github.app.start': 'App creation started', 'integration.github.app.install': 'App installed',
+    'integration.aws.sso.start': 'Sign-in started', 'integration.aws.sso.signin': 'Signed in', 'integration.aws.sso.signout': 'Signed out', 'integration.aws.sso.denied': 'Sign-in denied',
+    'integration.aws.account.add': 'Account added', 'integration.aws.account.remove': 'Account removed', 'integration.aws.account.writes': 'Changes allowed or stopped for an account',
+    'k8s.cluster.add': 'Cluster added', 'k8s.cluster.delete': 'Cluster removed',
+  };
+  return known[action] || String(action).replace(/^integration\./, '').replace(/[._]/g, ' ');
+}
+
+const GCP_HINT = 'projects/my-project, folders/1234567890 or organizations/1234567890';
+const GCP_SCOPE = /^(projects|folders|organizations)\/[A-Za-z0-9][A-Za-z0-9._:-]{0,62}$/;
+const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+/** The same check the server makes, so a typo is caught before a round trip. The server stays the authority. */
+export function normalizeGcpScope(input) {
+  let s = String(input == null ? '' : input).trim();
+  if (!s) return { error: 'Give a project, folder or organization, such as ' + GCP_HINT + '.' };
+  if (!s.includes('/')) s = 'projects/' + s;
+  if (!GCP_SCOPE.test(s)) return { error: 'That is not a scope Google understands. Use ' + GCP_HINT + '.' };
+  return { scope: s };
+}
+
+/** Subscription ids: lower-cased, no repeats, sorted, each a GUID, at most 20. Empty means every subscription the login can see. */
+export function normalizeAzureSubs(list) {
+  const out = [];
+  for (const x of list || []) {
+    const v = String(x).trim().toLowerCase();
+    if (!v || out.includes(v)) continue;
+    if (!GUID.test(v)) return { error: `"${v.slice(0, 40)}" is not a subscription id.` };
+    out.push(v);
+  }
+  if (out.length > 20) return { error: 'Choose at most 20 subscriptions, or none to read every subscription the login can see.' };
+  return { subs: out.sort() };
+}

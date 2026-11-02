@@ -7,6 +7,12 @@ section in the pull request that makes the change; a release moves it under its 
 ## [Unreleased]
 
 ### Added
+- **Connect wizard and Activity tab in the integrations popup** (design note 025, slice S1). Google Cloud and Azure
+  connect inside the popup in three steps: choose what to read (a scope is checked in the browser the way the server
+  checks it), connect (the server proves the login can read it first and, if not, says which role or command is
+  needed and saves nothing), and test. Administrators also get an **Activity** tab for each integration: the newest
+  30 audit entries that belong to it, with refusals marked, from the new `GET /v1/integrations/{id}/activity`. The
+  match is exact, so AWS and the AWS MCP Server never show each other's entries, and no address is included.
 - **Azure, read-only** (design note 025, slice S6). Infrastructure has an Azure tab. Forgeline uses the server user's
   `az` login and one Azure Resource Graph query (a fixed one: nothing a person types is in it) over the subscriptions the
   login can read, or the ones an administrator ticks, read in pages of 1000 up to 3000 resources. Virtual machines, App
