@@ -58,6 +58,12 @@ func TestHubListsEverySystemWithAStatusAndPlannedOnesHaveNoTest(t *testing.T) {
 	}
 	valid := map[string]bool{intConnected: true, intAttention: true, intDetected: true, intOff: true, intNext: true, intLater: true}
 	for id, it := range h {
+		if it.Blurb == "" || len(it.Blurb) > 160 {
+			t.Errorf("%s needs a short blurb for its card: %q", id, it.Blurb)
+		}
+		if (it.Status == intNext || it.Status == intLater) && it.Blurb != firstSentence(it.Plan) {
+			t.Errorf("planned %s: the blurb should be the plan's first sentence, got %q", id, it.Blurb)
+		}
 		if !valid[it.Status] || it.Name == "" || it.Category == "" || it.Summary == "" {
 			t.Errorf("%s is incomplete: %+v", id, it)
 		}
@@ -75,6 +81,21 @@ func TestHubListsEverySystemWithAStatusAndPlannedOnesHaveNoTest(t *testing.T) {
 	}
 	if !strings.Contains(h["runpod"].Plan, "2026-11-15") {
 		t.Errorf("the RunPod plan does not mention that REST v1 retires: %q", h["runpod"].Plan)
+	}
+}
+
+// The categories the server uses must be the ones the console lays out, or a card would not appear.
+func TestHubCategoriesAreTheOnesTheConsoleKnows(t *testing.T) {
+	m := newMCPHarness(t)
+	m.srv.run = integRun(&awsStub{}, true, "old\n")
+	js, err := uiFiles.ReadFile("ui/lib/hub.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, it := range hub(t, m.dev) {
+		if !strings.Contains(string(js), "'"+it.Category+"'") {
+			t.Errorf("%s is in the category %q, which ui/lib/hub.js does not list", it.ID, it.Category)
+		}
 	}
 }
 

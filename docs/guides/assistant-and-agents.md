@@ -20,7 +20,9 @@ Click **Assistant** in the top bar. It sees the page you are on (a run, a pipeli
 
 ![Assistant]({{ '/console/21-assistant.png' | relative_url }})
 
-Set it up under **Integrations → Assistant**:
+Set it up under **Integrations**: open the **Claude** card and choose **Connect** (or **Open settings**). A **Test connection** button in the same popup sends one short question to check it.
+
+The settings offer three ways to sign in:
 
 - **Anthropic API key**: stored in the vault. Billed to that key. Best for teams.
 - **Claude Code login token**: paste the output of `claude setup-token` once. It is stored as the secret `CLAUDE_CODE_OAUTH_TOKEN`, the same one agent steps use. The `claude` program runs in a scratch home directory with only that token, so the server user's own login is not touched.

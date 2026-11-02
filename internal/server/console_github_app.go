@@ -352,7 +352,7 @@ var manifestPage = `<!doctype html><html lang="en"><head><meta charset="utf-8"><
 <h1 class="text-lg font-semibold">Create the Forgeline GitHub App</h1>
 <p class="mt-2 text-sm">GitHub will show you the app: <strong>%[1]s</strong>, private to %[2]s, with read access to repository contents and write access to commit statuses. Review it there and choose Create. You come back here afterwards.</p>
 <form method="post" action="%[3]s" class="mt-5"><input type="hidden" name="manifest" value="%[4]s"><button class="btn-primary" type="submit" id="go-github">Continue to GitHub</button>
-<a class="btn-secondary ml-2" href="/#/integrations">Cancel</a></form></div></main></body></html>`
+<a class="btn-secondary ml-2" href="/#/integrations/github/settings">Cancel</a></form></div></main></body></html>`
 
 func (s *Server) handleGHAppLaunch(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("state")
@@ -413,7 +413,7 @@ func (s *Server) handleGHAppLaunch(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleGHAppCallback(w http.ResponseWriter, r *http.Request) {
 	code, state := r.URL.Query().Get("code"), r.URL.Query().Get("state")
 	back := func(msg string) {
-		http.Redirect(w, r, "/#/integrations?app="+url.QueryEscape(msg), http.StatusSeeOther)
+		http.Redirect(w, r, "/#/integrations/github/settings?app="+url.QueryEscape(msg), http.StatusSeeOther)
 	}
 	st, ok := s.ghApp.take(state)
 	if !ok {

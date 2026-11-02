@@ -243,7 +243,7 @@ func TestConsoleConnectsGitHubWithAnApp(t *testing.T) {
 	}
 	// A failed attempt used the state up; start again.
 	state, start = startApp(t, admin, app.srv.URL, nil)
-	if loc := callback(appGoodCode, state); loc != "/#/integrations?app=created" {
+	if loc := callback(appGoodCode, state); loc != "/#/integrations/github/settings?app=created" {
 		t.Fatalf("callback went to %q", loc)
 	}
 	if loc := callback(appGoodCode, state); !strings.Contains(loc, "app=expired") {

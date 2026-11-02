@@ -16,7 +16,8 @@ import { kubernetesPage } from './pages/kubernetes.js';
 import { environmentsPage } from './pages/environments.js';
 import { marketplacePage } from './pages/marketplace.js';
 import { infraPage } from './pages/infra.js';
-import { integrationsPage } from './pages/integrations.js';
+import { githubSettingsPage, claudeSettingsPage } from './pages/integrations.js';
+import { integrationsHubPage } from './pages/integrations_hub.js';
 import { secretsPage } from './pages/secrets.js';
 import { peoplePage } from './pages/people.js';
 import { auditPage } from './pages/audit.js';
@@ -172,7 +173,10 @@ async function boot() {
     route('/proposals', guard('viewer', proposalsPage));
     route('/proposals/:id', guard('viewer', proposalsPage));
     route('/infrastructure', guard('viewer', infraPage));
-    route('/integrations', guard('developer', integrationsPage));
+    route('/integrations', guard('developer', integrationsHubPage));
+    route('/integrations/github/settings', guard('developer', githubSettingsPage));
+    route('/integrations/claude/settings', guard('developer', claudeSettingsPage));
+    route('/integrations/:id', guard('developer', integrationsHubPage)); // opens that integration's popup over the hub
     route('/secrets', guard('developer', secretsPage));
     route('/people', guard('admin', peoplePage));
     route('/audit', guard('admin', auditPage));

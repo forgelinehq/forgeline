@@ -267,7 +267,7 @@ function build(close, role) {
     ready = cfg.ready;
     if (!cfg.ready) {
       form.classList.add('hidden');
-      mount(list, notice('info', 'The assistant is not set up yet. ', atLeast(role, 'admin') ? h('a', { href: '#/integrations', class: 'underline', onclick: close }, 'Turn it on under Integrations.') : 'Ask an administrator to turn it on.'));
+      mount(list, notice('info', 'The assistant is not set up yet. ', atLeast(role, 'admin') ? h('a', { href: '#/integrations/claude/settings', class: 'underline', onclick: close }, 'Turn it on under Integrations.') : 'Ask an administrator to turn it on.'));
     } else empty();
   }).catch(e => mount(list, errorBox(e.message)));
   return panel;

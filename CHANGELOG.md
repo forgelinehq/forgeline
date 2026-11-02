@@ -13,8 +13,15 @@ section in the pull request that makes the change; a release moves it under its 
   (Google Cloud, Azure, cloud models, a custom model endpoint, Lambda, Nebius, CoreWeave, RunPod, registries, Datadog
   and others), none of which has a Connect button. An AWS sign-in that ends within 30 minutes, or has ended, is
   flagged with what to do. Each system says who enforces read-only. `POST /v1/integrations/{id}/checks` runs a
-  read-only test with a result, a detail and a fix per check, and never creates or changes anything. The hub page
-  itself comes next.
+  read-only test with a result, a detail and a fix per check, and never creates or changes anything. The hub page uses it
+  (below).
+- **The integrations hub page** (note 025). Integrations is now one page of cards grouped by category, with status
+  filters, search and a strip for anything that needs attention. Click a card for its popup: the status and what to
+  do, who enforces read-only, and (for administrators) a Test connection button that shows each check with its result,
+  fix and time. Each popup has its own address (`#/integrations/aws`). Planned systems are dashed and have no Connect
+  button. GitHub and Claude settings moved to `#/integrations/github/settings` and `#/integrations/claude/settings`
+  (the GitHub App return address follows). Not built yet: the Settings area, per-tool access policy, a wizard in the
+  popup, Google Cloud and Azure.
 - **The assistant shows its work as it happens** (design note 024). New `POST /v1/assistant/runs` answers with
   server-sent events (AG-UI vocabulary) from the same lookup loop, limits and audit as `/v1/assistant/chat`. The
   panel shows each lookup as a card while it runs (what it asked, a cut of what came back, opened on demand), then

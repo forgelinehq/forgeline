@@ -11,7 +11,7 @@ export function githubAppCard(gh, reload) {
   if (flash === 'created') toast('GitHub App created. Now install it.', 'ok');
   else if (flash === 'failed') toast('GitHub did not finish creating the app. Try again.', 'error');
   else if (flash === 'expired') toast('That setup link expired. Start again.', 'error');
-  if (flash) history.replaceState(null, '', '#/integrations');
+  if (flash) history.replaceState(null, '', '#/integrations/github/settings');
 
   const title = (badge) => h('div', { class: 'mb-3 flex flex-wrap items-center gap-3' },
     h('h2', { class: 'flex items-center gap-2 text-base font-semibold' }, icon('git', 'size-5'), 'Connect with a GitHub App'), badge);
