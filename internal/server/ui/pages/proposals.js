@@ -10,7 +10,7 @@ export async function proposalsPage({ params }) {
   async function list() {
     let r;
     try { r = await get('/v1/ai/proposals'); } catch (e) { return mount(el, errorBox(e.message)); }
-    mount(el, pageHeader('Proposals', 'Changes the assistant drafted for review. Nothing runs until a different administrator approves the exact text.'),
+    mount(el, pageHeader('Approvals', 'Changes the assistant drafted for review. Nothing runs until a different administrator approves the exact text.'),
       r.proposals.length ? h('div', { class: 'card overflow-x-auto' }, h('table', { class: 'tbl' },
         h('thead', {}, h('tr', {}, ['Change', 'Status', 'Risk', 'Calls', 'Proposed by', 'When'].map(x => h('th', {}, x)))),
         h('tbody', {}, r.proposals.map(p => h('tr', {},
@@ -39,7 +39,7 @@ export async function proposalsPage({ params }) {
       if (ok) act('approve', { hash: p.hash, note: note.value });
     } }, icon('check', 'size-4'), 'Approve and apply');
     mount(el,
-      h('nav', { class: 'mb-2 text-sm', 'aria-label': 'Breadcrumb' }, h('a', { href: '#/proposals', class: 'muted hover:underline' }, 'Proposals'), h('span', { class: 'muted' }, ' › '), h('span', {}, p.id)),
+      h('nav', { class: 'mb-2 text-sm', 'aria-label': 'Breadcrumb' }, h('a', { href: '#/proposals', class: 'muted hover:underline' }, 'Approvals'), h('span', { class: 'muted' }, ' › '), h('span', {}, p.id)),
       pageHeader(p.title, 'Drafted by ' + p.proposed_by + (p.via_ai ? ' with the assistant' : '') + ' · ' + relTime(p.proposed_at), pill(p.status)),
       p.status === 'failed' && h('div', { class: 'mb-4' }, errorBox('The change did not complete cleanly. Check the account by hand.')),
       h('section', { class: 'card card-pad mb-4' }, h('h2', { class: 'h-section mb-2' }, 'Why'), h('p', { class: 'whitespace-pre-wrap text-sm' }, p.reason)),

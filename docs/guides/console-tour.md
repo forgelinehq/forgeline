@@ -8,7 +8,7 @@ nav_order: 1
 
 Everything below is done from the web console. Pictures were taken from a running server in a real browser, after the redesign, on stand-ins for AWS and GitHub with demo data. The agent-step and assistant pictures are older and still show the previous indigo colour; those pages work the same.
 
-The sidebar groups pages by the job you are doing: **Ship** (Pipelines, Actions, Environments), **Cloud** (Infrastructure, Kubernetes, Guard, Integrations), **AI** (Agents, Marketplace) and **Govern** (Proposals, Secrets, People, Audit log). What you see depends on your role.
+The sidebar holds the daily work, grouped by the job you are doing: **Ship** (Pipelines, Actions, Environments), **Cloud** (Infrastructure, Kubernetes, Guard), **AI** (Agents, Marketplace) and **Decide** (Approvals, the changes waiting for a different administrator). Setup lives behind the **Settings** gear at the bottom: People and roles, Integrations, Secrets, Models, the Audit log and API tokens, grouped on one page with a menu on the left. Entries that are planned (single sign-on, access policy, budgets, approval rules) are listed dimmed as coming soon. What you see depends on your role, and old addresses still work.
 
 ## Overview
 Every pipeline with its current status, a sparkline of its last runs, success rate and average time. Failing pipelines sort first. A strip at the top shows platform health.

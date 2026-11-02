@@ -7,6 +7,12 @@ section in the pull request that makes the change; a release moves it under its 
 ## [Unreleased]
 
 ### Added
+- **A Settings area behind a gear** (design note 025, slice S2). The sidebar keeps the daily work (Overview, Ship,
+  Cloud, Agents and Marketplace, Approvals) and a **Settings** gear at the bottom opens one page that groups the
+  setup pages: People and roles, Integrations, Secrets, Models, the Audit log and API tokens. Those pages show a
+  Settings menu on the left. Planned entries (single sign-on, access policy, budgets, approval rules) are listed
+  dimmed as coming soon, with no link. Proposals is now called Approvals in the sidebar and on its page. Every old
+  address still works. Not built yet: the ⌘K search and the entries that are only listed.
 - **Integrations hub API** (design note 025, slice S1). `GET /v1/integrations` lists every system Forgeline
   connects to with a status and a plain sentence: GitHub, AWS, the AWS MCP Server, the Docker host, Kubernetes and
   Claude; AWS profiles found on the server (names only, never a credential); and the planned systems in build order
