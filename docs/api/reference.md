@@ -88,6 +88,8 @@ A run's `status` is one of `queued`, `running`, `succeeded`, `failed`, `canceled
 
 | Method and path | Role | Purpose |
 | --- | --- | --- |
+| `GET /v1/integrations` | developer | Every system Forgeline connects to, for the integrations hub (note 025): built ones with a status (`connected`, `attention`, `off`), logins found on this server by name only (`detected`, such as an AWS profile), and planned ones (`next`, `later`, with a build order and what they will do). Each has a plain `summary`, a `problem` that says what to do when it needs attention, `warnings`, who enforces read-only (`read_only_by`: `provider` or `forgeline`), and the last test. Status comes from stored settings; only the Docker host runs a local command. No secret is ever included. |
+| `POST /v1/integrations/{id}/checks` | admin | Runs a read-only test of one integration (`github`, `aws`, `aws-mcp`, `docker`, `kubernetes`, `claude`) and returns its checks, each with a result (`ok`, `warn`, `fail`), a detail, a fix and a time. It creates and changes nothing (`changed` is always false), is audited, and is remembered for the hub. The Claude test sends one short question. Planned systems have no test (404). |
 | `GET /v1/integrations/aws` | developer | Settings and identity. |
 | `PUT /v1/integrations/aws` | admin | Use a server profile. Body: `enabled`, `profile`, `region`. The name `forgeline-sso` is reserved. |
 | `GET /v1/integrations/aws/mcp` | admin | Whether the AWS MCP Server is on, the tools it offers, and the proxy and endpoint used. |

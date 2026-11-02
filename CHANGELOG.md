@@ -7,6 +7,14 @@ section in the pull request that makes the change; a release moves it under its 
 ## [Unreleased]
 
 ### Added
+- **Integrations hub API** (design note 025, slice S1). `GET /v1/integrations` lists every system Forgeline
+  connects to with a status and a plain sentence: GitHub, AWS, the AWS MCP Server, the Docker host, Kubernetes and
+  Claude; AWS profiles found on the server (names only, never a credential); and the planned systems in build order
+  (Google Cloud, Azure, cloud models, a custom model endpoint, Lambda, Nebius, CoreWeave, RunPod, registries, Datadog
+  and others), none of which has a Connect button. An AWS sign-in that ends within 30 minutes, or has ended, is
+  flagged with what to do. Each system says who enforces read-only. `POST /v1/integrations/{id}/checks` runs a
+  read-only test with a result, a detail and a fix per check, and never creates or changes anything. The hub page
+  itself comes next.
 - **The assistant shows its work as it happens** (design note 024). New `POST /v1/assistant/runs` answers with
   server-sent events (AG-UI vocabulary) from the same lookup loop, limits and audit as `/v1/assistant/chat`. The
   panel shows each lookup as a card while it runs (what it asked, a cut of what came back, opened on demand), then
