@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/forgelinehq/forgeline/internal/authn"
+	"github.com/forgelinehq/forgeline/internal/docstore"
 )
 
 // The integrations hub (design note 025). One list of every system Forgeline connects to: what is
@@ -627,4 +628,69 @@ func (s *Server) testAzure(ctx context.Context) []IntegrationCheckJSON {
 		return append(cs, checkOf("Resources can be queried", "fail", err.Error(), "Give the login the Reader role on the subscriptions, and install the Resource Graph extension.", t))
 	}
 	return append(cs, checkOf("Resources can be queried", "ok", "Azure Resource Graph answered.", "", t), checkOf("Created nothing, changed nothing", "ok", "The test only queried.", "", time.Now()))
+}
+
+// --- activity ---
+
+const integActivityMax = 30
+
+// IntegrationActivityJSON is one audit entry shown in an integration's Activity tab. The address of whoever
+// did it is left out: the Activity tab says what happened, the audit log keeps the rest.
+type IntegrationActivityJSON struct {
+	Time    time.Time `json:"time"`
+	Actor   string    `json:"actor"`
+	Action  string    `json:"action"`
+	Detail  string    `json:"detail,omitempty"`
+	Allowed bool      `json:"allowed"`
+}
+
+// activityIDs are the integrations that can have activity; Docker has none because Forgeline records
+// nothing about the host itself.
+var activityIDs = map[string]bool{"github": true, "aws": true, "aws-mcp": true, "gcp": true, "azure": true, "claude": true, "kubernetes": true, "docker": true}
+
+// activityFor says whether an audit entry belongs to an integration. The match is exact on the target, so
+// "integration/aws-mcp" never shows up under AWS.
+func activityFor(id string, e AuditEvent) bool {
+	t := e.Target
+	switch id {
+	case "github":
+		return t == "integration/github" || strings.HasPrefix(t, "github/")
+	case "aws":
+		return t == "integration/aws" || strings.HasPrefix(t, "integration/aws/")
+	case "aws-mcp", "gcp", "azure":
+		return t == "integration/"+id
+	case "claude":
+		return t == "integration/assistant" || t == "integration/claude"
+	case "kubernetes":
+		return strings.HasPrefix(e.Action, "k8s.")
+	}
+	return false
+}
+
+func (s *Server) handleIntegrationActivity(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if !activityIDs[id] {
+		writeError(w, http.StatusNotFound, "there is no such integration")
+		return
+	}
+	out := []IntegrationActivityJSON{}
+	docs, err := s.docs.List(r.Context(), kindAudit, docstore.ListOptions{Desc: true, Limit: 3000})
+	if err != nil {
+		s.internalError(w, "reading the audit log", err)
+		return
+	}
+	events, err := docstore.Decode[AuditEvent](docs)
+	if err != nil {
+		s.internalError(w, "reading the audit log", err)
+		return
+	}
+	for _, e := range events {
+		if activityFor(id, e) {
+			out = append(out, IntegrationActivityJSON{Time: e.Time, Actor: e.Actor, Action: e.Action, Detail: truncate(e.Detail, 300), Allowed: e.Allowed})
+			if len(out) == integActivityMax {
+				break
+			}
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"events": out}) // the audit list is already newest first
 }

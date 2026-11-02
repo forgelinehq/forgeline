@@ -312,3 +312,97 @@ func TestHubAndTestForAConnectedGitHub(t *testing.T) {
 		t.Errorf("last test = %+v", lt)
 	}
 }
+
+func activityOf(t *testing.T, b *browser, id string) []IntegrationActivityJSON {
+	t.Helper()
+	var out struct{ Events []IntegrationActivityJSON }
+	if err := json.Unmarshal(b.expect(200, "GET", "/v1/integrations/"+id+"/activity", nil), &out); err != nil {
+		t.Fatal(err)
+	}
+	return out.Events
+}
+
+func TestIntegrationActivityShowsOnlyThatIntegrationsEntries(t *testing.T) {
+	g := &gcloudStub{assets: gcpAssetsJSON}
+	m := gcpHarness(t, g)
+	m.dev.expect(403, "GET", "/v1/integrations/gcp/activity", nil) // activity is for administrators
+	m.v.expect(403, "GET", "/v1/integrations/gcp/activity", nil)
+	m.admin.expect(404, "GET", "/v1/integrations/nope/activity", nil)
+	m.admin.expect(404, "GET", "/v1/integrations/lambda/activity", nil) // planned: nothing to show
+
+	// A refused connection, a successful one and a test: three entries for Google Cloud.
+	g.stderr = "PERMISSION_DENIED"
+	m.admin.expect(422, "PUT", "/v1/integrations/gcp", map[string]any{"enabled": true, "scope": "projects/shop-prod"})
+	g.stderr = ""
+	m.admin.expect(200, "PUT", "/v1/integrations/gcp", map[string]any{"enabled": true, "scope": "projects/shop-prod"})
+	m.admin.expect(200, "POST", "/v1/integrations/gcp/checks", nil)
+	// AWS and the AWS MCP Server do their own things; neither may show up under Google Cloud, or under each other.
+	m.admin.expect(200, "PUT", "/v1/integrations/aws", map[string]any{"enabled": true, "profile": "dev", "region": "ap-south-1"})
+	m.admin.expect(200, "PUT", "/v1/integrations/aws/mcp", map[string]any{"enabled": true})
+	m.admin.expect(200, "POST", "/v1/integrations/aws/checks", nil)
+
+	gcp := activityOf(t, m.admin, "gcp")
+	if len(gcp) != 3 {
+		t.Fatalf("google cloud activity = %+v", gcp)
+	}
+	if gcp[0].Action != "integration.test" || gcp[1].Action != "integration.gcp.update" || !gcp[1].Allowed || gcp[2].Allowed {
+		t.Errorf("newest first, with the refusal marked: %+v", gcp)
+	}
+	if !strings.Contains(gcp[2].Detail, "refused") || gcp[0].Actor == "" {
+		t.Errorf("entries = %+v", gcp)
+	}
+	aws := activityOf(t, m.admin, "aws")
+	mcp := activityOf(t, m.admin, "aws-mcp")
+	for _, e := range aws {
+		if strings.Contains(e.Action, "awsmcp") || strings.Contains(e.Action, "gcp") {
+			t.Errorf("aws shows %+v", e)
+		}
+	}
+	if len(aws) < 2 { // the connection and the test
+		t.Errorf("aws activity = %+v", aws)
+	}
+	if len(mcp) != 1 || mcp[0].Action != "integration.awsmcp.update" {
+		t.Errorf("aws-mcp activity = %+v (it must not include AWS's own entries)", mcp)
+	}
+	// Claude's entries are the assistant's settings and its tests; Kubernetes' are its cluster changes.
+	m.admin.expect(200, "PUT", "/v1/integrations/assistant", map[string]any{"backend": "api", "api_key": assistKey, "api_base": m.llm.srv.URL})
+	m.srv.audit(context.Background(), Principal{Name: "ada", Role: "admin"}, "", "k8s.cluster.add", "k8s/demo", "demo (token)", true)
+	m.srv.audit(context.Background(), Principal{Name: "ada", Role: "admin"}, "", "kube.unrelated", "secret/x", "not a cluster change", true)
+	if c := activityOf(t, m.admin, "claude"); len(c) == 0 || c[0].Action != "integration.assistant.update" {
+		t.Errorf("claude activity = %+v", c)
+	}
+	if k := activityOf(t, m.admin, "kubernetes"); len(k) != 1 || k[0].Action != "k8s.cluster.add" {
+		t.Errorf("kubernetes activity = %+v", k)
+	}
+	for _, e := range activityOf(t, m.admin, "gcp") {
+		if strings.HasPrefix(e.Action, "k8s.") || strings.Contains(e.Action, "assistant") {
+			t.Errorf("google cloud shows another integration's entry: %+v", e)
+		}
+	}
+	// Docker records nothing; an empty list, not an error and not null.
+	if d := activityOf(t, m.admin, "docker"); d == nil || len(d) != 0 {
+		t.Errorf("docker = %+v", d)
+	}
+	// The address of the person is not part of it.
+	raw := string(m.admin.expect(200, "GET", "/v1/integrations/gcp/activity", nil))
+	if strings.Contains(raw, `"ip"`) {
+		t.Errorf("the activity includes an address: %s", raw)
+	}
+}
+
+func TestIntegrationActivityIsBounded(t *testing.T) {
+	m := newMCPHarness(t)
+	m.srv.run = integRun(&awsStub{}, true, "")
+	for i := 0; i < integActivityMax+8; i++ {
+		m.admin.expect(200, "POST", "/v1/integrations/github/checks", nil) // each test is recorded under GitHub
+	}
+	ev := activityOf(t, m.admin, "github")
+	if len(ev) != integActivityMax {
+		t.Errorf("%d entries, want the newest %d", len(ev), integActivityMax)
+	}
+	for i := 1; i < len(ev); i++ {
+		if ev[i].Time.After(ev[i-1].Time) {
+			t.Errorf("entries are not newest first at %d", i)
+		}
+	}
+}

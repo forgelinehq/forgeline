@@ -10,7 +10,7 @@ import (
 // The hub's filtering, sorting and wording (ui/lib/hub.js) are plain functions, so they run under Node.
 // Skipped where Node is not installed.
 const hubCases = `
-import { matches, group, counts, summaryLine, logo, testSummary, statusPill, statusText, tierText, readOnlyText, attentionList, isPlanned, CATEGORIES } from './hub.mjs';
+import { matches, group, counts, summaryLine, logo, testSummary, statusPill, statusText, tierText, readOnlyText, attentionList, isPlanned, CATEGORIES, activityLabel, normalizeGcpScope, normalizeAzureSubs } from './hub.mjs';
 
 let failed = 0;
 const eq = (name, got, want) => {
@@ -76,6 +76,27 @@ eq('test summary', testSummary({ passed: 3, warned: 1, failed: 0, took_ms: 1700,
 eq('test summary with a failure', testSummary({ passed: 0, warned: 0, failed: 2, took_ms: 200, changed: false }), '0 passed · 2 failed · took 0.2 s · created nothing, changed nothing');
 eq('a test that changed something does not claim otherwise', testSummary({ passed: 1, warned: 0, failed: 0, took_ms: 0, changed: true }).includes('created nothing'), false);
 eq('the fixed categories match the server', CATEGORIES, ['Source and CI', 'Cloud', 'AI infrastructure', 'Containers', 'AI', 'Observe and notify']);
+
+// Activity wording.
+eq('known actions', ['integration.test', 'integration.gcp.update', 'integration.aws.sso.signin', 'k8s.cluster.add'].map(activityLabel), ['Test run', 'Connection changed', 'Signed in', 'Cluster added']);
+eq('an unknown action keeps its own name', activityLabel('integration.newthing.do_it'), 'newthing do it');
+eq('an action that is not an integration one', activityLabel('k8s.cluster.scale'), 'k8s cluster scale');
+
+// Scope checks that mirror the server.
+eq('a bare project id', normalizeGcpScope('shop-prod'), { scope: 'projects/shop-prod' });
+eq('a folder', normalizeGcpScope('  folders/123 '), { scope: 'folders/123' });
+eq('empty scope', 'error' in normalizeGcpScope(''), true);
+eq('a flag is not a scope', 'error' in normalizeGcpScope('projects/x --format=json'), true);
+eq('wrong kind', 'error' in normalizeGcpScope('buckets/x'), true);
+eq('leading dash', 'error' in normalizeGcpScope('projects/-x'), true);
+eq('too long', 'error' in normalizeGcpScope('projects/' + 'a'.repeat(80)), true);
+eq('null is empty', 'error' in normalizeGcpScope(null), true);
+const A = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', B = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
+eq('subscriptions sorted, lower-cased and unique', normalizeAzureSubs([B.toUpperCase(), A, A, '']), { subs: [A, B] });
+eq('no subscriptions means all', normalizeAzureSubs([]), { subs: [] });
+eq('not a guid', 'error' in normalizeAzureSubs(['prod']), true);
+eq('a flag in front of a guid', 'error' in normalizeAzureSubs(['--x ' + A]), true);
+eq('more than twenty', 'error' in normalizeAzureSubs(Array.from({ length: 21 }, (_, i) => String(i + 1).padStart(8, '0') + '-0000-0000-0000-000000000000')), true);
 
 if (failed) process.exit(1);
 console.log('ok');
