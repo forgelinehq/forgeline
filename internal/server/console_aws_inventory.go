@@ -61,6 +61,7 @@ type AWSInventoryJSON struct {
 	Account   string           `json:"account,omitempty"`
 	FetchedAt string           `json:"fetched_at,omitempty"`
 	Error     string           `json:"error,omitempty"`
+	Notice    string           `json:"notice,omitempty"` // something a person should know about this read, such as a cap that was reached
 	Services  []AWSServiceJSON `json:"services"`
 }
 

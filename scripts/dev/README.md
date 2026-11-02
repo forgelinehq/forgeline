@@ -69,6 +69,19 @@ PATH=/tmp/fake-gcloud/bin:$PATH FORGELINE_TOKEN=a-long-dev-token-123 ./bin/forge
 
 `FAKE_GCLOUD_DENY=1` makes the search fail with a permission error; `FAKE_GCLOUD_NOAUTH=1` makes `auth list` print nothing.
 
+## `fake-az`: a stand-in for the az command
+
+Answers the read commands the console runs for Azure (`account show`, `account list`, `graph query` with paging and
+the `--subscriptions` filter) with made-up resources, including Azure OpenAI, an AI Foundry workspace and a kind the
+console does not know. Put it first on `PATH` as `az`:
+
+```sh
+mkdir -p /tmp/fake-az/bin && ln -sf $PWD/scripts/dev/fake-az /tmp/fake-az/bin/az
+PATH=/tmp/fake-az/bin:$PATH FORGELINE_TOKEN=a-long-dev-token-123 ./bin/forgeline server --listen 127.0.0.1:8081 --data-dir /tmp/fl-sim
+```
+
+`FAKE_AZ_DENY=1` makes the query fail with an authorization error; `FAKE_AZ_NOLOGIN=1` makes every command ask for `az login`.
+
 ## `fake-aws-mcp`: a stand-in for the AWS MCP Server's signing proxy
 
 Speaks MCP over stdio like `uvx mcp-proxy-for-aws`, offers the same tool names, and answers

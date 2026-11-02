@@ -107,6 +107,7 @@ type Server struct {
 	awsCache   awsCache
 	awsInv     invCache
 	gcpInv     invCache       // Google Cloud inventories, by scope
+	azureInv   invCache       // Azure inventories, by subscription set
 	integTests integTestStore // the last test of each integration, kept in memory
 	wf         wfEngine
 	guard      guardEngine
