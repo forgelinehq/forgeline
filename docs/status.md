@@ -14,4 +14,6 @@ assistant, AWS sign-in, the GitHub App.
 **Not checked against the real service:** a real GitHub webhook delivery and commit status; the assistant's API-key mode against the real
 Anthropic API; TLS behind a real proxy; more than one server sharing a database; single sign-on (not built).
 
+**Console redesign:** grouped navigation, the ember colour, the Markdown instruction editor and the AWS map are built ([note 022](https://github.com/forgelinehq/forgeline/blob/main/docs/design/022-console-redesign.md)). Designed but **not built**: CloudWatch alarms and logs ([023](https://github.com/forgelinehq/forgeline/blob/main/docs/design/023-infrastructure-map-and-logs.md)) and the assistant as an event stream ([024](https://github.com/forgelinehq/forgeline/blob/main/docs/design/024-assistant-agent-surface.md)). The redesign was checked in a browser on a fake AWS account, not on a real one.
+
 Roadmap and plan: [ROADMAP](https://github.com/forgelinehq/forgeline/blob/main/docs/ROADMAP.md), [PLAN](https://github.com/forgelinehq/forgeline/blob/main/docs/PLAN.md), [ARCHITECTURE](https://github.com/forgelinehq/forgeline/blob/main/docs/ARCHITECTURE.md).
