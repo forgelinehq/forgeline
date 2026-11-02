@@ -5,7 +5,7 @@ import { h, icon, emptyState } from '../lib/dom.js';
 import { buildMap, stateKind, attention } from '../lib/awsmap.js';
 
 const STATE_DOT = { ok: 'bg-emerald-500', bad: 'bg-rose-500', wait: 'bg-amber-500', idle: 'bg-slate-400', none: 'bg-slate-300 dark:bg-slate-600' };
-const CAT_DOT = { Compute: 'bg-sky-500', Containers: 'bg-violet-500', Storage: 'bg-emerald-500', Databases: 'bg-amber-500', Network: 'bg-cyan-500', Messaging: 'bg-pink-500', Management: 'bg-slate-500' };
+const CAT_DOT = { Compute: 'bg-sky-500', Containers: 'bg-violet-500', Storage: 'bg-emerald-500', Databases: 'bg-amber-500', Network: 'bg-cyan-500', Messaging: 'bg-pink-500', AI: 'bg-fuchsia-500', Management: 'bg-slate-500' };
 const SHOWN = 40; // tiles per group before "more"
 const ATTN_SHOWN = 8;
 

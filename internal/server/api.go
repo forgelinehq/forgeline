@@ -126,6 +126,9 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /v1/infra/aws/cost", s.requireRole(authn.Developer, s.handleAWSCost))
 	mux.Handle("GET /v1/integrations", s.requireRole(authn.Developer, s.handleListIntegrations))
 	mux.Handle("POST /v1/integrations/{id}/checks", s.requireRole(authn.Admin, s.handleTestIntegration)) // not /test: the GitHub and assistant tests already own those paths
+	mux.Handle("GET /v1/integrations/gcp", s.requireRole(authn.Developer, s.handleGetGCP))
+	mux.Handle("PUT /v1/integrations/gcp", s.requireRole(authn.Admin, s.handlePutGCP))
+	mux.Handle("GET /v1/infra/gcp/resources", s.requireRole(authn.Viewer, s.handleGCPInventory))
 	mux.Handle("GET /v1/integrations/aws", s.requireRole(authn.Developer, s.handleGetAWSSettings))
 	mux.Handle("PUT /v1/integrations/aws", s.requireRole(authn.Admin, s.handlePutAWSSettings))
 	mux.Handle("GET /v1/integrations/aws/sso", s.requireRole(authn.Developer, s.handleSSOStatus))

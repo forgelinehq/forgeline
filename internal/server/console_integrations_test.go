@@ -71,9 +71,12 @@ func TestHubListsEverySystemWithAStatusAndPlannedOnesHaveNoTest(t *testing.T) {
 			t.Errorf("planned %s should say what it will do, have an order and no test: %+v", id, it)
 		}
 	}
-	// The order follows the maintainer's decision: GCP, then Azure, then AI infrastructure, then Datadog.
-	if !(h["gcp"].Order < h["azure"].Order && h["azure"].Order < h["lambda"].Order && h["lambda"].Order < h["datadog"].Order) {
-		t.Errorf("order = gcp %d azure %d lambda %d datadog %d", h["gcp"].Order, h["azure"].Order, h["lambda"].Order, h["datadog"].Order)
+	// The order follows the maintainer's decision: GCP (now built), then Azure, then AI infrastructure, then Datadog.
+	if g := h["gcp"]; g.Status != intOff || g.Order != 0 || !g.Testable || g.ReadOnlyBy != "provider" || g.Manage != "/infrastructure?tab=gcp" {
+		t.Errorf("gcp is built now, so it is no longer planned: %+v", g)
+	}
+	if !(h["azure"].Order < h["lambda"].Order && h["lambda"].Order < h["datadog"].Order) {
+		t.Errorf("order = azure %d lambda %d datadog %d", h["azure"].Order, h["lambda"].Order, h["datadog"].Order)
 	}
 	// Who enforces read-only is stated, and for Lambda it is Forgeline, because the provider has no read-only keys.
 	if h["lambda"].ReadOnlyBy != "forgeline" || h["gcp"].ReadOnlyBy != "provider" || h["runpod"].ReadOnlyBy != "forgeline" {
@@ -181,7 +184,7 @@ func TestIntegrationTestOnlyReadsAndSaysWhatToFix(t *testing.T) {
 	m.admin.expect(200, "PUT", "/v1/integrations/aws", map[string]any{"enabled": true, "profile": "dev", "region": "ap-south-1"})
 	m.dev.expect(403, "POST", "/v1/integrations/aws/checks", nil) // a test is for administrators
 	m.admin.expect(404, "POST", "/v1/integrations/nope/checks", nil)
-	m.admin.expect(404, "POST", "/v1/integrations/gcp/checks", nil) // planned: nothing to test
+	m.admin.expect(404, "POST", "/v1/integrations/azure/checks", nil) // planned: nothing to test
 
 	var res IntegrationTestJSON
 	if err := json.Unmarshal(m.admin.expect(200, "POST", "/v1/integrations/aws/checks", nil), &res); err != nil {
@@ -237,7 +240,7 @@ func TestIntegrationTestsForDockerGitHubAndNotConnected(t *testing.T) {
 		t.Errorf("docker down = %+v", res)
 	}
 	// Systems that are not connected fail with what to do, rather than pretending to pass.
-	for _, id := range []string{"github", "aws", "aws-mcp", "kubernetes"} {
+	for _, id := range []string{"github", "aws", "gcp", "aws-mcp", "kubernetes"} {
 		json.Unmarshal(m.admin.expect(200, "POST", "/v1/integrations/"+id+"/checks", nil), &res)
 		if res.Failed == 0 || res.Passed != 0 {
 			t.Errorf("%s not connected: %+v", id, res)

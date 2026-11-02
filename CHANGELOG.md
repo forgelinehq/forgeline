@@ -7,6 +7,15 @@ section in the pull request that makes the change; a release moves it under its 
 ## [Unreleased]
 
 ### Added
+- **Google Cloud, read-only** (design note 025, slice S5). Infrastructure has a Google Cloud tab. Forgeline uses the
+  server user's `gcloud` login and one Cloud Asset Inventory call to list the resources in a project, folder or
+  organization: VMs, Cloud Run, GKE, Cloud Storage, disks, Cloud SQL, BigQuery, networks, firewall rules, Pub/Sub, Secret
+  Manager (names only) and **Vertex AI endpoints and models** under a new AI group. A resource type it does not know is
+  listed under Other resources. Connecting first proves the login can read the scope and says what to fix if not (no
+  login, no permission, API not enabled, unknown scope); it is on the Integrations hub with a read-only test. It cannot
+  change anything: the only commands are `asset search-all-resources`, `auth list` and `config get-value`. Tried only
+  against a stand-in `gcloud` (`scripts/dev/fake-gcloud`). Not built: the map, Guard rules, assistant lookups, spend,
+  changes, and other ways to sign in.
 - **A Settings area behind a gear** (design note 025, slice S2). The sidebar keeps the daily work (Overview, Ship,
   Cloud, Agents and Marketplace, Approvals) and a **Settings** gear at the bottom opens one page that groups the
   setup pages: People and roles, Integrations, Secrets, Models, the Audit log and API tokens. Those pages show a

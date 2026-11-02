@@ -55,14 +55,14 @@ Agents, skills and workflows. Instructions are written in **Markdown** with a sm
 ![Instructions editor]({{ '/console/71-agent-markdown-editor.png' | relative_url }})
 
 ## Integrations
-One page for everything Forgeline connects to: GitHub, AWS, the AWS MCP Server, the Docker host, Kubernetes and Claude. Each card says what it is, whether it is **Connected**, **Needs attention** (with what to do and when it was last tested), or **Not connected**. AWS profiles already set up on the server are listed as **Found on this server**, by name only; Forgeline never reads their credentials. Systems that are planned (Google Cloud, Azure, cloud model services, Lambda and other GPU clouds, Datadog and more) are shown dashed as **Coming soon, next** or **later**, with what each will do and how it will sign in. They have no Connect button because they cannot connect yet.
+One page for everything Forgeline connects to: GitHub, AWS, the AWS MCP Server, the Docker host, Kubernetes and Claude. Each card says what it is, whether it is **Connected**, **Needs attention** (with what to do and when it was last tested), or **Not connected**. AWS profiles already set up on the server are listed as **Found on this server**, by name only; Forgeline never reads their credentials. Systems that are planned (Azure, cloud model services, Lambda and other GPU clouds, Datadog and more) are shown dashed as **Coming soon, next** or **later**, with what each will do and how it will sign in. They have no Connect button because they cannot connect yet.
 
 Click a card for its popup. It shows the status, who enforces read-only (the provider, or Forgeline alone), and, for administrators, a **Test connection** button. A test runs a few checks one at a time, each with a result, what it found and what to do if it failed. It only reads: it never creates or changes anything, and it says so. **Open settings** goes to the existing settings for that system. Each popup has its own address, such as `#/integrations/aws`.
 
 ![The integrations hub]({{ '/console/72-integrations-hub.png' | relative_url }})
 ![A test of the AWS connection]({{ '/console/73-integration-test.png' | relative_url }})
 
-See [Connect GitHub]({{ '/guides/connect-github/' | relative_url }}), [Connect AWS]({{ '/guides/connect-aws/' | relative_url }}) and [Assistant and agents]({{ '/guides/assistant-and-agents/' | relative_url }}). The design, and what is coming, is in [note 025](https://github.com/forgelinehq/forgeline/blob/main/docs/design/025-integrations-hub-and-settings.md). Not built yet: the Settings area, a per-tool access policy, a wizard inside the popup, and Google Cloud and Azure.
+See [Connect GitHub]({{ '/guides/connect-github/' | relative_url }}), [Connect AWS]({{ '/guides/connect-aws/' | relative_url }}) and [Assistant and agents]({{ '/guides/assistant-and-agents/' | relative_url }}). The design, and what is coming, is in [note 025](https://github.com/forgelinehq/forgeline/blob/main/docs/design/025-integrations-hub-and-settings.md). Google Cloud has a tab under Infrastructure; see [Connect Google Cloud]({{ '/guides/connect-gcp/' | relative_url }}). Not built yet: a per-tool access policy, a wizard inside the popup, and Azure.
 
 ## People and audit log
 Users and roles, and an append-only record of who did what, including refused actions and failed logins.
