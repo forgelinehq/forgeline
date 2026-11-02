@@ -15,14 +15,14 @@ export const keyOf = (svc, r) => svc.id + '|' + r.id;
  * mapView(inv, {query, selected, expanded, onSelect, onExpand}) returns the map element.
  * `selected` is a keyOf() string; `expanded` is a Set of group keys that show every tile.
  */
-export function mapView(inv, { query = '', selected = '', expanded = new Set(), onSelect, onExpand }) {
-  const m = buildMap(inv, query);
+export function mapView(inv, { query = '', alarms = null, selected = '', expanded = new Set(), onSelect, onExpand }) {
+  const m = buildMap(inv, query, alarms);
   if (!m.vpcs.length && !m.regional.length) {
     return emptyState('cloud', query ? 'Nothing matches that search' : 'Nothing found in this region', query ? 'Try a name, an id or a tag.' : 'Global services such as S3 are listed too. Check the region in Change connection.');
   }
 
   function tile(svc, r) {
-    const key = keyOf(svc, r), on = key === selected, why = attention(svc.id, r), kind = stateKind(r.state);
+    const key = keyOf(svc, r), on = key === selected, why = attention(svc.id, r, alarms), kind = stateKind(r.state);
     const worst = why.some(w => w.level === 'bad');
     return h('button', {
       type: 'button', 'data-resource': r.id, 'aria-pressed': String(on),

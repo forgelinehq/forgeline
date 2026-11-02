@@ -159,6 +159,16 @@ if key == "ec2 describe-security-groups":
         {"IpProtocol": "tcp", "FromPort": 22, "ToPort": 22, "IpRanges": [{"CidrIp": "0.0.0.0/0"}]}]},
         {"GroupId": "sg-0internal", "GroupName": "internal", "Description": "private", "VpcId": "vpc-0def0def0def0def0", "IpPermissions": []}]})
 
+if key == "cloudwatch describe-alarms":
+    out({"MetricAlarms": [
+        {"AlarmName": "orders-db-cpu-high", "StateValue": "ALARM", "StateReason": "Threshold Crossed: 2 datapoints [91.2, 88.5] were greater than 80.0",
+         "StateUpdatedTimestamp": "2026-11-01T09:12:00Z", "Namespace": "AWS/RDS", "MetricName": "CPUUtilization",
+         "Dimensions": [{"Name": "DBInstanceIdentifier", "Value": "orders-db"}]},
+        {"AlarmName": "web-service-5xx", "StateValue": "OK", "Namespace": "AWS/ECS", "MetricName": "CPUUtilization",
+         "Dimensions": [{"Name": "ClusterName", "Value": "payments"}, {"Name": "ServiceName", "Value": "web"}]},
+        {"AlarmName": "batch-status-check", "StateValue": "INSUFFICIENT_DATA", "Namespace": "AWS/EC2", "MetricName": "StatusCheckFailed",
+         "Dimensions": [{"Name": "InstanceId", "Value": "i-0prodbatch"}]}]})
+
 if key == "ec2 describe-volumes":
     out({"Volumes": [
         {"VolumeId": "vol-0inuse", "State": "in-use", "Size": 50, "VolumeType": "gp3", "Encrypted": True, "AvailabilityZone": "ap-south-1a"},

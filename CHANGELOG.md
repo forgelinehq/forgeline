@@ -7,6 +7,12 @@ section in the pull request that makes the change; a release moves it under its 
 ## [Unreleased]
 
 ### Added
+- **CloudWatch alarms on the AWS map** (design note 023, step 2). New `GET /v1/infra/aws/alarms` (viewer, one
+  read-only `describe-alarms` call). An alarm in ALARM marks the resource it names as needing a look, and the
+  resource's detail lists its alarms. An alarm belongs to a resource only when its namespace and its own
+  dimensions name it (EC2, EBS, RDS, Lambda, DynamoDB, SQS, S3, load balancers, ECS clusters and services). A
+  resource with no alarm says so; it is never shown as healthy. If the role may not read alarms, the console says
+  which permission is missing (`cloudwatch:DescribeAlarms`) and the map still works. Logs and metrics are not built.
 - **AWS map** (design note 023, step 1). The AWS explorer opens on a Map: resources sit inside the VPC their
   own VPC field names, the rest are grouped by category, and a strip lists what needs a look (a failing or
   changing state, a security group open to the internet, an unattached or unencrypted volume, a database that
