@@ -15,7 +15,7 @@ section in the pull request that makes the change; a release moves it under its 
   what. No new API.
 
 ### Changed
-- **Docs site.** The console tour, the AWS guide, the assistant guide and the status page now describe the redesign, with two new pictures. They say plainly that logs, alarms and the assistant event stream are designed but not built.
+- **Docs site.** The console tour, the AWS guide, the assistant guide and the status page now describe the redesign, with new pictures. The console pictures used by the guides were retaken after the redesign. They say plainly that logs, alarms and the assistant event stream are designed but not built.
 - **Console redesign, first steps** (design note 022). The sidebar groups pages into Ship, Cloud, AI and
   Govern, and the brand colour is now ember instead of indigo. Agent instructions and skill steps are
   edited as Markdown, with a toolbar, a live preview and advisory checks (for example a T0 agent told to
