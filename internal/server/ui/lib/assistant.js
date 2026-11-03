@@ -1,7 +1,7 @@
 // The assistant panel: a read-only helper that answers questions about the page you are on.
 // It cannot change anything; a pipeline it drafts is text until you save it yourself.
-import { h, icon, mount, errorBox, notice, copyButton, toast, pill } from './dom.js';
-import { get, post, atLeast, streamPost } from './api.js';
+import { h, icon, mount, errorBox, notice, copyButton, toast, pill, relTime } from './dom.js';
+import { get, post, del, atLeast, streamPost } from './api.js';
 import { currentPath, navigate } from './router.js';
 import { renderReply } from './mdview.js';
 import { newRun, applyEvent, progressLabel } from './runstate.js';
@@ -52,6 +52,7 @@ export function assistantButton(role) {
 
 function build(close, role) {
   const history = []; // {role, content}
+  let conversation = ''; // the saved conversation this panel continues; the server starts one on the first question
   const prefs = loadPrefs();
   const list = h('div', { class: 'min-h-0 flex-1 space-y-5 overflow-y-auto px-4 py-4', 'aria-live': 'polite', id: 'assistant-thread' });
   const ctxLabel = h('span', { class: 'font-medium' });
@@ -150,6 +151,25 @@ function build(close, role) {
       h('div', { class: 'flex gap-2' }, btn('approve', 'Approve', 'btn-primary btn-sm'), btn('deny', 'Deny', 'btn-secondary btn-sm')));
   }
 
+  /**
+   * A note the assistant tried to keep. One it saved at once can be undone here; one it only suggested (because it
+   * read data you did not type) is kept only if you say so. Either way the Memory page lists it.
+   */
+  function memoryCard(n) {
+    const pending = n.status === 'pending';
+    const act = async (e, fn) => {
+      const box = e.currentTarget.closest('[data-memory-id]');
+      box.querySelectorAll('button').forEach(b => { b.disabled = true; });
+      try { await fn(); box.replaceChildren(h('span', { class: 'muted' }, 'Done.')); } catch (err) { toast(err.message, 'error'); box.querySelectorAll('button').forEach(b => { b.disabled = false; }); }
+    };
+    return h('div', { class: amber + ' flex-wrap items-center', 'data-memory-id': n.id, 'data-status': n.status },
+      icon('sparkle', 'size-4 shrink-0'),
+      h('div', { class: 'min-w-0 flex-1' }, h('b', {}, pending ? 'Keep this note? ' : 'Remembered: '), n.text,
+        n.about === 'system' ? ' (about this system; an administrator confirms it)' : ''),
+      pending && n.about !== 'system' ? h('button', { type: 'button', class: 'btn-primary btn-sm', 'data-memory': 'keep', onclick: (e) => act(e, () => post('/v1/assistant/memory/' + encodeURIComponent(n.id) + '/approve')) }, 'Keep') : null,
+      n.about === 'system' && pending ? null : h('button', { type: 'button', class: 'btn-secondary btn-sm', 'data-memory': 'undo', onclick: (e) => act(e, () => del('/v1/assistant/memory/' + encodeURIComponent(n.id))) }, pending ? 'Discard' : 'Undo'));
+  }
+
   /** The run so far: its lookups as cards, what it is doing, the answer as cards, and anything it filed. */
   function runNode(run, opened, cards, stop) {
     const cardFor = (id) => { if (!cards.has(id)) cards.set(id, proposalCard(id)); return cards.get(id); };
@@ -163,6 +183,7 @@ function build(close, role) {
       run.text ? renderReply(run.text, { codeBlock }) : null,
       run.error ? errorBox(run.error) : null,
       run.proposals.map(cardFor),
+      run.memories.map(memoryCard),
       run.environments.length ? h('div', { class: amber, 'data-filed': 'environment' }, icon('server', 'mt-0.5 size-4 shrink-0'), h('div', {}, 'Environment requested. Nothing exists until an administrator approves: ',
         h('a', { href: '#/environments', class: 'font-semibold underline', onclick: close }, 'see Environments'))) : null,
       run.status === 'finished' && run.context ? h('div', { class: 'muted text-[11px]' }, 'Based on: ' + run.context) : null);
@@ -192,15 +213,52 @@ function build(close, role) {
     draw(); list.scrollTop = list.scrollHeight;
     const c = pageContext();
     try {
-      await streamPost('/v1/assistant/runs', { message: q, history, context: { kind: c.kind, id: c.id } }, (ev) => { applyEvent(run, ev); draw(); }, ctl.signal);
+      await streamPost('/v1/assistant/runs', { message: q, history, conversationId: conversation, context: { kind: c.kind, id: c.id } }, (ev) => { applyEvent(run, ev); draw(); }, ctl.signal);
       if (run.status === 'running') { run.status = 'error'; run.error = 'The connection closed before the assistant finished.'; }
     } catch (e) {
       if (e && e.name === 'AbortError') run.status = 'stopped';
       else { run.status = 'error'; run.error = e.message; }
     }
     draw();
+    if (run.conversation) conversation = run.conversation;
     if (run.status === 'finished') history.push({ role: 'user', content: q }, { role: 'assistant', content: run.text });
     busy = false; sendBtn.disabled = false; input.focus();
+  }
+
+  /** Your saved conversations: open one to carry on from it, or delete it. They are private to you. */
+  async function showHistory() {
+    if (busy) return;
+    let rows;
+    try { rows = await get('/v1/assistant/conversations'); } catch (e) { return mount(list, errorBox(e.message)); }
+    const back = h('button', { class: 'btn-ghost btn-sm', type: 'button', onclick: () => (history.length ? restore() : empty()) }, 'Back');
+    mount(list, h('div', { class: 'space-y-2', id: 'assistant-history-list' },
+      h('div', { class: 'flex items-center justify-between' }, h('h3', { class: 'text-sm font-semibold' }, 'Your conversations'), back),
+      rows.length ? rows.slice(0, 30).map(c => h('div', { class: 'flex items-center gap-1 rounded-lg border border-slate-200 dark:border-slate-700', 'data-conversation': c.id },
+        h('button', { class: 'min-w-0 flex-1 px-3 py-2 text-left text-sm', type: 'button', onclick: () => openConversation(c.id) },
+          h('div', { class: 'truncate font-medium' }, c.title || 'Untitled'),
+          h('div', { class: 'muted text-xs' }, relTime(c.updated) + (c.refs && c.refs.length ? ' · filed ' + c.refs.length : ''))),
+        h('button', { class: 'btn-ghost btn-sm', type: 'button', 'aria-label': 'Delete this conversation', onclick: async () => {
+          try { await del('/v1/assistant/conversations/' + encodeURIComponent(c.id)); if (conversation === c.id) { history.length = 0; conversation = ''; } showHistory(); } catch (e) { toast(e.message, 'error'); }
+        } }, icon('trash', 'size-4')))) : h('p', { class: 'muted text-sm' }, 'Nothing yet. Conversations are saved as you have them.')));
+  }
+
+  /** Shows what is in `history` again, after the history list. */
+  function restore() {
+    list.replaceChildren();
+    for (let i = 0; i < history.length; i++) {
+      const t = history[i];
+      list.append(t.role === 'user' ? userBubble(t.content) : h('div', { 'data-turn': 'assistant' }, renderReply(t.content, { codeBlock })));
+    }
+    list.scrollTop = list.scrollHeight;
+  }
+
+  async function openConversation(id) {
+    let c;
+    try { c = await get('/v1/assistant/conversations/' + encodeURIComponent(id)); } catch (e) { return toast(e.message, 'error'); }
+    history.length = 0;
+    for (const m of c.messages) history.push({ role: m.role, content: m.text });
+    conversation = c.id;
+    restore();
   }
 
   const form = h('form', { class: 'flex items-end gap-2 border-t border-slate-200 p-3 dark:border-slate-800', onsubmit: (e) => { e.preventDefault(); ask(); } }, input, sendBtn);
@@ -217,7 +275,8 @@ function build(close, role) {
   const header = h('div', { class: 'flex shrink-0 items-center justify-between border-b border-slate-200 px-4 py-3 dark:border-slate-800', id: 'assistant-header' },
     h('div', {}, h('div', { class: 'flex items-center gap-2 text-sm font-semibold' }, icon('sparkle'), 'Assistant'), h('div', { class: 'muted text-xs' }, 'Looking at ', ctxLabel)),
     h('div', { class: 'flex gap-1' }, wideBtn, modeBtn,
-      h('button', { class: 'btn-ghost btn-sm', type: 'button', 'aria-label': 'Clear the conversation', onclick: () => { history.length = 0; empty(); } }, icon('refresh')),
+      h('button', { class: 'btn-ghost btn-sm', type: 'button', id: 'assistant-history', 'aria-label': 'Your past conversations', onclick: showHistory }, icon('history')),
+      h('button', { class: 'btn-ghost btn-sm', type: 'button', 'aria-label': 'Clear the conversation', onclick: () => { history.length = 0; conversation = ''; empty(); } }, icon('refresh')),
       h('button', { class: 'btn-ghost btn-sm', type: 'button', 'aria-label': 'Close the assistant', onclick: close }, icon('x'))));
   const panel = h('aside', { class: DOCK_CLASS, role: 'dialog', 'aria-label': 'Assistant', id: 'assistant-panel' }, handle, header, list, form);
   panel.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });

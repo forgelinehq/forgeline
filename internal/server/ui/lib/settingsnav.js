@@ -15,6 +15,7 @@ export const SETTINGS = [
   ] },
   { title: 'AI', items: [
     { path: '/integrations/claude/settings', label: 'Models', note: 'Which model answers the assistant and agents', min: 'developer' },
+    { path: '/memory', label: 'Memory', note: 'What the assistant remembers about you and this system, and your conversations', min: 'developer' },
     { label: 'Access policy', note: 'What each agent may do with each connection: Allow, Needs approval or Blocked', planned: true },
     { label: 'Budgets and limits', note: 'How much each agent may spend', planned: true },
   ] },

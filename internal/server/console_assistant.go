@@ -223,6 +223,8 @@ type chatRequest struct {
 	Message string      `json:"message"`
 	History []chatTurn  `json:"history"`
 	Context chatContext `json:"context"`
+	// ConversationID continues a saved conversation (design note 027); the stream starts one when it is empty.
+	ConversationID string `json:"conversationId"`
 }
 
 // ChatReply is the assistant's answer.
@@ -255,7 +257,9 @@ type chatJob struct {
 	turns   []chatTurn
 	ctxText string
 	ctxNote string
-	asked   int // characters in the question, for the audit entry
+	asked   int    // characters in the question, for the audit entry
+	conv    string // the conversation this turn belongs to, or ""
+	message string // the question as asked
 }
 
 // prepareChat applies the rate limit and every check on the request. It has already written the
@@ -306,7 +310,7 @@ func (s *Server) prepareChat(w http.ResponseWriter, r *http.Request) (chatJob, b
 		turns = turns[1:]
 	}
 	turns = append(turns, chatTurn{Role: "user", Content: req.Message})
-	return chatJob{p: p, turns: turns, ctxText: ctxText, ctxNote: ctxNote, asked: len(req.Message)}, true
+	return chatJob{p: p, turns: turns, ctxText: ctxText, ctxNote: ctxNote, asked: len(req.Message), conv: req.ConversationID, message: req.Message}, true
 }
 
 func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
@@ -426,6 +430,17 @@ func (s *Server) askAssistant(ctx context.Context, role authn.Role, turns []chat
 	}
 	if role != "" {
 		system += "\n\nLookups you may use:\n" + s.lookupHelp(ctx, role)
+	}
+	if mt := memTurnFrom(ctx); mt != nil {
+		if mt.question == "" && len(turns) > 0 {
+			mt.question = turns[len(turns)-1].Content
+		}
+		if !mt.blockDone { // once per question: the model is asked again after every lookup
+			mt.block, mt.blockDone = s.memoryBlock(ctx, mt), true
+		}
+		if mem := mt.block; mem != "" {
+			system += "\n\n<memory>\n" + memoryPreamble + strings.ReplaceAll(mem, "</memory>", "") + "</memory>"
+		}
 	}
 	if ctxText != "" {
 		// A closing tag inside the data must not be able to end the block early.

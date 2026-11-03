@@ -20,8 +20,8 @@ const eq = (name, got, want) => {
 const links = (role) => visibleGroups(role).flatMap(g => g.items.filter(i => !i.planned).map(i => i.path));
 
 // Who sees what.
-eq('an administrator sees every page', links('admin'), ['/people', '/integrations', '/secrets', '/integrations/claude/settings', '/audit', '/account']);
-eq('a developer does not see People or the audit log', links('developer'), ['/integrations', '/secrets', '/integrations/claude/settings', '/account']);
+eq('an administrator sees every page', links('admin'), ['/people', '/integrations', '/secrets', '/integrations/claude/settings', '/memory', '/audit', '/account']);
+eq('a developer does not see People or the audit log', links('developer'), ['/integrations', '/secrets', '/integrations/claude/settings', '/memory', '/account']);
 eq('a viewer sees only their own tokens', links('viewer'), ['/account']);
 eq('an unknown role sees nothing', links('nobody'), []);
 eq('a group with no pages for the role is left out', visibleGroups('developer').map(g => g.title), ['Connections', 'AI', 'Developer']);
@@ -44,6 +44,8 @@ eq('the personal account page does not make the gear active', isSettingsPath('/a
 
 // The menu entry highlighted for a path: the most specific one.
 eq('claude settings beats integrations', activeItem('/integrations/claude/settings').label, 'Models');
+eq('memory is a settings page', activeItem('/memory').label, 'Memory');
+eq('memory counts as settings', isSettingsPath('/memory'), true);
 eq('a popup address is integrations', activeItem('/integrations/aws').label, 'Integrations');
 eq('no entry for a daily page', activeItem('/pipelines'), null);
 

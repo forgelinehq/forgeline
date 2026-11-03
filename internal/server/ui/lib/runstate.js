@@ -3,7 +3,7 @@
 // (design note 024); anything not listed here is ignored, so a newer server cannot break the panel.
 
 export function newRun() {
-  return { status: 'running', context: '', steps: [], approvals: [], text: '', proposals: [], environments: [], error: '' };
+  return { status: 'running', context: '', steps: [], approvals: [], text: '', proposals: [], environments: [], memories: [], conversation: '', error: '' };
 }
 
 const step = (run, id) => run.steps.find(s => s.id === id);
@@ -21,6 +21,7 @@ export function applyEvent(run, ev) {
         run.approvals.push({ id: String(v.id), tool: String(v.tool || ''), args: String(v.args || ''), integration: String(v.integration || ''), seconds: Number(v.expiresInSeconds) || 0, state: 'waiting', step: open.length ? open[open.length - 1].id : '' });
       } else if (ev.name === 'forgeline.approval_decided') { const a = run.approvals.find(x => x.id === v.id); if (a) a.state = ['approve', 'deny', 'expired'].includes(v.decision) ? v.decision : 'deny'; }
       else if (ev.name === 'forgeline.proposal' && v.id && !run.proposals.includes(v.id)) run.proposals.push(String(v.id));
+      else if (ev.name === 'forgeline.memory' && v.id && !run.memories.some(m => m.id === v.id)) run.memories.push({ id: String(v.id), text: String(v.text || ''), about: v.about === 'system' ? 'system' : 'me', status: v.status === 'pending' ? 'pending' : 'active' });
       else if (ev.name === 'forgeline.environment' && v.id && !run.environments.includes(v.id)) run.environments.push(String(v.id));
       break;
     }
@@ -30,6 +31,7 @@ export function applyEvent(run, ev) {
     case 'TOOL_CALL_ARGS': { const s = step(run, ev.toolCallId); if (s) s.args += String(ev.delta || ''); break; }
     case 'TOOL_CALL_RESULT': { const s = step(run, ev.toolCallId); if (s) { s.result = String(ev.content || ''); if (s.status === 'running') s.status = 'done'; } break; }
     case 'TEXT_MESSAGE_CONTENT': run.text += String(ev.delta || ''); break;
+    case 'RUN_STARTED': if (ev.threadId && ev.threadId !== 'assistant') run.conversation = String(ev.threadId); break;
     case 'RUN_FINISHED': run.status = 'finished'; break;
     case 'RUN_ERROR': run.status = 'error'; run.error = String(ev.message || 'The assistant failed.'); break;
   }

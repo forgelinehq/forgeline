@@ -285,6 +285,8 @@ update that asks for different hosts needs a fresh grant.
 | [76-connect-wizard](76-connect-wizard.png) | The Google Cloud connect wizard at its last step: the three steps, and the checks of the test with what each found |
 | [77-access-policy](77-access-policy.png) | The Access tab of AWS: each tool with Allow or Blocked (a proposal tool shows Needs approval and cannot be allowed), and what each agent can do with the result, from stand-in AWS and two example agents |
 | [78-approval-card](78-approval-card.png) | The assistant asking before it reads Google Cloud: the call, Approve and Deny, and "Waiting for your answer", from a stand-in `gcloud` and a scripted model |
+| [80-assistant-remembers](80-assistant-remembers.png) | The assistant keeping a note the person asked it to (with Undo) and using it on the next question, from a scripted model |
+| [81-memory-page](81-memory-page.png) | The Memory page under Settings: notes about you (one waiting for your confirmation because it was written after a lookup), notes about the system, and your conversations |
 | [79-approval-denied](79-approval-denied.png) | After Deny: the step shows as failed, the card is gone, and the answer says the lookup was not approved |
 
 ## Which pictures are current

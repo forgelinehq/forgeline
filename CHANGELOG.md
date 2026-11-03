@@ -7,6 +7,18 @@ section in the pull request that makes the change; a release moves it under its 
 ## [Unreleased]
 
 ### Added
+- **Assistant memory and conversation history** (design note 027). The assistant keeps short notes about you and about the
+  system, and uses the ones that match your question: it ranks by words in common, then by how recently and how often a
+  note helped, puts at most about 1.5 KB in the prompt as background (never as instructions), and drops notes nobody used for
+  180 days. The assistant can save a note with a new `remember` tool, but only for something you said yourself in a turn
+  where it has read nothing you did not type; after a lookup or with a run, pipeline or infrastructure page attached, the note
+  waits for you to keep it, and a note about the system always waits for an administrator. Secrets, markup and anything over
+  300 characters are refused. Every conversation is now saved for the person who had it (questions, answers, which lookups
+  ran and what was filed, never lookup results, secrets hidden), private even from administrators, up to 100 conversations
+  and 90 days. A new Memory page under Settings lists, edits and deletes notes and conversations, and an administrator
+  confirms system notes and can turn memory off; the assistant panel has a History button to reopen a conversation. Agents,
+  MCP clients and plain chat requests neither read nor write memory. API: `/v1/assistant/conversations` and
+  `/v1/assistant/memory`.
 - **Needs approval for read tools, and Google Cloud and Azure lookups for the assistant** (design note 026, slice 2). The
   access policy has a third level for reads, Needs approval: in the assistant panel a card shows the call with Approve
   and Deny, and nothing runs until the person who asked answers (once, from their own session; no answer in two minutes is a
