@@ -5,7 +5,7 @@ import { get, put } from '../lib/api.js';
 import { toolChoice, policyRequest, agentStateText } from '../lib/hub.js';
 
 const SEG = { allow: 'bg-emerald-50 font-medium text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300', ask: 'bg-amber-50 font-medium text-amber-700 dark:bg-amber-500/15 dark:text-amber-300', block: 'bg-rose-50 font-medium text-rose-700 dark:bg-rose-500/15 dark:text-rose-300' };
-const STATE = { allowed: 'pill-ok', blocked: 'pill-bad', not_listed: 'pill-idle' };
+const STATE = { allowed: 'pill-ok', blocked: 'pill-bad', not_listed: 'pill-idle', needs_person: 'pill-wait' };
 
 export function accessPane(it, admin, onChange) {
   const box = h('div', { class: 'space-y-4', id: 'integration-access' }, spinner());
@@ -17,7 +17,7 @@ export function accessPane(it, admin, onChange) {
   }
 
   async function set(name, key) {
-    try { view = await put('/v1/integrations/' + encodeURIComponent(it.id) + '/policy', policyRequest(view.tools, name, key)); toast(key === 'block' ? name + ' is blocked' : name + (toolIsWrite(name) ? ' goes back to needing approval' : ' is allowed'), 'ok'); onChange && onChange(); }
+    try { view = await put('/v1/integrations/' + encodeURIComponent(it.id) + '/policy', policyRequest(view.tools, name, key)); toast(key === 'block' ? name + ' is blocked' : key === 'ask' ? name + ' needs approval' : name + ' is allowed', 'ok'); onChange && onChange(); }
     catch (e) { toast(e.message, 'error'); }
     draw();
   }
@@ -37,15 +37,15 @@ export function accessPane(it, admin, onChange) {
   }
 
   function draw() {
-    const blocked = view.tools.filter(t => t.level === 'block').length;
+    const blocked = view.tools.filter(t => t.level === 'block').length, asks = view.tools.filter(t => t.level === 'ask').length;
     mount(box,
       !view.readable ? notice('warn', 'The stored access policy cannot be read, so every tool of this integration is refused until it is fixed. It will not be changed over from here.') : null,
       h('div', {}, h('div', { class: 'h-section mb-1' }, 'The ceiling for this connection'),
-        h('p', { class: 'muted text-xs' }, 'No agent, assistant or MCP client can use a blocked tool, whatever its own list says. Changes are never Allow: they stay proposals that a different administrator approves. '
+        h('p', { class: 'muted text-xs' }, 'No agent, assistant or MCP client can use a blocked tool, whatever its own list says. A tool that needs approval asks the person in the assistant before each call, and is refused wherever nobody is present (an agent run, an MCP client). Changes are never Allow: they stay proposals that a different administrator approves. '
           + (admin ? '' : 'Only administrators can change this.'))),
       h('div', { class: 'overflow-x-auto' }, h('table', { class: 'w-full text-sm' }, h('thead', {}, h('tr', { class: 'muted text-left text-xs uppercase' }, h('th', { class: 'pb-1 pr-3' }, 'Tool'), h('th', { class: 'pb-1 pr-3' }, 'Kind'), h('th', { class: 'pb-1' }, 'Access'))),
         h('tbody', { class: 'divide-y divide-slate-100 dark:divide-slate-800' }, view.tools.map(row)))),
-      h('p', { class: 'muted text-xs', id: 'access-summary' }, blocked ? `${blocked} of ${view.tools.length} tools blocked.` : 'Nothing is blocked.' + (view.updated_by ? ' Last changed by ' + view.updated_by + '.' : '')),
+      h('p', { class: 'muted text-xs', id: 'access-summary' }, (blocked ? `${blocked} of ${view.tools.length} tools blocked.` : 'Nothing is blocked.') + (asks ? ` ${asks} need${asks === 1 ? 's' : ''} your approval each time.` : '') + (view.updated_by ? ' Last changed by ' + view.updated_by + '.' : '')),
       h('div', {}, h('div', { class: 'h-section mb-1' }, 'What each agent can do'),
         view.agents.length ? h('div', { class: 'overflow-x-auto' }, h('table', { class: 'w-full text-sm', id: 'access-agents' },
           h('thead', {}, h('tr', { class: 'muted text-left text-xs uppercase' }, h('th', { class: 'pb-1 pr-3' }, 'Agent'), view.tools.map(t => h('th', { class: 'pb-1 pr-3 font-mono normal-case' }, t.name)))),

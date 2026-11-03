@@ -3,7 +3,7 @@
 // (design note 024); anything not listed here is ignored, so a newer server cannot break the panel.
 
 export function newRun() {
-  return { status: 'running', context: '', steps: [], text: '', proposals: [], environments: [], error: '' };
+  return { status: 'running', context: '', steps: [], approvals: [], text: '', proposals: [], environments: [], error: '' };
 }
 
 const step = (run, id) => run.steps.find(s => s.id === id);
@@ -15,6 +15,11 @@ export function applyEvent(run, ev) {
       const v = ev.value || {};
       if (ev.name === 'forgeline.context') run.context = String(v.note || '');
       else if (ev.name === 'forgeline.tool_status') { const s = step(run, v.toolCallId); if (s) s.status = v.ok === false ? 'failed' : 'done'; }
+      else if (ev.name === 'forgeline.approval' && v.id && !run.approvals.some(a => a.id === v.id)) {
+        // The question belongs to the call that is open, which is the last one that is still running.
+        const open = run.steps.filter(s => s.status === 'running');
+        run.approvals.push({ id: String(v.id), tool: String(v.tool || ''), args: String(v.args || ''), integration: String(v.integration || ''), seconds: Number(v.expiresInSeconds) || 0, state: 'waiting', step: open.length ? open[open.length - 1].id : '' });
+      } else if (ev.name === 'forgeline.approval_decided') { const a = run.approvals.find(x => x.id === v.id); if (a) a.state = ['approve', 'deny', 'expired'].includes(v.decision) ? v.decision : 'deny'; }
       else if (ev.name === 'forgeline.proposal' && v.id && !run.proposals.includes(v.id)) run.proposals.push(String(v.id));
       else if (ev.name === 'forgeline.environment' && v.id && !run.environments.includes(v.id)) run.environments.push(String(v.id));
       break;
@@ -34,6 +39,7 @@ export function applyEvent(run, ev) {
 /** What to tell the person while nothing has arrived yet. */
 export function progressLabel(run) {
   if (run.status !== 'running') return '';
+  if (run.approvals.some(a => a.state === 'waiting')) return 'Waiting for your answer…';
   const open = run.steps.filter(s => s.status === 'running');
   if (open.length) return 'Looking up ' + open[open.length - 1].name + '…';
   return run.steps.length ? 'Writing the answer…' : 'Thinking…';

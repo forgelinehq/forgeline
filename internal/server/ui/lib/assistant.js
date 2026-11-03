@@ -1,7 +1,7 @@
 // The assistant panel: a read-only helper that answers questions about the page you are on.
 // It cannot change anything; a pipeline it drafts is text until you save it yourself.
 import { h, icon, mount, errorBox, notice, copyButton, toast, pill } from './dom.js';
-import { get, atLeast, streamPost } from './api.js';
+import { get, post, atLeast, streamPost } from './api.js';
 import { currentPath, navigate } from './router.js';
 import { renderReply } from './mdview.js';
 import { newRun, applyEvent, progressLabel } from './runstate.js';
@@ -132,12 +132,31 @@ function build(close, role) {
     return box;
   }
 
+  /**
+   * A read the access policy wants a person to approve. It is the person's own session that answers, once; the
+   * model cannot. Nothing runs until Approve, and no answer before the time is up counts as a denial.
+   */
+  function approvalCard(a) {
+    const btn = (decision, label, cls) => h('button', { type: 'button', class: cls, 'data-approval': decision, onclick: async (e) => {
+      const box = e.currentTarget.closest('[data-approval-id]');
+      box.querySelectorAll('button').forEach(b => { b.disabled = true; });
+      try { await post('/v1/assistant/approvals/' + encodeURIComponent(a.id), { decision }); } catch (err) { toast(err.message, 'error'); box.querySelectorAll('button').forEach(b => { b.disabled = false; }); }
+    } }, label);
+    return h('div', { class: amber + ' flex-col', 'data-approval-id': a.id, role: 'group', 'aria-label': 'Approve this lookup' },
+      h('div', { class: 'flex items-center gap-2 font-semibold' }, icon('shield', 'size-4 shrink-0'), 'Approve this lookup?'),
+      h('div', {}, 'The access policy for ', h('b', {}, a.integration || 'this connection'), ' asks you before ', h('code', { class: 'font-mono' }, a.tool), ' runs. It only reads. Nothing runs until you approve',
+        a.seconds ? ` (it is a no after ${Math.round(a.seconds / 60) || 1} min)` : '', '.'),
+      a.args ? h('pre', { class: 'max-h-24 w-full overflow-auto whitespace-pre-wrap break-words rounded-lg bg-white/70 p-2 font-mono text-[11px] dark:bg-slate-900/50' }, a.args) : null,
+      h('div', { class: 'flex gap-2' }, btn('approve', 'Approve', 'btn-primary btn-sm'), btn('deny', 'Deny', 'btn-secondary btn-sm')));
+  }
+
   /** The run so far: its lookups as cards, what it is doing, the answer as cards, and anything it filed. */
   function runNode(run, opened, cards, stop) {
     const cardFor = (id) => { if (!cards.has(id)) cards.set(id, proposalCard(id)); return cards.get(id); };
     const label = progressLabel(run);
     return h('div', { class: 'space-y-3' },
       run.steps.length ? h('div', { class: 'space-y-1.5', 'aria-label': 'What the assistant looked up' }, run.steps.map(st => stepCard(st, opened))) : null,
+      run.approvals.filter(a => a.state === 'waiting').map(approvalCard),
       label ? h('div', { class: 'flex items-center gap-2 text-sm muted', role: 'status' }, h('span', { class: 'size-2 animate-pulse-dot rounded-full bg-brand-500' }), label,
         h('button', { class: 'btn-ghost btn-sm ml-auto', type: 'button', id: 'assistant-stop', onclick: stop }, icon('stop', 'size-3'), 'Stop')) : null,
       run.status === 'stopped' ? h('p', { class: 'muted text-xs' }, 'Stopped. Nothing more was looked up.') : null,

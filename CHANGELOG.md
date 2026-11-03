@@ -7,6 +7,13 @@ section in the pull request that makes the change; a release moves it under its 
 ## [Unreleased]
 
 ### Added
+- **Needs approval for read tools, and Google Cloud and Azure lookups for the assistant** (design note 026, slice 2). The
+  access policy has a third level for reads, Needs approval: in the assistant panel a card shows the call with Approve
+  and Deny, and nothing runs until the person who asked answers (once, from their own session; no answer in two minutes is a
+  denial; each outcome is audited). Where nobody is present (agent runs, MCP clients, plain chat requests) such a tool is
+  refused and not offered, and the effective-access view says "needs a person". A change tool still cannot be set to
+  Allow. The assistant gets `gcp_resources` and `azure_resources` (read-only, from the same cache as the explorers); both
+  join the access policy and the MCP read list. API: `POST /v1/assistant/approvals/{id}`; `/policy` accepts `ask`.
 - **Access policy for integration tools** (design note 026, slice 1). The popup of AWS, the AWS MCP Server and Kubernetes
   has an Access tab where an administrator sets each tool to Allow (the default) or Blocked. A blocked tool is refused for
   everyone, whatever an agent's own tool list says, and never reaches a command line or proxy; it is hidden from the
