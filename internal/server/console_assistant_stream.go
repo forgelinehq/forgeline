@@ -124,11 +124,22 @@ func (s *Server) handleAssistantRun(w http.ResponseWriter, r *http.Request) {
 
 	runID := randomID()
 	thread := "assistant"
+	// A person with an account keeps a history. The conversation id is the one they sent, if it is theirs.
+	conv := job.conv
+	if job.p.UserID != "" {
+		if _, mine := s.getConversation(r.Context(), job.p.UserID, conv); !mine {
+			var other Conversation
+			if conv == "" || !conversationIDRE.MatchString(conv) || s.docs.Get(r.Context(), kindChat, conv, &other) == nil {
+				conv = randomID() // none, malformed, or someone else's: start a new one
+			}
+		}
+		thread = conv
+	}
 	out.send("RUN_STARTED", map[string]any{"threadId": thread, "runId": runID})
 	out.send("CUSTOM", map[string]any{"name": "forgeline.context", "value": map[string]any{"note": job.ctxNote, "role": string(job.p.Role)}})
 
 	sink := &lookupSink{}
-	sentP, sentE := 0, 0
+	sentP, sentE, sentN := 0, 0, 0
 	obs := assistObserver(func(ev assistEvent) {
 		switch ev.Kind {
 		case evToolStart:
@@ -145,9 +156,15 @@ func (s *Server) handleAssistantRun(w http.ResponseWriter, r *http.Request) {
 			for ; sentE < len(sink.environments); sentE++ {
 				out.send("CUSTOM", map[string]any{"name": "forgeline.environment", "value": map[string]any{"id": sink.environments[sentE]}})
 			}
+			for ; sentN < len(sink.notes); sentN++ {
+				n := sink.notes[sentN]
+				out.send("CUSTOM", map[string]any{"name": "forgeline.memory", "value": map[string]any{"id": n.ID, "text": n.Text, "about": n.About, "status": n.Status}})
+			}
 		}
 	})
 	ctx := context.WithValue(context.WithValue(r.Context(), lookupSinkKey{}, sink), assistObserverKey{}, obs)
+	// A person is chatting: the assistant may use and add to memory. The default overview (run ids, pipeline names, counts) is clean; a run, a pipeline or the infrastructure attached as context is text they did not type.
+	ctx = context.WithValue(ctx, memTurnKey{}, &memTurn{p: job.p, question: job.message, dirty: job.ctxNote != "overview"})
 	// A person is present on this stream, so a tool that needs approval can ask them, here, and wait.
 	ctx = context.WithValue(ctx, approverKey{}, approver(func(c lookupCall) error {
 		return s.askToApprove(r.Context(), job.p, c, func(id string, wait time.Duration) {
@@ -165,9 +182,17 @@ func (s *Server) handleAssistantRun(w http.ResponseWriter, r *http.Request) {
 		out.send("RUN_ERROR", map[string]any{"message": err.Error()})
 		return
 	}
+	var refs []chatRef
+	for _, id := range sink.proposals {
+		refs = append(refs, chatRef{Kind: "proposal", ID: id})
+	}
+	for _, id := range sink.environments {
+		refs = append(refs, chatRef{Kind: "environment", ID: id})
+	}
+	s.saveTurn(r.Context(), job.p, conv, job.message, reply, lookups, refs)
 	msgID := randomID()
 	out.send("TEXT_MESSAGE_START", map[string]any{"messageId": msgID, "role": "assistant"})
 	out.send("TEXT_MESSAGE_CONTENT", map[string]any{"messageId": msgID, "delta": reply})
 	out.send("TEXT_MESSAGE_END", map[string]any{"messageId": msgID})
-	out.send("RUN_FINISHED", map[string]any{"threadId": thread, "runId": runID, "result": map[string]any{"context": job.ctxNote, "lookups": lookups}})
+	out.send("RUN_FINISHED", map[string]any{"threadId": thread, "runId": runID, "result": map[string]any{"context": job.ctxNote, "lookups": lookups, "conversation": conv}})
 }

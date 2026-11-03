@@ -22,6 +22,7 @@ import { secretsPage } from './pages/secrets.js';
 import { peoplePage } from './pages/people.js';
 import { auditPage } from './pages/audit.js';
 import { accountPage } from './pages/account.js';
+import { memoryPage } from './pages/memory.js';
 import { assistantButton } from './lib/assistant.js';
 import { visibleGroups, isSettingsPath, activeItem, canOpenSettings } from './lib/settingsnav.js';
 import { settingsPage } from './pages/settings.js';
@@ -209,6 +210,7 @@ async function boot() {
     route('/integrations/claude/settings', guard('developer', inSettings(claudeSettingsPage)));
     route('/integrations/:id', guard('developer', inSettings(integrationsHubPage))); // opens that integration's popup over the hub
     route('/secrets', guard('developer', inSettings(secretsPage)));
+    route('/memory', guard('developer', inSettings(memoryPage)));
     route('/people', guard('admin', inSettings(peoplePage)));
     route('/audit', guard('admin', inSettings(auditPage)));
     route('/account', guard('viewer', accountPage));

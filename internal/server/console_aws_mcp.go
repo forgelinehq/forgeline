@@ -441,7 +441,10 @@ func (s *Server) lookupProposeChange(ctx context.Context, raw json.RawMessage) (
 }
 
 type lookupSinkKey struct{}
-type lookupSink struct{ proposals, environments []string }
+type lookupSink struct {
+	proposals, environments []string
+	notes                   []MemoryNote // notes the assistant tried to remember, for the card
+}
 
 func (s *Server) handleListProposals(w http.ResponseWriter, r *http.Request) {
 	docs, err := s.docs.List(r.Context(), kindAIProposal, docstore.ListOptions{Desc: true, Limit: 100})
