@@ -322,22 +322,16 @@ func (s *Server) handlePutAzure(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, AzureSettingsJSON{Enabled: st.Enabled, Subscriptions: st.Subscriptions, UpdatedBy: st.UpdatedBy})
 }
 
-func (s *Server) handleAzureInventory(w http.ResponseWriter, r *http.Request) {
-	st := s.loadAzure(r.Context())
-	if !st.Enabled {
-		writeJSON(w, http.StatusOK, AWSInventoryJSON{Services: []AWSServiceJSON{}})
-		return
-	}
-	refresh := r.URL.Query().Get("refresh") == "1"
+// azureInventory is the cached read of the connected subscriptions, shared by the console tab and the assistant.
+func (s *Server) azureInventory(ctx context.Context, st azureSettings, refresh bool) AWSInventoryJSON {
 	key := strings.Join(st.Subscriptions, ",")
 	s.azureInv.mu.Lock()
 	if e, ok := s.azureInv.entries[key]; ok && !refresh && time.Since(e.at) < inventoryTTL {
 		s.azureInv.mu.Unlock()
-		writeJSON(w, http.StatusOK, e.data)
-		return
+		return e.data
 	}
 	s.azureInv.mu.Unlock()
-	d := s.fetchAzure(r.Context(), st)
+	d := s.fetchAzure(ctx, st)
 	if d.Error == "" {
 		s.azureInv.mu.Lock()
 		if s.azureInv.entries == nil || len(s.azureInv.entries) >= maxAWSAccounts+1 {
@@ -346,5 +340,34 @@ func (s *Server) handleAzureInventory(w http.ResponseWriter, r *http.Request) {
 		s.azureInv.entries[key] = invEntry{at: time.Now(), data: d}
 		s.azureInv.mu.Unlock()
 	}
-	writeJSON(w, http.StatusOK, d)
+	return d
+}
+
+func (s *Server) handleAzureInventory(w http.ResponseWriter, r *http.Request) {
+	st := s.loadAzure(r.Context())
+	if !st.Enabled {
+		writeJSON(w, http.StatusOK, AWSInventoryJSON{Services: []AWSServiceJSON{}})
+		return
+	}
+	writeJSON(w, http.StatusOK, s.azureInventory(r.Context(), st, r.URL.Query().Get("refresh") == "1"))
+}
+
+// lookupAzureResources is the assistant's read of the connected Azure subscriptions: the same inventory as the
+// console tab, as compact text. It reads nothing the tab does not show and changes nothing.
+func (s *Server) lookupAzureResources(ctx context.Context, raw json.RawMessage) (string, error) {
+	var a struct {
+		Service string `json:"service"`
+	}
+	if err := decodeArgs(raw, &a); err != nil {
+		return "", err
+	}
+	st := s.loadAzure(ctx)
+	if !st.Enabled {
+		return "", errors.New("Azure is not connected to this Forgeline server")
+	}
+	d := s.azureInventory(ctx, st, false)
+	if d.Error != "" {
+		return "", errors.New(d.Error)
+	}
+	return formatInventory(fmt.Sprintf("Azure, %s, read %s. Counts include every resource found; names are listed up to %d per service.", d.Region, d.FetchedAt, inventoryMax), d, a.Service)
 }

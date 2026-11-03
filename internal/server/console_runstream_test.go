@@ -40,7 +40,7 @@ const run = (events) => events.reduce((r, e) => applyEvent(r, e), newRun());
 const call = (id, name) => [{ type: 'TOOL_CALL_START', toolCallId: id, toolCallName: name }, { type: 'TOOL_CALL_ARGS', toolCallId: id, delta: '{"a":1}' }, { type: 'TOOL_CALL_END', toolCallId: id }];
 const done = (id, content, ok = true) => [{ type: 'TOOL_CALL_RESULT', toolCallId: id, content }, { type: 'CUSTOM', name: 'forgeline.tool_status', value: { toolCallId: id, ok } }];
 
-eq('a new run is running and empty', newRun(), { status: 'running', context: '', steps: [], text: '', proposals: [], environments: [], error: '' });
+eq('a new run is running and empty', newRun(), { status: 'running', context: '', steps: [], approvals: [], text: '', proposals: [], environments: [], error: '' });
 let r = run([{ type: 'CUSTOM', name: 'forgeline.context', value: { note: 'infrastructure' } }, ...call('c1', 'aws_script')]);
 eq('a lookup in progress', [r.context, r.steps.map(s => [s.id, s.name, s.args, s.status])], ['infrastructure', [['c1', 'aws_script', '{"a":1}', 'running']]]);
 eq('progress names the lookup', progressLabel(r), 'Looking up aws_script…');
@@ -63,6 +63,18 @@ r = run([{ type: 'CUSTOM', name: 'forgeline.proposal', value: { id: 'p1' } }, { 
 eq('proposals and environments are listed once', [r.proposals, r.environments], [['p1'], ['e1']]);
 eq('unknown events and custom names are ignored', run([{ type: 'STATE_SNAPSHOT' }, { type: 'CUSTOM', name: 'other.thing', value: {} }, {}]), newRun());
 eq('a custom event without a value is safe', run([{ type: 'CUSTOM', name: 'forgeline.proposal' }]).proposals, []);
+
+// Approvals: a question belongs to the call that is open, and is waiting until it is answered.
+const ask = { type: 'CUSTOM', name: 'forgeline.approval', value: { id: 'a1', tool: 'gcp_resources', args: '{"service":"compute"}', integration: 'gcp', expiresInSeconds: 120 } };
+const waiting = run([...call('c1', 'list_runs'), { type: 'TOOL_CALL_RESULT', toolCallId: 'c1', content: 'x' }, ...call('c2', 'gcp_resources'), ask]);
+eq('a question is waiting', waiting.approvals.map(a => [a.id, a.tool, a.integration, a.state, a.step, a.seconds]), [['a1', 'gcp_resources', 'gcp', 'waiting', 'c2', 120]]);
+eq('the label says it is waiting for the person', progressLabel(waiting), 'Waiting for your answer…');
+eq('a repeated question is not shown twice', run([...call('c1', 'x'), ask, ask]).approvals.length, 1);
+for (const d of ['approve', 'deny', 'expired']) eq('answered: ' + d, run([...call('c1', 'x'), ask, { type: 'CUSTOM', name: 'forgeline.approval_decided', value: { id: 'a1', decision: d } }]).approvals[0].state, d);
+eq('an unknown decision counts as a denial', run([...call('c1', 'x'), ask, { type: 'CUSTOM', name: 'forgeline.approval_decided', value: { id: 'a1', decision: 'maybe' } }]).approvals[0].state, 'deny');
+eq('an answer for another question changes nothing', run([...call('c1', 'x'), ask, { type: 'CUSTOM', name: 'forgeline.approval_decided', value: { id: 'zz', decision: 'approve' } }]).approvals[0].state, 'waiting');
+eq('after the answer the label goes back to the lookup', progressLabel(run([...call('c1', 'x'), ask, { type: 'CUSTOM', name: 'forgeline.approval_decided', value: { id: 'a1', decision: 'approve' } }])), 'Looking up x…');
+eq('a question without an id is ignored', run([{ type: 'CUSTOM', name: 'forgeline.approval', value: { tool: 'x' } }]).approvals, []);
 
 if (failed) process.exit(1);
 console.log('ok');

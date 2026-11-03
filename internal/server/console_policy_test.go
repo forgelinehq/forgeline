@@ -148,7 +148,7 @@ func TestAWriteToolCanBeBlockedButNeverSetToAllow(t *testing.T) {
 	m.admin.expect(200, "PUT", "/v1/integrations/aws-mcp/policy", map[string]any{"tools": map[string]string{"propose_aws_change": "block"}})
 	m.admin.expect(200, "PUT", "/v1/integrations/aws/policy", map[string]any{"tools": map[string]string{toolProposeCloud: "block"}})
 	ctx := context.Background()
-	if err := m.srv.policyGate(ctx, polDev, toolProposeCloud); err == nil {
+	if err := m.srv.policyGate(ctx, polDev, lookupCall{Tool: toolProposeCloud}); err == nil {
 		t.Error("propose_cloud_change (used over MCP) ran although it is blocked")
 	}
 	if _, err := m.srv.runLookup(ctx, polDev, lookupCall{Tool: "propose_aws_change", Args: json.RawMessage(`{"title":"a change","reason":"for the test run","code":"x"}`)}); err == nil || !strings.Contains(err.Error(), "blocked by the access policy for the AWS MCP Server") {
@@ -173,7 +173,6 @@ func TestOnlyAdministratorsChangeThePolicyAndOnlyWithKnownTools(t *testing.T) {
 		{"aws", map[string]string{"k8s_clusters": "block"}}, // another integration's tool
 		{"aws", map[string]string{"list_runs": "block"}},    // Forgeline's own tool
 		{"aws", map[string]string{"aws_summary": "maybe"}},  // not a level
-		{"aws", map[string]string{"aws_summary": "ask"}},    // needs-approval is not available for reads yet
 		{"kubernetes", map[string]string{"aws_summary": "block"}},
 	} {
 		m.admin.expect(400, "PUT", "/v1/integrations/"+c.integ+"/policy", map[string]any{"tools": c.tools})
@@ -194,7 +193,7 @@ func TestOnlyAdministratorsChangeThePolicyAndOnlyWithKnownTools(t *testing.T) {
 		t.Errorf("a request sets this integration's tools, it does not add to them: %+v", v.Tools)
 	}
 	aud := string(m.admin.expect(200, "GET", "/v1/audit?action=policy.update", nil))
-	if !strings.Contains(aud, "blocked: [aws_summary] (was [call_aws])") {
+	if !strings.Contains(aud, "blocked: [aws_summary], needs approval: [] (was blocked [call_aws], needs approval [])") {
 		t.Errorf("the change is not audited with before and after: %s", aud)
 	}
 	// The hub says which integrations have a policy and how many tools are blocked.

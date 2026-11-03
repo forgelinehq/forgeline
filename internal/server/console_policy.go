@@ -23,12 +23,13 @@ const (
 	idPolicy      = "access-policy"
 	polAllow      = "allow"
 	polBlock      = "block"
+	polAsk        = "ask" // a read tool that needs a person present to approve each call
 	toolKindRead  = "read"
 	toolKindWrite = "write"
 )
 
 type accessPolicy struct {
-	Tools     map[string]string `json:"tools"` // only blocks are stored: a tool with no entry is allowed
+	Tools     map[string]string `json:"tools"` // block or ask; a tool with no entry is allowed
 	UpdatedAt time.Time         `json:"updated_at"`
 	UpdatedBy string            `json:"updated_by"`
 }
@@ -41,6 +42,10 @@ func integrationOfTool(name string) string {
 		return "aws"
 	case strings.HasPrefix(name, "k8s_"):
 		return "kubernetes"
+	case name == "gcp_resources":
+		return "gcp"
+	case name == "azure_resources":
+		return "azure"
 	case needsMCP(name):
 		return "aws-mcp"
 	}
@@ -67,47 +72,73 @@ func (s *Server) loadPolicy(ctx context.Context) (accessPolicy, error) {
 	return p, nil
 }
 
-// policyDecision reports whether a tool is blocked and why. It is the one place the rule lives.
-func (s *Server) policyDecision(ctx context.Context, tool string) (blocked bool, why string) {
+// policyDecision is the one place the rule lives: what the ceiling says about a tool.
+func (s *Server) policyDecision(ctx context.Context, tool string) (level, why string) {
 	integ := integrationOfTool(tool)
 	if integ == "" {
-		return false, ""
+		return polAllow, ""
 	}
 	p, err := s.loadPolicy(ctx)
 	if err != nil {
-		return true, "the access policy could not be read, so " + tool + " is refused until it can"
+		return polBlock, "the access policy could not be read, so " + tool + " is refused until it can"
 	}
-	if p.Tools[tool] == polBlock {
-		return true, tool + " is blocked by the access policy for " + integrationLabel(integ)
+	switch p.Tools[tool] {
+	case polBlock:
+		return polBlock, tool + " is blocked by the access policy for " + integrationLabel(integ)
+	case polAsk:
+		if !isWriteTool(tool) { // a change is always a proposal; "ask" is how it already works
+			return polAsk, tool + " needs approval under the access policy for " + integrationLabel(integ)
+		}
 	}
-	return false, ""
+	return polAllow, ""
 }
 
 func integrationLabel(id string) string {
-	return map[string]string{"aws": "AWS", "aws-mcp": "the AWS MCP Server", "kubernetes": "Kubernetes"}[id]
+	return map[string]string{"aws": "AWS", "aws-mcp": "the AWS MCP Server", "kubernetes": "Kubernetes", "gcp": "Google Cloud", "azure": "Azure"}[id]
 }
 
 // policyGate is called before any integration tool runs. A refusal is audited against the integration, so its
-// Activity tab shows it.
-func (s *Server) policyGate(ctx context.Context, p Principal, tool string) error {
-	blocked, why := s.policyDecision(ctx, tool)
-	if !blocked {
-		return nil
-	}
+// Activity tab shows it. A tool that needs approval waits for the person who asked, if one is present (the
+// console's assistant stream); anywhere nobody is present (an agent, an MCP client, a plain chat request) it is
+// refused, and the refusal says so.
+func (s *Server) policyGate(ctx context.Context, p Principal, c lookupCall) error {
+	level, why := s.policyDecision(ctx, c.Tool)
 	ip, _ := ctx.Value(mcpIPKey{}).(string)
-	_ = s.audit(ctx, p, ip, "policy.refused", "integration/"+integrationOfTool(tool), why, false)
-	return errors.New(why)
+	target := "integration/" + integrationOfTool(c.Tool)
+	switch level {
+	case polBlock:
+		_ = s.audit(ctx, p, ip, "policy.refused", target, why, false)
+		return errors.New(why)
+	case polAsk:
+		ap := approverFrom(ctx)
+		if ap == nil {
+			why += ", and nobody is present to approve it here (an agent, an MCP client or a plain request has no one)"
+			_ = s.audit(ctx, p, ip, "policy.refused", target, why, false)
+			return errors.New(why)
+		}
+		if err := ap(c); err != nil {
+			_ = s.audit(ctx, p, ip, "policy.approval", target, c.Tool+": "+err.Error(), false)
+			return err
+		}
+		_ = s.audit(ctx, p, ip, "policy.approval", target, c.Tool+": approved by "+p.Name, true)
+	}
+	return nil
 }
 
-// blockedTools is the set of blocked tools, read once, for lists that show the model or an MCP caller what it
-// may use. If the policy cannot be read every integration tool is hidden.
+// blockedTools is the set of integration tools the caller of this context cannot use, read once, for lists that
+// show the model or an MCP caller what it may use. A tool that needs approval is hidden where nobody is present
+// to approve it. If the policy cannot be read every integration tool is hidden.
 func (s *Server) blockedTools(ctx context.Context) func(tool string) bool {
 	p, err := s.loadPolicy(ctx)
+	present := approverFrom(ctx) != nil
 	return func(tool string) bool {
 		if integrationOfTool(tool) == "" {
 			return false
 		}
-		return err != nil || p.Tools[tool] == polBlock
+		if err != nil || p.Tools[tool] == polBlock {
+			return true
+		}
+		return p.Tools[tool] == polAsk && !isWriteTool(tool) && !present
 	}
 }
 
@@ -180,8 +211,11 @@ func (s *Server) policyView(ctx context.Context, integration string) PolicyJSON 
 	v := PolicyJSON{Integration: integration, Tools: policyTools(integration), Agents: []PolicyAgentJSON{}, Readable: perr == nil, UpdatedBy: p.UpdatedBy}
 	for i := range v.Tools {
 		v.Tools[i].Level = polAllow
-		if perr != nil || p.Tools[v.Tools[i].Name] == polBlock {
+		switch {
+		case perr != nil || p.Tools[v.Tools[i].Name] == polBlock:
 			v.Tools[i].Level = polBlock
+		case p.Tools[v.Tools[i].Name] == polAsk && v.Tools[i].Kind == toolKindRead:
+			v.Tools[i].Level = polAsk
 		}
 	}
 	agents, err := s.listAgents(ctx)
@@ -205,6 +239,8 @@ func (s *Server) policyView(ctx context.Context, integration string) PolicyJSON 
 				x.State, x.Reason = "blocked", "Blocked by the access policy for this connection"
 			case !has[t.Name]:
 				x.State, x.Reason = "not_listed", "Not in this agent's tool list"
+			case t.Level == polAsk:
+				x.State, x.Reason = "needs_person", "Needs a person to approve each call, so it is refused in an agent run where nobody is present"
 			case t.Kind == toolKindWrite:
 				x.State, x.Reason = "allowed", "Allowed, as a proposal that a different administrator approves"
 			default:
@@ -249,8 +285,8 @@ func (s *Server) handlePutPolicy(w http.ResponseWriter, r *http.Request) {
 		case !ok:
 			writeError(w, http.StatusBadRequest, fmt.Sprintf("%q is not a tool of %s", name, integrationLabel(id)))
 			return
-		case level != polAllow && level != polBlock:
-			writeError(w, http.StatusBadRequest, fmt.Sprintf("the level of %s must be allow or block", name))
+		case level != polAllow && level != polBlock && level != polAsk:
+			writeError(w, http.StatusBadRequest, fmt.Sprintf("the level of %s must be allow, ask or block", name))
 			return
 		case t.Kind == toolKindWrite && level == polAllow:
 			writeError(w, http.StatusBadRequest, name+" asks for a change, so it is always a proposal that a different administrator approves; it can be blocked, but not set to allow")
@@ -263,13 +299,13 @@ func (s *Server) handlePutPolicy(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, "the stored access policy cannot be read, so it will not be changed over; fix or remove it first")
 		return
 	}
-	before := blockedOf(cur, id)
+	before := stateOf(cur, id)
 	for _, t := range tools { // this integration's tools are set from the request; others are left alone
 		delete(cur.Tools, t.Name)
 	}
 	for name, level := range req.Tools {
-		if level == polBlock {
-			cur.Tools[name] = polBlock
+		if level == polBlock || level == polAsk && known[name].Kind == toolKindRead { // a write tool's "ask" is what it already is
+			cur.Tools[name] = level
 		}
 	}
 	cur.UpdatedAt, cur.UpdatedBy = time.Now().UTC(), principalFrom(r.Context()).Name
@@ -277,17 +313,24 @@ func (s *Server) handlePutPolicy(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, "saving the policy", err)
 		return
 	}
-	s.auditReq(r, "policy.update", "integration/"+id, fmt.Sprintf("blocked: [%s] (was [%s])", strings.Join(blockedOf(cur, id), ", "), strings.Join(before, ", ")), true)
+	s.auditReq(r, "policy.update", "integration/"+id, fmt.Sprintf("blocked: [%s], needs approval: [%s] (was blocked [%s], needs approval [%s])", strings.Join(stateOf(cur, id)[0], ", "), strings.Join(stateOf(cur, id)[1], ", "), strings.Join(before[0], ", "), strings.Join(before[1], ", ")), true)
 	writeJSON(w, http.StatusOK, s.policyView(r.Context(), id))
 }
 
-func blockedOf(p accessPolicy, integration string) []string {
-	var out []string
+func blockedOf(p accessPolicy, integration string) []string { return stateOf(p, integration)[0] }
+
+// stateOf lists an integration's blocked tools and its tools that need approval.
+func stateOf(p accessPolicy, integration string) [2][]string {
+	var out [2][]string
 	for _, t := range policyTools(integration) {
-		if p.Tools[t.Name] == polBlock {
-			out = append(out, t.Name)
+		switch {
+		case p.Tools[t.Name] == polBlock:
+			out[0] = append(out[0], t.Name)
+		case p.Tools[t.Name] == polAsk && t.Kind == toolKindRead:
+			out[1] = append(out[1], t.Name)
 		}
 	}
-	sort.Strings(out)
+	sort.Strings(out[0])
+	sort.Strings(out[1])
 	return out
 }

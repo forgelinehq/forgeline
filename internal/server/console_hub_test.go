@@ -105,16 +105,20 @@ eq('a blocked read tool shows Blocked', toolChoice(rd('a', 'block')).shown, 'blo
 eq('a write tool that is not blocked shows Needs approval, never Allow', toolChoice(wr('p')).shown, 'ask');
 eq('a blocked write tool shows Blocked', toolChoice(wr('p', 'block')).shown, 'block');
 eq('a write tool cannot be set to Allow, but can go back to Needs approval after being blocked', toolChoice(wr('p', 'block')).options.map(o => [o.key, o.enabled]), [['allow', false], ['ask', true], ['block', true]]);
-eq('a read tool can be Allow or Blocked, but not Needs approval yet', toolChoice(rd('a')).options.map(o => [o.key, o.enabled]), [['allow', true], ['ask', false], ['block', true]]);
+eq('a read tool can be Allow, Needs approval or Blocked', toolChoice(rd('a')).options.map(o => [o.key, o.enabled]), [['allow', true], ['ask', true], ['block', true]]);
+eq('a read tool set to ask shows Needs approval', toolChoice(rd('a', 'ask')).shown, 'ask');
+eq('a blocked read tool stays Blocked even if marked ask', toolChoice(rd('a', 'block')).shown, 'block');
 eq('every disabled option says why', ['read', 'write'].every(k => toolChoice({ kind: k, level: 'allow' }).options.filter(o => !o.enabled).every(o => o.why.length > 10)), true);
-const tl = [rd('a'), rd('b', 'block'), wr('p')];
-eq('blocking one keeps the others as shown', policyRequest(tl, 'a', 'block'), { tools: { a: 'block', b: 'block' } });
-eq('allowing one removes only its block', policyRequest(tl, 'b', 'allow'), { tools: {} });
-eq('a write tool is never sent as allow, even when nothing is blocked', Object.values(policyRequest([wr('p')], 'p', 'allow').tools), []);
+eq('the read ask option explains that agents and MCP are refused', toolChoice(rd('a')).options[1].why.includes('refused'), true);
+const tl = [rd('a'), rd('b', 'block'), rd('c', 'ask'), wr('p')];
+eq('blocking one keeps the others as shown', policyRequest(tl, 'a', 'block'), { tools: { a: 'block', b: 'block', c: 'ask' } });
+eq('allowing one removes only its entry', policyRequest(tl, 'b', 'allow'), { tools: { c: 'ask' } });
+eq('asking sends ask for a read tool and keeps the rest', policyRequest(tl, 'a', 'ask'), { tools: { a: 'ask', b: 'block', c: 'ask' } });
+eq('a write tool is never sent as allow or ask', policyRequest([wr('p')], 'p', 'allow'), { tools: {} });
+eq('a write tool asked is not sent', policyRequest([wr('p')], 'p', 'ask'), { tools: {} });
 eq('a blocked write tool is sent as a block', policyRequest([wr('p')], 'p', 'block'), { tools: { p: 'block' } });
 eq('unblocking a write tool sends nothing for it', policyRequest([wr('p', 'block'), rd('a')], 'p', 'ask'), { tools: {} });
-eq('Needs approval is not a request for a read tool', policyRequest(tl, 'a', 'ask').tools.a, undefined);
-eq('agent state words', ['allowed', 'blocked', 'not_listed', 'x'].map(agentStateText), ['Allowed', 'Blocked', 'Not listed', 'x']);
+eq('agent state words', ['allowed', 'blocked', 'not_listed', 'needs_person', 'x'].map(agentStateText), ['Allowed', 'Blocked', 'Not listed', 'Needs a person', 'x']);
 
 if (failed) process.exit(1);
 console.log('ok');

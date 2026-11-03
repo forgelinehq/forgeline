@@ -148,6 +148,15 @@ func (s *Server) handleAssistantRun(w http.ResponseWriter, r *http.Request) {
 		}
 	})
 	ctx := context.WithValue(context.WithValue(r.Context(), lookupSinkKey{}, sink), assistObserverKey{}, obs)
+	// A person is present on this stream, so a tool that needs approval can ask them, here, and wait.
+	ctx = context.WithValue(ctx, approverKey{}, approver(func(c lookupCall) error {
+		return s.askToApprove(r.Context(), job.p, c, func(id string, wait time.Duration) {
+			out.send("CUSTOM", map[string]any{"name": "forgeline.approval", "value": map[string]any{
+				"id": id, "tool": c.Tool, "args": argsPreview(c), "integration": integrationOfTool(c.Tool), "expiresInSeconds": int(wait.Seconds())}})
+		}, func(id, decision string) {
+			out.send("CUSTOM", map[string]any{"name": "forgeline.approval_decided", "value": map[string]any{"id": id, "decision": decision}})
+		})
+	}))
 	reply, lookups, err := s.askWithLookups(ctx, job.p, job.turns, job.ctxText, func(tool string, ok bool) {
 		s.auditReq(r, "assistant.lookup", "assistant", tool, ok)
 	})

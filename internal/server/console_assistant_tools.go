@@ -50,6 +50,8 @@ func assistantLookups() []lookupTool {
 		{"aws_resources", `{"account":"optional account id","service":"optional, e.g. ecs, ec2, s3, lambda, rds"} everything in the account by service with state and key details: ECS clusters and services, EC2, EBS, Lambda, S3, RDS, DynamoDB, VPCs, load balancers, queues, log groups`, authn.Viewer, (*Server).lookupAWSResources},
 		{"k8s_clusters", `{} the Kubernetes clusters that are registered, with their ids`, authn.Viewer, (*Server).lookupK8sClusters},
 		{"k8s_resources", `{"cluster":"cluster id from k8s_clusters","kind":"optional: nodes, deployments, statefulsets, daemonsets, pods, services, namespaces, events"} what runs in a cluster, with state and key details`, authn.Viewer, (*Server).lookupK8sResources},
+		{"gcp_resources", `{"service":"optional, e.g. compute, storage, gke, cloud run, vertex"} everything in the connected Google Cloud scope by service, with state and key details`, authn.Viewer, (*Server).lookupGCPResources},
+		{"azure_resources", `{"service":"optional, e.g. virtual machines, storage, aks, app service, openai"} everything in the connected Azure subscriptions by service, with state and key details`, authn.Viewer, (*Server).lookupAzureResources},
 		{"guard_findings", `{"account":"optional account id","severity":"optional: critical|high|medium|low|info"} the open security and hygiene findings from the last scan, worst first, with a suggested fix for each`, authn.Viewer, (*Server).lookupGuardFindings},
 		{"aws_summary", `{"account":"optional account id from aws_accounts"} the AWS account summary: stacks and instances`, authn.Viewer, (*Server).lookupAWS},
 		{"call_aws", `{"cli_command":"aws ecs list-clusters --region ap-south-1","account":"optional account id from aws_accounts"} one read-only AWS CLI call (describe-, list-, get- only; no secrets, credentials, data or logs). Administrators only`, authn.Admin, (*Server).lookupCallAWS},
@@ -149,7 +151,7 @@ func (s *Server) runLookup(ctx context.Context, p Principal, c lookupCall) (stri
 		if sc := scopeFrom(ctx); !sc.allows(t.name) || sc != nil && t.name == askAgentTool {
 			return "", fmt.Errorf("%s is not one of this agent's tools", t.name)
 		}
-		if err := s.policyGate(ctx, p, t.name); err != nil {
+		if err := s.policyGate(ctx, p, c); err != nil {
 			return "", err
 		}
 		if needsMCP(t.name) && !s.loadAWSMCP(ctx).Enabled {
