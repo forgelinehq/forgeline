@@ -189,6 +189,7 @@ func (s *Server) runLookup(ctx context.Context, p Principal, c lookupCall) (stri
 // final answer and the names of the lookups that ran.
 func (s *Server) askWithLookups(ctx context.Context, p Principal, turns []chatTurn, ctxText string, audit func(detail string, ok bool)) (string, []string, error) {
 	var used []string
+	nudged := false
 	obs := lookupObserver(ctx)
 	for i := 0; ; i++ {
 		reply, err := s.askAssistant(ctx, p.Role, turns, ctxText)
@@ -196,6 +197,14 @@ func (s *Server) askWithLookups(ctx context.Context, p Principal, turns []chatTu
 			return "", used, err
 		}
 		call, isLookup := parseLookup(reply)
+		if !isLookup && !nudged && strings.Contains(reply, lookupFence) {
+			// Real models sometimes write a sentence before the block. The call inside is not run (prose around a block is
+			// an answer), but the person should not be shown a raw block, so the model is asked once to send it alone.
+			nudged = true
+			turns = append(turns, chatTurn{Role: "assistant", Content: reply},
+				chatTurn{Role: "user", Content: "Your reply mixed text with a lookup block, so nothing ran. Send either only the lookup block, or only your answer."})
+			continue
+		}
 		if !isLookup {
 			return reply, used, nil
 		}

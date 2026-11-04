@@ -161,3 +161,30 @@ func TestAnAgentCannotPrepareAnAction(t *testing.T) {
 		t.Error("an agent prepared an action")
 	}
 }
+
+func TestAReplyThatMixesTextWithALookupIsSentBackOnceAndNeverRunWithTheText(t *testing.T) {
+	m := newMCPHarness(t)
+	m.dev.expect(201, "POST", "/v1/pipelines", map[string]any{"yaml": twoSteps})
+	mixed := "I'll check the pipelines first.\n\n" + lookupReply("list_pipelines", map[string]string{})
+	evs := m.run(m.dev, map[string]any{"message": "run demo"}, mixed, lookupReply("prepare_action", map[string]string{"action": "run_pipeline", "pipeline": "demo"}))
+	// The mixed reply did not run anything itself; the model was told, and its next reply (a clean lookup) did.
+	if len(actionsIn(evs)) != 1 {
+		t.Fatalf("no card after the nudge: %v", evs)
+	}
+	if !strings.Contains(m.llm.lastUser(2), "mixed text with a lookup block") && !strings.Contains(m.llm.lastUser(1), "mixed text with a lookup block") {
+		t.Error("the model was not told why nothing ran")
+	}
+	if tools := toolsRun(evs); len(tools) != 1 || tools[0] != "prepare_action" {
+		t.Errorf("tools run = %v (the lookup inside the mixed reply must not run)", tools)
+	}
+}
+
+func toolsRun(evs []map[string]any) []string {
+	var out []string
+	for _, f := range evs {
+		if f["type"] == "TOOL_CALL_START" {
+			out = append(out, f["toolCallName"].(string))
+		}
+	}
+	return out
+}
