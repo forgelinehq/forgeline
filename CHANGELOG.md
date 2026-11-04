@@ -7,6 +7,11 @@ section in the pull request that makes the change; a release moves it under its 
 ## [Unreleased]
 
 ### Added
+- **Morning check, and the assistant can read your repositories** (design note 028). A new `morning_check` lookup gives one
+  look at what needs a person: the Docker host, failed runs in the last 24 hours, change proposals waiting and the worst open
+  Guard findings. New `github_repos` and `github_files` lookups let the assistant see which repositories an administrator
+  allowed and read a directory or a file in them (default branch, 12 KB at most, secret-looking files such as `.env`, keys
+  and `.pem` never read, known secret shapes hidden), so it can write a pipeline that fits the project and offer it as a card.
 - **The assistant can act inside Forgeline, with your confirmation** (design note 028). A new `prepare_action` tool saves a
   pipeline or starts a run, but only by filing a card: it lists the exact effects (written by the server from the file, so
   the model cannot soften them: images, network, secrets), shows the file, and does nothing until you press Confirm. Confirm

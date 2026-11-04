@@ -24,7 +24,7 @@ const SUGGESTIONS = {
   run: ['Why did this run fail?', 'Summarise what happened in this run.'],
   pipeline: ['Review this pipeline for problems.', 'How could this run faster?'],
   infra: ['Summarise what is running in AWS.', 'Is anything here worth cleaning up?'],
-  none: ['What needs attention right now?', 'Draft a pipeline that builds and tests a Go project.'],
+  none: ['Give me the morning check: what needs me first?', 'Set up a pipeline that builds and tests one of my GitHub repositories.'],
 };
 
 const PREF_KEY = 'forgeline-assistant';

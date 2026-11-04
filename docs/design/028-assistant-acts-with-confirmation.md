@@ -20,6 +20,18 @@ it done. How does it act without a mistaken, or injected, request changing thing
 | Audit | `assistant.action.prepare`, `.confirm`, `.dismiss`, plus the usual `pipeline.create` and `run.start` | The log shows who pressed what |
 | Memory | Preparing counts as reading data, so a note saved in the same turn is held for confirmation (027) | Same rule as any lookup |
 
+## Use cases this serves
+
+| Ask | How it is answered |
+| --- | --- |
+| "How are things?" / "What needs me?" | `morning_check` reads the host, failed runs, waiting proposals and worst findings in one lookup |
+| "Set up CI for my repo" | `github_repos`, `github_files` to see what the project is, then a `save_pipeline` card, then a `run_pipeline` card |
+| "Why did that fail, and what now?" | the run lookups already there, then a card or a proposal |
+
+Reading a repository is read only and limited to the allow list, the default branch and 12 KB a file. Files named like secrets
+(`.env`, keys, `.pem`, `.netrc`) are never read and known secret shapes in other files are replaced with `[hidden]`. Repository
+text was written by other people, so a turn that read it counts as dirty for memory (027).
+
 ## Not in this slice
 
 Updating or deleting pipelines, cancelling runs, connecting integrations, adding people and changing settings. Each becomes
