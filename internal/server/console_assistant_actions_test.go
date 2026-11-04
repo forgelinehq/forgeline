@@ -188,3 +188,17 @@ func toolsRun(evs []map[string]any) []string {
 	}
 	return out
 }
+
+func TestMorningCheckSummarisesWhatNeedsAPerson(t *testing.T) {
+	m := newMCPHarness(t)
+	m.dev.expect(201, "POST", "/v1/pipelines", map[string]any{"yaml": twoSteps})
+	out, err := m.srv.runLookup(t.Context(), Principal{Name: "v", Role: authn.Viewer}, lookupCall{Tool: "morning_check"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"Host:", "Runs in the last 24 hours:", "Change proposals waiting for approval: 0", "Open Guard findings: 0 critical"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("morning check lacks %q:\n%s", want, out)
+		}
+	}
+}

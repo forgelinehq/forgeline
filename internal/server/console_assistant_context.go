@@ -155,3 +155,61 @@ func (s *Server) assistantContextFor(ctx context.Context, p Principal, c chatCon
 	}
 	return s.assistantContext(ctx, c)
 }
+
+// lookupMorningCheck is one look at everything that may need a person: the host, failed runs, waiting proposals and the
+// worst open findings. It only reads, from the same sources as the console pages.
+func (s *Server) lookupMorningCheck(ctx context.Context, _ json.RawMessage) (string, error) {
+	var b strings.Builder
+	b.WriteString("Host:\n" + s.hostLine(ctx))
+	if runs, err := s.cfg.Store.ListRuns(ctx, store.ListOptions{Limit: 200}); err == nil {
+		total, failed := 0, []string{}
+		for _, r := range runs {
+			if time.Since(r.CreatedAt) > 24*time.Hour {
+				continue
+			}
+			total++
+			if r.Status == store.RunFailed && len(failed) < 8 {
+				failed = append(failed, fmt.Sprintf("%s (%s, run %s)", r.PipelineName, r.CreatedAt.Format("15:04 UTC"), r.ID))
+			}
+		}
+		fmt.Fprintf(&b, "Runs in the last 24 hours: %d. Failed: %d", total, len(failed))
+		if len(failed) > 0 {
+			b.WriteString(": " + strings.Join(failed, "; "))
+		}
+		b.WriteString(".\n")
+	}
+	if docs, err := s.docs.List(ctx, kindAIProposal, docstore.ListOptions{}); err == nil {
+		if ps, err := docstore.Decode[AIProposal](docs); err == nil {
+			var waiting []string
+			for _, pr := range ps {
+				if pr.Status == apProposed && time.Since(pr.ProposedAt) <= aiProposalTTL {
+					waiting = append(waiting, fmt.Sprintf("%q (id %s, risk %s)", truncate(pr.Title, 80), pr.ID, pr.Risk))
+				}
+			}
+			fmt.Fprintf(&b, "Change proposals waiting for approval: %d", len(waiting))
+			if len(waiting) > 0 {
+				b.WriteString(": " + strings.Join(waiting, "; "))
+			}
+			b.WriteString(".\n")
+		}
+	}
+	if all, err := s.guardViews(ctx, time.Now()); err == nil {
+		bySev := map[string]int{}
+		var top []string
+		for _, f := range all {
+			if f.Status != "open" || f.Accepted != nil {
+				continue
+			}
+			bySev[f.Severity]++
+			if (f.Severity == "critical" || f.Severity == "high") && len(top) < 5 {
+				top = append(top, fmt.Sprintf("[%s] %s: %s (%s)", f.Severity, f.Title, f.Name, f.AccountName))
+			}
+		}
+		fmt.Fprintf(&b, "Open Guard findings: %d critical, %d high, %d medium, %d low.", bySev["critical"], bySev["high"], bySev["medium"], bySev["low"])
+		if len(top) > 0 {
+			b.WriteString(" Worst: " + strings.Join(top, "; ") + ".")
+		}
+		b.WriteString(" (From the last scan; none means no scan has run if the counts are all zero.)\n")
+	}
+	return b.String(), nil
+}
