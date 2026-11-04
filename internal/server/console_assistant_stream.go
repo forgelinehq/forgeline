@@ -136,10 +136,9 @@ func (s *Server) handleAssistantRun(w http.ResponseWriter, r *http.Request) {
 		thread = conv
 	}
 	out.send("RUN_STARTED", map[string]any{"threadId": thread, "runId": runID})
-	out.send("CUSTOM", map[string]any{"name": "forgeline.context", "value": map[string]any{"note": job.ctxNote, "role": string(job.p.Role)}})
 
 	sink := &lookupSink{}
-	sentP, sentE, sentN := 0, 0, 0
+	sentP, sentE, sentN, sentA := 0, 0, 0, 0
 	obs := assistObserver(func(ev assistEvent) {
 		switch ev.Kind {
 		case evToolStart:
@@ -156,6 +155,10 @@ func (s *Server) handleAssistantRun(w http.ResponseWriter, r *http.Request) {
 			for ; sentE < len(sink.environments); sentE++ {
 				out.send("CUSTOM", map[string]any{"name": "forgeline.environment", "value": map[string]any{"id": sink.environments[sentE]}})
 			}
+			for ; sentA < len(sink.actions); sentA++ {
+				a := sink.actions[sentA]
+				out.send("CUSTOM", map[string]any{"name": "forgeline.action", "value": map[string]any{"id": a.ID, "kind": a.Kind, "title": a.Title, "effects": a.Effects, "detail": truncate(a.Detail, 8<<10), "pipeline": a.Pipeline}})
+			}
 			for ; sentN < len(sink.notes); sentN++ {
 				n := sink.notes[sentN]
 				out.send("CUSTOM", map[string]any{"name": "forgeline.memory", "value": map[string]any{"id": n.ID, "text": n.Text, "about": n.About, "status": n.Status}})
@@ -164,7 +167,18 @@ func (s *Server) handleAssistantRun(w http.ResponseWriter, r *http.Request) {
 	})
 	ctx := context.WithValue(context.WithValue(r.Context(), lookupSinkKey{}, sink), assistObserverKey{}, obs)
 	// A person is chatting: the assistant may use and add to memory. The default overview (run ids, pipeline names, counts) is clean; a run, a pipeline or the infrastructure attached as context is text they did not type.
-	ctx = context.WithValue(ctx, memTurnKey{}, &memTurn{p: job.p, question: job.message, dirty: job.ctxNote != "overview"})
+	mt := &memTurn{p: job.p, question: job.message, dirty: job.ctxNote != "overview"}
+	ctx = context.WithValue(context.WithValue(ctx, memTurnKey{}, mt), setupKey{}, job.setup)
+	// Choose the notes now, so the person can be shown exactly what the assistant was given.
+	mt.block, mt.blockDone = s.memoryBlock(ctx, mt), true
+	given := job.setup
+	if job.ctxText != "" {
+		given += "\nThe page (" + job.ctxNote + "):\n" + job.ctxText
+	}
+	if mt.block != "" {
+		given += "\nNotes it was given:\n" + mt.block
+	}
+	out.send("CUSTOM", map[string]any{"name": "forgeline.context", "value": map[string]any{"note": job.ctxNote, "role": string(job.p.Role), "given": truncate(given, 6<<10)}})
 	// A person is present on this stream, so a tool that needs approval can ask them, here, and wait.
 	ctx = context.WithValue(ctx, approverKey{}, approver(func(c lookupCall) error {
 		return s.askToApprove(r.Context(), job.p, c, func(id string, wait time.Duration) {

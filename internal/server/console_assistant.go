@@ -215,7 +215,7 @@ type chatTurn struct {
 }
 
 type chatContext struct {
-	Kind string `json:"kind"` // run, pipeline, infra or none
+	Kind string `json:"kind"` // run, pipeline, infra, k8s, guard, proposal, agent or none
 	ID   string `json:"id"`
 }
 
@@ -260,6 +260,7 @@ type chatJob struct {
 	asked   int    // characters in the question, for the audit entry
 	conv    string // the conversation this turn belongs to, or ""
 	message string // the question as asked
+	setup   string // what the server says about this installation
 }
 
 // prepareChat applies the rate limit and every check on the request. It has already written the
@@ -289,7 +290,7 @@ func (s *Server) prepareChat(w http.ResponseWriter, r *http.Request) (chatJob, b
 		return chatJob{}, false
 	}
 
-	ctxText, ctxNote, err := s.assistantContext(r.Context(), req.Context)
+	ctxText, ctxNote, err := s.assistantContextFor(r.Context(), p, req.Context)
 	if err != nil {
 		writeError(w, http.StatusNotFound, err.Error())
 		return chatJob{}, false
@@ -310,7 +311,7 @@ func (s *Server) prepareChat(w http.ResponseWriter, r *http.Request) (chatJob, b
 		turns = turns[1:]
 	}
 	turns = append(turns, chatTurn{Role: "user", Content: req.Message})
-	return chatJob{p: p, turns: turns, ctxText: ctxText, ctxNote: ctxNote, asked: len(req.Message), conv: req.ConversationID, message: req.Message}, true
+	return chatJob{p: p, turns: turns, ctxText: ctxText, ctxNote: ctxNote, asked: len(req.Message), conv: req.ConversationID, message: req.Message, setup: s.setupText(r.Context(), p)}, true
 }
 
 func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
@@ -319,7 +320,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	sink := &lookupSink{}
-	reply, lookups, err := s.askWithLookups(context.WithValue(r.Context(), lookupSinkKey{}, sink), job.p, job.turns, job.ctxText, func(tool string, ok bool) {
+	reply, lookups, err := s.askWithLookups(context.WithValue(context.WithValue(r.Context(), lookupSinkKey{}, sink), setupKey{}, job.setup), job.p, job.turns, job.ctxText, func(tool string, ok bool) {
 		s.auditReq(r, "assistant.lookup", "assistant", tool, ok)
 	})
 	s.auditReq(r, "assistant.chat", "assistant", fmt.Sprintf("%s, %d chars asked, %d lookups, %v", job.ctxNote, job.asked, len(lookups), err == nil), err == nil)
@@ -430,6 +431,9 @@ func (s *Server) askAssistant(ctx context.Context, role authn.Role, turns []chat
 	}
 	if role != "" {
 		system += "\n\nLookups you may use:\n" + s.lookupHelp(ctx, role)
+	}
+	if setup, _ := ctx.Value(setupKey{}).(string); setup != "" {
+		system += "\n\n" + setup
 	}
 	if mt := memTurnFrom(ctx); mt != nil {
 		if mt.question == "" && len(turns) > 0 {

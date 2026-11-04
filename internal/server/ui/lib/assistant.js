@@ -152,6 +152,31 @@ function build(close, role) {
   }
 
   /**
+   * Something the assistant prepared inside Forgeline. Nothing has happened: the card lists the exact effects
+   * (written by the server, not the model) and the file, and it only runs when you press Confirm.
+   */
+  function actionCard(a) {
+    const box = h('div', { class: amber + ' flex-col', 'data-action-id': a.id, 'data-kind': a.kind });
+    const done = (text, link) => { box.replaceChildren(h('div', { class: 'flex items-center gap-2' }, icon('check', 'size-4 shrink-0'), h('span', {}, text),
+      link ? h('a', { href: '#' + link, class: 'font-semibold underline', onclick: close }, 'Open') : null)); };
+    const busy = (on) => box.querySelectorAll('button').forEach(b => { b.disabled = on; });
+    const send = async (verb) => {
+      busy(true);
+      try { const r = await post('/v1/assistant/actions/' + encodeURIComponent(a.id) + '/' + verb); verb === 'confirm' ? done(r.result || 'Done.', r.link) : done('Dismissed.'); }
+      catch (err) { toast(err.message, 'error'); busy(false); }
+    };
+    box.append(
+      h('div', { class: 'flex items-center gap-2 font-semibold' }, icon('bolt', 'size-4 shrink-0'), a.title || 'Waiting for you'),
+      h('ul', { class: 'list-disc space-y-0.5 pl-5 text-xs' }, a.effects.map(e => h('li', {}, e))),
+      a.detail ? h('details', {}, h('summary', { class: 'cursor-pointer text-xs underline' }, 'Show the file'),
+        h('pre', { class: 'mt-1 max-h-48 w-full overflow-auto whitespace-pre-wrap break-words rounded-lg bg-white/70 p-2 font-mono text-[11px] dark:bg-slate-900/50' }, a.detail)) : null,
+      h('div', { class: 'flex gap-2' },
+        h('button', { type: 'button', class: 'btn-primary btn-sm', 'data-action': 'confirm', onclick: () => send('confirm') }, 'Confirm'),
+        h('button', { type: 'button', class: 'btn-secondary btn-sm', 'data-action': 'dismiss', onclick: () => send('dismiss') }, 'Dismiss')));
+    return box;
+  }
+
+  /**
    * A note the assistant tried to keep. One it saved at once can be undone here; one it only suggested (because it
    * read data you did not type) is kept only if you say so. Either way the Memory page lists it.
    */
@@ -183,6 +208,7 @@ function build(close, role) {
       run.text ? renderReply(run.text, { codeBlock }) : null,
       run.error ? errorBox(run.error) : null,
       run.proposals.map(cardFor),
+      run.actions.map(actionCard),
       run.memories.map(memoryCard),
       run.environments.length ? h('div', { class: amber, 'data-filed': 'environment' }, icon('server', 'mt-0.5 size-4 shrink-0'), h('div', {}, 'Environment requested. Nothing exists until an administrator approves: ',
         h('a', { href: '#/environments', class: 'font-semibold underline', onclick: close }, 'see Environments'))) : null,
@@ -192,7 +218,7 @@ function build(close, role) {
   function empty() {
     const c = pageContext();
     mount(list, h('div', { class: 'space-y-3 text-sm' },
-      h('p', { class: 'muted' }, 'I can explain failures, review pipelines and draft new ones. I can only read: I cannot change anything, and I never see secret values.'),
+      h('p', { class: 'muted' }, 'I can explain failures, review pipelines, and set things up here: I prepare a pipeline or a run and you press Confirm. I cannot change your cloud myself (I file a proposal for another administrator), and I never see secret values.'),
       h('div', { class: 'flex flex-col gap-2' }, (SUGGESTIONS[c.kind] || SUGGESTIONS.none).map(q =>
         h('button', { class: 'btn-secondary justify-start text-left', type: 'button', onclick: () => ask(q) }, q)))));
   }

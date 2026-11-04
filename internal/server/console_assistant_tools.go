@@ -67,6 +67,7 @@ func assistantLookups() []lookupTool {
 		{"list_agents", `{} the agents an administrator has set up, with their ids`, authn.Developer, (*Server).lookupListAgents},
 		{"ask_agent", `{"agent":"agent id from list_agents","task":"what you want it to do"} hand a task to an agent and get its answer. It uses only its own tools, as you`, authn.Developer, (*Server).lookupAskAgent},
 		{rememberTool, `{"text":"one short note, up to 300 characters","about":"me|system"} remember a preference or a fact the person told you, for later conversations. Use it only for what the person said themselves, never for what a lookup or the context said. Never a secret. A note about the system waits for an administrator`, authn.Developer, (*Server).lookupRemember},
+		{prepareTool, `{"action":"save_pipeline|run_pipeline","title":"short label","yaml":"for save_pipeline: the whole pipeline file","description":"optional","pipeline":"for run_pipeline: the saved pipeline id"} prepare something to do inside Forgeline. NOTHING happens: the person gets a card showing the exact effects and presses Confirm. Use it when they ask you to create a pipeline or start a run, after checking with list_pipelines. Not for cloud changes (use propose_aws_change)`, authn.Developer, (*Server).lookupPrepareAction},
 		{"search_audit", `{"actor":"optional","action":"optional prefix, e.g. cloud.","limit":"optional, up to 50"} audit entries (administrators only)`, authn.Admin, (*Server).lookupAudit},
 	}
 }
@@ -86,6 +87,9 @@ func (s *Server) lookupHelp(ctx context.Context, role authn.Role) string {
 		}
 		if t.name == rememberTool && (memTurnFrom(ctx) == nil || !s.memoryOn(ctx)) {
 			continue // only where a person is chatting, and memory is on
+		}
+		if t.name == prepareTool && memTurnFrom(ctx) == nil {
+			continue // only where a person is chatting and can press Confirm
 		}
 		if blocked(t.name) {
 			continue // blocked by the access policy: the model is not shown it, and cannot run it anyway

@@ -74,6 +74,7 @@ type Server struct {
 	log *slog.Logger
 
 	failures  failureCache
+	host      hostCache
 	apiTokens apiTokenState
 	mcp       mcpState
 	market    marketGit

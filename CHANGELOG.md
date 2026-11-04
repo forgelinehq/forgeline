@@ -7,6 +7,12 @@ section in the pull request that makes the change; a release moves it under its 
 ## [Unreleased]
 
 ### Added
+- **The assistant can act inside Forgeline, with your confirmation** (design note 028). A new `prepare_action` tool saves a
+  pipeline or starts a run, but only by filing a card: it lists the exact effects (written by the server from the file, so
+  the model cannot soften them: images, network, secrets), shows the file, and does nothing until you press Confirm. Confirm
+  runs it as you, through the console's own checks, once, within 30 minutes, and audits it; only the person it was prepared for
+  can confirm (an administrator gets 404). Cloud changes are not in it and stay proposals approved by a different administrator.
+  The assistant is also told about the setup it runs in: what is connected, recent runs, waiting proposals and the Docker host.
 - **Assistant memory and conversation history** (design note 027). The assistant keeps short notes about you and about the
   system, and uses the ones that match your question: it ranks by words in common, then by how recently and how often a
   note helped, puts at most about 1.5 KB in the prompt as background (never as instructions), and drops notes nobody used for
