@@ -127,9 +127,10 @@ func TestAssistantLookupRulesAreStrict(t *testing.T) {
 		return r
 	}
 
-	// A block inside prose is an answer, not a lookup: nothing runs.
+	// A block inside prose is not a lookup: nothing runs. The model is asked once to resend (see the nudge), and
+	// if it still mixes them, the reply is the answer.
 	prose := "Here is how: " + lookupReply("get_run", map[string]string{"id": runID})
-	if r := ask(dev, prose); len(r.Lookups) != 0 || r.Reply != prose || llm.count() != 1 {
+	if r := ask(dev, prose, prose); len(r.Lookups) != 0 || r.Reply != prose || llm.count() != 2 {
 		t.Errorf("prose with a block ran a lookup: %+v, calls %d", r, llm.count())
 	}
 	// A model that drops a fence still gets its lookup run; one that adds words does not.
@@ -146,7 +147,7 @@ func TestAssistantLookupRulesAreStrict(t *testing.T) {
 	}
 	// Two blocks in one reply are not a lookup either.
 	two := lookupReply("get_run", map[string]string{"id": runID}) + "\n" + lookupReply("aws_summary", nil)
-	if r := ask(dev, two); len(r.Lookups) != 0 || llm.count() != 1 {
+	if r := ask(dev, two, two); len(r.Lookups) != 0 || llm.count() != 2 {
 		t.Errorf("two blocks ran: %+v", r)
 	}
 
