@@ -444,6 +444,7 @@ type lookupSinkKey struct{}
 type lookupSink struct {
 	proposals, environments []string
 	notes                   []MemoryNote // notes the assistant tried to remember, for the card
+	actions                 []AssistAction
 }
 
 func (s *Server) handleListProposals(w http.ResponseWriter, r *http.Request) {

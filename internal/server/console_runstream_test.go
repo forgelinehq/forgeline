@@ -40,7 +40,7 @@ const run = (events) => events.reduce((r, e) => applyEvent(r, e), newRun());
 const call = (id, name) => [{ type: 'TOOL_CALL_START', toolCallId: id, toolCallName: name }, { type: 'TOOL_CALL_ARGS', toolCallId: id, delta: '{"a":1}' }, { type: 'TOOL_CALL_END', toolCallId: id }];
 const done = (id, content, ok = true) => [{ type: 'TOOL_CALL_RESULT', toolCallId: id, content }, { type: 'CUSTOM', name: 'forgeline.tool_status', value: { toolCallId: id, ok } }];
 
-eq('a new run is running and empty', newRun(), { status: 'running', context: '', steps: [], approvals: [], text: '', proposals: [], environments: [], memories: [], conversation: '', error: '' });
+eq('a new run is running and empty', newRun(), { status: 'running', context: '', steps: [], approvals: [], text: '', proposals: [], environments: [], memories: [], actions: [], conversation: '', error: '' });
 let r = run([{ type: 'CUSTOM', name: 'forgeline.context', value: { note: 'infrastructure' } }, ...call('c1', 'aws_script')]);
 eq('a lookup in progress', [r.context, r.steps.map(s => [s.id, s.name, s.args, s.status])], ['infrastructure', [['c1', 'aws_script', '{"a":1}', 'running']]]);
 eq('progress names the lookup', progressLabel(r), 'Looking up aws_script…');
@@ -76,6 +76,8 @@ eq('an answer for another question changes nothing', run([...call('c1', 'x'), as
 eq('after the answer the label goes back to the lookup', progressLabel(run([...call('c1', 'x'), ask, { type: 'CUSTOM', name: 'forgeline.approval_decided', value: { id: 'a1', decision: 'approve' } }])), 'Looking up x…');
 eq('a note is kept once', run([{ type: 'CUSTOM', name: 'forgeline.memory', value: { id: 'm1', text: 'Works in eu-west-1', about: 'me', status: 'active' } }, { type: 'CUSTOM', name: 'forgeline.memory', value: { id: 'm1', text: 'again' } }]).memories, [{ id: 'm1', text: 'Works in eu-west-1', about: 'me', status: 'active' }]);
 eq('an odd note status counts as active only when it says so', run([{ type: 'CUSTOM', name: 'forgeline.memory', value: { id: 'm2', text: 'x', about: 'weird', status: 'whatever' } }]).memories[0], { id: 'm2', text: 'x', about: 'me', status: 'active' });
+eq('an action card is kept once, with its effects', run([{ type: 'CUSTOM', name: 'forgeline.action', value: { id: 'a1', kind: 'save_pipeline', title: 'Save demo', effects: ['Saves a new pipeline "demo". It does not run.'], detail: 'name: demo', pipeline: 'demo' } }, { type: 'CUSTOM', name: 'forgeline.action', value: { id: 'a1', title: 'again' } }]).actions, [{ id: 'a1', kind: 'save_pipeline', title: 'Save demo', effects: ['Saves a new pipeline "demo". It does not run.'], detail: 'name: demo', pipeline: 'demo' }]);
+eq('an action without an id is ignored', run([{ type: 'CUSTOM', name: 'forgeline.action', value: { title: 'x' } }]).actions, []);
 eq('a note without an id is ignored', run([{ type: 'CUSTOM', name: 'forgeline.memory', value: { text: 'x' } }]).memories, []);
 eq('the conversation id comes from the start of the run', run([{ type: 'RUN_STARTED', threadId: 'c0ffee' }]).conversation, 'c0ffee');
 eq('the old fixed thread name is not a conversation', run([{ type: 'RUN_STARTED', threadId: 'assistant' }]).conversation, '');

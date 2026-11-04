@@ -223,6 +223,8 @@ Only repositories on the GitHub allow list. A workflow can only be started on a 
 | `POST /v1/assistant/memory` | developer | Add a note, body `{"text":"...","about":"me|system"}`. A note about you is active at once; a developer's note about the system waits for an administrator. Up to 300 characters; secrets and markup are refused (400). 409 when memory is off. |
 | `PUT /v1/assistant/memory/{id}` | developer | Change the text of your own note, or any system note as an administrator. Anyone else gets 404. |
 | `POST /v1/assistant/memory/{id}/approve` | developer | Confirm your own pending note, or approve a pending system note as an administrator. Anyone else gets 404. |
+| `POST /v1/assistant/actions/{id}/confirm` | developer | Do what the assistant prepared (save a pipeline, start a run), as you. Only the person it was prepared for; anyone else gets 404. Once only (409 after), and not after 30 minutes. Audited. |
+| `POST /v1/assistant/actions/{id}/dismiss` | developer | Discard a prepared action. Same ownership rule. |
 | `DELETE /v1/assistant/memory/{id}` | developer | Delete your own note; an administrator deletes system notes; you can withdraw a system note you suggested while it is pending. |
 | `DELETE /v1/assistant/memory` | developer | Forget every note about you. Audited as `memory.me.forget_all`. |
 | `PUT /v1/assistant/memory/settings` | admin | Turn memory on or off, body `{"enabled":false}`. Audited as `memory.settings`. |

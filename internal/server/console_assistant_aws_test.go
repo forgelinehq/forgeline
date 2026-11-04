@@ -63,7 +63,18 @@ func TestAssistantCallAWSRunsAReadWithTheConsoleConnection(t *testing.T) {
 	h, admin, dev, _ := assistantHarness(t, llm, "x")
 	var mu sync.Mutex
 	var seen [][]string
-	calls := func() [][]string { mu.Lock(); defer mu.Unlock(); return append([][]string(nil), seen...) }
+	// Only AWS commands count: the setup text asks Docker about the host, which is not an AWS call.
+	calls := func() [][]string {
+		mu.Lock()
+		defer mu.Unlock()
+		var out [][]string
+		for _, c := range seen {
+			if c[0] == "aws" {
+				out = append(out, c)
+			}
+		}
+		return out
+	}
 	reset := func() { mu.Lock(); seen = nil; mu.Unlock() }
 	h.srv.run = func(_ context.Context, name string, args ...string) ([]byte, string, error) {
 		mu.Lock()
