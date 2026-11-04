@@ -208,8 +208,8 @@ function build(close, role) {
       run.text ? renderReply(run.text, { codeBlock }) : null,
       run.error ? errorBox(run.error) : null,
       run.proposals.map(cardFor),
-      run.actions.map(actionCard),
-      run.memories.map(memoryCard),
+      run.actions.map(a => { const k = 'action:' + a.id; if (!cards.has(k)) cards.set(k, actionCard(a)); return cards.get(k); }),
+      run.memories.map(n => { const k = 'memory:' + n.id; if (!cards.has(k)) cards.set(k, memoryCard(n)); return cards.get(k); }),
       run.environments.length ? h('div', { class: amber, 'data-filed': 'environment' }, icon('server', 'mt-0.5 size-4 shrink-0'), h('div', {}, 'Environment requested. Nothing exists until an administrator approves: ',
         h('a', { href: '#/environments', class: 'font-semibold underline', onclick: close }, 'see Environments'))) : null,
       run.status === 'finished' && run.context ? h('div', { class: 'muted text-[11px]' }, 'Based on: ' + run.context) : null);
