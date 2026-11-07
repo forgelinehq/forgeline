@@ -277,7 +277,9 @@ update that asks for different hosts needs a fresh grant.
 | Picture | What it shows |
 | --- | --- |
 | [70-aws-map](70-aws-map.png) | The AWS map on a fake account: grouped navigation, ember colour, resources inside their VPC, and the "needs a look" strip. A stand-in AWS CLI supplied the data |
-| [71-agent-markdown-editor](71-agent-markdown-editor.png) | An agent's instructions in the Markdown editor: toolbar, live preview, advisory checks |
+| [71-agent-markdown-editor](71-agent-markdown-editor.png) | An agent's instructions in the Markdown editor: toolbar, live preview, advisory checks (before note 029) |
+| [82-agent-editor](82-agent-editor.png) | The agent editor after note 029: sections, Advises or Proposes as cards, tools grouped and in plain words |
+| [83-agent-page](83-agent-page.png) | An agent's page after note 029: face, status, instructions, skills, what it can use in plain words, and a chat beside it |
 | [72-integrations-hub](72-integrations-hub.png) | The integrations hub (note 025): cards grouped by category with a status, AWS profiles found on the server by name, and planned systems shown dashed. Stand-in AWS and Claude |
 | [73-integration-test](73-integration-test.png) | The popup of a connected system with the result of a read-only test: each check, what it found, how long it took, and "created nothing, changed nothing" |
 | [74-gcp-explorer](74-gcp-explorer.png) | The Google Cloud tab: connected scope, and the explorer grouped by kind with Vertex AI under an AI group, from a stand-in `gcloud` (made-up resources) |
@@ -296,3 +298,5 @@ The sidebar changed again with the Settings area (note 025): Integrations, Secre
 Retaken after the redesign (grouped menu, ember colour), on stand-ins for AWS, GitHub and AWS sign-in with demo data: 01, 04, 05, 07, 08, 10, 11, 12, 15, 23 (sign-in code and deploy preview), 24, 25 (change succeeded), 26 (audit log), 28 (overview dark and GitHub App connected), 30, 31, 32, 33, 34 to 38, 70 and 71.
 
 Not retaken, so they still show the earlier indigo colour and flat menu: 20, 21 and 22 (they need a real Claude login), and 39 onward (Kubernetes, Guard, environments, marketplace, plugins, signed packages, account writes, API tokens). They are listed above and used only here, not in the guides.
+
+Taken after the visual system of note 029 (warm neutrals, Bricolage Grotesque and IBM Plex served by Forgeline): 82 and 83. Other pictures still show the earlier fonts and the cooler grey.

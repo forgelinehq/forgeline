@@ -46,8 +46,8 @@ function shell() {
     h('a', {
       href: '#' + i.path, onclick: () => sidebar.classList.add('hidden'),
       class: 'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ' + (isActive(i)
-        ? 'bg-brand-50 text-brand-700 dark:bg-brand-500/15 dark:text-brand-200'
-        : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'),
+        ? 'bg-white text-brand-700 shadow-sm ring-1 ring-slate-200 dark:bg-brand-500/15 dark:text-brand-200 dark:ring-0'
+        : 'text-slate-600 hover:bg-slate-200/60 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800'),
       'aria-current': isActive(i) ? 'page' : null,
     }, icon(i.icon, 'size-[18px]'), i.label);
   const renderNav = () => {
@@ -65,9 +65,9 @@ function shell() {
         : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800') }, icon('gear', 'size-[18px]'), 'Settings') : null);
   };
 
-  const sidebar = h('aside', { class: 'fixed inset-y-0 left-0 z-40 hidden w-64 flex-col border-r border-slate-200 bg-white pt-4 lg:flex dark:border-slate-800 dark:bg-slate-900' },
+  const sidebar = h('aside', { class: 'fixed inset-y-0 left-0 z-40 hidden w-64 flex-col border-r border-slate-200 bg-slate-100/80 pt-4 backdrop-blur lg:flex dark:border-slate-800 dark:bg-slate-900' },
     h('a', { href: '#/', class: 'mb-5 flex items-center gap-2.5 px-6' },
-      h('img', { src: '/ui/favicon.svg', alt: '', class: 'size-8' }), h('span', { class: 'text-lg font-semibold tracking-tight' }, 'Forgeline')),
+      h('img', { src: '/ui/favicon.svg', alt: '', class: 'size-8' }), h('span', { class: 'font-display text-xl font-bold tracking-tight' }, 'Forgeline')),
     nav, gearSlot,
     h('div', { class: 'border-t border-slate-200 p-4 text-xs text-slate-500 dark:border-slate-800 dark:text-slate-400' }, h('div', { id: 'build-info' }, 'Delivery where AI agents run safely')));
 

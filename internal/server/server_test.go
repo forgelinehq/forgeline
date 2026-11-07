@@ -668,6 +668,9 @@ func TestUIIsServedWithStrictHeaders(t *testing.T) {
 		{"/ui/app.css", "text/css", "tailwindcss v4.3.3"},
 		{"/ui/lib/dom.js", "text/javascript", "no innerHTML anywhere"},
 		{"/ui/pages/infra.js", "text/javascript", "Cloud changes"},
+		{"/ui/fonts/ibm-plex-sans.woff2", "font/woff2", "wOF2"},       // served by Forgeline itself, so the CSP can stay 'self'
+		{"/ui/fonts/bricolage-grotesque.woff2", "font/woff2", "wOF2"}, // design note 029
+		{"/ui/fonts/LICENSE-OFL.txt", "text/plain", "SIL Open Font License"},
 	}
 	for _, tt := range tests {
 		resp, body := h.do("GET", tt.path, "", nil, "") // the page itself needs no token; the API does
@@ -682,7 +685,7 @@ func TestUIIsServedWithStrictHeaders(t *testing.T) {
 			t.Errorf("%s: body does not contain %q", tt.path, tt.wantBody)
 		}
 		csp := resp.Header.Get("Content-Security-Policy")
-		for _, want := range []string{"default-src 'none'", "script-src 'self'", "frame-ancestors 'none'"} {
+		for _, want := range []string{"default-src 'none'", "script-src 'self'", "font-src 'self';", "frame-ancestors 'none'"} {
 			if !strings.Contains(csp, want) {
 				t.Errorf("%s: CSP %q lacks %q", tt.path, csp, want)
 			}

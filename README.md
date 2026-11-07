@@ -22,7 +22,8 @@ see the Docker host, connect an AWS account, and propose cloud changes that a se
 must approve. The first page, **Home**, lists what needs you (changes to approve, failed pipelines,
 serious security findings, broken connections); the sidebar groups the rest by job: Ship, Build, Team
 and Watch, with setup behind the Settings gear. In Settings › Integrations › AWS › Access you choose
-which AWS services (S3, ECS, ECR and so on) the assistant and agents may use at all. [Screenshots](docs/console/README.md) and [design note 006](docs/design/006-console.md)
+which AWS services (S3, ECS, ECR and so on) the assistant and agents may use at all. The console
+serves its own fonts and loads nothing from other hosts. [Screenshots](docs/console/README.md) and [design note 006](docs/design/006-console.md)
 show what each page does and what has not been checked.
 
 Accounts, pipelines, secrets and settings are kept in `<data-dir>/console.json`, encrypted where

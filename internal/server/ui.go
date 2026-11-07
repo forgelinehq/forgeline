@@ -16,7 +16,7 @@ var uiFiles embed.FS
 // this server. There is no inline script or style, and pages cannot be framed. Pipeline
 // names, step names and log output are untrusted, so the UI also inserts them as text only.
 const contentSecurityPolicy = "default-src 'none'; script-src 'self'; style-src 'self'; " +
-	"connect-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+	"connect-src 'self'; img-src 'self' data:; font-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
 
 // uiHandler serves the embedded web UI: the page at "/" and its assets under "/ui/".
 func uiHandler() (index, assets http.Handler) {

@@ -71,6 +71,7 @@ const ICONS = {
   lock: 'M6 11h12v9H6zM8 11V8a4 4 0 0 1 8 0v3',
   bolt: 'M13 2 4 14h7l-1 8 9-12h-7z',
   box: 'M21 8 12 3 3 8v8l9 5 9-5zM3 8l9 5 9-5M12 13v8',
+  search: 'M10.5 4a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13zM20 20l-4.8-4.8',
   sparkle: 'M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM19 16l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z',
   send: 'M4 12 20 4l-6 16-3-7z',
   gear: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z',
@@ -177,14 +178,14 @@ export function toast(message, kind = 'info') {
 }
 
 /** Opens a modal. build(close) returns the dialog body; resolves when closed. */
-export function modal(title, build, { wide = false } = {}) {
+export function modal(title, build, { wide = false, xl = false } = {}) {
   return new Promise(resolve => {
     const prev = document.activeElement;
     const close = (value) => { overlay.remove(); document.removeEventListener('keydown', onKey); prev && prev.focus && prev.focus(); resolve(value); };
     const onKey = (e) => { if (e.key === 'Escape') close(undefined); };
-    const panel = h('div', { class: 'w-full ' + (wide ? 'max-w-3xl' : 'max-w-lg') + ' max-h-[90vh] overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900', role: 'dialog', 'aria-modal': 'true', 'aria-label': title },
-      h('div', { class: 'flex items-center justify-between border-b border-slate-200 px-5 py-3.5 dark:border-slate-800' },
-        h('h2', { class: 'text-base font-semibold' }, title),
+    const panel = h('div', { class: 'w-full ' + (xl ? 'max-w-5xl' : wide ? 'max-w-3xl' : 'max-w-lg') + ' max-h-[90vh] overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900', role: 'dialog', 'aria-modal': 'true', 'aria-label': title },
+      h('div', { class: 'sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white/95 px-5 py-3.5 backdrop-blur dark:border-slate-800 dark:bg-slate-900/95' },
+        h('h2', { class: 'font-display text-lg font-bold' }, title),
         h('button', { class: 'btn-ghost btn-sm', type: 'button', 'aria-label': 'Close', onclick: () => close(undefined) }, icon('x'))),
       // A form, so Enter submits (it presses the primary button) and password managers behave.
       h('form', { class: 'p-5', novalidate: true, onsubmit: (e) => { e.preventDefault(); const go = e.target.querySelector('button.btn-primary, button.btn-danger'); if (go && !go.disabled) go.click(); } }, build(close)));
@@ -249,5 +250,5 @@ export function copyButton(text, label = 'Copy') {
 export function kpi(label, value, sub, tone) {
   const toneCls = tone === 'bad' ? 'text-rose-600 dark:text-rose-400' : tone === 'ok' ? 'text-emerald-600 dark:text-emerald-400' : tone === 'run' ? 'text-sky-600 dark:text-sky-400' : '';
   return h('div', { class: 'card card-pad' }, h('div', { class: 'h-section' }, label),
-    h('div', { class: 'mt-2 text-3xl font-semibold tabular-nums ' + toneCls }, value), sub && h('div', { class: 'muted mt-1 text-xs' }, sub));
+    h('div', { class: 'mt-2 font-display text-3xl font-bold tabular-nums ' + toneCls }, value), sub && h('div', { class: 'muted mt-1 text-xs' }, sub));
 }
