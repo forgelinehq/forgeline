@@ -38,6 +38,16 @@ The full plan has six phases. Each starts with its own note where it changes tru
 5. **Autonomy and recovery:** a snapshot before every apply, restore as an approved change, weekly restore drills. Applying without approval in sandbox environments is **not decided**: it changes note 006 and needs its own note and the maintainer's yes.
 6. **More targets:** Kubernetes (Helm), then Google Cloud and Azure through OpenTofu.
 
+## Slice 2: the visual system, the assistant and agents (built 2026-11-07)
+
+| Decision | Choice |
+| --- | --- |
+| Neutrals | Every grey is a Tailwind `slate` shade, so the scale is redefined once in `web/tailwind.css` with a warm hue. Lightness matches slate step for step, so contrast stays where it was |
+| Type | Bricolage Grotesque for page titles, figures and the brand; IBM Plex Sans for the interface; IBM Plex Mono for code and section labels. Served by Forgeline from `ui/fonts` (SIL Open Font License, text in `ui/fonts/LICENSE-OFL.txt`); the CSP gains `font-src 'self'` and nothing else |
+| Assistant | A welcome that says what it can do (explain, prepare, propose) and what it cannot; each lookup as a sentence with the technical detail one click away (`ui/lib/steplabel.js`), folded into "Looked at N things" when done; a composer with the send button inside; labelled header buttons |
+| Agents | A face per agent, On/Off and Advises/Proposes in words, tools grouped by what they touch and named in plain words (`ui/lib/tools.js`); the editor in sections, tiers as two cards, tools and skills as check cards with what each does; the Markdown editor as one framed box |
+| Tested | Under Node: every tool the server offers has a sentence and a group (a new tool without words fails the test), labels, summaries, grouping, the schema stripped from help, tiers |
+
 ## Decisions taken since (2026-11-07)
 
 The maintainer chose an enterprise focus; the open questions below are settled in [note 030](030-service-switches.md): no automatic apply anywhere, OpenTofu, our own graph layout without elkjs, coding engines later. Service switches (phase 2) are built.

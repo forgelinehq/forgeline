@@ -308,7 +308,8 @@ Design: [docs/design/006-console.md](design/006-console.md). Pictures: [docs/con
 > Agentic missions (discover, propose, approve, apply, verify; ECS to IaC, CI/CD and canary as the worked example) are in `docs/design/014-agentic-missions.md`. AI use cases and how Claude can reach our infrastructure safely are in `docs/design/013-ai-use-cases.md`. Market research (2026-10-30) is in `docs/design/012-market-research.md`: pain points, enterprise gaps, integrations, a UI plan and a ranked backlog of 16 items. Pick from its ranking once the items below that need a real-service check are done or blocked.
 
 > **Console redesign (notes 029 and 030, 2026-11-07), enterprise focus.** Built: the sidebar grouped into
-> Home, Ship, Build, Team and Watch; Home's Needs you list; AWS service switches for the AI. Decided: no
+> Home, Ship, Build, Team and Watch; Home's Needs you list; AWS service switches for the AI; the visual
+> system (warm neutrals, self-served fonts), the assistant panel and the agent and skill screens. Decided: no
 > automatic apply anywhere, OpenTofu for blueprints, our own graph layout, Codex and Copilot later. Next, in
 > order: single sign-on (OIDC, group-to-role mapping), approval rules, audit export and retention; then
 > foundations (tokens, component kit, one SVG graph component, Playwright screenshot suite), blueprints and

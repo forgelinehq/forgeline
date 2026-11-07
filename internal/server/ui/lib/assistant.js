@@ -6,6 +6,7 @@ import { currentPath, navigate } from './router.js';
 import { renderReply } from './mdview.js';
 import { newRun, applyEvent, progressLabel } from './runstate.js';
 import { dockWidth, wideDockWidth, floatRect, readPrefs } from './panelgeom.js';
+import { stepLabel, stepsSummary } from './steplabel.js';
 
 const DRAFT_KEY = 'forgeline-draft';
 
@@ -16,8 +17,8 @@ function pageContext() {
   if (m) return { kind: 'run', id: decodeURIComponent(m[1]), label: 'this run' };
   m = p.match(/^\/pipelines\/([^/]+)$/);
   if (m && m[1] !== 'new') return { kind: 'pipeline', id: decodeURIComponent(m[1]), label: 'this pipeline' };
-  if (p === '/infrastructure') return { kind: 'infra', id: '', label: 'the infrastructure' };
-  return { kind: 'none', id: '', label: 'the overview' };
+  if (p === '/infrastructure') return { kind: 'infra', id: '', label: 'your infrastructure' };
+  return { kind: 'none', id: '', label: 'Home' };
 }
 
 const SUGGESTIONS = {
@@ -56,8 +57,8 @@ function build(close, role) {
   const prefs = loadPrefs();
   const list = h('div', { class: 'min-h-0 flex-1 space-y-5 overflow-y-auto px-4 py-4', 'aria-live': 'polite', id: 'assistant-thread' });
   const ctxLabel = h('span', { class: 'font-medium' });
-  const input = h('textarea', { id: 'assistant-input', class: 'input min-h-[2.75rem] flex-1 resize-none', rows: '2', maxlength: '4000', placeholder: 'Ask about this page…', 'aria-label': 'Your question' });
-  const sendBtn = h('button', { class: 'btn-primary', type: 'submit', 'aria-label': 'Send' }, icon('send'));
+  const input = h('textarea', { id: 'assistant-input', class: 'block max-h-40 min-h-[2.5rem] flex-1 resize-none bg-transparent py-2 text-sm placeholder:text-slate-400 focus:outline-none', rows: '1', maxlength: '4000', placeholder: 'Ask anything, or tell me what to set up…', 'aria-label': 'Your question' });
+  const sendBtn = h('button', { class: 'btn-primary size-9 shrink-0 rounded-xl p-0', type: 'submit', 'aria-label': 'Send', title: 'Send' }, icon('send'));
   let busy = false, ready = null;
 
   const refreshCtx = () => { ctxLabel.textContent = pageContext().label; };
@@ -65,7 +66,7 @@ function build(close, role) {
   addEventListener('hashchange', refreshCtx);
 
   function userBubble(text) {
-    return h('div', { class: 'flex justify-end' }, h('div', { class: 'max-w-[85%] whitespace-pre-wrap break-words rounded-xl bg-brand-600 px-3.5 py-2.5 text-sm text-white' }, text));
+    return h('div', { class: 'flex justify-end' }, h('div', { class: 'max-w-[85%] whitespace-pre-wrap break-words rounded-2xl rounded-br-md bg-slate-900 px-3.5 py-2.5 text-sm text-white dark:bg-slate-700' }, text));
   }
 
   /** A code block with Copy, and for YAML a way to open it as a new pipeline. */
@@ -89,15 +90,31 @@ function build(close, role) {
   };
   const STEP_WORD = { running: 'running', done: 'done', failed: 'failed' };
 
-  /** One lookup: its name, what it was asked, its state, and the cut of the result on demand. */
+  /** One lookup in plain words; the tool's name, arguments and the cut of its result are one click away. */
   function stepCard(st, opened) {
-    return h('details', { class: 'rounded-lg border border-slate-200 bg-slate-50 text-xs dark:border-slate-700 dark:bg-slate-800/60', 'data-step': st.name, 'data-status': st.status, open: opened.has(st.id),
+    const l = stepLabel(st.name, st.args, st.status);
+    return h('details', { class: 'group rounded-lg text-xs', 'data-step': st.name, 'data-status': st.status, open: opened.has(st.id),
       ontoggle: (e) => { if (e.target.open) opened.add(st.id); else opened.delete(st.id); } },
-      h('summary', { class: 'flex cursor-pointer items-center gap-2 px-2.5 py-1.5' },
+      h('summary', { class: 'flex cursor-pointer list-none items-center gap-2 rounded-lg px-2 py-1 hover:bg-slate-100 dark:hover:bg-slate-800' },
         STEP_ICON[st.status](), h('span', { class: 'sr-only' }, STEP_WORD[st.status]),
-        icon('tool', 'size-3 shrink-0 text-slate-400'), h('span', { class: 'shrink-0 font-mono font-medium' }, st.name),
-        st.args ? h('span', { class: 'muted min-w-0 truncate font-mono' }, st.args) : null),
-      st.result ? h('pre', { class: 'max-h-60 overflow-auto whitespace-pre-wrap break-words border-t border-slate-200 p-2.5 font-mono text-[11px] leading-relaxed dark:border-slate-700' }, st.result) : null);
+        h('span', { class: 'text-slate-700 dark:text-slate-300' }, l.text),
+        l.detail ? h('span', { class: 'muted min-w-0 truncate' }, l.detail) : null,
+        icon('chevron', 'ml-auto size-3 shrink-0 text-slate-400 transition-transform group-open:rotate-90')),
+      h('div', { class: 'ml-6 mt-1 space-y-1 rounded-lg border border-slate-200 bg-slate-50 p-2.5 dark:border-slate-700 dark:bg-slate-800/60' },
+        h('div', { class: 'font-mono text-[11px]' }, h('span', { class: 'font-semibold' }, st.name), st.args ? h('span', { class: 'muted' }, ' ' + st.args) : null),
+        st.result ? h('pre', { class: 'max-h-60 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed' }, st.result) : h('div', { class: 'muted' }, st.status === 'running' ? 'Waiting for the answer…' : 'No result.')));
+  }
+
+  /** The steps of one answer: open while it works, folded into one line once it is done. */
+  function stepsBlock(run, opened) {
+    if (!run.steps.length) return null;
+    const working = run.steps.some(st => st.status === 'running') || run.status === 'running';
+    const key = 'steps';
+    return h('details', { class: 'group/steps', open: working || opened.has(key), 'aria-label': 'What the assistant looked at',
+      ontoggle: (e) => { if (e.target.open) opened.add(key); else opened.delete(key); } },
+      h('summary', { class: 'muted flex cursor-pointer list-none items-center gap-1.5 text-xs' }, icon('search', 'size-3.5'), stepsSummary(run.steps),
+        icon('chevron', 'size-3 transition-transform group-open/steps:rotate-90')),
+      h('div', { class: 'mt-1.5 space-y-0.5 border-l-2 border-slate-200 pl-2 dark:border-slate-700' }, run.steps.map(st => stepCard(st, opened))));
   }
 
   /**
@@ -200,12 +217,12 @@ function build(close, role) {
     const cardFor = (id) => { if (!cards.has(id)) cards.set(id, proposalCard(id)); return cards.get(id); };
     const label = progressLabel(run);
     return h('div', { class: 'space-y-3' },
-      run.steps.length ? h('div', { class: 'space-y-1.5', 'aria-label': 'What the assistant looked up' }, run.steps.map(st => stepCard(st, opened))) : null,
+      stepsBlock(run, opened),
       run.approvals.filter(a => a.state === 'waiting').map(approvalCard),
       label ? h('div', { class: 'flex items-center gap-2 text-sm muted', role: 'status' }, h('span', { class: 'size-2 animate-pulse-dot rounded-full bg-brand-500' }), label,
         h('button', { class: 'btn-ghost btn-sm ml-auto', type: 'button', id: 'assistant-stop', onclick: stop }, icon('stop', 'size-3'), 'Stop')) : null,
       run.status === 'stopped' ? h('p', { class: 'muted text-xs' }, 'Stopped. Nothing more was looked up.') : null,
-      run.text ? renderReply(run.text, { codeBlock }) : null,
+      run.text ? h('div', { class: 'text-sm leading-relaxed' }, renderReply(run.text, { codeBlock })) : null,
       run.error ? errorBox(run.error) : null,
       run.proposals.map(cardFor),
       run.actions.map(a => { const k = 'action:' + a.id; if (!cards.has(k)) cards.set(k, actionCard(a)); return cards.get(k); }),
@@ -217,10 +234,20 @@ function build(close, role) {
 
   function empty() {
     const c = pageContext();
-    mount(list, h('div', { class: 'space-y-3 text-sm' },
-      h('p', { class: 'muted' }, 'I can explain failures, review pipelines, and set things up here: I prepare a pipeline or a run and you press Confirm. I cannot change your cloud myself (I file a proposal for another administrator), and I never see secret values.'),
-      h('div', { class: 'flex flex-col gap-2' }, (SUGGESTIONS[c.kind] || SUGGESTIONS.none).map(q =>
-        h('button', { class: 'btn-secondary justify-start text-left', type: 'button', onclick: () => ask(q) }, q)))));
+    const can = (ic, title, text) => h('li', { class: 'flex gap-3' },
+      h('span', { class: 'mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-700 dark:bg-brand-500/15 dark:text-brand-200' }, icon(ic, 'size-4')),
+      h('div', {}, h('div', { class: 'font-medium' }, title), h('div', { class: 'muted text-xs' }, text)));
+    mount(list, h('div', { class: 'space-y-5 text-sm', id: 'assistant-welcome' },
+      h('div', {}, h('h3', { class: 'font-display text-lg font-bold' }, 'How can I help?'),
+        h('p', { class: 'muted text-xs' }, 'I can see ' + c.label + ' and what your role can see. I never see secret values.')),
+      h('ul', { class: 'space-y-3' },
+        can('search', 'Explain', 'Why a run failed, what is running in your cloud, what needs attention.'),
+        can('flow', 'Prepare', 'Pipelines, runs and environments. Nothing happens until you press Confirm.'),
+        can('shield', 'Propose', 'Cloud changes go to a different administrator to approve. I cannot change your cloud myself.')),
+      h('div', {}, h('div', { class: 'h-section mb-2' }, 'Try asking'),
+        h('div', { class: 'flex flex-col gap-2' }, (SUGGESTIONS[c.kind] || SUGGESTIONS.none).map(q =>
+          h('button', { class: 'flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-left text-sm transition-colors hover:border-brand-300 hover:bg-brand-50/50 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-brand-500/50', type: 'button', onclick: () => ask(q) },
+            icon('sparkle', 'size-3.5 shrink-0 text-brand-600 dark:text-brand-300'), h('span', {}, q)))))));
   }
 
   async function ask(question) {
@@ -287,23 +314,30 @@ function build(close, role) {
     restore();
   }
 
-  const form = h('form', { class: 'flex items-end gap-2 border-t border-slate-200 p-3 dark:border-slate-800', onsubmit: (e) => { e.preventDefault(); ask(); } }, input, sendBtn);
+  const form = h('form', { class: 'shrink-0 border-t border-slate-200 p-3 dark:border-slate-800', onsubmit: (e) => { e.preventDefault(); ask(); } },
+    h('div', { class: 'flex items-end gap-2 rounded-2xl border border-slate-300 bg-white p-1.5 pl-3 shadow-sm focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-500/25 dark:border-slate-700 dark:bg-slate-900' }, input, sendBtn),
+    h('div', { class: 'muted mt-1.5 px-1 text-[11px]' }, 'Enter to send, Shift and Enter for a new line. Every answer is saved in your conversations.'));
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); form.requestSubmit(); } });
 
   const root = document.documentElement;
-  const modeBtn = h('button', { class: 'btn-ghost btn-sm', type: 'button', id: 'assistant-mode', onclick: () => { prefs.mode = prefs.mode === 'dock' ? 'float' : 'dock'; savePrefs(prefs); layout(); } });
-  const wideBtn = h('button', { class: 'btn-ghost btn-sm', type: 'button', id: 'assistant-wide', onclick: () => {
+  const modeBtn = h('button', { class: 'btn-ghost btn-sm size-8 p-0', type: 'button', id: 'assistant-mode', onclick: () => { prefs.mode = prefs.mode === 'dock' ? 'float' : 'dock'; savePrefs(prefs); layout(); } });
+  const wideBtn = h('button', { class: 'btn-ghost btn-sm size-8 p-0', type: 'button', id: 'assistant-wide', onclick: () => {
     prefs.dockW = dockWidth(prefs.dockW, innerWidth) >= wideDockWidth(innerWidth) ? 520 : wideDockWidth(innerWidth);
     savePrefs(prefs); layout();
   } });
   const handle = h('div', { class: 'absolute inset-y-0 -left-1.5 z-10 hidden w-3 cursor-col-resize touch-none after:absolute after:inset-y-0 after:left-1 after:w-0.5 after:bg-transparent hover:after:bg-brand-500 focus-visible:after:bg-brand-500', id: 'assistant-resize',
     role: 'separator', 'aria-orientation': 'vertical', 'aria-label': 'Resize the assistant. Use the left and right arrow keys.', tabindex: '0' });
-  const header = h('div', { class: 'flex shrink-0 items-center justify-between border-b border-slate-200 px-4 py-3 dark:border-slate-800', id: 'assistant-header' },
-    h('div', {}, h('div', { class: 'flex items-center gap-2 text-sm font-semibold' }, icon('sparkle'), 'Assistant'), h('div', { class: 'muted text-xs' }, 'Looking at ', ctxLabel)),
-    h('div', { class: 'flex gap-1' }, wideBtn, modeBtn,
-      h('button', { class: 'btn-ghost btn-sm', type: 'button', id: 'assistant-history', 'aria-label': 'Your past conversations', onclick: showHistory }, icon('history')),
-      h('button', { class: 'btn-ghost btn-sm', type: 'button', 'aria-label': 'Clear the conversation', onclick: () => { history.length = 0; conversation = ''; empty(); } }, icon('refresh')),
-      h('button', { class: 'btn-ghost btn-sm', type: 'button', 'aria-label': 'Close the assistant', onclick: close }, icon('x'))));
+  const hdrBtn = (props, ic) => h('button', { class: 'btn-ghost btn-sm size-8 p-0', type: 'button', title: props['aria-label'], ...props }, icon(ic));
+  const header = h('div', { class: 'flex shrink-0 items-center justify-between gap-2 border-b border-slate-200 px-4 py-3 dark:border-slate-800', id: 'assistant-header' },
+    h('div', { class: 'flex min-w-0 items-center gap-2.5' },
+      h('span', { class: 'flex size-8 shrink-0 items-center justify-center rounded-lg bg-brand-600 text-white' }, icon('sparkle', 'size-4')),
+      h('div', { class: 'min-w-0' }, h('div', { class: 'font-display text-[15px] font-bold leading-tight' }, 'Assistant'), h('div', { class: 'muted truncate text-xs' }, 'Looking at ', ctxLabel))),
+    h('div', { class: 'flex items-center gap-0.5' },
+      h('button', { class: 'btn-ghost btn-sm', type: 'button', id: 'assistant-new', title: 'Start a new conversation', onclick: () => { history.length = 0; conversation = ''; empty(); } }, icon('plus', 'size-3.5'), h('span', { class: 'hidden sm:inline' }, 'New')),
+      hdrBtn({ id: 'assistant-history', 'aria-label': 'Your past conversations', onclick: showHistory }, 'history'),
+      h('span', { class: 'mx-1 h-5 w-px bg-slate-200 dark:bg-slate-700', 'aria-hidden': 'true' }),
+      wideBtn, modeBtn,
+      hdrBtn({ 'aria-label': 'Close the assistant', onclick: close }, 'x')));
   const panel = h('aside', { class: DOCK_CLASS, role: 'dialog', 'aria-label': 'Assistant', id: 'assistant-panel' }, handle, header, list, form);
   panel.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
 
@@ -326,9 +360,9 @@ function build(close, role) {
     const wide = docked && prefs.dockW >= wideDockWidth(vw);
     wideBtn.classList.toggle('hidden', !docked);
     wideBtn.replaceChildren(icon(wide ? 'shrink' : 'expand'));
-    wideBtn.setAttribute('aria-label', wide ? 'Make the assistant narrower' : 'Make the assistant wider');
+    wideBtn.setAttribute('aria-label', wide ? 'Make the assistant narrower' : 'Make the assistant wider'); wideBtn.title = wideBtn.getAttribute('aria-label');
     modeBtn.replaceChildren(icon(docked ? 'window' : 'dock'));
-    modeBtn.setAttribute('aria-label', docked ? 'Float the assistant as a window' : 'Dock the assistant to the side');
+    modeBtn.setAttribute('aria-label', docked ? 'Float the assistant as a window' : 'Dock the assistant to the side'); modeBtn.title = modeBtn.getAttribute('aria-label');
     header.classList.toggle('cursor-move', !docked);
   }
 
