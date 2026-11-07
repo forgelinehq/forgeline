@@ -189,11 +189,33 @@ func (s *Server) lookupAWSResources(ctx context.Context, raw json.RawMessage) (s
 	if !st.Enabled {
 		return "", errors.New("AWS is not connected to this Forgeline server")
 	}
+	off, err := s.awsServicesOff(ctx)
+	if err != nil {
+		return "", errors.New("the access policy could not be read, so AWS resources are not shown until it can")
+	}
 	d := s.inventoryFor(ctx, a.Account, st, false)
 	if d.Error != "" {
 		return "", errors.New(d.Error)
 	}
-	return formatInventory(fmt.Sprintf("Account %s (id %q), region %s, read %s. Counts include every resource; names are listed up to %d per service.", d.Account, a.Account, d.Region, d.FetchedAt, inventoryMax), d, a.Service)
+	d = withoutOffServices(d, off)
+	text, err := formatInventory(fmt.Sprintf("Account %s (id %q), region %s, read %s. Counts include every resource; names are listed up to %d per service.", d.Account, a.Account, d.Region, d.FetchedAt, inventoryMax), d, a.Service)
+	return text + offServicesNote(off), err
+}
+
+// withoutOffServices drops the services an administrator turned off for the AI (note 030). It copies the
+// list, so the cached inventory the explorer shows people is not changed.
+func withoutOffServices(d AWSInventoryJSON, off map[string]bool) AWSInventoryJSON {
+	if len(off) == 0 {
+		return d
+	}
+	kept := make([]AWSServiceJSON, 0, len(d.Services))
+	for _, svc := range d.Services {
+		if !off[awsSwitchForInventory(svc.ID)] {
+			kept = append(kept, svc)
+		}
+	}
+	d.Services = kept
+	return d
 }
 
 // formatInventory renders an inventory as compact text for the assistant and agents. A service filter

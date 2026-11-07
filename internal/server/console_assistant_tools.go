@@ -165,6 +165,9 @@ func (s *Server) runLookup(ctx context.Context, p Principal, c lookupCall) (stri
 		if err := s.policyGate(ctx, p, c); err != nil {
 			return "", err
 		}
+		if err := s.servicesGate(ctx, p, c); err != nil {
+			return "", err
+		}
 		if needsMCP(t.name) && !s.loadAWSMCP(ctx).Enabled {
 			return "", fmt.Errorf("%s needs the AWS MCP Server, which is not turned on", t.name)
 		}

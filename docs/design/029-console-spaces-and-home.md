@@ -38,7 +38,11 @@ The full plan has six phases. Each starts with its own note where it changes tru
 5. **Autonomy and recovery:** a snapshot before every apply, restore as an approved change, weekly restore drills. Applying without approval in sandbox environments is **not decided**: it changes note 006 and needs its own note and the maintainer's yes.
 6. **More targets:** Kubernetes (Helm), then Google Cloud and Azure through OpenTofu.
 
-## Open decisions (for the maintainer)
+## Decisions taken since (2026-11-07)
+
+The maintainer chose an enterprise focus; the open questions below are settled in [note 030](030-service-switches.md): no automatic apply anywhere, OpenTofu, our own graph layout without elkjs, coding engines later. Service switches (phase 2) are built.
+
+## Open decisions at the time (for the record)
 
 - Whether agents may apply changes without approval in sandbox environments (separate account, cost cap, time limit). Production stays approval-only either way.
 - OpenTofu as the code generated from blueprints (recommended; MPL-2.0).

@@ -30,7 +30,7 @@ eq('settings open for developers and administrators only', [canOpenSettings('vie
 // Planned entries are shown but are never links.
 const planned = SETTINGS.flatMap(g => g.items).filter(i => i.planned);
 eq('planned entries have no path', planned.every(i => !i.path), true);
-eq('planned entries are listed for administrators', visibleGroups('admin').flatMap(g => g.items).filter(i => i.planned).map(i => i.label), ['Sign-in (SSO)', 'Access policy', 'Budgets and limits', 'Approval rules']);
+eq('planned entries are listed for administrators', visibleGroups('admin').flatMap(g => g.items).filter(i => i.planned).map(i => i.label), ['Sign-in (SSO)', 'Budgets and limits', 'Approval rules']);
 eq('a real page is never marked planned', SETTINGS.flatMap(g => g.items).filter(i => i.path).every(i => !i.planned && i.min), true);
 
 // Which pages are part of Settings.

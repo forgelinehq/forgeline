@@ -10,13 +10,12 @@ export const SETTINGS = [
     { label: 'Sign-in (SSO)', note: 'Let people sign in with the company login', planned: true },
   ] },
   { title: 'Connections', items: [
-    { path: '/integrations', label: 'Integrations', note: 'GitHub, AWS, Docker, Kubernetes, Claude and what is coming', min: 'developer', also: ['/integrations/'] },
+    { path: '/integrations', label: 'Integrations', note: 'GitHub, AWS, Docker, Kubernetes, Claude; and in each one\'s Access tab, what the AI may use', min: 'developer', also: ['/integrations/'] },
     { path: '/secrets', label: 'Secrets', note: 'Keys and tokens, stored encrypted and never shown again', min: 'developer' },
   ] },
   { title: 'AI', items: [
     { path: '/integrations/claude/settings', label: 'Models', note: 'Which model answers the assistant and agents', min: 'developer' },
     { path: '/memory', label: 'Memory', note: 'What the assistant remembers about you and this system, and your conversations', min: 'developer' },
-    { label: 'Access policy', note: 'What each agent may do with each connection: Allow, Needs approval or Blocked', planned: true },
     { label: 'Budgets and limits', note: 'How much each agent may spend', planned: true },
   ] },
   { title: 'Security', items: [

@@ -129,6 +129,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /v1/integrations/{id}/activity", s.requireRole(authn.Admin, s.handleIntegrationActivity))
 	mux.Handle("GET /v1/integrations/{id}/policy", s.requireRole(authn.Developer, s.handleGetPolicy))
 	mux.Handle("PUT /v1/integrations/{id}/policy", s.requireRole(authn.Admin, s.handlePutPolicy))
+	mux.Handle("PUT /v1/integrations/{id}/services", s.requireRole(authn.Admin, s.handlePutServices))
 	mux.Handle("GET /v1/integrations/azure", s.requireRole(authn.Developer, s.handleGetAzure))
 	mux.Handle("PUT /v1/integrations/azure", s.requireRole(authn.Admin, s.handlePutAzure))
 	mux.Handle("GET /v1/infra/azure/resources", s.requireRole(authn.Viewer, s.handleAzureInventory))
