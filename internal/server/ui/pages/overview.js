@@ -3,14 +3,33 @@ import { versionLabel } from '../lib/version.js';
 import { get, post, atLeast } from '../lib/api.js';
 import { navigate } from '../lib/router.js';
 import { session } from '../app.js';
+import { buildInbox, pulse } from '../lib/inbox.js';
 
 export async function overviewPage() {
   const el = h('div', {});
   let timer = null;
   let first = true;
+  let extra = {}; // the inbox's other sources, read every INBOX_EVERY loads
+  let loads = 0;
+  const INBOX_EVERY = 8; // 8 × 4 s: approvals, findings and connections change slowly
+
+  // Each source is read only when this role may read it, and a failed read leaves it out: the
+  // inbox then says less, never something wrong.
+  async function loadExtra() {
+    const dev = atLeast(session.role, 'developer');
+    const [proposals, changes, findings, scans, integrations] = await Promise.all([
+      get('/v1/ai/proposals').catch(() => null),
+      get('/v1/cloud/changes').catch(() => null),
+      get('/v1/guard/findings').catch(() => null),
+      get('/v1/guard/scans').catch(() => null),
+      dev ? get('/v1/integrations').catch(() => null) : null,
+    ]);
+    extra = { proposals: proposals?.proposals, changes: changes?.changes, findings, scans, integrations };
+  }
 
   async function load() {
     try {
+      if (loads++ % INBOX_EVERY === 0) await loadExtra();
       const [ov, rt] = await Promise.all([get('/v1/overview'), get('/v1/infra/runtime').catch(() => null)]);
       render(ov, rt);
     } catch (e) {
@@ -54,17 +73,19 @@ export async function overviewPage() {
       h('td', { class: 'whitespace-nowrap text-sm tabular-nums' }, duration(r.started_at, r.finished_at) || '–'),
       h('td', { class: 'muted whitespace-nowrap text-sm', title: absTime(r.created_at) }, relTime(r.created_at))));
 
+    const inbox = buildInbox({ ...extra, overview: ov }, { name: session.name, role: session.role });
+    const pl = pulse({ ...extra, overview: ov }, inbox);
+
     mount(el,
-      pageHeader('Overview', 'What is running, what is failing, and how the platform is doing.',
+      pageHeader('Home', 'What needs you, and how everything is doing.',
         canRun && h('a', { href: '#/pipelines/new', class: 'btn-primary' }, icon('plus'), 'New pipeline')),
-      h('div', { class: 'grid grid-cols-2 gap-4 lg:grid-cols-4' },
-        kpi('Running', t.running, 'steps executing now', t.running ? 'run' : null),
-        kpi('Queued', t.queued, 'waiting for a worker'),
-        kpi('Success rate', pct(rate), `${t.succeeded} passed · ${t.failed} failed · last ${t.window} runs`, rate == null ? null : rate >= 0.9 ? 'ok' : rate < 0.6 ? 'bad' : null),
-        kpi('Failed', t.failed, 'in the same window', t.failed ? 'bad' : null)),
+      pulseTiles(pl),
+      inboxSection(inbox),
       platformStrip(rt),
       h('section', { class: 'mt-8' },
-        h('h2', { class: 'h-section mb-3' }, 'Pipelines'),
+        h('div', { class: 'mb-3 flex flex-wrap items-baseline justify-between gap-2' },
+          h('h2', { class: 'h-section' }, 'Pipelines'),
+          h('span', { class: 'muted text-xs tabular-nums' }, `${t.running} running · ${t.queued} queued · ${pct(rate)} passed of the last ${t.window} runs`)),
         h('div', { class: 'card overflow-x-auto' }, ov.pipelines.length
           ? h('table', { class: 'tbl' }, h('thead', {}, h('tr', {}, ['Pipeline', 'Status', 'Last 12 runs', 'Success', 'Avg time', 'Last run', ''].map(x => h('th', {}, x)))), h('tbody', {}, pipelineRows))
           : emptyState('flow', 'No pipelines yet', 'Create your first pipeline in the editor, or send one from the command line.',
@@ -73,6 +94,41 @@ export async function overviewPage() {
         h('h2', { class: 'h-section mb-3' }, 'Recent runs'),
         h('div', { class: 'card overflow-x-auto' }, h('table', { class: 'tbl' },
           h('thead', {}, h('tr', {}, ['Pipeline', 'Status', 'Started by', 'Duration', 'When'].map(x => h('th', {}, x)))), h('tbody', {}, recentRows)))));
+  }
+
+  function pulseTiles(pl) {
+    const tiles = [];
+    tiles.push(kpi('Approvals', pl.act, pl.act ? 'waiting for you' : (pl.waiting ? pl.waiting + ' waiting on someone else' : 'nothing waiting'), pl.act ? 'bad' : null));
+    if (pl.pipelines) tiles.push(kpi('Pipelines', pl.pipelines.ran ? `${pl.pipelines.healthy} of ${pl.pipelines.ran}` : '–',
+      pl.pipelines.ran ? 'passed on their last run' : (pl.pipelines.total ? 'none has run yet' : 'none saved yet'),
+      pl.pipelines.ran ? (pl.pipelines.healthy === pl.pipelines.ran ? 'ok' : 'bad') : null));
+    const sec = pl.security;
+    if (sec && sec.scanned === false) tiles.push(kpi('Security', '–', 'Guard has not scanned yet'));
+    else if (sec) tiles.push(kpi('Security', sec.serious,
+      (sec.serious ? 'serious findings open · ' + sec.open + ' in all' : sec.open + ' minor findings open') + (sec.last ? ' · scanned ' + relTime(sec.last) : ''), sec.serious ? 'bad' : 'ok'));
+    if (pl.connections) tiles.push(kpi('Connections', pl.connections.connected, pl.connections.attention ? pl.connections.attention + ' need attention' : 'connected and working', pl.connections.attention ? 'bad' : 'ok'));
+    return h('div', { class: 'grid grid-cols-2 gap-4 lg:grid-cols-4' }, tiles);
+  }
+
+  function inboxSection(items) {
+    const SHOW = 6;
+    const bar = { act: 'bg-brand-600', bad: 'bg-rose-500', warn: 'bg-amber-500', wait: 'bg-slate-300 dark:bg-slate-600' };
+    const verb = { act: 'Review', bad: 'Open', warn: 'Open', wait: 'View' };
+    const row = (i) => h('li', {},
+      h('a', { href: '#' + i.href, class: 'card flex items-stretch gap-4 overflow-hidden pr-4 transition-colors hover:border-brand-300 dark:hover:border-brand-500/50' },
+        h('span', { class: 'w-1 shrink-0 ' + bar[i.tone], 'aria-hidden': 'true' }),
+        h('div', { class: 'min-w-0 flex-1 py-3' },
+          h('div', { class: 'truncate text-sm font-medium' }, i.title),
+          h('div', { class: 'muted truncate text-xs' }, i.detail, i.at && h('span', { title: absTime(i.at) }, ' · ' + relTime(i.at)))),
+        h('span', { class: (i.tone === 'act' ? 'btn-primary' : 'btn-secondary') + ' btn-sm self-center' }, verb[i.tone])));
+    const more = items.length - SHOW;
+    return h('section', { class: 'mt-6', 'aria-labelledby': 'needs-you' },
+      h('h2', { id: 'needs-you', class: 'h-section mb-3' }, 'Needs you'),
+      items.length
+        ? h('div', {}, h('ul', { class: 'space-y-2' }, items.slice(0, SHOW).map(row)),
+            more > 0 && h('div', { class: 'muted mt-2 text-xs' }, `and ${more} more: see `, h('a', { href: '#/proposals', class: 'underline' }, 'Approvals'), ' and ', h('a', { href: '#/guard', class: 'underline' }, 'Guard')))
+        : h('div', { class: 'card card-pad flex items-center gap-3 text-sm' }, icon('check', 'size-4 text-emerald-600 dark:text-emerald-400'),
+            h('span', {}, 'Nothing needs you. Approvals, failed pipelines, serious security findings and broken connections show up here.')));
   }
 
   function platformStrip(rt) {
