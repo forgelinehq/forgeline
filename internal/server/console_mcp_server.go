@@ -370,6 +370,9 @@ func (s *Server) mcpCall(ctx context.Context, w http.ResponseWriter, req rpcRequ
 	switch in.Name {
 	case toolProposeCloud:
 		if err = s.policyGate(cctx, p, lookupCall{Tool: toolProposeCloud}); err == nil {
+			err = s.servicesGate(cctx, p, lookupCall{Tool: toolProposeCloud, Args: args})
+		}
+		if err == nil {
 			out, err = s.lookupProposeCloud(cctx, args)
 		}
 	case "run_failure":

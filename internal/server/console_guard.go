@@ -753,10 +753,18 @@ func (s *Server) lookupGuardFindings(ctx context.Context, raw json.RawMessage) (
 	if err != nil {
 		return "", errors.New("could not read the findings")
 	}
+	off, err := s.awsServicesOff(ctx)
+	if err != nil {
+		return "", errors.New("the access policy could not be read, so findings are not shown until it can")
+	}
 	var b strings.Builder
-	n, accepted := 0, 0
+	n, accepted, hidden := 0, 0, 0
 	for _, f := range all {
 		if f.Status != "open" || (a.Account != "" && f.Account != a.Account) || (a.Severity != "" && f.Severity != a.Severity) {
+			continue
+		}
+		if f.AWSAccount != "" && off[awsSwitchForInventory(f.Service)] { // an AWS finding about a service turned off for the AI
+			hidden++
 			continue
 		}
 		if f.Accepted != nil {
@@ -768,12 +776,16 @@ func (s *Server) lookupGuardFindings(ctx context.Context, raw json.RawMessage) (
 			fmt.Fprintf(&b, "- [%s] %s: %s (%s %s, account %s) %s. Fix: %s\n", f.Severity, f.Title, f.Name, f.Service, f.Resource, f.AccountName, f.Detail, f.Fix)
 		}
 	}
+	note := ""
+	if hidden > 0 {
+		note = fmt.Sprintf("\n%d more are about services an administrator turned off for the AI, and are not shown.", hidden)
+	}
 	if n == 0 {
-		return fmt.Sprintf("No open findings (%d accepted). If no scan has run, start one on the Guard page.", accepted), nil
+		return fmt.Sprintf("No open findings (%d accepted). If no scan has run, start one on the Guard page.", accepted) + note, nil
 	}
 	head := fmt.Sprintf("%d open findings, worst first (%d accepted by an administrator are left out)", n, accepted)
 	if n > 60 {
 		head += "; showing the first 60"
 	}
-	return head + ":\n" + b.String(), nil
+	return head + ":\n" + b.String() + note, nil
 }

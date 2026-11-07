@@ -512,6 +512,14 @@ func (s *Server) handleApproveProposal(w http.ResponseWriter, r *http.Request) {
 		writeError(w, status, msg)
 	}
 	st, _, target, werr := s.writeTarget(ctx, p.Account)
+	// A service an administrator turned off for the AI after this was filed is refused here too (note 030).
+	off, offErr := s.awsServicesOff(ctx)
+	offHit := ""
+	for _, id := range scriptSwitches(p.Calls) {
+		if off[id] && offHit == "" {
+			offHit = id
+		}
+	}
 	switch {
 	case p.Status == apExpired:
 		refuse(http.StatusConflict, "this proposal is older than 24 hours; ask for it again so it matches the account today")
@@ -533,6 +541,12 @@ func (s *Server) handleApproveProposal(w http.ResponseWriter, r *http.Request) {
 		return
 	case !s.loadAWSMCP(ctx).Enabled:
 		refuse(http.StatusConflict, "the AWS MCP Server is turned off")
+		return
+	case offErr != nil:
+		refuse(http.StatusConflict, "the access policy could not be read, so no AI change is applied until it can")
+		return
+	case offHit != "":
+		refuse(http.StatusConflict, awsServiceName(offHit)+" was turned off for the AI after this was proposed, so it cannot be applied")
 		return
 	case s.aiBusy:
 		refuse(http.StatusConflict, "another approved change is being applied; try again in a moment")

@@ -29,9 +29,10 @@ const (
 )
 
 type accessPolicy struct {
-	Tools     map[string]string `json:"tools"` // block or ask; a tool with no entry is allowed
-	UpdatedAt time.Time         `json:"updated_at"`
-	UpdatedBy string            `json:"updated_by"`
+	Tools     map[string]string   `json:"tools"`              // block or ask; a tool with no entry is allowed
+	Services  map[string][]string `json:"services,omitempty"` // per integration, the services turned off for the AI (note 030)
+	UpdatedAt time.Time           `json:"updated_at"`
+	UpdatedBy string              `json:"updated_by"`
 }
 
 // integrationOfTool says which integration a tool reaches, or "" for Forgeline's own tools (runs, pipelines,
@@ -170,11 +171,12 @@ type PolicyAgentJSON struct {
 
 // PolicyJSON is an integration's policy and the effective access it gives.
 type PolicyJSON struct {
-	Integration string            `json:"integration"`
-	Tools       []PolicyToolJSON  `json:"tools"`
-	Agents      []PolicyAgentJSON `json:"agents"`
-	UpdatedBy   string            `json:"updated_by,omitempty"`
-	Readable    bool              `json:"readable"` // false when the stored policy cannot be read: every tool is then refused
+	Integration string                 `json:"integration"`
+	Tools       []PolicyToolJSON       `json:"tools"`
+	Agents      []PolicyAgentJSON      `json:"agents"`
+	UpdatedBy   string                 `json:"updated_by,omitempty"`
+	Readable    bool                   `json:"readable"`           // false when the stored policy cannot be read: every tool is then refused
+	Services    []AWSServiceSwitchJSON `json:"services,omitempty"` // AWS only: which services the AI may use (note 030)
 }
 
 func toolHelp(h string) string {
@@ -209,6 +211,9 @@ func policyTools(integration string) []PolicyToolJSON {
 func (s *Server) policyView(ctx context.Context, integration string) PolicyJSON {
 	p, perr := s.loadPolicy(ctx)
 	v := PolicyJSON{Integration: integration, Tools: policyTools(integration), Agents: []PolicyAgentJSON{}, Readable: perr == nil, UpdatedBy: p.UpdatedBy}
+	if integration == "aws" && perr == nil {
+		v.Services = servicesView(p)
+	}
 	for i := range v.Tools {
 		v.Tools[i].Level = polAllow
 		switch {
