@@ -110,8 +110,10 @@ function build(close, role) {
     if (!run.steps.length) return null;
     const working = run.steps.some(st => st.status === 'running') || run.status === 'running';
     const key = 'steps';
-    return h('details', { class: 'group/steps', open: working || opened.has(key), 'aria-label': 'What the assistant looked at',
-      ontoggle: (e) => { if (e.target.open) opened.add(key); else opened.delete(key); } },
+    const initial = working || opened.has(key);
+    // A details element drawn open fires "toggle" by itself; only a change from how it was drawn is the person's.
+    return h('details', { class: 'group/steps', open: initial, 'aria-label': 'What the assistant looked at',
+      ontoggle: (e) => { if (e.target.open === initial) return; if (e.target.open) opened.add(key); else opened.delete(key); } },
       h('summary', { class: 'muted flex cursor-pointer list-none items-center gap-1.5 text-xs' }, icon('search', 'size-3.5'), stepsSummary(run.steps),
         icon('chevron', 'size-3 transition-transform group-open/steps:rotate-90')),
       h('div', { class: 'mt-1.5 space-y-0.5 border-l-2 border-slate-200 pl-2 dark:border-slate-700' }, run.steps.map(st => stepCard(st, opened))));
