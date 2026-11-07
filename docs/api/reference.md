@@ -48,7 +48,7 @@ A run's `status` is one of `queued`, `running`, `succeeded`, `failed`, `canceled
 | `POST /v1/pipelines/{id}/run` | developer | Run the latest version. May use secrets. |
 | `POST /v1/pipelines/{id}/versions/{version}/restore` | developer | Make an old version the newest. |
 | `DELETE /v1/pipelines/{id}` | admin | Delete the pipeline and its versions. |
-| `GET /v1/overview` | viewer | Everything the Overview page shows. |
+| `GET /v1/overview` | viewer | The pipeline and run figures on the Home page (its Needs you list also reads proposals, cloud changes, Guard findings and integrations). |
 
 ## Secrets
 

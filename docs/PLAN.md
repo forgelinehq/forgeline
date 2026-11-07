@@ -307,6 +307,13 @@ Design: [docs/design/006-console.md](design/006-console.md). Pictures: [docs/con
 
 > Agentic missions (discover, propose, approve, apply, verify; ECS to IaC, CI/CD and canary as the worked example) are in `docs/design/014-agentic-missions.md`. AI use cases and how Claude can reach our infrastructure safely are in `docs/design/013-ai-use-cases.md`. Market research (2026-10-30) is in `docs/design/012-market-research.md`: pain points, enterprise gaps, integrations, a UI plan and a ranked backlog of 16 items. Pick from its ranking once the items below that need a real-service check are done or blocked.
 
+> **Console redesign (design note 029, 2026-11-07).** Slice 1 is built: the sidebar grouped into
+> Home, Ship, Build, Team and Watch, and Home's Needs you list. Next, in order: foundations (tokens,
+> fonts in the binary, component kit, one SVG graph component, Simple mode, a Playwright screenshot
+> suite); per-service switches on connections mapped onto the access policy; the ask bar. Blueprints and
+> the design canvas, coding engines (Codex, Copilot CLI), missions and budgets, snapshots and restore
+> follow. Four decisions are open in note 029; sandbox auto-apply **needs a decision**.
+
 Do these top to bottom. Items marked **needs a decision** must wait for the maintainer; ask once,
 with a recommendation, and do something else meanwhile.
 

@@ -26,33 +26,17 @@ import { memoryPage } from './pages/memory.js';
 import { assistantButton } from './lib/assistant.js';
 import { visibleGroups, isSettingsPath, activeItem, canOpenSettings } from './lib/settingsnav.js';
 import { settingsPage } from './pages/settings.js';
+import { navFor, isActivePath } from './lib/nav.js';
 
 const root = document.getElementById('root');
 export const session = { role: 'viewer', name: '', user: null };
-
-const NAV = [ // `group` is the sidebar heading; Overview has none and sits at the top
-  { path: '/', label: 'Overview', icon: 'home', min: 'viewer' },
-  { group: 'Ship', path: '/pipelines', label: 'Pipelines', icon: 'flow', min: 'viewer', also: ['/pipelines/', '/runs/'] },
-  { group: 'Ship', path: '/actions', label: 'Actions', icon: 'bolt', min: 'developer' },
-  { group: 'Ship', path: '/environments', label: 'Environments', icon: 'clock', min: 'developer' },
-  { group: 'Cloud', path: '/infrastructure', label: 'Infrastructure', icon: 'server', min: 'viewer' },
-  { group: 'Cloud', path: '/kubernetes', label: 'Kubernetes', icon: 'box', min: 'viewer', also: ['/kubernetes/'] },
-  { group: 'Cloud', path: '/guard', label: 'Guard', icon: 'shield', min: 'viewer' },
-  { group: 'AI', path: '/agents', label: 'Agents', icon: 'sparkle', min: 'developer', also: ['/agents/', '/skills/', '/workflows/', '/workflow-runs/'] },
-  { group: 'AI', path: '/marketplace', label: 'Marketplace', icon: 'plug', min: 'developer' },
-  { group: 'Decide', path: '/proposals', label: 'Approvals', icon: 'check', min: 'viewer' },
-]; // setup pages (Integrations, Secrets, People, Audit log) live under Settings, behind the gear
 
 function setTheme(dark) {
   document.documentElement.classList.toggle('dark', dark);
   try { localStorage.setItem('forgeline-theme', dark ? 'dark' : 'light'); } catch { /* storage blocked */ }
 }
 
-function isActive(item) {
-  const p = currentPath().split('?')[0];
-  if (item.path === '/') return p === '/';
-  return p === item.path || p.startsWith(item.path + '/') || (item.also || []).some(a => p.startsWith(a));
-}
+function isActive(item) { return isActivePath(item, currentPath()); }
 
 function shell() {
   const outlet = h('main', { id: 'main', tabindex: '-1', class: 'mx-auto w-full max-w-7xl flex-1 px-4 py-6 outline-none sm:px-6 lg:px-8 min-[1800px]:max-w-[96rem] min-[2300px]:max-w-[120rem]' });
@@ -69,7 +53,7 @@ function shell() {
   const renderNav = () => {
     const out = [];
     let last;
-    for (const i of NAV.filter(x => atLeast(session.role, x.min))) {
+    for (const i of navFor(session.role)) {
       if (i.group && i.group !== last) out.push(h('div', { class: 'h-section mb-1 mt-4 px-3' }, i.group));
       last = i.group;
       out.push(navLink(i));
