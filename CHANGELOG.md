@@ -148,6 +148,8 @@ section in the pull request that makes the change; a release moves it under its 
   what. No new API.
 
 ### Changed
+- The assistant knows where the console's pages are (Design and blueprints, the Watch map, AI use and budgets, approval
+  rules), so it can answer "how do I…" about them instead of saying it does not know them.
 - **Selected items unreadable in dark mode, and a narrow page on big screens.** The selected tile on the AWS map and
   other selected cards used a colour shade (`brand-950`) that was never defined, so in dark mode they stayed pale
   under light text and the text could not be read. The shade is defined, and a test now fails when the console uses a

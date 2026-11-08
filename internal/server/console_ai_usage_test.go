@@ -155,3 +155,13 @@ func TestConsoleUsageWords(t *testing.T) {
 		t.Fatalf("usage words failed:\n%s", out)
 	}
 }
+
+// The assistant is told where things are, so it can answer "how do I…" about the newer pages. A page that moves
+// or is renamed should be changed here too.
+func TestAssistantKnowsWhereThingsAre(t *testing.T) {
+	for _, want := range []string{"Build › Design", "Preview changes", "Watch › Map", "AI use and budgets", "Approval rules", "different administrator approves"} {
+		if !strings.Contains(assistantSystem, want) {
+			t.Errorf("the assistant's instructions do not mention %q", want)
+		}
+	}
+}
