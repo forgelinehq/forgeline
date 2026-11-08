@@ -35,11 +35,21 @@ const savePrefs = (p) => { try { localStorage.setItem(PREF_KEY, JSON.stringify(p
 const DOCK_CLASS = 'fixed bottom-0 right-0 top-0 z-40 flex w-full flex-col border-l border-slate-200 bg-white shadow-xl lg:top-14 lg:w-[var(--assistant-w)] dark:border-slate-700 dark:bg-slate-900';
 const FLOAT_CLASS = 'fixed z-40 flex resize flex-col overflow-hidden rounded-xl border border-slate-300 bg-white shadow-2xl dark:border-slate-600 dark:bg-slate-900';
 
+let opener = null; // set by the button that owns the panel
+
+/** Opens the assistant and asks it a question, as if typed (Home's ask bar). False when there is none for this role. */
+export function openAssistant(question) {
+  if (!opener) return false;
+  opener(question);
+  return true;
+}
+
 export function assistantButton(role) {
-  if (!atLeast(role, 'developer')) return null;
+  if (!atLeast(role, 'developer')) { opener = null; return null; }
   let panel = null;
   const btn = h('button', { class: 'btn-secondary btn-sm', type: 'button', id: 'assistant-open', 'aria-haspopup': 'dialog', onclick: () => toggle() }, icon('sparkle'), h('span', { class: 'hidden sm:inline' }, 'Assistant'));
   const close = () => { if (!panel) return; panel.dispose(); panel.remove(); panel = null; btn.focus(); };
+  opener = (q) => { if (!panel) toggle(); if (q) panel.ask(q); };
 
   function toggle() {
     if (panel) return close();
@@ -341,6 +351,7 @@ function build(close, role) {
       wideBtn, modeBtn,
       hdrBtn({ 'aria-label': 'Close the assistant', onclick: close }, 'x')));
   const panel = h('aside', { class: DOCK_CLASS, role: 'dialog', 'aria-label': 'Assistant', id: 'assistant-panel' }, handle, header, list, form);
+  panel.ask = (q) => ask(q);
   panel.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
 
   /** Applies the saved mode and size, kept inside the window. Docked: a width the page makes room for. Floating: a window. */

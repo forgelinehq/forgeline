@@ -36,7 +36,7 @@ Questions are rate limited (20 a minute per person) and audited by page and leng
 
 ## Agents you define
 
-Under **Agents** you can define named agents with instructions, skills and a short list of tools. The instructions are written in Markdown, with a live preview and advisory checks; the model receives exactly the text you wrote. See the [Console tour]({{ '/guides/console-tour/' | relative_url }}#agents).
+Under **Team → Agents** you can define named agents with instructions, skills and a short list of tools. The instructions are written in Markdown, with a live preview and advisory checks; the model receives exactly the text you wrote. See the [Console tour]({{ '/guides/console-tour/' | relative_url }}#agents).
 
 ## Agent steps
 

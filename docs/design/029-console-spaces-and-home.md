@@ -48,6 +48,18 @@ The full plan has six phases. Each starts with its own note where it changes tru
 | Agents | A face per agent, On/Off and Advises/Proposes in words, tools grouped by what they touch and named in plain words (`ui/lib/tools.js`); the editor in sections, tiers as two cards, tools and skills as check cards with what each does; the Markdown editor as one framed box |
 | Tested | Under Node: every tool the server offers has a sentence and a group (a new tool without words fails the test), labels, summaries, grouping, the schema stripped from help, tiers |
 
+## Slice 3: frame 1, five spaces and the new Home (built 2026-11-08)
+
+The maintainer confirmed six screen frames (Home, Connections, the assistant, the design canvas, Team, Watch). Frame 1 is built:
+
+| Decision | Choice |
+| --- | --- |
+| Sidebar | Five spaces only: Home, Build, Ship, Team, Watch, then Settings. A space links to its first tab the role may open; a space with nothing the role may open is left out (a viewer sees Home, Ship and Watch) |
+| Tabs | The pages people know are tabs at the top of their space (`ui/lib/nav.js`). Same addresses, so old links work. Planned tabs (Design, Blueprints, Missions) are shown dimmed with "soon" and are never links. Settings keeps its own menu and no tabs |
+| Approvals | A button at the top right of every page with the number of changes waiting, and a tab under Home |
+| Home | Ask or tell Forgeline (opens the assistant with the question; developers and up), a greeting with how much needs you, tiles for pipelines, spend (loaded on request: AWS bills each look), the AI team and security, Needs you, Start something and Recent changes (decided proposals and changes). The ask bar sits outside the part that redraws every few seconds, so typing is never lost |
+| Tested | Under Node: spaces per role, tabs per role, planned tabs never links, every page in its space, Settings in none, the greeting, the summary line, recent changes (decided only, newest first, wording, limit) |
+
 ## Decisions taken since (2026-11-07)
 
 The maintainer chose an enterprise focus; the open questions below are settled in [note 030](030-service-switches.md): no automatic apply anywhere, OpenTofu, our own graph layout without elkjs, coding engines later. Service switches (phase 2) are built.

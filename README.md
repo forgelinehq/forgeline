@@ -19,9 +19,9 @@ make run-local        # needs Go and Docker; builds and starts the server on 127
 Open the link it prints. The first visit asks you to create an administrator, using the token
 the server printed. From the console you can write and run pipelines, add secrets, connect GitHub,
 see the Docker host, connect an AWS account, and propose cloud changes that a second administrator
-must approve. The first page, **Home**, lists what needs you (changes to approve, failed pipelines,
-serious security findings, broken connections); the sidebar groups the rest by job: Ship, Build, Team
-and Watch, with setup behind the Settings gear. In Settings › Integrations › AWS › Access you choose
+must approve. The sidebar has five spaces: **Home** (what needs you, an ask bar for the assistant, spend and
+security at a glance), **Build**, **Ship**, **Team** and **Watch**, with the pages as tabs inside
+each, and setup behind the Settings gear. In Settings › Integrations › AWS › Access you choose
 which AWS services (S3, ECS, ECR and so on) the assistant and agents may use at all. The console
 serves its own fonts and loads nothing from other hosts. [Screenshots](docs/console/README.md) and [design note 006](docs/design/006-console.md)
 show what each page does and what has not been checked.

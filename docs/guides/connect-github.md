@@ -9,7 +9,7 @@ nav_order: 3
 Pushes to chosen branches start runs of the `forgeline.yaml` at the repository root, and the
 result is posted back as a commit status. Pull requests from forks never start runs.
 
-Go to **Integrations**, open the **GitHub** card and choose **Connect** (or **Open settings** once connected). There are two ways in.
+Go to **Settings → Integrations**, open the **GitHub** card and choose **Connect** (or **Open settings** once connected). There are two ways in.
 
 ## A. GitHub App (recommended)
 

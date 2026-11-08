@@ -60,7 +60,7 @@ After setup you sign in with the username and password; the token keeps working 
 
 ## 3. Run a pipeline
 
-Go to **Pipelines → New pipeline** and paste:
+Go to **Ship → Pipelines → New pipeline** (or press **New pipeline** on Home) and paste:
 
 ```yaml
 version: v1alpha1
