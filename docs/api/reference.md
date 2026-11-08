@@ -175,6 +175,10 @@ A run's `status` is one of `queued`, `running`, `succeeded`, `failed`, `canceled
 | `PUT /v1/blueprints/{id}` | developer | Replace a blueprint. Send the `revision` you started from; 409 if someone saved it since. Audited. |
 | `DELETE /v1/blueprints/{id}` | developer | Delete a draft; only its author or an administrator. Audited. Nothing in the cloud changes. |
 | `GET /v1/blueprints/{id}/code` | developer | The OpenTofu configuration the blueprint generates (`main.tf.json`, AWS provider `~> 6.72`). |
+| `POST /v1/blueprints/{id}/plan` | developer | Preview: run `tofu plan` on the saved blueprint in the background (reads only). 202 with the preview, `status` `planning`; 409 while another preview or build of it runs. Audited. |
+| `GET /v1/blueprints/{id}/plan` | developer | The latest preview, or `null`: `status` (`planning`, `ready`, `failed`), `error`, `revision`, `aws_account`, `add`, `change`, `remove`, and `changes` (`address`, `type`, `block`, `action` `add`/`change`/`replace`/`remove`). The plan file itself is never returned. |
+| `POST /v1/blueprints/{id}/propose` | developer | Body `reason`. Files the latest preview as a `blueprint-apply` cloud change for a different administrator to approve; refused unless the preview is ready, of the saved blueprint, under an hour old, from the current state and changing something. On approval exactly that plan is applied. |
+| `GET /v1/blueprints/{id}/built` | developer | Whether it has been built: `built`, and if so `aws_account`, `region`, `applies`, `updated_at`, `updated_by`. |
 | `GET /v1/plugins` | developer | Whether plugins are on, and the installed plugins with their tools, network and host grants and secret names (never values). |
 | `PUT /v1/plugins/settings` | admin | Turn plugins on or off. Turning on checks that Docker answers. |
 | `GET /v1/market/packages` | developer | The catalogue: each package with its skills, agents, workflows, environment templates, tools, tiers, sha256, source (`built-in`, `local` or `git`), signer, and what is installed; `git` describes the signed git source (url, ref, trusted key ids, last commit and fetch, error). |

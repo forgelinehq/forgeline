@@ -192,6 +192,14 @@ func (s *Server) handleUpdateBlueprint(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	// What was built stays where it was built: its state belongs to that account and region.
+	if built, ok, err := s.loadBPState(r.Context(), cur.ID); err != nil {
+		s.internalError(w, "reading the blueprint's state", err)
+		return
+	} else if ok && (d.Target.Account != cur.Target.Account || d.Target.Region != cur.Target.Region) {
+		writeError(w, http.StatusConflict, "target: this blueprint was built in "+cur.Target.Account+", "+built.Region+"; it cannot be moved. Make a new blueprint for another account or region")
+		return
+	}
 	if e := s.checkTarget(r.Context(), d.Target); e != nil {
 		writeError(w, e.status, e.msg)
 		return
@@ -218,6 +226,14 @@ func (s *Server) handleDeleteBlueprint(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusForbidden, "only "+b.CreatedBy+" or an administrator can delete this blueprint")
 		return
 	}
+	if _, built, err := s.loadBPState(r.Context(), b.ID); err != nil {
+		s.internalError(w, "reading the blueprint's state", err)
+		return
+	} else if built {
+		writeError(w, http.StatusConflict, "this blueprint has been built; deleting the draft would leave what it built without a record. Removing what it built comes later")
+		return
+	}
+	s.docs.Delete(r.Context(), kindBPPlan, b.ID) // its preview, if any
 	if err := s.docs.Delete(r.Context(), kindBlueprint, b.ID); err != nil {
 		s.internalError(w, "deleting the blueprint", err)
 		return

@@ -164,3 +164,38 @@ export function explainError(bp, msg) {
     .replace(/blocks\[(\d+)\]/g, (m, i) => bp.blocks[i] ? '“' + bp.blocks[i].name + '”' : m)
     .replace(/links\[(\d+)\]/g, (m, i) => bp.links[i] ? 'the link from “' + name(bp.links[i].from) + '” to “' + name(bp.links[i].to) + '”' : m);
 }
+
+// ---------------------------------------------------------------- previews (slice 3)
+
+const WORST = { remove: 4, replace: 3, change: 2, add: 1 };
+
+/** What a preview does to each block: { blockId: 'add' | 'change' | 'replace' | 'remove' }, the worst of its resources. */
+export function planByBlock(plan) {
+  const out = {};
+  for (const c of plan?.changes || []) {
+    if (!c.block) continue;
+    if (!out[c.block] || WORST[c.action] > WORST[out[c.block]]) out[c.block] = c.action;
+  }
+  return out;
+}
+
+/**
+ * Where a preview stands for the blueprint on screen: 'none', 'planning', 'failed', 'stale' (the blueprint
+ * changed since, or it is over an hour old), 'nothing' (ready, changes nothing) or 'ready'.
+ */
+export function planState(plan, revision, dirty, now = Date.now()) {
+  if (!plan) return 'none';
+  if (plan.status === 'planning') return 'planning';
+  if (plan.status === 'failed') return 'failed';
+  if (dirty || plan.revision !== revision || !plan.finished_at || now - new Date(plan.finished_at).getTime() > 3600e3) return 'stale';
+  return plan.add + plan.change + plan.remove ? 'ready' : 'nothing';
+}
+
+/** The preview's one-line summary. */
+export function planWords(plan) {
+  const parts = [];
+  if (plan.add) parts.push(plan.add + ' to add');
+  if (plan.change) parts.push(plan.change + ' to change');
+  if (plan.remove) parts.push(plan.remove + ' to remove');
+  return parts.length ? parts.join(', ') : 'Nothing to change: AWS already matches the blueprint';
+}

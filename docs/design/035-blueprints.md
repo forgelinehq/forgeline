@@ -1,6 +1,6 @@
 # 035: Blueprints and the design canvas
 
-Status: **Slices 1 (the model, its checks and the OpenTofu it generates) and 2 (the canvas) are built.** Date: 2026-11-08.
+Status: **Slices 1 (the model, its checks and the OpenTofu it generates), 2 (the canvas) and 3 (preview, approval and apply) are built.** Date: 2026-11-08.
 Frame 4 of the confirmed screen frames (note 029). Decided by the maintainer on 2026-11-08: **OpenTofu**.
 
 ## Question
@@ -68,3 +68,25 @@ Tested under Node: building the small web app only with the canvas's operations 
 the links offered at each step, ids and names of added blocks, removing blocks and links, moving, layout, the
 messages, paths and bounds. Every kind's starting block is valid by the Go rules. Browser: drag, add, link, a
 problem named by its block with Save off, fix, save, reload; light and dark; no sideways scroll on a phone.
+
+## Slice 3: preview, approval and apply (built)
+
+| Decision | Choice |
+| --- | --- |
+| The binary | OpenTofu 1.13.9, downloaded on first use into `<data-dir>/tools/tofu-1.13.9/` and refused unless the zip's SHA-256 matches the release's published sum (pinned for Linux and macOS, amd64 and arm64). `FORGELINE_TOFU` names another binary (`scripts/dev/fake-tofu` for demos). Providers are cached in `<data-dir>/tools/tofu-plugins` |
+| What OpenTofu sees | A fixed environment: `PATH`, `HOME`, the AWS config file variables, CA bundles and proxies, the target's `AWS_PROFILE` and `AWS_REGION`, and its own settings (`TF_IN_AUTOMATION`, an empty CLI config, the provider cache). Never the server's token or other variables. Each run gets a private directory, removed afterwards (it holds the state in the clear) |
+| Preview | `POST /v1/blueprints/{id}/plan` (developer) runs `tofu init` and `tofu plan -out` in the background against the saved blueprint, reading only. `tofu show -json` gives the resources to add, change, replace or remove, each tied to its block. The plan file is sealed with the vault; the API never returns it. The canvas marks each block (+ add, ~ change, replace, remove) and lists every resource |
+| Send for approval | `POST /v1/blueprints/{id}/propose` with a reason files a `blueprint-apply` cloud change. Refused unless the preview is finished, of the blueprint as saved now, under an hour old, made from the state as it is now, and changes something. The change carries a frozen copy of the plan; its preview rows are the plan's resources |
+| Approval | The usual rules: a different administrator approves, and the approval rules (note 032) count a plan that removes or replaces anything as high risk |
+| Apply | On approval Forgeline restores the code, the provider lock file and the state, runs `tofu init -lockfile=readonly` (the providers the plan was made with) and `tofu apply` of the saved plan file. It refuses if the blueprint was built again since the preview. The state is sealed and saved after every apply, failed ones too, since a failed apply may have made things. The result lists the outputs (the front door's address) |
+| Built blueprints | A built blueprint cannot be deleted as a draft (its state would be lost) or moved to another account or region. Removing what a blueprint built comes later |
+| Permissions | Building needs the AWS permissions for what the blueprint makes. An app block makes two IAM roles (`fl-…-exec` and `fl-…-task`), which `PowerUserAccess` does not allow: give the role `iam:CreateRole`, `iam:DeleteRole`, `iam:GetRole`, `iam:TagRole`, `iam:PutRolePolicy`, `iam:GetRolePolicy`, `iam:DeleteRolePolicy`, `iam:AttachRolePolicy`, `iam:DetachRolePolicy`, `iam:ListRolePolicies`, `iam:ListAttachedRolePolicies`, `iam:ListInstanceProfilesForRole` and `iam:PassRole` on `arn:aws:iam::<account>:role/fl-*` only. Tables, buckets, queues and logs need no IAM |
+
+Tested with a stand-in OpenTofu (Go, race detector): preview, the environment OpenTofu sees (a server variable
+planted for the test never reaches it), the work directory removed, the plan sealed and never returned, a stale
+preview refused (edited, older state, nothing to do), propose, the proposer cannot approve, apply of the saved plan
+with the planned providers, the state sealed, a second proposal from the same preview refused at apply, a built
+blueprint cannot be deleted or moved, removing a block is high risk, a failed apply keeps its state and the next
+preview starts from it, and a download with the wrong checksum is refused. 15 rules removed one at a time, each
+fails a test. Browser with `fake-aws` and `fake-tofu`: preview, stale after an edit, send, a second administrator
+approves, the apply succeeds, the canvas shows Built and the next preview changes nothing.

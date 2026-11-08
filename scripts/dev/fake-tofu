@@ -1,0 +1,48 @@
+#!/usr/bin/env python3
+# A stand-in for OpenTofu, for trying blueprints in the console without a cloud account. Point the server
+# at it with FORGELINE_TOFU. Its "state" is the list of resource addresses that exist: a plan adds what
+# main.tf.json has and the state lacks, and removes what the state has and the code lacks. See README.md.
+import json, os, sys
+
+args = sys.argv[1:]
+cmd = args[0] if args else ""
+
+def read(name, default=""):
+    try:
+        return open(name).read()
+    except OSError:
+        return default
+
+def code_addrs():
+    doc = json.loads(read("main.tf.json", "{}"))
+    return sorted(f"{t}.{n}" for t, m in doc.get("resource", {}).items() for n in m)
+
+def state_addrs():
+    return set(json.loads(read("terraform.tfstate", '{"addresses": []}')).get("addresses", []))
+
+if cmd == "init":
+    if "-lockfile=readonly" in args and not read(".terraform.lock.hcl"):
+        sys.exit("Error: the lock file is missing")
+    if not read(".terraform.lock.hcl"):
+        open(".terraform.lock.hcl", "w").write("# fake-tofu: providers hashicorp/aws 6.72.0\n")
+    print("OpenTofu has been successfully initialized! (fake)")
+elif cmd == "plan":
+    open("plan.bin", "w").write("FAKE-PLAN\n" + read("terraform.tfstate"))
+    print("Plan saved (fake)")
+elif cmd == "show":
+    have, want, out = state_addrs(), set(code_addrs()), []
+    for a in sorted(want | have):
+        t, n = a.split(".", 1)
+        act = ["no-op"] if a in have and a in want else (["create"] if a in want else ["delete"])
+        out.append({"address": a, "mode": "managed", "type": t, "name": n, "change": {"actions": act}})
+    print(json.dumps({"resource_changes": out}))
+elif cmd == "apply":
+    if not read("plan.bin").startswith("FAKE-PLAN"):
+        sys.exit("Error: not a saved plan")
+    open("terraform.tfstate", "w").write(json.dumps({"addresses": code_addrs()}))
+    print("Apply complete! (fake)")
+elif cmd == "output":
+    doc = json.loads(read("main.tf.json", "{}"))
+    print(json.dumps({k: {"value": "http://fake-" + k + ".elb.example"} for k in doc.get("output", {})}))
+else:
+    sys.exit("fake-tofu: unsupported: " + " ".join(args))

@@ -1,13 +1,13 @@
 // Build › Design (design note 035, slice 2): a blueprint on a canvas. Blocks are drawn in SVG (positions are
 // attributes, so the CSP needs no inline styles), dragged to move, and edited in the panel on the right. Every
 // change is checked by the server as you go; Save keeps it. Preview and approval are the next slice.
-import { h, icon, mount, pageHeader, relTime, spinner, errorBox, notice, toast, emptyState } from '../lib/dom.js';
+import { h, icon, mount, pageHeader, relTime, spinner, errorBox, notice, toast, emptyState, modal, field } from '../lib/dom.js';
 import { get, post, put } from '../lib/api.js';
 import { navigate } from '../lib/router.js';
 import { KINDS, blockFacts, linkWords } from '../lib/blueprint.js';
 import {
   BLOCK_W, BLOCK_H, FARGATE, LOG_DAYS, autoLayout, addBlock, removeBlock, updateBlock, moveBlock, linkTargets,
-  addLink, removeLink, toBody, linkPath, bounds, fit, explainError,
+  addLink, removeLink, toBody, linkPath, bounds, fit, explainError, planByBlock, planState, planWords,
 } from '../lib/canvas.js';
 
 /** Build › Design without a blueprint: open the one changed last, or say how to make one. */
@@ -27,7 +27,9 @@ export async function designPage({ params }) {
   mount(el, spinner());
   let saved;
   try { saved = await get('/v1/blueprints/' + encodeURIComponent(params.id)); } catch (e) { mount(el, pageHeader('Design', ''), errorBox(e.message)); return el; }
-  let others = [];
+  let others = [], plan = null, built = null, pollTimer = 0;
+  try { plan = await get('/v1/blueprints/' + encodeURIComponent(params.id) + '/plan'); } catch { /* no preview yet */ }
+  try { built = await get('/v1/blueprints/' + encodeURIComponent(params.id) + '/built'); } catch { /* optional */ }
   try { others = (await get('/v1/blueprints')).blueprints; } catch { /* the switcher is optional */ }
 
   let revision = saved.revision;
@@ -61,11 +63,47 @@ export async function designPage({ params }) {
     drawBar();
   }
 
+  async function preview() {
+    try { plan = await post('/v1/blueprints/' + encodeURIComponent(saved.id) + '/plan', {}); } catch (e) { toast(e.message, 'error'); return; }
+    drawBar(); drawSide(); draw();
+    poll();
+  }
+
+  function poll() {
+    clearTimeout(pollTimer);
+    if (plan?.status !== 'planning') return;
+    pollTimer = setTimeout(async () => {
+      if (!el.isConnected) return; // the person left the page
+      try { plan = await get('/v1/blueprints/' + encodeURIComponent(saved.id) + '/plan'); } catch { /* try again */ }
+      drawBar(); drawSide(); draw();
+      poll();
+    }, 1500);
+  }
+
+  async function send() {
+    await modal('Send for approval', (close) => {
+      const reason = h('textarea', { id: 'send-reason', class: 'input', rows: '3', maxlength: '500', placeholder: 'Why this should be built' });
+      const err = h('div', {});
+      return h('div', { class: 'space-y-4' },
+        h('p', { class: 'text-sm' }, planWords(plan) + ' in ' + bp.target.account + ' · ' + bp.target.region + '. A different administrator approves it; then exactly this preview is applied.'),
+        field('Why', reason, 'The approver reads this.'), err,
+        h('div', { class: 'flex justify-end gap-2' }, h('button', { class: 'btn-secondary', type: 'button', onclick: () => close() }, 'Cancel'),
+          h('button', { class: 'btn-primary', type: 'button', id: 'send-go', onclick: async () => {
+            try {
+              await post('/v1/blueprints/' + encodeURIComponent(saved.id) + '/propose', { reason: reason.value });
+              close();
+              toast('Sent for approval. It is listed under Infrastructure › Cloud changes.', 'ok');
+            } catch (e) { mount(err, errorBox(e.message)); }
+          } }, 'Send')));
+    });
+  }
+
   async function save() {
     try {
       const r = await put('/v1/blueprints/' + encodeURIComponent(saved.id), toBody(bp, revision));
       revision = r.revision; checks = r.checks; clean = JSON.stringify(bp); problem = '';
       toast('Saved', 'ok');
+      draw();
     } catch (e) { problem = explainError(bp, e.message); toast(problem, 'error'); }
     drawSide();
     drawBar();
@@ -73,16 +111,21 @@ export async function designPage({ params }) {
 
   function drawBar() {
     const can = dirty() && !problem;
+    const ps = planState(plan, revision, dirty());
     mount(bar, h('div', { class: 'mb-4 flex flex-wrap items-center gap-2' },
       h('span', { class: 'inline-flex overflow-hidden rounded-lg border border-slate-300 text-sm dark:border-slate-700' },
         h('span', { class: 'bg-brand-600 px-3 py-1.5 text-white' }, 'AWS'), h('span', { class: 'px-3 py-1.5' }, bp.target.account + ' · ' + bp.target.region)),
       others.length > 1 && h('select', { class: 'input h-9 w-auto py-0 text-sm', 'aria-label': 'Open another blueprint', onchange: (e) => navigate('/design/' + e.target.value) },
         others.map(o => h('option', { value: o.id, selected: o.id === saved.id }, o.name))),
       dirty() ? h('span', { class: 'pill-wait', id: 'design-dirty' }, 'Not saved') : h('span', { class: 'muted text-xs' }, 'Saved'),
+      built?.built ? h('span', { class: 'pill-ok', id: 'design-built', title: 'Built ' + built.applies + ' time' + (built.applies === 1 ? '' : 's') + ', last by ' + built.updated_by + ' ' + relTime(built.updated_at) }, 'Built') : null,
       h('span', { class: 'flex-1' }),
       h('a', { class: 'btn-secondary btn-sm', href: '#/blueprints/' + saved.id }, icon('git', 'size-3.5'), 'Code'),
-      h('button', { class: 'btn-secondary btn-sm', type: 'button', disabled: true, title: 'Comes next: tofu plan, drawn on the canvas' }, 'Preview changes'),
-      h('button', { class: 'btn-secondary btn-sm', type: 'button', disabled: true, title: 'Comes next: a cloud change a different administrator approves' }, 'Send for approval'),
+      h('button', { class: 'btn-secondary btn-sm', type: 'button', id: 'design-preview', disabled: dirty() || !!problem || ps === 'planning',
+        title: dirty() ? 'Save first: the preview is of the saved blueprint' : 'Ask OpenTofu what building this would do in AWS (reads only)', onclick: preview },
+        ps === 'planning' ? 'Previewing…' : 'Preview changes'),
+      h('button', { class: (ps === 'ready' ? 'btn-primary' : 'btn-secondary') + ' btn-sm', type: 'button', id: 'design-send', disabled: ps !== 'ready',
+        title: ps === 'ready' ? 'A different administrator approves; then exactly this preview is applied' : 'Preview the changes first', onclick: send }, 'Send for approval'),
       h('button', { class: 'btn-primary btn-sm', type: 'button', id: 'design-save', disabled: !can, onclick: save }, 'Save')));
   }
 
@@ -94,9 +137,25 @@ export async function designPage({ params }) {
           onclick: () => { const r = addBlock(bp, k); selected = r.id; change(r.bp); drawInspector(); } }, icon(v.icon, 'size-3.5 text-slate-500'), v.label))));
   }
 
+  function previewCard() {
+    const ps = planState(plan, revision, dirty());
+    if (ps === 'none') return null;
+    const head = h('h2', { class: 'h-section mb-2' }, 'Preview');
+    if (ps === 'planning') return h('section', { class: 'card card-pad', id: 'design-plan' }, head, h('p', { class: 'flex items-center gap-2 text-sm' }, spinner(), 'OpenTofu is working out what would change. It only reads.'));
+    if (ps === 'failed') return h('section', { class: 'card card-pad', id: 'design-plan' }, head, errorBox(plan.error || 'The preview failed.'));
+    const tone = { add: 'pill-ok', change: 'pill-wait', replace: 'pill-bad', remove: 'pill-bad' };
+    return h('section', { class: 'card card-pad', id: 'design-plan' }, head,
+      ps === 'stale' ? h('div', { class: 'mb-2' }, notice('warn', 'The blueprint changed since this preview, or it is over an hour old. Save and preview again before sending it.')) : null,
+      h('p', { class: 'text-sm font-medium', id: 'design-plan-summary' }, planWords(plan)),
+      h('p', { class: 'muted mb-2 text-xs' }, 'Planned by ' + plan.by + ' ' + relTime(plan.finished_at) + ' against AWS account ' + plan.aws_account + '.'),
+      plan.changes.length ? h('details', {}, h('summary', { class: 'cursor-pointer text-sm' }, 'Every resource'),
+        h('ul', { class: 'mt-2 max-h-64 space-y-1 overflow-auto text-xs' }, plan.changes.map(c => h('li', { class: 'flex items-center gap-2' },
+          h('span', { class: tone[c.action] }, c.action), h('code', { class: 'break-all' }, c.address))))) : null);
+  }
+
   function drawSide() {
-    mount(side,
-      h('section', { class: 'card card-pad', id: 'design-checks', 'aria-live': 'polite' }, h('h2', { class: 'h-section mb-2' }, 'What it means'),
+    mount(side, previewCard(),
+      h('section', { class: 'card card-pad mt-4', id: 'design-checks', 'aria-live': 'polite' }, h('h2', { class: 'h-section mb-2' }, 'What it means'),
         problem ? h('div', { id: 'design-problem' }, errorBox(problem)) : null,
         h('ul', { class: 'mt-2 grid gap-x-6 gap-y-2 text-sm md:grid-cols-2' }, (problem ? [] : checks).map(c => h('li', { class: 'flex items-start gap-2' },
           h('span', { class: c.level === 'ok' ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400' }, icon(c.level === 'ok' ? 'check' : 'alert', 'mt-0.5 size-4')), c.text)))));
@@ -121,14 +180,19 @@ export async function designPage({ params }) {
     mount(canvasBox, svg);
   }
 
+  // What the current preview does to each block, shown on the block while the preview is current.
+  const ACT = { add: ['+ add', 'fill-emerald-600 dark:fill-emerald-400', 'stroke-emerald-500'], change: ['~ change', 'fill-amber-600 dark:fill-amber-400', 'stroke-amber-500'],
+    replace: ['replace', 'fill-rose-600 dark:fill-rose-400', 'stroke-rose-500'], remove: ['remove', 'fill-rose-600 dark:fill-rose-400', 'stroke-rose-500'] };
   function blockNode(b) {
     const k = KINDS[b.kind] || { label: b.kind, tech: '' };
+    const ps = planState(plan, revision, dirty());
+    const act = ps === 'ready' || ps === 'nothing' ? ACT[planByBlock(plan)[b.id]] : null;
     const on = b.id === selected, existing = b.kind === 'existing';
     const g = h('g', { transform: `translate(${b.x} ${b.y})`, tabindex: '0', role: 'button', 'aria-pressed': String(on), 'aria-label': b.name + ', ' + k.label, 'data-block': b.id, class: 'cursor-grab focus:outline-none' },
       h('rect', { width: String(BLOCK_W), height: String(BLOCK_H), rx: '12', 'stroke-width': on ? '2.5' : '1.25', 'stroke-dasharray': existing ? '5 4' : '',
-        class: (existing ? 'fill-slate-50 dark:fill-slate-900/60 ' : 'fill-white dark:fill-slate-900 ') + (on ? 'stroke-brand-500' : b.kind === 'frontdoor' ? 'stroke-brand-400' : 'stroke-slate-300 dark:stroke-slate-700') }),
+        class: (existing ? 'fill-slate-50 dark:fill-slate-900/60 ' : 'fill-white dark:fill-slate-900 ') + (on ? 'stroke-brand-500' : act ? act[2] : b.kind === 'frontdoor' ? 'stroke-brand-400' : 'stroke-slate-300 dark:stroke-slate-700') }),
       h('text', { x: '14', y: '24', class: 'fill-slate-900 text-[13px] font-semibold dark:fill-slate-100' }, fit(b.name, 21)),
-      h('text', { x: String(BLOCK_W - 12), y: '24', 'text-anchor': 'end', class: 'fill-slate-400 text-[10px] uppercase tracking-wide' }, k.label),
+      h('text', { x: String(BLOCK_W - 12), y: '24', 'text-anchor': 'end', class: act ? act[1] + ' text-[10px] font-semibold uppercase' : 'fill-slate-400 text-[10px] uppercase tracking-wide', 'data-act': act ? act[0] : '' }, act ? act[0] : k.label),
       h('text', { x: '14', y: '44', class: 'fill-slate-500 text-[11px] dark:fill-slate-400' }, fit(k.tech, 28)),
       h('text', { x: '14', y: '58', class: 'fill-slate-500 text-[10px] dark:fill-slate-400' }, fit(blockFacts(b), 33)),
       h('title', {}, b.name + ' · ' + blockFacts(b)));
@@ -276,7 +340,7 @@ export async function designPage({ params }) {
     bar,
     h('div', { class: 'grid gap-4 xl:grid-cols-[minmax(0,1fr)_18rem]' },
       h('div', { class: 'min-w-0 space-y-4' }, h('section', { class: 'card overflow-hidden' }, tools, h('div', { class: 'p-2' }, canvasBox)), side), inspector),
-    h('p', { class: 'hint mt-3' }, 'Orange lines carry traffic from the internet; grey lines are an app using data; dashed lines are logs; dashed blocks already exist and are kept as they are.'));
-  drawBar(); drawTools(); drawSide(); draw(); drawInspector();
+    h('p', { class: 'hint mt-3' }, 'Orange lines carry traffic from the internet; grey lines are an app using data; dashed lines are logs; dashed blocks already exist and are kept as they are. After a preview, each block says whether it would be added, changed, replaced or removed.'));
+  drawBar(); drawTools(); drawSide(); draw(); drawInspector(); poll();
   return el;
 }
