@@ -17,4 +17,6 @@ npm test         # the sync's tests (also run in CI)
 
 - The home page (hero and cards) is `src/home.mdx`.
 - The sidebar is in `astro.config.mjs`: add a new guide there; design notes are listed on their own.
+- Above each title: breadcrumbs from the sidebar, the section, and a Copy page menu (`src/components/PageTitle.astro`).
+  The sync writes a Markdown copy of each page (`/forgeline/<page>.md`) and `llms.txt` for it and for AI tools.
 - Colours and fonts match the console (`src/styles/custom.css`, fonts in `public/fonts`, OFL).

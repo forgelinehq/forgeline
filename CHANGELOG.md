@@ -7,6 +7,9 @@ section in the pull request that makes the change; a release moves it under its 
 ## [Unreleased]
 
 ### Added
+- **Docs pages like docs.openclaw.ai's:** breadcrumbs and the section above each title, and a **Copy page** menu (copy the
+  page as Markdown, view it as Markdown, or open it in ChatGPT or Claude to ask about it). Every page has a plain Markdown
+  copy next to it, and `llms.txt` lists them for AI tools.
 - **A new documentation site** in the style of docs.openclaw.ai: Starlight (Astro, MIT) on GitHub Pages, with a home page
   of cards, a grouped sidebar (Start here, Guides, Reference, Project, Design notes), search on every page, dark and light
   themes in the console's colours and fonts, and an edit link on each page. Pages are still written in `docs/`; the design
