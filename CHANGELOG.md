@@ -7,6 +7,10 @@ section in the pull request that makes the change; a release moves it under its 
 ## [Unreleased]
 
 ### Added
+- **Set up Forgeline** (design note 038, step 1). A new server's Home lists the first-run steps (your team, GitHub, a cloud
+  account, the assistant, what the AI may touch, a first pipeline or blueprint), each linking to the page that does it and
+  ticking itself when done; administrators can skip one. Settings › Setup shows them any time. `forgeline onboard` shows
+  the same list in a terminal and asks what a terminal can answer (the assistant, an AWS profile and region), never a key.
 - **Built by Forgeline** (Build › Built): everything Forgeline created and keeps in your cloud accounts in one place. Each
   built blueprint is an interactive diagram whose blocks list the AWS resources they made (name, id, ARN only; the state
   stays sealed), plus stacks from approved changes and environments that are up. **Check against AWS** marks each resource

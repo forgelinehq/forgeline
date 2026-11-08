@@ -58,6 +58,22 @@ password of at least 12 characters, and press **Create administrator**.
 The token is required so that whoever reaches the port first cannot take the server over.
 After setup you sign in with the username and password; the token keeps working for the CLI and the API.
 
+Home then shows **Set up Forgeline**: seven steps (your team, GitHub, a cloud account, the assistant, what the AI may
+touch, a first pipeline or blueprint), each with a button that opens the page that does it. A step ticks itself when what
+it sets up exists, and an administrator can skip any of them. The same list is in **Settings › Setup** later.
+
+![Set up Forgeline on Home]({{ '/console/117-setup.png' | relative_url }})
+
+Prefer a terminal? From the `forgeline` folder:
+
+```sh
+FORGELINE_TOKEN=<the server token> ./bin/forgeline onboard --server http://127.0.0.1:8080
+```
+
+It shows the same steps and asks what a terminal can answer: which assistant to use (the `claude` program on the server)
+and which AWS profile and region to use. API keys and tokens are only ever entered in the console. Add `--non-interactive`
+to just print the list (exit code 0 when everything is done or skipped).
+
 ## 3. Run a pipeline
 
 Go to **Ship → Pipelines → New pipeline** (or press **New pipeline** on Home) and paste:
@@ -92,6 +108,8 @@ export FORGELINE_TOKEN=… FORGELINE_SERVER=http://127.0.0.1:8080   # paste the 
 instead of `./bin/forgeline`, copy the binary into a folder on your `PATH`.
 
 ## 4. Next
+
+Follow **Set up Forgeline** on Home, or go straight to:
 
 - Put values a step needs in **Secrets**, then ask for them with `permissions.secrets`: [Pipelines]({{ '/guides/pipelines/' | relative_url }}).
 - [Connect GitHub]({{ '/guides/connect-github/' | relative_url }}) so a push runs your pipeline.

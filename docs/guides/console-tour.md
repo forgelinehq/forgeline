@@ -21,9 +21,13 @@ with the number of changes waiting. What you see depends on your role, and old a
 | Ship | Pipelines, GitHub Actions |
 | Team | Team, Agents, Missions, Marketplace |
 | Watch | Map, Infrastructure, Kubernetes, Security |
-| Settings | People and roles, Sign-in (SSO), Connections, Secrets, Models, Memory, AI use and budgets, Audit log, Approval rules, API tokens |
+| Settings | Setup, People and roles, Sign-in (SSO), Connections, Secrets, Models, Memory, AI use and budgets, Audit log, Approval rules, API tokens |
 
 ## Home
+
+Until a new server is set up, **Set up Forgeline** at the top lists the first-run steps (your team, GitHub, a cloud
+account, the assistant, what the AI may touch, a first pipeline or blueprint), each with a button to the page that does
+it. A step ticks itself when it is done; an administrator can skip one. **Settings › Setup** shows the list any time.
 
 **Ask or tell Forgeline** at the top opens the assistant with your question (developers and administrators). Below it a
 greeting says how much needs you, and four tiles count your pipelines, your AWS **spend** (loaded only when you press

@@ -43,7 +43,7 @@ Everything below is built and tested with the race detector, and the console in 
 
 ## Not built yet
 
-See the [roadmap]({{ '/roadmap/' | relative_url }}). The next items are: a first-run setup that asks questions (and can use
-a small model on your own machine), a page of everything Forgeline built with a diagram, removing what a blueprint built,
+See the [roadmap]({{ '/roadmap/' | relative_url }}). The next items are: a local small-model option for the assistant (and onboarding by
+conversation if it proves reliable), removing what a blueprint built,
 forwarding the audit log to a SIEM, and a lead agent that hands out work. Coding engines other than Claude Code (Codex,
 Copilot) come later.

@@ -6,6 +6,7 @@
 
 export const SETTINGS = [
   { title: 'Workspace', items: [
+    { path: '/setup', label: 'Setup', note: 'The first-run steps: what is set up, and what is left', min: 'developer' },
     { path: '/people', label: 'People and roles', note: 'Who can sign in and what each person may do', min: 'admin' },
     { path: '/sso', label: 'Sign-in (SSO)', note: 'Let people sign in with the company login, with roles from their groups', min: 'admin' },
   ] },
