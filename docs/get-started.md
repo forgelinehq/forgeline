@@ -7,8 +7,10 @@ nav_order: 2
 
 ## What you need
 
-- Go 1.27 or newer (to build) and Docker (to run steps). Linux, macOS, or Windows with WSL2.
+- Go 1.27 or newer, `git` and `make` (to build), and Docker, running (to run steps). Linux, macOS, or Windows with WSL2.
 - A browser.
+
+No cloud account, database or other setup is needed for this page. Checked from a fresh clone on 2026-11-08.
 
 ## 1. Build and start
 
@@ -17,9 +19,23 @@ git clone https://github.com/forgelinehq/forgeline && cd forgeline
 make run-local
 ```
 
-`make run-local` builds the binary and starts the server on `127.0.0.1:8080`. On a loopback
-address with no `FORGELINE_TOKEN` set, it makes a random token and **prints it**. Keep it: you
-need it once, for setup.
+`make run-local` builds the binary into `./bin/forgeline` (the first build downloads Go modules and takes
+under a minute) and starts the server on `127.0.0.1:8080`. On a loopback address with no
+`FORGELINE_TOKEN` set, it makes a random token for this run and **prints** two lines:
+
+```text
+  Open:    http://127.0.0.1:8080/#token=…
+  CLI:     export FORGELINE_TOKEN=… FORGELINE_SERVER=http://127.0.0.1:8080
+```
+
+Keep that terminal open. The **Open** link is for step 2; the **CLI** line is for the command line below.
+
+Port 8080 already in use? Start it on another port instead:
+
+```sh
+make build
+./bin/forgeline server --data-dir .forgeline-server --listen 127.0.0.1:9000
+```
 
 To keep the same token across restarts, and rebuild and restart in one go:
 
@@ -28,12 +44,14 @@ scripts/dev/demo.sh                 # data in /tmp/fl-demo, http://127.0.0.1:808
 scripts/dev/demo.sh ~/forgeline-data 127.0.0.1:9000
 ```
 
-The token is saved in `<data-dir>/.token` (mode 0600).
+The token is saved in `<data-dir>/.token` (mode 0600). Running the script again restarts only the server it
+started for that data directory; any other Forgeline you run is left alone.
 
 ## 2. Create the first administrator
 
-Open <http://127.0.0.1:8080>. The first visit shows the setup form. Paste the server token,
-choose a username and a password of at least 12 characters.
+Open the **Open** link from step 1; it fills in the server token for you. (Or open
+<http://127.0.0.1:8080> and paste the token.) The first visit shows the setup form: choose a username and a
+password of at least 12 characters, and press **Create administrator**.
 
 ![First run]({{ '/console/01-setup.png' | relative_url }})
 
@@ -53,18 +71,25 @@ steps:
     run: echo "hello from Forgeline"
 ```
 
-The editor checks it as you type. **Save**, then **Run**. You see the steps as a graph, coloured by
-status, with live logs.
+The editor checks it as you type and says **Valid**. Press **Create & run** (or **Create** to save
+without running). You land on the run: the steps as a graph, coloured by status, and the live log, which ends
+with `hello from Forgeline`. The first run downloads the `alpine` image, so it can take a few seconds more.
+**Run again** runs it once more.
 
 ![A run in progress]({{ '/console/05-run-live.png' | relative_url }})
 
-Prefer the command line? These work without the console:
+Prefer the command line? From the `forgeline` folder, in a second terminal:
 
 ```sh
-forgeline run examples/hello/pipeline.yaml                # on your machine, in Docker
-forgeline submit --server http://127.0.0.1:8080 --wait examples/hello/pipeline.yaml
-forgeline schema                                          # the JSON Schema, for editor support
+./bin/forgeline run examples/hello/pipeline.yaml      # runs here, in Docker, with no server
+export FORGELINE_TOKEN=… FORGELINE_SERVER=http://127.0.0.1:8080   # paste the CLI line from step 1
+./bin/forgeline submit --wait examples/hello/pipeline.yaml        # runs it on the server; it shows in the console
+./bin/forgeline schema                                # the JSON Schema, for editor support
 ```
+
+`run` prints one line per step (`ran`, or `cached` the second time). `submit` needs the token: without the
+`export` line it stops with `set --server (or FORGELINE_SERVER) and FORGELINE_TOKEN`. To type `forgeline`
+instead of `./bin/forgeline`, copy the binary into a folder on your `PATH`.
 
 ## 4. Next
 
