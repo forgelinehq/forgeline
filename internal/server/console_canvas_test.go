@@ -86,6 +86,8 @@ eq('a link to nothing has no flow', flowOf(fb, { from: 'a', to: 'gone' }), null)
   const t = Object.fromEntries(linkTargets(w, fe).map(x => [x.id, x.access]));
   eq('a service may call one with a port, not itself or one without', [be in t, fe in t, wk in t], [true, false, false]);
   eq('databases, caches, secrets and existing ones need no access', [t[db], t[rc], t[sc], t[old]], [false, false, false, false]);
+  eq('a call in one column runs from the bottom of one block to the top of the next', linkPath({ x: 346, y: 40 }, { x: 346, y: 140 }), 'M441 106 C441 126, 441 120, 441 140');
+  eq('and upwards from the top', linkPath({ x: 346, y: 140 }, { x: 346, y: 40 }), 'M441 140 C441 120, 441 126, 441 106');
   eq('calls and databases flow both ways, secrets come back', [flowOf(w, { from: fe, to: be }), flowOf(w, { from: be, to: db }), flowOf(w, { from: be, to: sc }), flowOf(w, { from: be, to: old })], ['both', 'both', 'back', 'both']);
 }
 console.log(JSON.stringify({ built: toBody(bp, 3), defaults: DEFAULTS }));
