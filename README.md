@@ -21,8 +21,9 @@ the server printed. From the console you can write and run pipelines, add secret
 see the Docker host, connect an AWS account, and propose cloud changes that a second administrator
 must approve. The sidebar has five spaces: **Home** (what needs you, an ask bar for the assistant, spend and
 security at a glance), **Build**, **Ship**, **Team** and **Watch**, with the pages as tabs inside
-each, and setup behind the Settings gear. In Settings › Integrations › AWS › Access you choose
-which AWS services (S3, ECS, ECR and so on) the assistant and agents may use at all. The console
+each, and setup behind the Settings gear. In Settings › Connections › AWS › Services you choose,
+for each AWS service (S3, ECS, ECR and so on), whether the assistant and agents may not see it, only look,
+or propose changes that someone else approves. The console
 serves its own fonts and loads nothing from other hosts. [Screenshots](docs/console/README.md) and [design note 006](docs/design/006-console.md)
 show what each page does and what has not been checked.
 

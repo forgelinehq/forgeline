@@ -315,7 +315,7 @@ function agentForm(ag, skills, tools, after, base) {
       step('How much it may do', 'Either way it works as the person who asks, and can never do more than they could.', tierBox, tier),
       step('Instructions', 'What it should do and how. Write in Markdown; the model receives exactly this text.', ins.el),
       step('Skills it follows', ag ? 'Skills stay on the version they were pinned to. Untick and tick one to take its latest version.' : 'Step-by-step procedures it can follow.', skillBoxes),
-      step('What it can use', 'Pick the fewest it needs. Administrators can turn services off for every agent in Settings › Integrations.', toolBoxes),
+      step('What it can use', 'Pick the fewest it needs. Administrators can turn services off for every agent in Settings › Connections.', toolBoxes),
       step('Save', null, field('Note for the history', note, null, 'agent-note'), err,
         h('div', { class: 'flex justify-end gap-2' }, h('button', { class: 'btn-secondary', type: 'button', onclick: () => close() }, 'Cancel'), go))));
     return form;

@@ -167,3 +167,39 @@ export function policyRequest(tools, name, key) {
 export function agentStateText(state) {
   return { allowed: 'Allowed', blocked: 'Blocked', not_listed: 'Not listed', needs_person: 'Needs a person' }[state] || state;
 }
+
+/**
+ * The Connections page's left column (design note 029, frame 2): what is connected (worst first), logins
+ * found on the server, and everything else, which lives behind "Add a connection".
+ */
+export function connectionGroups(list) {
+  const sorted = [...(list || [])].sort((a, b) => (RANK[a.status] ?? 9) - (RANK[b.status] ?? 9) || a.name.localeCompare(b.name));
+  return {
+    connected: sorted.filter(i => i.status === 'connected' || i.status === 'attention'),
+    found: sorted.filter(i => i.status === 'detected'),
+    rest: sorted.filter(i => i.status === 'off' || isPlanned(i)),
+  };
+}
+
+/** Which connection the page opens on: the one asked for, else the first connected one, else none (the add view). */
+export function defaultConnection(list, wanted) {
+  if (wanted && (list || []).some(i => i.id === wanted)) return wanted;
+  const g = connectionGroups(list);
+  return g.connected.length ? g.connected[0].id : null;
+}
+
+/** The levels a person can give an AWS service, in words. */
+export const SERVICE_LEVELS = [
+  { key: 'off', label: 'Off', text: 'The AI cannot see it' },
+  { key: 'read', label: 'Look only', text: 'The AI can read it, never propose a change' },
+  { key: 'change', label: 'Change, with approval', text: 'The AI can propose changes; a different administrator approves each one' },
+];
+
+/** The body of PUT /v1/integrations/aws/services after setting one service to a level. */
+export function serviceLevelsRequest(services, id, level) {
+  const lvl = (s) => (s.id === id ? level : s.level || (s.on === false ? 'off' : 'change'));
+  return {
+    off: (services || []).filter(s => lvl(s) === 'off').map(s => s.id),
+    read_only: (services || []).filter(s => lvl(s) === 'read').map(s => s.id),
+  };
+}

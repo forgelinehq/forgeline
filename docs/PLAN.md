@@ -310,7 +310,8 @@ Design: [docs/design/006-console.md](design/006-console.md). Pictures: [docs/con
 > **Console redesign (notes 029 and 030, 2026-11-07), enterprise focus.** Built: the sidebar grouped into
 > Home, Ship, Build, Team and Watch; Home's Needs you list; AWS service switches for the AI; the visual
 > system (warm neutrals, self-served fonts), the assistant panel, the agent and skill screens, and frame 1
-> of the confirmed screen frames (five spaces with tabs, the new Home). Next: frame 2 (Connections). Decided: no
+> of the confirmed screen frames (five spaces with tabs, the new Home) and frame 2 (Connections, with Off /
+> Look only / Change with approval per AWS service). Next: single sign-on, then frames 5, 6 and 4. Decided: no
 > automatic apply anywhere, OpenTofu for blueprints, our own graph layout, Codex and Copilot later. Next, in
 > order: single sign-on (OIDC, group-to-role mapping), approval rules, audit export and retention; then
 > foundations (tokens, component kit, one SVG graph component, Playwright screenshot suite), blueprints and

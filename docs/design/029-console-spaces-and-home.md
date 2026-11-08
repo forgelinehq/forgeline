@@ -60,6 +60,16 @@ The maintainer confirmed six screen frames (Home, Connections, the assistant, th
 | Home | Ask or tell Forgeline (opens the assistant with the question; developers and up), a greeting with how much needs you, tiles for pipelines, spend (loaded on request: AWS bills each look), the AI team and security, Needs you, Start something and Recent changes (decided proposals and changes). The ask bar sits outside the part that redraws every few seconds, so typing is never lost |
 | Tested | Under Node: spaces per role, tabs per role, planned tabs never links, every page in its space, Settings in none, the greeting, the summary line, recent changes (decided only, newest first, wording, limit) |
 
+## Slice 4: frame 2, Connections (built 2026-11-08)
+
+| Decision | Choice |
+| --- | --- |
+| Layout | Settings › Connections: connected systems (worst first) and logins found on the server on the left; the one picked opens on the right with Overview, Services (AWS), What the AI may do and Activity. Nothing connected opens Add a connection |
+| Add a connection | Everything not connected, including Coming soon, with filters and search; it is no longer mixed into the main view |
+| Service levels | Off, Look only, Change with approval per AWS service (note 030) |
+| Words | "Integrations" is "Connections" in the menu and in messages; the addresses stay `#/integrations/…` so links keep working |
+| Tested | Under Node: the left column's groups (each item in exactly one), what the page opens on, the levels request |
+
 ## Decisions taken since (2026-11-07)
 
 The maintainer chose an enterprise focus; the open questions below are settled in [note 030](030-service-switches.md): no automatic apply anywhere, OpenTofu, our own graph layout without elkjs, coding engines later. Service switches (phase 2) are built.

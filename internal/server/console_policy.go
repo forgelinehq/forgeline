@@ -29,10 +29,12 @@ const (
 )
 
 type accessPolicy struct {
-	Tools     map[string]string   `json:"tools"`              // block or ask; a tool with no entry is allowed
-	Services  map[string][]string `json:"services,omitempty"` // per integration, the services turned off for the AI (note 030)
-	UpdatedAt time.Time           `json:"updated_at"`
-	UpdatedBy string              `json:"updated_by"`
+	Tools    map[string]string   `json:"tools"`              // block or ask; a tool with no entry is allowed
+	Services map[string][]string `json:"services,omitempty"` // per integration, the services turned off for the AI (note 030)
+	// ServicesRead lists, per integration, the services the AI may read but never propose a change to.
+	ServicesRead map[string][]string `json:"services_read,omitempty"`
+	UpdatedAt    time.Time           `json:"updated_at"`
+	UpdatedBy    string              `json:"updated_by"`
 }
 
 // integrationOfTool says which integration a tool reaches, or "" for Forgeline's own tools (runs, pipelines,

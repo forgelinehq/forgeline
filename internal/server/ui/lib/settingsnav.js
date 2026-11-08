@@ -10,7 +10,7 @@ export const SETTINGS = [
     { label: 'Sign-in (SSO)', note: 'Let people sign in with the company login', planned: true },
   ] },
   { title: 'Connections', items: [
-    { path: '/integrations', label: 'Integrations', note: 'GitHub, AWS, Docker, Kubernetes, Claude; and in each one\'s Access tab, what the AI may use', min: 'developer', also: ['/integrations/'] },
+    { path: '/integrations', label: 'Connections', note: 'GitHub, AWS, Docker, Kubernetes, Claude, and what the AI may do with each', min: 'developer', also: ['/integrations/'] },
     { path: '/secrets', label: 'Secrets', note: 'Keys and tokens, stored encrypted and never shown again', min: 'developer' },
   ] },
   { title: 'AI', items: [

@@ -1,7 +1,7 @@
 import { h, icon, mount, spinner, errorBox, notice, toast, field } from '../lib/dom.js';
 import { get, put, post } from '../lib/api.js';
 
-/** The assistant's settings card on the Integrations page. */
+/** The assistant's settings card on the Connections page. */
 export async function assistantSettings(box, admin) {
   mount(box, spinner());
   let cfg;

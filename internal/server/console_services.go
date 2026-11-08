@@ -97,15 +97,27 @@ func awsServiceName(id string) string {
 
 // awsServicesOff is the set of switched-off services. An unreadable policy is an error: callers refuse.
 func (s *Server) awsServicesOff(ctx context.Context) (map[string]bool, error) {
+	off, _, err := s.awsServiceLevels(ctx)
+	return off, err
+}
+
+// awsServiceLevels gives the switched-off services and the look-only ones (readable, but no change may be
+// proposed for them). Everything else is "change, with approval".
+func (s *Server) awsServiceLevels(ctx context.Context) (off, readOnly map[string]bool, err error) {
 	p, err := s.loadPolicy(ctx)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	off := map[string]bool{}
+	off, readOnly = map[string]bool{}, map[string]bool{}
 	for _, id := range p.Services["aws"] {
 		off[id] = true
 	}
-	return off, nil
+	for _, id := range p.ServicesRead["aws"] {
+		if !off[id] {
+			readOnly[id] = true
+		}
+	}
+	return off, readOnly, nil
 }
 
 // awsCallServices says which switches a tool call touches, before it runs. ok is false for tools that are not
@@ -176,13 +188,19 @@ func (s *Server) servicesGate(ctx context.Context, p Principal, c lookupCall) er
 	if !ok {
 		return nil
 	}
-	off, err := s.awsServicesOff(ctx)
+	off, readOnly, err := s.awsServiceLevels(ctx)
 	if err != nil {
 		return errors.New("the access policy could not be read, so " + c.Tool + " is refused until it can")
 	}
 	for _, id := range switches {
-		if off[id] {
-			why := fmt.Sprintf("%s is turned off for the AI in Settings › Integrations › AWS, so %s is refused", awsServiceName(id), c.Tool)
+		why := ""
+		switch {
+		case off[id]:
+			why = fmt.Sprintf("%s is turned off for the AI in Settings › Connections › AWS, so %s is refused", awsServiceName(id), c.Tool)
+		case readOnly[id] && isWriteTool(c.Tool):
+			why = fmt.Sprintf("%s is set to Look only for the AI in Settings › Connections › AWS, so no change to it can be proposed", awsServiceName(id))
+		}
+		if why != "" {
 			ip, _ := ctx.Value(mcpIPKey{}).(string)
 			_ = s.audit(ctx, p, ip, "policy.refused", "integration/aws", why, false)
 			return errors.New(why)
@@ -214,6 +232,7 @@ type AWSServiceSwitchJSON struct {
 	Label string `json:"label"`
 	Tech  string `json:"tech"`
 	On    bool   `json:"on"`
+	Level string `json:"level"` // off, read (look only: no proposals) or change (change, with approval)
 }
 
 func servicesView(p accessPolicy) []AWSServiceSwitchJSON {
@@ -221,9 +240,19 @@ func servicesView(p accessPolicy) []AWSServiceSwitchJSON {
 	for _, id := range p.Services["aws"] {
 		off[id] = true
 	}
+	ro := map[string]bool{}
+	for _, id := range p.ServicesRead["aws"] {
+		ro[id] = true
+	}
 	out := make([]AWSServiceSwitchJSON, 0, len(awsServiceCatalog))
 	for _, s := range awsServiceCatalog {
-		out = append(out, AWSServiceSwitchJSON{ID: s.ID, Label: s.Label, Tech: s.Tech, On: !off[s.ID]})
+		lvl := "change"
+		if off[s.ID] {
+			lvl = "off"
+		} else if ro[s.ID] {
+			lvl = "read"
+		}
+		out = append(out, AWSServiceSwitchJSON{ID: s.ID, Label: s.Label, Tech: s.Tech, On: !off[s.ID], Level: lvl})
 	}
 	return out
 }
@@ -234,24 +263,42 @@ func (s *Server) handlePutServices(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		Off []string `json:"off"`
+		Off      []string `json:"off"`
+		ReadOnly []string `json:"read_only"` // look only: readable, but no change may be proposed
 	}
 	if !readJSON(w, r, &req) {
 		return
 	}
-	seen := map[string]bool{}
-	var off []string
-	for i, id := range req.Off {
-		if _, ok := awsServiceByID(id); !ok {
-			writeError(w, http.StatusBadRequest, fmt.Sprintf("off[%d]: %q is not an AWS service switch", i, id))
+	clean := func(field string, ids []string) ([]string, bool) {
+		seen := map[string]bool{}
+		var out []string
+		for i, id := range ids {
+			if _, ok := awsServiceByID(id); !ok {
+				writeError(w, http.StatusBadRequest, fmt.Sprintf("%s[%d]: %q is not an AWS service switch", field, i, id))
+				return nil, false
+			}
+			if !seen[id] {
+				seen[id] = true
+				out = append(out, id)
+			}
+		}
+		sort.Strings(out)
+		return out, true
+	}
+	off, ok := clean("off", req.Off)
+	if !ok {
+		return
+	}
+	readOnly, ok := clean("read_only", req.ReadOnly)
+	if !ok {
+		return
+	}
+	for _, id := range readOnly {
+		if contains(off, id) {
+			writeError(w, http.StatusBadRequest, fmt.Sprintf("%q is both off and look only; choose one", id))
 			return
 		}
-		if !seen[id] {
-			seen[id] = true
-			off = append(off, id)
-		}
 	}
-	sort.Strings(off)
 	// Read before writing; an unreadable policy is not overwritten blindly (as in handlePutPolicy).
 	cur, err := s.loadPolicy(r.Context())
 	if err != nil {
@@ -259,19 +306,28 @@ func (s *Server) handlePutServices(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	before := append([]string(nil), cur.Services["aws"]...)
+	beforeRO := append([]string(nil), cur.ServicesRead["aws"]...)
 	if cur.Services == nil {
 		cur.Services = map[string][]string{}
+	}
+	if cur.ServicesRead == nil {
+		cur.ServicesRead = map[string][]string{}
 	}
 	if len(off) == 0 {
 		delete(cur.Services, "aws")
 	} else {
 		cur.Services["aws"] = off
 	}
+	if len(readOnly) == 0 {
+		delete(cur.ServicesRead, "aws")
+	} else {
+		cur.ServicesRead["aws"] = readOnly
+	}
 	cur.UpdatedAt, cur.UpdatedBy = time.Now().UTC(), principalFrom(r.Context()).Name
 	if err := s.docs.Put(r.Context(), kindSettings, idPolicy, cur); err != nil {
 		s.internalError(w, "saving the policy", err)
 		return
 	}
-	s.auditReq(r, "policy.services", "integration/aws", fmt.Sprintf("off for the AI: [%s] (was [%s])", strings.Join(off, ", "), strings.Join(before, ", ")), true)
+	s.auditReq(r, "policy.services", "integration/aws", fmt.Sprintf("off for the AI: [%s] (was [%s]); look only: [%s] (was [%s])", strings.Join(off, ", "), strings.Join(before, ", "), strings.Join(readOnly, ", "), strings.Join(beforeRO, ", ")), true)
 	writeJSON(w, http.StatusOK, s.policyView(r.Context(), "aws"))
 }

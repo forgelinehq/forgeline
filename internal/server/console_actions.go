@@ -104,7 +104,7 @@ type WorkflowJobJSON struct {
 func (s *Server) actionsRepo(w http.ResponseWriter, repo string) (*GitHubConfig, RepoRule, bool) {
 	gh := s.gh()
 	if gh == nil {
-		writeError(w, http.StatusConflict, "connect GitHub under Integrations first")
+		writeError(w, http.StatusConflict, "connect GitHub under Settings › Connections first")
 		return nil, RepoRule{}, false
 	}
 	if !repoNameRE.MatchString(repo) {
@@ -168,7 +168,7 @@ func githubError(status int, raw []byte) error {
 	case status == http.StatusForbidden && strings.Contains(strings.ToLower(msg), "not accessible by integration"):
 		return errors.New("GitHub refused: the GitHub App does not have the Actions permission yet. Approve it on the App's page, then try again")
 	case status == http.StatusUnauthorized:
-		return errors.New("GitHub rejected the stored credentials; reconnect GitHub under Integrations")
+		return errors.New("GitHub rejected the stored credentials; reconnect GitHub under Settings › Connections")
 	case status == http.StatusNotFound:
 		return errors.New("GitHub answered not found (the repository, workflow or run does not exist, or the token cannot see it)")
 	case status == http.StatusUnprocessableEntity && msg != "":
@@ -372,7 +372,7 @@ func (s *Server) handleActionsDispatch(w http.ResponseWriter, r *http.Request) {
 	// the ref is as trusted as a push to it would be.
 	if strings.HasPrefix(req.Ref, "refs/") || !gh.allowed(rule.Repo, req.Ref) {
 		s.auditReq(r, "actions.dispatch", target, "refused: branch "+truncate(req.Ref, 80)+" is not allowed", false)
-		writeError(w, http.StatusForbidden, "that branch is not allowed for this repository (see the GitHub rules under Integrations)")
+		writeError(w, http.StatusForbidden, "that branch is not allowed for this repository (see the GitHub rules under Settings › Connections)")
 		return
 	}
 	if len(req.Inputs) > maxDispatchInputs {

@@ -145,7 +145,7 @@ export async function pipelineEditorPage({ params }) {
       const wfInputs = h('textarea', { id: 'winputs', class: 'input h-20 font-mono text-[13px]', placeholder: 'environment=staging', spellcheck: 'false' });
       const wfDetach = h('input', { type: 'checkbox', id: 'wdetach', class: 'size-4 rounded' });
       const wfBox = h('div', { class: 'hidden space-y-4' },
-        notice('info', 'The Forgeline server starts the workflow with its GitHub connection and waits for it. The repository and branch must be allowed under Integrations, and the workflow needs ', h('code', { class: 'font-mono text-xs' }, 'on: workflow_dispatch'), '. Runs started by GitHub cannot use this step.'),
+        notice('info', 'The Forgeline server starts the workflow with its GitHub connection and waits for it. The repository and branch must be allowed under Settings › Connections, and the workflow needs ', h('code', { class: 'font-mono text-xs' }, 'on: workflow_dispatch'), '. Runs started by GitHub cannot use this step.'),
         h('div', { class: 'grid gap-4 sm:grid-cols-2' }, field('Repository', wfRepo), field('Workflow file', wfFile, 'File name under .github/workflows, or its number.')),
         field('Branch', wfRef), field('Inputs (optional)', wfInputs, 'One name=value per line.'),
         h('label', { class: 'flex items-center gap-2 text-sm' }, wfDetach, 'Do not wait for it to finish'));

@@ -46,7 +46,7 @@ eq('the personal account page does not make the gear active', isSettingsPath('/a
 eq('claude settings beats integrations', activeItem('/integrations/claude/settings').label, 'Models');
 eq('memory is a settings page', activeItem('/memory').label, 'Memory');
 eq('memory counts as settings', isSettingsPath('/memory'), true);
-eq('a popup address is integrations', activeItem('/integrations/aws').label, 'Integrations');
+eq('a connection address is Connections', activeItem('/integrations/aws').label, 'Connections');
 eq('no entry for a daily page', activeItem('/pipelines'), null);
 
 if (failed) process.exit(1);
