@@ -95,14 +95,21 @@ func (s *Server) team(ctx context.Context, now time.Time) (TeamJSON, error) {
 		}
 	}
 
-	// Schedules: the earliest next run among enabled scheduled workflows the agent is a step of.
+	// Schedules: the earliest next run among enabled scheduled workflows the agent is a step of. A workflow
+	// with a run in progress is skipped by the scheduler, so it promises no time until that run ends.
+	busy := map[string]bool{}
+	for _, run := range runs {
+		if !run.final() {
+			busy[run.Workflow] = true
+		}
+	}
 	for _, wf := range wfs {
 		v, ok := wf.version(wf.Current)
 		if !ok || wf.Disabled {
 			continue
 		}
 		var next time.Time
-		if v.EveryMinutes > 0 {
+		if v.EveryMinutes > 0 && !busy[wf.ID] {
 			var st wfState
 			_ = s.docs.Get(ctx, kindWFState, wf.ID, &st)
 			next = st.LastScheduledAt.Add(time.Duration(v.EveryMinutes) * time.Minute)

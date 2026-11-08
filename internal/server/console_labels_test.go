@@ -170,7 +170,7 @@ eq('mission', missionSteps({ stages: [
   { name: 'OK', gate: true, status: 'waiting', steps: [] },
   { name: 'Apply', status: 'pending', steps: [{}] },
   { name: 'Check', gate: true, status: 'pending', steps: [{}] }] }).map(s => s.state + ':' + s.note),
-  ['done:2 done', 'failed:1 of 2 failed', 'wait:Your OK', 'todo:', 'todo:needs your OK']);
+  ['done:2 done', 'failed:1 of 2 failed', 'wait:waiting for you', 'todo:', 'todo:needs your OK']);
 eq('no run', missionSteps(null), []);
 if (failed) process.exit(1);
 console.log('ok');

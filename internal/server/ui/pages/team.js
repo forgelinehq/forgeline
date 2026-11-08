@@ -49,7 +49,7 @@ export async function teamPage() {
     return h('div', { class: 'card flex w-60 flex-col gap-1.5 p-3 text-left' + (m.state === 'off' ? ' opacity-70' : ''), 'data-member': m.id },
       h('a', { href: '#/agents/' + m.id, class: 'flex items-center gap-2.5 hover:text-brand-700 dark:hover:text-brand-300' }, avatar(m.name, m.id, 'size-9 text-xs'),
         h('span', { class: 'min-w-0' }, h('span', { class: 'block truncate font-semibold' }, m.name), m.description && h('span', { class: 'muted block truncate text-xs' }, m.description))),
-      h('span', { class: 'flex items-center gap-1.5 text-xs ' + TONE[st.tone], 'data-state': m.state }, h('span', { class: 'size-2 shrink-0 rounded-full ' + DOT[st.tone] }),
+      h('span', { class: 'flex items-center gap-1.5 text-xs ' + TONE[st.tone], 'data-state': m.state, title: st.text }, h('span', { class: 'size-2 shrink-0 rounded-full ' + DOT[st.tone] }),
         m.run_id ? h('a', { href: '#/workflow-runs/' + m.run_id, class: 'truncate underline-offset-2 hover:underline' }, st.text) : h('span', { class: 'truncate' }, st.text)),
       h('span', { class: 'muted text-xs' }, factsLine(m)),
       admin && leadPicker(m));
