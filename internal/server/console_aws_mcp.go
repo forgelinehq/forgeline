@@ -332,6 +332,10 @@ type AIProposal struct {
 	RanCalls    []scriptCall `json:"ran_calls,omitempty"`
 	FinishedAt  *time.Time   `json:"finished_at,omitempty"`
 	ViaAI       bool         `json:"via_ai"`
+	// Approvals given so far, when the approval rules ask for more than one (note 032).
+	Approvals []approvalVote `json:"approvals,omitempty"`
+	// Approval is filled in on reads: how many approvals the rules ask for now, and who may give them.
+	Approval *ApprovalStateJSON `json:"approval,omitempty"`
 }
 
 const (
@@ -460,6 +464,9 @@ func (s *Server) handleListProposals(w http.ResponseWriter, r *http.Request) {
 	}
 	for i := range ps {
 		ps[i] = expiredProposal(ps[i])
+		if ps[i].Status == apProposed {
+			ps[i].Approval = s.approvalState(r.Context(), approvalKindAI, ps[i].Account, ps[i].Risk == "high", ps[i].Approvals)
+		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"proposals": ps})
 }
@@ -472,6 +479,9 @@ func (s *Server) handleGetProposal(w http.ResponseWriter, r *http.Request) {
 	} else if err != nil {
 		s.internalError(w, "reading the proposal", err)
 		return
+	}
+	if p.Status == apProposed {
+		p.Approval = s.approvalState(r.Context(), approvalKindAI, p.Account, p.Risk == "high", p.Approvals)
 	}
 	writeJSON(w, http.StatusOK, p)
 }
@@ -569,6 +579,25 @@ func (s *Server) handleApproveProposal(w http.ResponseWriter, r *http.Request) {
 	// Re-read the script with the same rules, in case the rules are stricter than when it was filed.
 	if _, err := checkScript(p.Code, true); err != nil {
 		refuse(http.StatusUnprocessableEntity, "the script no longer passes the checks: "+err.Error())
+		return
+	}
+	// The approval rules (note 032): may this person approve, and is this the approval that completes the count?
+	votes, need, done, vstatus, vmsg := s.vote(ctx, approvalKindAI, p.Account, p.Risk == "high", p.Approvals, who.Name, req.Note)
+	if vmsg != "" {
+		refuse(vstatus, vmsg)
+		return
+	}
+	p.Approvals = votes
+	if !done {
+		if err := s.docs.Put(ctx, kindAIProposal, p.ID, p); err != nil {
+			s.aiMu.Unlock()
+			s.internalError(w, "saving the approval", err)
+			return
+		}
+		s.aiMu.Unlock()
+		s.auditReq(r, "ai.proposal.approve", "ai-proposal/"+p.ID, fmt.Sprintf("%s — approval %d of %d recorded; waiting for another administrator", p.Title, len(votes), need.Needed), true)
+		p.Approval = s.approvalState(ctx, approvalKindAI, p.Account, p.Risk == "high", p.Approvals)
+		writeJSON(w, http.StatusOK, p)
 		return
 	}
 	now := time.Now().UTC()

@@ -1,4 +1,5 @@
 import { h, icon, mount, pill, pageHeader, relTime, absTime, bytes, spinner, errorBox, notice, toast, modal, confirmDialog, field, emptyState, kpi } from '../lib/dom.js';
+import { approvalView } from '../lib/approval.js';
 import { versionLabel } from '../lib/version.js';
 import { get, put, post, patch, del, atLeast } from '../lib/api.js';
 import { navigate } from '../lib/router.js';
@@ -344,6 +345,7 @@ async function changes(body) {
         try { await post(`/v1/cloud/changes/${encodeURIComponent(id)}/${verb}`, { note: note.value }); toast(label, 'ok'); close(); load(); } catch (e) { toast(e.message, 'error'); }
       };
       const canDecide = c.status === 'proposed';
+      const av = approvalView(c.approval, me, c.proposed_by, 'run');
       return h('div', { class: 'space-y-4' },
         h('div', { class: 'flex flex-wrap items-center gap-3' }, pill(c.status), h('span', { class: 'muted text-sm' }, `Proposed by ${c.proposed_by} ${relTime(c.proposed_at)} · account ${c.account}${c.conn_name ? ' (' + c.conn_name + ')' : ''} · ${c.region}`)),
         h('div', {}, h('div', { class: 'h-section mb-1' }, 'Reason'), h('p', { class: 'text-sm' }, c.reason)),
@@ -353,11 +355,18 @@ async function changes(body) {
           : h('p', { class: 'muted text-sm' }, c.status === 'preparing' ? 'AWS is working out the preview…' : 'No preview is available.')),
         c.result && (c.status === 'failed' ? errorBox(c.result) : notice('ok', c.result)),
         c.decided_by && h('p', { class: 'muted text-sm' }, `${c.status === 'rejected' ? 'Rejected' : c.status === 'canceled' ? 'Canceled' : 'Approved'} by ${c.decided_by} ${relTime(c.decided_at)}${c.decision_note ? ': ' + c.decision_note : ''}`),
+        canDecide && av.line ? notice('info', av.line + '.') : null,
+        canDecide && admin && c.proposed_by !== me && !av.may ? notice('warn', av.why) : null,
         canDecide && h('div', {}, note, h('div', { class: 'mt-3 flex flex-wrap justify-end gap-2' },
           c.proposed_by === me && h('span', { class: 'muted mr-auto self-center text-xs' }, 'You proposed this, so someone else must approve it.'),
           (c.proposed_by === me || admin) && h('button', { class: 'btn-secondary', type: 'button', onclick: () => act('cancel', 'Canceled') }, 'Cancel proposal'),
           admin && h('button', { class: 'btn-secondary', type: 'button', onclick: () => act('reject', 'Rejected') }, 'Reject'),
-          admin && h('button', { class: 'btn-primary', type: 'button', disabled: c.proposed_by === me, onclick: async () => { if (await confirmDialog({ title: 'Approve and run this change?', body: 'It will run against AWS account ' + c.account + (c.conn_name ? ' (' + c.conn_name + ')' : '') + ' straight away.', confirmLabel: 'Approve and run' })) act('approve', 'Approved. Running now.'); } }, icon('check', 'size-4'), 'Approve and run'))));
+          admin && h('button', { class: 'btn-primary', type: 'button', disabled: !av.may, title: av.why || null, onclick: async () => {
+            const ok = await confirmDialog(av.last
+              ? { title: 'Approve and run this change?', body: 'It will run against AWS account ' + c.account + (c.conn_name ? ' (' + c.conn_name + ')' : '') + ' straight away.', confirmLabel: 'Approve and run' }
+              : { title: 'Approve this change?', body: 'Your approval is recorded. Nothing runs until another administrator approves it.', confirmLabel: 'Approve' });
+            if (ok) act('approve', av.last ? 'Approved. Running now.' : 'Your approval is recorded. It needs another administrator.');
+          } }, icon('check', 'size-4'), av.label))));
     }, { wide: true });
   }
 

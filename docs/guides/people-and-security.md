@@ -55,6 +55,24 @@ What to know:
 ![Single sign-on settings]({{ '/console/84-sso-settings.png' | relative_url }})
 ![The sign-in page with single sign-on]({{ '/console/85-sso-sign-in.png' | relative_url }})
 
+## Approval rules
+
+Every change to your cloud already needs an administrator who did not propose it. Under
+**Settings → Approval rules** you can ask for more where it matters:
+
+- **Needs two approvals**: the first approval is recorded and the change keeps waiting ("Approve (1 of 2)"); it
+  runs only when a second, different administrator approves the same exact change.
+- **Who may approve**: tick the administrators who may approve; everyone else's approval is refused.
+- A rule matches by **account** (for example Primary), by **who made the change** (the assistant, or people in the
+  console) and optionally **only high-risk changes** (such as deleting a stack). Nothing ticked means every change.
+
+When several rules match, the strictest wins: the most approvals any rule asks for, and only people allowed by every
+rule that names approvers. With no rules, nothing changes. The Approvals page shows on each waiting change how many
+approvals it needs, who already approved, and who may approve next. Developers can read the rules, so they know who
+will review their changes; only administrators change them, and every change is in the audit log.
+
+![Approval rules]({{ '/console/86-approval-rules.png' | relative_url }})
+
 ## What protects you
 
 - Passwords use PBKDF2-SHA256, at least 12 characters, with login throttling per account and per address.

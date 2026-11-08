@@ -101,3 +101,45 @@ func TestConsoleStepAndToolLabels(t *testing.T) {
 		t.Fatalf("label cases failed:\n%s", out)
 	}
 }
+
+// The words for a waiting change under approval rules (ui/lib/approval.js).
+const approvalCases = `
+import { approvalView } from './approval.mjs';
+let failed = 0;
+const eq = (name, got, want) => { const g = JSON.stringify(got), w = JSON.stringify(want); if (g !== w) { failed++; console.error('FAIL ' + name + '\n  got  ' + g + '\n  want ' + w); } };
+const one = approvalView({ needed: 1, given: [] }, 'grace', 'dev');
+eq('one approval: no extra line, approve and apply', [one.line, one.may, one.label, one.last], ['', true, 'Approve and apply', true]);
+eq('no state is one approval', approvalView(null, 'grace', 'dev').label, 'Approve and apply');
+const two = { needed: 2, given: [], rules: ['Prod'] };
+eq('first of two', [approvalView(two, 'grace', 'dev').label, approvalView(two, 'grace', 'dev').last, approvalView(two, 'grace', 'dev').line], ['Approve (1 of 2)', false, 'Needs 2 approvals (Prod)']);
+const half = { needed: 2, given: [{ by: 'grace' }], rules: ['Prod'] };
+eq('second of two', [approvalView(half, 'lin', 'dev').label, approvalView(half, 'lin', 'dev').last], ['Approve and apply', true]);
+eq('the same person again', [approvalView(half, 'grace', 'dev').may, approvalView(half, 'grace', 'dev').why], [false, 'You approved this. It needs another administrator.']);
+eq('the proposer', approvalView(half, 'dev', 'dev').may, false);
+eq('given line', approvalView(half, 'lin', 'dev').line, 'Needs 2 approvals · 1 given, by grace (Prod)');
+const named = { needed: 1, given: [], approvers: ['lin'], rules: ['Leads'] };
+eq('not named', [approvalView(named, 'grace', 'dev').may, approvalView(named, 'grace', 'dev').why], [false, 'Only lin may approve this change.']);
+eq('named', approvalView(named, 'lin', 'dev').may, true);
+eq('the rules leave nobody', [approvalView({ needed: 1, given: [], nobody: true }, 'lin', 'dev').may, approvalView({ needed: 1, given: [], nobody: true }, 'lin', 'dev').why], [false, 'The approval rules leave nobody who may approve this change.']);
+eq('run word', approvalView(null, 'a', 'b', 'run').label, 'Approve and run');
+if (failed) process.exit(1);
+console.log('ok');
+`
+
+func TestConsoleApprovalWords(t *testing.T) {
+	node, err := exec.LookPath("node")
+	if err != nil {
+		t.Skip("node is not installed")
+	}
+	tmp := t.TempDir()
+	src, err := uiFiles.ReadFile("ui/lib/approval.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.WriteFile(filepath.Join(tmp, "approval.mjs"), src, 0o600)
+	test := filepath.Join(tmp, "cases.mjs")
+	os.WriteFile(test, []byte(approvalCases), 0o600)
+	if out, err := exec.Command(node, test).CombinedOutput(); err != nil {
+		t.Fatalf("approval cases failed:\n%s", out)
+	}
+}

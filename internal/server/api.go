@@ -48,6 +48,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /v1/auth/oidc/start", s.handleOIDCStart)
 	mux.HandleFunc("GET /v1/auth/oidc/callback", s.handleOIDCCallback)
 	mux.Handle("GET /v1/settings/sso", s.requireRole(authn.Admin, s.handleGetSSO))
+	mux.Handle("GET /v1/settings/approvals", s.requireRole(authn.Developer, s.handleGetApprovalRules))
+	mux.Handle("PUT /v1/settings/approvals", s.requireRole(authn.Admin, s.handlePutApprovalRules))
 	mux.Handle("PUT /v1/settings/sso", s.requireRole(authn.Admin, s.handlePutSSO))
 	mux.Handle("POST /v1/settings/sso/test", s.requireRole(authn.Admin, s.handleTestSSO))
 	mux.Handle("POST /v1/auth/logout", s.requireRole(authn.Viewer, s.handleLogout))

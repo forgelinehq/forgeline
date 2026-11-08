@@ -21,6 +21,8 @@ Role = the minimum role. A test (`internal/server/apidocs_test.go`) fails if a r
 | `GET /v1/settings/sso` | admin | Single sign-on settings: `enabled`, `name` (button text), `issuer`, `client_id`, `address`, `groups_claim`, `mappings` (group and role), `allow_new`, `default_role`, `domains`, plus `has_secret`, `redirect_url` (to register at the provider) and `ready`. The client secret is never returned. |
 | `PUT /v1/settings/sso` | admin | The same fields, plus `client_secret` (write-only; empty keeps the stored one, sealed in the vault). The issuer and address must be `https`, or `http` on a loopback host. Turning it on needs the issuer, client ID, address and a stored secret. Audited as `sso.update`. |
 | `POST /v1/settings/sso/test` | admin | Body: `issuer`. Reads the provider's discovery document and says what it found (`ok`, `authorization_endpoint`, `token_endpoint`, `pkce`). Changes nothing. |
+| `GET /v1/settings/approvals` | developer | The approval rules (design note 032): each with `name`, `accounts`, `kinds` (`ai`, `cloud`), `high_risk`, `approvals` (1 or 2) and `approvers`. No rules means one approval from an administrator who did not propose the change. |
+| `PUT /v1/settings/approvals` | admin | Body: `rules`. Validated (known accounts, active administrators, two approvals need two possible approvers). Every matching rule applies and the strictest wins. Waiting changes show `approval` (`needed`, `given`, `approvers`, `rules`). Audited as `approval.rules`. |
 | `POST /v1/auth/logout` | viewer | Ends the session. |
 | `POST /v1/me/password` | viewer | Body: `current`, `new` (at least 12 characters). |
 | `GET /v1/tokens` | viewer | Your personal API tokens (never the secrets); `?all=1` for everyone's, administrators only. |
