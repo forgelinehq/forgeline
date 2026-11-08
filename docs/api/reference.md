@@ -13,9 +13,14 @@ Role = the minimum role. A test (`internal/server/apidocs_test.go`) fails if a r
 | Method and path | Role | Purpose |
 | --- | --- | --- |
 | `GET /healthz` | public | Liveness. |
-| `GET /v1/auth/state` | public | Is setup needed, and who am I. |
+| `GET /v1/auth/state` | public | Is setup needed, who am I, and `sso` (`enabled`, `name`): whether the sign-in page offers single sign-on. |
 | `POST /v1/auth/setup` | public (needs server token) | Create the first admin. Body: `token`, `username`, `name`, `password`. |
 | `POST /v1/auth/login` | public | Body: `username`, `password`. Sets the session cookie. Throttled. |
+| `GET /v1/auth/oidc/start` | public | Starts single sign-on (design note 031): sends the browser to the provider with PKCE, a single-use `state` (10 minutes, bound to a `SameSite=Lax` cookie) and a `nonce`. When single sign-on is off it goes back to the sign-in page with `#sso-error=off`. |
+| `GET /v1/auth/oidc/callback` | public | Where the provider sends the browser back. Checks the state and its cookie, exchanges the code, verifies the ID token (signature, issuer, audience, expiry, nonce), applies the rules (new people, domains, roles from groups, never demoting the last administrator) and sets the session cookie, then goes to `/#/`. A refusal goes to the sign-in page with `#sso-error=` `state`, `token`, `refused`, `provider` or `off`; the audit log has the full reason (`login.sso.failed`). A person is matched by issuer and subject, never by email. |
+| `GET /v1/settings/sso` | admin | Single sign-on settings: `enabled`, `name` (button text), `issuer`, `client_id`, `address`, `groups_claim`, `mappings` (group and role), `allow_new`, `default_role`, `domains`, plus `has_secret`, `redirect_url` (to register at the provider) and `ready`. The client secret is never returned. |
+| `PUT /v1/settings/sso` | admin | The same fields, plus `client_secret` (write-only; empty keeps the stored one, sealed in the vault). The issuer and address must be `https`, or `http` on a loopback host. Turning it on needs the issuer, client ID, address and a stored secret. Audited as `sso.update`. |
+| `POST /v1/settings/sso/test` | admin | Body: `issuer`. Reads the provider's discovery document and says what it found (`ok`, `authorization_endpoint`, `token_endpoint`, `pkce`). Changes nothing. |
 | `POST /v1/auth/logout` | viewer | Ends the session. |
 | `POST /v1/me/password` | viewer | Body: `current`, `new` (at least 12 characters). |
 | `GET /v1/tokens` | viewer | Your personal API tokens (never the secrets); `?all=1` for everyone's, administrators only. |

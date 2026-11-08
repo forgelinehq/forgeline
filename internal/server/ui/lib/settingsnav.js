@@ -7,7 +7,7 @@
 export const SETTINGS = [
   { title: 'Workspace', items: [
     { path: '/people', label: 'People and roles', note: 'Who can sign in and what each person may do', min: 'admin' },
-    { label: 'Sign-in (SSO)', note: 'Let people sign in with the company login', planned: true },
+    { path: '/sso', label: 'Sign-in (SSO)', note: 'Let people sign in with the company login, with roles from their groups', min: 'admin' },
   ] },
   { title: 'Connections', items: [
     { path: '/integrations', label: 'Connections', note: 'GitHub, AWS, Docker, Kubernetes, Claude, and what the AI may do with each', min: 'developer', also: ['/integrations/'] },

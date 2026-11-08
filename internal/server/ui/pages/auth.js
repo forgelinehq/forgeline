@@ -24,16 +24,31 @@ function form(fields, submitLabel, onSubmit) {
   return f;
 }
 
-export function loginPage(root, done) {
+// What a failed single sign-on means to the person (the server audits the full reason; design note 031).
+const SSO_ERRORS = {
+  off: 'Single sign-on is not set up on this server.',
+  provider: 'The company login could not be reached, or it said no. Try again, or ask an administrator.',
+  state: 'That sign-in expired or was started in another browser. Try again.',
+  token: 'The company login sent back something Forgeline could not verify. Ask an administrator to check the single sign-on settings.',
+  refused: 'You signed in at your company, but this server does not let you in. Ask an administrator for access.',
+};
+
+export function loginPage(root, done, sso) {
   const user = h('input', { id: 'username', class: 'input', autocomplete: 'username', autofocus: true, required: true });
   const pass = h('input', { id: 'password', class: 'input', type: 'password', autocomplete: 'current-password', required: true });
-  mount(root, frame('Sign in to Forgeline', 'Use your account to continue.', form([
-    field('Username', user), field('Password', pass),
-  ], 'Sign in', async () => {
-    await post('/v1/auth/login', { username: user.value, password: pass.value });
-    done();
-  })));
-  user.focus();
+  const m = /^#sso-error=([a-z]+)$/.exec(location.hash);
+  if (m) history.replaceState(null, '', location.pathname); // the code is shown once; a reload starts clean
+  const ssoBox = sso && sso.enabled ? h('div', { class: 'space-y-4' },
+    h('a', { href: '/v1/auth/oidc/start', id: 'sso-start', class: 'btn-primary w-full' }, icon('lock', 'size-4'), 'Sign in with ' + sso.name),
+    h('div', { class: 'flex items-center gap-3 text-xs text-slate-400' }, h('span', { class: 'h-px flex-1 bg-slate-200 dark:bg-slate-700' }), 'or with a Forgeline account', h('span', { class: 'h-px flex-1 bg-slate-200 dark:bg-slate-700' }))) : null;
+  mount(root, frame('Sign in to Forgeline', sso && sso.enabled ? 'Use your company login, or a Forgeline account.' : 'Use your account to continue.', h('div', { class: 'space-y-4' },
+    m ? errorBox(SSO_ERRORS[m[1]] || 'Single sign-on did not work. Try again.') : null,
+    ssoBox,
+    form([field('Username', user), field('Password', pass)], 'Sign in', async () => {
+      await post('/v1/auth/login', { username: user.value, password: pass.value });
+      done();
+    }))));
+  if (!(sso && sso.enabled)) user.focus();
 }
 
 export function setupPage(root, done) {

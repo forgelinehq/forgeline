@@ -12,7 +12,7 @@ assistant, AWS sign-in, the GitHub App.
 **Checked on real services:** AWS sign-in, an approved deploy and delete of a stack on a real account, a GitHub App created and installed on github.com, the assistant on a real Claude Code login token, and (2026-11-07) AI-proposed changes in two real AWS accounts: the assistant filed one proposal per account, a different administrator approved each, and Forgeline applied exactly the approved call through the AWS MCP Server, signed in with IAM Roles Anywhere.
 
 **Not checked against the real service:** a real GitHub webhook delivery and commit status; the assistant's API-key mode against the real
-Anthropic API; TLS behind a real proxy; more than one server sharing a database; single sign-on (not built).
+Anthropic API; TLS behind a real proxy; more than one server sharing a database; single sign-on against a real provider (built and tested against a stand-in, design note 031).
 
 **Console redesign for teams that are not infrastructure specialists ([note 029](https://github.com/forgelinehq/forgeline/blob/main/docs/design/029-console-spaces-and-home.md)):** Home lists what needs you, and the sidebar is grouped by job (Ship, Build, Team, Watch). AWS service switches for the AI are built ([note 030](https://github.com/forgelinehq/forgeline/blob/main/docs/design/030-service-switches.md)). Next: single sign-on, approval rules and audit export for enterprise use, then blueprints and a design canvas.
 

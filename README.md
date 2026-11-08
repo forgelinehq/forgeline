@@ -23,8 +23,9 @@ must approve. The sidebar has five spaces: **Home** (what needs you, an ask bar 
 security at a glance), **Build**, **Ship**, **Team** and **Watch**, with the pages as tabs inside
 each, and setup behind the Settings gear. In Settings › Connections › AWS › Services you choose,
 for each AWS service (S3, ECS, ECR and so on), whether the assistant and agents may not see it, only look,
-or propose changes that someone else approves. The console
-serves its own fonts and loads nothing from other hosts. [Screenshots](docs/console/README.md) and [design note 006](docs/design/006-console.md)
+or propose changes that someone else approves. People can sign in with
+your company login (OpenID Connect: Google, Entra ID, Okta, Keycloak) with roles from their groups. The
+console serves its own fonts and loads nothing from other hosts. [Screenshots](docs/console/README.md) and [design note 006](docs/design/006-console.md)
 show what each page does and what has not been checked.
 
 Accounts, pipelines, secrets and settings are kept in `<data-dir>/console.json`, encrypted where

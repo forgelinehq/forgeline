@@ -19,7 +19,7 @@ export async function peoplePage() {
       } }, Object.keys(ROLES).map(r => h('option', { value: r, selected: r === u.role }, r)));
       return h('tr', {},
         h('td', {}, h('div', { class: 'flex items-center gap-3' }, h('span', { class: 'flex size-8 items-center justify-center rounded-full bg-slate-200 text-xs font-semibold dark:bg-slate-700' }, u.username.slice(0, 1).toUpperCase()),
-          h('div', {}, h('div', { class: 'font-medium' }, u.name || u.username, self && h('span', { class: 'pill-idle ml-2' }, 'you')), h('div', { class: 'muted text-xs' }, u.username)))),
+          h('div', {}, h('div', { class: 'font-medium' }, u.name || u.username, self && h('span', { class: 'pill-idle ml-2' }, 'you')), h('div', { class: 'muted text-xs' }, u.username, u.sso ? h('span', { class: 'pill-run ml-2', title: 'Signs in with single sign-on; has no password' }, 'SSO') : null, u.email ? ' · ' + u.email : '')))),
         h('td', {}, role),
         h('td', {}, u.disabled ? h('span', { class: 'pill-bad' }, 'Disabled') : h('span', { class: 'pill-ok' }, 'Active')),
         h('td', { class: 'muted whitespace-nowrap text-sm', title: u.last_login_at ? absTime(u.last_login_at) : '' }, u.last_login_at ? relTime(u.last_login_at) : 'never'),
