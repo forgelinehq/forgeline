@@ -99,8 +99,11 @@ type CloudChange struct {
 	DecidedBy    string     `json:"decided_by,omitempty"`
 	DecidedAt    *time.Time `json:"decided_at,omitempty"`
 	DecisionNote string     `json:"decision_note,omitempty"`
-	FinishedAt   *time.Time `json:"finished_at,omitempty"`
-	Result       string     `json:"result,omitempty"`
+	// Approvals given so far, when the approval rules ask for more than one (note 032); Approval is filled in on reads.
+	Approvals  []approvalVote     `json:"approvals,omitempty"`
+	Approval   *ApprovalStateJSON `json:"approval,omitempty"`
+	FinishedAt *time.Time         `json:"finished_at,omitempty"`
+	Result     string             `json:"result,omitempty"`
 }
 
 func (c CloudChange) target() string {
@@ -207,6 +210,11 @@ func (s *Server) handleListChanges(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, "listing changes", err)
 		return
 	}
+	for i := range changes {
+		if changes[i].Status == stProposed {
+			changes[i].Approval = s.approvalState(r.Context(), approvalKindCons, changes[i].Conn, changes[i].Kind == kindStackDelete, changes[i].Approvals)
+		}
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"changes": changes})
 }
 
@@ -219,7 +227,11 @@ func (s *Server) handleGetChange(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, "reading the change", err)
 		return
 	}
-	writeJSON(w, http.StatusOK, expireIfStale(c))
+	c = expireIfStale(c)
+	if c.Status == stProposed {
+		c.Approval = s.approvalState(r.Context(), approvalKindCons, c.Conn, c.Kind == kindStackDelete, c.Approvals)
+	}
+	writeJSON(w, http.StatusOK, c)
 }
 
 // --- proposing ---
@@ -686,6 +698,25 @@ func (s *Server) approveChange(ctx context.Context, id string, p Principal, ip, 
 		return refuse(http.StatusConflict, "this change is "+c.Status+", not waiting for approval")
 	case c.ProposedBy == p.Name && !policy:
 		return refuse(http.StatusForbidden, "you proposed this change; someone else must approve it")
+	}
+	// The approval rules (note 032). The environment engine acting under an administrator's rule (policy) has
+	// its own rules (note 017) and is not counted here.
+	if !policy {
+		votes, need, done, vstatus, vmsg := s.vote(ctx, approvalKindCons, c.Conn, c.Kind == kindStackDelete, c.Approvals, p.Name, note)
+		if vmsg != "" {
+			return refuse(vstatus, vmsg)
+		}
+		c.Approvals = votes
+		if !done {
+			if err := s.docs.Put(ctx, kindCloud, c.ID, c); err != nil {
+				s.cloud.mu.Unlock()
+				return CloudChange{}, refusal(http.StatusInternalServerError, err.Error())
+			}
+			s.cloud.mu.Unlock()
+			_ = s.audit(ctx, p, ip, "cloud.approve", c.target(), fmt.Sprintf("%s — approval %d of %d recorded; waiting for another administrator", c.Title, len(votes), need.Needed), true)
+			c.Approval = s.approvalState(ctx, approvalKindCons, c.Conn, c.Kind == kindStackDelete, c.Approvals)
+			return c, nil
+		}
 	}
 	if s.cloud.busy == nil {
 		s.cloud.busy = map[string]string{}
