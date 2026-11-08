@@ -68,6 +68,10 @@ type User struct {
 	CreatedAt    time.Time  `json:"created_at"`
 	CreatedBy    string     `json:"created_by,omitempty"`
 	LastLoginAt  *time.Time `json:"last_login_at,omitempty"`
+	// Single sign-on (note 031): the provider and its stable id for this person. Empty for a local account.
+	SSOIssuer  string `json:"sso_issuer,omitempty"`
+	SSOSubject string `json:"sso_subject,omitempty"`
+	Email      string `json:"email,omitempty"`
 }
 
 // UserJSON is what the API shows of a User: never the hash.
@@ -80,11 +84,13 @@ type UserJSON struct {
 	CreatedAt   time.Time  `json:"created_at"`
 	CreatedBy   string     `json:"created_by,omitempty"`
 	LastLoginAt *time.Time `json:"last_login_at,omitempty"`
+	SSO         bool       `json:"sso,omitempty"` // signs in with single sign-on; has no password
+	Email       string     `json:"email,omitempty"`
 }
 
 func (u User) json() UserJSON {
 	return UserJSON{ID: u.ID, Username: u.Username, Name: u.Name, Role: u.Role, Disabled: u.Disabled,
-		CreatedAt: u.CreatedAt, CreatedBy: u.CreatedBy, LastLoginAt: u.LastLoginAt}
+		CreatedAt: u.CreatedAt, CreatedBy: u.CreatedBy, LastLoginAt: u.LastLoginAt, SSO: u.SSOSubject != "", Email: u.Email}
 }
 
 type sessionDoc struct {
@@ -316,8 +322,9 @@ type authStateJSON struct {
 	Authenticated bool      `json:"authenticated"`
 	User          *UserJSON `json:"user,omitempty"`
 	// Actor is the name shown for the shared bearer token, which has no user record.
-	Actor string `json:"actor,omitempty"`
-	Role  string `json:"role,omitempty"`
+	Actor string    `json:"actor,omitempty"`
+	Role  string    `json:"role,omitempty"`
+	SSO   ssoPublic `json:"sso"` // whether the sign-in page offers single sign-on
 }
 
 func (s *Server) handleAuthState(w http.ResponseWriter, r *http.Request) {
@@ -326,7 +333,7 @@ func (s *Server) handleAuthState(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, "reading accounts", err)
 		return
 	}
-	out := authStateJSON{SetupNeeded: n == 0}
+	out := authStateJSON{SetupNeeded: n == 0, SSO: s.ssoPublicState(r.Context())}
 	if p, ok := s.authenticate(r); ok {
 		out.Authenticated, out.Actor, out.Role = true, p.Name, string(p.Role)
 		if p.UserID != "" {
@@ -446,7 +453,10 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ok, rehash := false, false
-	if err == nil {
+	switch {
+	case err == nil && u.PasswordHash == "": // a single sign-on account has no password: fail, as slowly as a wrong one
+		authn.DummyVerify(req.Password)
+	case err == nil:
 		ok, rehash = authn.VerifyPassword(req.Password, u.PasswordHash)
 	}
 	if !ok || u.Disabled {

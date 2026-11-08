@@ -26,6 +26,7 @@ import { memoryPage } from './pages/memory.js';
 import { assistantButton } from './lib/assistant.js';
 import { visibleGroups, isSettingsPath, activeItem, canOpenSettings } from './lib/settingsnav.js';
 import { settingsPage } from './pages/settings.js';
+import { ssoPage } from './pages/sso.js';
 import { spacesFor, activeSpace, tabsFor, tabMatches } from './lib/nav.js';
 
 const root = document.getElementById('root');
@@ -191,7 +192,7 @@ async function boot() {
     mount(root, h('div', { class: 'mx-auto mt-24 max-w-md p-4' }, errorBox(e.message))); return;
   }
   if (state.setup_needed) { setupPage(root, boot); return; }
-  if (!state.authenticated) { loginPage(root, boot); return; }
+  if (!state.authenticated) { loginPage(root, boot, state.sso); return; }
   session.role = state.role; session.name = state.actor; session.user = state.user;
   signedOutHandled = false;
 
@@ -225,6 +226,7 @@ async function boot() {
     route('/secrets', guard('developer', inSettings(secretsPage)));
     route('/memory', guard('developer', inSettings(memoryPage)));
     route('/people', guard('admin', inSettings(peoplePage)));
+    route('/sso', guard('admin', inSettings(ssoPage)));
     route('/audit', guard('admin', inSettings(auditPage)));
     route('/account', guard('viewer', accountPage));
   }

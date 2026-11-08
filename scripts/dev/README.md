@@ -1,7 +1,7 @@
 # Development stand-ins
 
 Throwaway helpers for trying the console without touching real accounts. The Go tests do not use
-them (they have their own fakes). Never expose them to a network.
+them (they have their own fakes), except `fakeoidc`, which shares `internal/oidcfake` with the tests. Never expose them to a network.
 
 ## `fake-aws`: a stateful stand-in for the AWS CLI
 
@@ -18,6 +18,17 @@ To try several accounts, set `FAKE_AWS_ACCOUNTS="staging=444455556666"`: that pr
 its own state file. In the console create the administrator, a second administrator and a developer, connect AWS
 (leave the profile empty, any region), and walk a proposal through approval. Delete the state
 file to start over.
+
+## `fakeoidc`: a stand-in single sign-on provider
+
+```sh
+go run ./scripts/dev/fakeoidc -listen 127.0.0.1:9111 -client forgeline -secret dev-secret
+```
+
+In the console, **Settings → Sign-in (SSO)**: issuer `http://127.0.0.1:9111`, client ID `forgeline`, client secret
+`dev-secret`, Forgeline's address as you open it (for example `http://127.0.0.1:8081`), turn on **Let new people in**,
+and map a group such as `platform-admins` to a role. Sign out and press **Sign in with …**: the stand-in shows a form
+where you type who signs in (subject, email, groups). It signs in whoever you type, so keep it on loopback.
 
 ## `fake-github.py`: a stand-in for the GitHub API
 
