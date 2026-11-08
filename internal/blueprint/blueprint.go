@@ -514,7 +514,7 @@ func (b Blueprint) Checks() []Check {
 		}
 	}
 	if n := len(byKind[KindFrontDoor]); n > 0 {
-		ok(plural(n, "Only the front door is", "Only the front doors are") + " reachable from the internet; services take traffic only from their front door.")
+		ok(plural(n, "Only the front door is", "Only the front doors are") + " reachable from the internet; services take traffic only from their front door and the services that call them.")
 	} else {
 		ok("Nothing in it is reachable from the internet.")
 	}
@@ -547,7 +547,8 @@ func (b Blueprint) Checks() []Check {
 		if days == 0 {
 			days = 7
 		}
-		ok(fmt.Sprintf("%s (%s) is private and encrypted, keeps backups %d days, cannot be deleted by mistake, and AWS keeps its password: Forgeline never sees it.", d.Name, d.Engine, days))
+		engine := map[string]string{"mysql": "MySQL", "postgres": "PostgreSQL"}[d.Engine]
+		ok(fmt.Sprintf("%s (%s) is private and encrypted, keeps backups %d days, cannot be deleted by mistake, and AWS keeps its password: Forgeline never sees it.", d.Name, engine, days))
 		if !d.MultiAZ {
 			warn(d.Name + " runs in one availability zone; turn on multi-AZ to survive a zone failure.")
 		}

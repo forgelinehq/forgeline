@@ -147,8 +147,13 @@ export function toBody(bp, revision) {
 /** The drawn path of a link: from the right edge of one block to the left edge of the other. */
 export function linkPath(a, b) {
   const x1 = a.x + BLOCK_W, y1 = a.y + BLOCK_H / 2, x2 = b.x, y2 = b.y + BLOCK_H / 2;
-  // In the same column (one service calling another): a bracket on the right, from one block to the other.
-  if (Math.abs(a.x - b.x) < BLOCK_W / 2) return `M${x1} ${y1} C${x1 + 50} ${y1}, ${b.x + BLOCK_W + 50} ${y2}, ${b.x + BLOCK_W} ${y2}`;
+  // In the same column (one service calling another): from the bottom of one to the top of the other, clear of the
+  // lines that come in from the left and leave to the right.
+  if (Math.abs(a.x - b.x) < BLOCK_W / 2) {
+    const ax = a.x + BLOCK_W / 2, bx = b.x + BLOCK_W / 2;
+    return b.y > a.y ? `M${ax} ${a.y + BLOCK_H} C${ax} ${a.y + BLOCK_H + 20}, ${bx} ${b.y - 20}, ${bx} ${b.y}`
+      : `M${ax} ${a.y} C${ax} ${a.y - 20}, ${bx} ${b.y + BLOCK_H + 20}, ${bx} ${b.y + BLOCK_H}`;
+  }
   if (x2 >= x1) {
     const mid = (x1 + x2) / 2;
     return `M${x1} ${y1} C${mid} ${y1}, ${mid} ${y2}, ${x2} ${y2}`;
