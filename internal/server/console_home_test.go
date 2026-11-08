@@ -97,11 +97,11 @@ eq('a developer sees all five', ids('developer'), ['home', 'build', 'ship', 'tea
 eq('an unknown role sees nothing', ids('nobody'), []);
 eq('a space links to its first tab the role may open', spacesFor('developer').map(s => s.path), ['/', '/design', '/pipelines', '/team', '/map']);
 eq('a viewer sees only the Ship tabs they may open', tabsFor(SPACES.find(s => s.id === 'ship'), 'viewer').map(t => t.label), ['Pipelines']);
-eq('planned tabs are listed and never links', tabsFor(SPACES.find(s => s.id === 'team'), 'developer').map(t => (t.planned ? '~' : '') + t.label), ['Team', 'Agents', '~Missions', 'Marketplace']);
+eq('the team space has missions', tabsFor(SPACES.find(s => s.id === 'team'), 'developer').map(t => (t.planned ? '~' : '') + t.label), ['Team', 'Agents', 'Missions', 'Marketplace']);
 eq('build has the canvas first', tabsFor(SPACES.find(s => s.id === 'build'), 'developer').map(t => t.label), ['Design', 'Environments', 'Blueprints']);
 eq('planned tabs have no path', SPACES.every(s => s.tabs.every(t => !t.planned || !t.path)), true);
-eq('every page belongs to its space', ['/', '/proposals/abc', '/design/bp-1', '/blueprints', '/environments', '/pipelines/new', '/runs/r1', '/actions', '/team', '/agents/x', '/skills/y', '/workflow-runs/z', '/marketplace', '/map', '/infrastructure?tab=aws', '/kubernetes/k1', '/guard'].map(p => activeSpace(p)?.id),
-  ['home', 'home', 'build', 'build', 'build', 'ship', 'ship', 'ship', 'team', 'team', 'team', 'team', 'team', 'watch', 'watch', 'watch', 'watch']);
+eq('every page belongs to its space', ['/', '/proposals/abc', '/design/bp-1', '/blueprints', '/environments', '/pipelines/new', '/runs/r1', '/actions', '/team', '/agents/x', '/skills/y', '/workflow-runs/z', '/missions/ms-1', '/marketplace', '/map', '/infrastructure?tab=aws', '/kubernetes/k1', '/guard'].map(p => activeSpace(p)?.id),
+  ['home', 'home', 'build', 'build', 'build', 'ship', 'ship', 'ship', 'team', 'team', 'team', 'team', 'team', 'team', 'watch', 'watch', 'watch', 'watch']);
 eq('settings pages belong to no space', ['/settings', '/integrations', '/people', '/account'].map(p => activeSpace(p)), [null, null, null, null]);
 eq('Home matches only itself', [tabMatches(SPACES[0].tabs[0], '/'), tabMatches(SPACES[0].tabs[0], '/pipelines')], [true, false]);
 eq('active tab', [activeTab('/skills/a')?.label, activeTab('/guard')?.label, activeTab('/agentsx')?.label, activeTab('/team')?.label], ['Agents', 'Security', undefined, 'Team']);

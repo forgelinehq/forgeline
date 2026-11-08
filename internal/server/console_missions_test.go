@@ -4,6 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -216,5 +219,43 @@ func TestMissionGate(t *testing.T) {
 		if err := missionGate(c.ctx, c.call); (err == nil) != c.ok {
 			t.Errorf("case %d (%s %s): err = %v", i, c.call.Tool, c.call.Args, err)
 		}
+	}
+}
+
+const missionWordCases = `
+import { stageStates, columnOf, missionLine, findingsByRisk, outcome } from './missions.mjs';
+let failed = 0;
+const eq = (name, got, want) => { const g = JSON.stringify(got), w = JSON.stringify(want); if (g !== w) { failed++; console.error('FAIL ' + name + '\n  got  ' + g + '\n  want ' + w); } };
+const states = m => stageStates(m).map(s => s.state).join(' ');
+eq('discovering', states({ stage: 'discover', status: 'running', steps: [] }), 'now todo todo todo todo');
+eq('waiting for approval', states({ stage: 'approval', status: 'waiting', steps: [{ stage: 'discover' }, { stage: 'propose' }], proposals: ['p'] }), 'done done wait todo todo');
+eq('nothing found: straight to the report', states({ stage: 'report', status: 'done', steps: [{ stage: 'discover' }], proposals: [] }), 'done skipped skipped skipped done');
+eq('advisory: proposed, nothing to approve or verify', states({ stage: 'report', status: 'done', steps: [{ stage: 'discover' }, { stage: 'propose' }], proposals: [] }), 'done done skipped skipped done');
+eq('full', states({ stage: 'report', status: 'done', steps: [{ stage: 'discover' }, { stage: 'propose' }, { stage: 'verify' }], proposals: ['p'] }), 'done done done done done');
+eq('failed in discover', states({ stage: 'discover', status: 'failed', steps: [{ stage: 'discover' }] }), 'failed skipped skipped skipped skipped');
+eq('columns', ['running', 'waiting', 'done', 'stopped', 'cancelled'].map(s => columnOf({ status: s })), ['working', 'waiting', 'ended', 'ended', 'ended']);
+eq('line running', missionLine({ agent_name: 'Fixer', status: 'running', stage: 'verify', findings: [{}], proposals: [] }), 'Fixer · verify… · 1 finding');
+eq('line waiting', missionLine({ agent_name: 'Fixer', status: 'waiting', stage: 'approval', findings: [{}, {}], proposals: ['a', 'b'] }), 'Fixer · 2 proposals wait · 2 findings');
+eq('line stopped', missionLine({ agent_name: 'Fixer', status: 'stopped', findings: [], proposals: [] }), 'Fixer · stopped: budget used up');
+const m = { findings: [{ severity: 'low', title: 'a' }, { severity: 'high', title: 'b' }, { severity: 'info', title: 'c' }, { severity: 'high', title: 'd' }],
+  plan: [{ finding: 1, proposal: 'p1' }], evidence: [{ finding: 1, result: 'unknown' }, { finding: 1, result: 'fixed' }] };
+eq('worst first, numbers kept', findingsByRisk(m).map(f => f.title + f.n), ['b1', 'd3', 'a0', 'c2']);
+eq('outcome: the plan and the last evidence', outcome(m, 1), { plan: { finding: 1, proposal: 'p1' }, evidence: { finding: 1, result: 'fixed' } });
+eq('no outcome', outcome(m, 0), { plan: null, evidence: null });
+if (failed) process.exit(1);
+`
+
+func TestConsoleMissionWords(t *testing.T) {
+	node, err := exec.LookPath("node")
+	if err != nil {
+		t.Skip("node is not installed")
+	}
+	tmp := t.TempDir()
+	src, _ := uiFiles.ReadFile("ui/lib/missions.js")
+	os.WriteFile(filepath.Join(tmp, "missions.mjs"), src, 0o600)
+	test := filepath.Join(tmp, "cases.mjs")
+	os.WriteFile(test, []byte(missionWordCases), 0o600)
+	if out, err := exec.Command(node, test).CombinedOutput(); err != nil {
+		t.Fatalf("mission words failed:\n%s", out)
 	}
 }
