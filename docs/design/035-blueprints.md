@@ -1,6 +1,6 @@
 # 035: Blueprints and the design canvas
 
-Status: **Slice 1 (the model, its checks and the OpenTofu it generates) is built.** Date: 2026-11-08.
+Status: **Slices 1 (the model, its checks and the OpenTofu it generates) and 2 (the canvas) are built.** Date: 2026-11-08.
 Frame 4 of the confirmed screen frames (note 029). Decided by the maintainer on 2026-11-08: **OpenTofu**.
 
 ## Question
@@ -53,3 +53,18 @@ HTTPS redirect, name lengths, the same code every time). The generated code was 
 run that test. API: roles, a message that says where, an unknown account, revisions, author-only delete, audit.
 Node: the words for blocks and links, and every starting point is valid by the server's rules. 13 of 14 rules
 fail a test when removed; the 14th (escaping the image) cannot fail, since an image name may not contain `$` or `{`.
+
+## Slice 2: the canvas (built)
+
+| Decision | Choice |
+| --- | --- |
+| Page | Build › Design (`#/design/{id}`), the Build space's first tab; `#/design` opens the blueprint changed last |
+| Drawing | SVG only: a block is a group placed with a `transform` attribute, so the CSP needs no inline styles. It scales down to fit its panel, but not below a readable size (then it scrolls) |
+| Editing | Add from the toolbar (each kind starts valid); drag or arrow keys to move; the panel on the right edits the picked block's fields and its links. Only links the server would accept are offered (`ui/lib/canvas.js` mirrors the Go rules; the server stays the authority) |
+| Checking | Each change is sent to `POST /v1/blueprints/check`; the answer's `blocks[2]` and `links[0]` are shown as the names on the canvas. Save is off while there is a problem. Saving sends the revision it started from |
+| Layout | A blueprint with no positions is laid out in three columns: front doors, apps, then what apps use |
+
+Tested under Node: building the small web app only with the canvas's operations (and the server accepts the result),
+the links offered at each step, ids and names of added blocks, removing blocks and links, moving, layout, the
+messages, paths and bounds. Every kind's starting block is valid by the Go rules. Browser: drag, add, link, a
+problem named by its block with Save off, fix, save, reload; light and dark; no sideways scroll on a phone.

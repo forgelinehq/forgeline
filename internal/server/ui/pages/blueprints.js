@@ -47,7 +47,7 @@ async function newBlueprint() {
       try {
         const b = await post('/v1/blueprints', { name: name.value, target: { cloud: 'aws', account: acct.value, region: region.value.trim() }, blocks: s.blocks, links: s.links });
         close(true);
-        navigate('/blueprints/' + b.id);
+        navigate('/design/' + b.id);
       } catch (e) { mount(err, h('div', { class: 'mt-3' }, errorBox(e.message))); }
     } }, 'Create');
     return h('div', { class: 'space-y-4' }, field('Name', name), h('div', { class: 'grid gap-3 sm:grid-cols-2' }, field('AWS account', acct), field('Region', region)),
@@ -84,9 +84,10 @@ export async function blueprintPage({ params }) {
   };
   mount(el,
     pageHeader(b.name, `${b.target.account} · ${b.target.region} · changed by ${b.updated_by} ${relTime(b.updated_at)}`,
+      h('a', { class: 'btn-primary', href: '#/design/' + encodeURIComponent(b.id), id: 'open-canvas' }, icon('edit', 'size-4'), 'Open on the canvas'),
       h('button', { class: 'btn-secondary', type: 'button', id: 'show-code', onclick: toggleCode }, icon('git', 'size-4'), 'Code'),
       mayDelete && h('button', { class: 'btn-ghost text-rose-600 dark:text-rose-400', type: 'button', onclick: remove }, icon('trash', 'size-4'), 'Delete')),
-    h('div', { class: 'mb-4' }, notice('info', 'Editing blocks on the design canvas, previewing what AWS would do, and sending it for approval come next. For now a blueprint shows what it would build and the code for it.')),
+    h('div', { class: 'mb-4' }, notice('info', 'Change it on the design canvas. Previewing what AWS would do and sending it for approval come next.')),
     h('div', { class: 'grid gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]' },
       h('section', { class: 'card card-pad', id: 'blueprint-blocks' },
         h('h2', { class: 'h-section mb-3' }, 'Blocks'),

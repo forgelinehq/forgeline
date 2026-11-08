@@ -1,0 +1,282 @@
+// Build › Design (design note 035, slice 2): a blueprint on a canvas. Blocks are drawn in SVG (positions are
+// attributes, so the CSP needs no inline styles), dragged to move, and edited in the panel on the right. Every
+// change is checked by the server as you go; Save keeps it. Preview and approval are the next slice.
+import { h, icon, mount, pageHeader, relTime, spinner, errorBox, notice, toast, emptyState } from '../lib/dom.js';
+import { get, post, put } from '../lib/api.js';
+import { navigate } from '../lib/router.js';
+import { KINDS, blockFacts, linkWords } from '../lib/blueprint.js';
+import {
+  BLOCK_W, BLOCK_H, FARGATE, LOG_DAYS, autoLayout, addBlock, removeBlock, updateBlock, moveBlock, linkTargets,
+  addLink, removeLink, toBody, linkPath, bounds, fit, explainError,
+} from '../lib/canvas.js';
+
+/** Build › Design without a blueprint: open the one changed last, or say how to make one. */
+export async function designHomePage() {
+  const el = h('div', {});
+  mount(el, spinner());
+  let list = [];
+  try { list = (await get('/v1/blueprints')).blueprints; } catch (e) { mount(el, pageHeader('Design', ''), errorBox(e.message)); return el; }
+  if (list.length) { navigate('/design/' + list[0].id); return el; }
+  mount(el, pageHeader('Design', 'Draw what should exist in your cloud.'), h('div', { class: 'card' },
+    emptyState('layers', 'Nothing to design yet', 'Make a blueprint first; it opens here on the canvas.', h('a', { class: 'btn-primary', href: '#/blueprints' }, 'Go to Blueprints'))));
+  return el;
+}
+
+export async function designPage({ params }) {
+  const el = h('div', {});
+  mount(el, spinner());
+  let saved;
+  try { saved = await get('/v1/blueprints/' + encodeURIComponent(params.id)); } catch (e) { mount(el, pageHeader('Design', ''), errorBox(e.message)); return el; }
+  let others = [];
+  try { others = (await get('/v1/blueprints')).blueprints; } catch { /* the switcher is optional */ }
+
+  let revision = saved.revision;
+  let bp = autoLayout({ name: saved.name, description: saved.description || '', target: saved.target, blocks: saved.blocks, links: saved.links });
+  let clean = JSON.stringify(bp), selected = '', problem = '', checks = saved.checks, checkTimer = 0, checkSeq = 0;
+  const dirty = () => JSON.stringify(bp) !== clean;
+
+  const canvasBox = h('div', { class: 'overflow-auto', id: 'design-canvas' });
+  const inspector = h('aside', { class: 'card card-pad self-start', id: 'design-inspector', 'aria-label': 'Selected block' });
+  const side = h('div', { id: 'design-side' });
+  const tools = h('div', {});
+  const bar = h('div', {});
+
+  function change(next, { redraw = true } = {}) {
+    bp = next;
+    if (redraw) draw();
+    clearTimeout(checkTimer);
+    checkTimer = setTimeout(check, 350);
+    drawBar();
+  }
+
+  async function check() {
+    const seq = ++checkSeq;
+    try {
+      const r = await post('/v1/blueprints/check', toBody(bp, revision));
+      if (seq !== checkSeq) return; // a newer edit has been checked since
+      problem = r.error ? explainError(bp, r.error) : '';
+      checks = r.checks || [];
+    } catch (e) { problem = e.message; }
+    drawSide();
+    drawBar();
+  }
+
+  async function save() {
+    try {
+      const r = await put('/v1/blueprints/' + encodeURIComponent(saved.id), toBody(bp, revision));
+      revision = r.revision; checks = r.checks; clean = JSON.stringify(bp); problem = '';
+      toast('Saved', 'ok');
+    } catch (e) { problem = explainError(bp, e.message); toast(problem, 'error'); }
+    drawSide();
+    drawBar();
+  }
+
+  function drawBar() {
+    const can = dirty() && !problem;
+    mount(bar, h('div', { class: 'mb-4 flex flex-wrap items-center gap-2' },
+      h('span', { class: 'inline-flex overflow-hidden rounded-lg border border-slate-300 text-sm dark:border-slate-700' },
+        h('span', { class: 'bg-brand-600 px-3 py-1.5 text-white' }, 'AWS'), h('span', { class: 'px-3 py-1.5' }, bp.target.account + ' · ' + bp.target.region)),
+      others.length > 1 && h('select', { class: 'input h-9 w-auto py-0 text-sm', 'aria-label': 'Open another blueprint', onchange: (e) => navigate('/design/' + e.target.value) },
+        others.map(o => h('option', { value: o.id, selected: o.id === saved.id }, o.name))),
+      dirty() ? h('span', { class: 'pill-wait', id: 'design-dirty' }, 'Not saved') : h('span', { class: 'muted text-xs' }, 'Saved'),
+      h('span', { class: 'flex-1' }),
+      h('a', { class: 'btn-secondary btn-sm', href: '#/blueprints/' + saved.id }, icon('git', 'size-3.5'), 'Code'),
+      h('button', { class: 'btn-secondary btn-sm', type: 'button', disabled: true, title: 'Comes next: tofu plan, drawn on the canvas' }, 'Preview changes'),
+      h('button', { class: 'btn-secondary btn-sm', type: 'button', disabled: true, title: 'Comes next: a cloud change a different administrator approves' }, 'Send for approval'),
+      h('button', { class: 'btn-primary btn-sm', type: 'button', id: 'design-save', disabled: !can, onclick: save }, 'Save')));
+  }
+
+  function drawTools() {
+    mount(tools, h('div', { class: 'flex flex-wrap items-center gap-1.5 border-b border-slate-200 px-3 py-2 dark:border-slate-800', role: 'toolbar', 'aria-label': 'Add a block' },
+      h('span', { class: 'muted mr-1 text-xs' }, 'Add'),
+      Object.entries(KINDS).map(([k, v]) =>
+        h('button', { type: 'button', class: 'flex items-center gap-1.5 rounded-lg border border-slate-200 px-2 py-1 text-xs hover:border-brand-400 dark:border-slate-700', 'data-add': k,
+          onclick: () => { const r = addBlock(bp, k); selected = r.id; change(r.bp); drawInspector(); } }, icon(v.icon, 'size-3.5 text-slate-500'), v.label))));
+  }
+
+  function drawSide() {
+    mount(side,
+      h('section', { class: 'card card-pad', id: 'design-checks', 'aria-live': 'polite' }, h('h2', { class: 'h-section mb-2' }, 'What it means'),
+        problem ? h('div', { id: 'design-problem' }, errorBox(problem)) : null,
+        h('ul', { class: 'mt-2 grid gap-x-6 gap-y-2 text-sm md:grid-cols-2' }, (problem ? [] : checks).map(c => h('li', { class: 'flex items-start gap-2' },
+          h('span', { class: c.level === 'ok' ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400' }, icon(c.level === 'ok' ? 'check' : 'alert', 'mt-0.5 size-4')), c.text)))));
+  }
+
+  // ---------------------------------------------------------------- the drawing
+
+  function draw() {
+    const { w, h: ht } = bounds(bp);
+    const byId = Object.fromEntries(bp.blocks.map(b => [b.id, b]));
+    const svg = h('svg', { width: String(w), height: String(ht), viewBox: `0 0 ${w} ${ht}`, class: 'block h-auto max-w-full min-w-[36rem] select-none', role: 'group', 'aria-label': 'Blueprint drawing' });
+    for (const l of bp.links) {
+      const a = byId[l.from], b = byId[l.to];
+      if (!a || !b) continue;
+      const traffic = a.kind === 'frontdoor', logs = b.kind === 'logs';
+      const on = selected && (l.from === selected || l.to === selected);
+      svg.append(h('path', { d: linkPath(a, b), fill: 'none', 'stroke-width': on ? '2.5' : '1.75', 'stroke-dasharray': logs ? '5 4' : '',
+        class: traffic ? 'stroke-brand-500' : on ? 'stroke-slate-600 dark:stroke-slate-300' : 'stroke-slate-400 dark:stroke-slate-500', 'data-link': l.from + '>' + l.to },
+        h('title', {}, linkWords(bp, l))));
+    }
+    for (const b of bp.blocks) svg.append(blockNode(b));
+    mount(canvasBox, svg);
+  }
+
+  function blockNode(b) {
+    const k = KINDS[b.kind] || { label: b.kind, tech: '' };
+    const on = b.id === selected, existing = b.kind === 'existing';
+    const g = h('g', { transform: `translate(${b.x} ${b.y})`, tabindex: '0', role: 'button', 'aria-pressed': String(on), 'aria-label': b.name + ', ' + k.label, 'data-block': b.id, class: 'cursor-grab focus:outline-none' },
+      h('rect', { width: String(BLOCK_W), height: String(BLOCK_H), rx: '12', 'stroke-width': on ? '2.5' : '1.25', 'stroke-dasharray': existing ? '5 4' : '',
+        class: (existing ? 'fill-slate-50 dark:fill-slate-900/60 ' : 'fill-white dark:fill-slate-900 ') + (on ? 'stroke-brand-500' : b.kind === 'frontdoor' ? 'stroke-brand-400' : 'stroke-slate-300 dark:stroke-slate-700') }),
+      h('text', { x: '14', y: '24', class: 'fill-slate-900 text-[13px] font-semibold dark:fill-slate-100' }, fit(b.name, 21)),
+      h('text', { x: String(BLOCK_W - 12), y: '24', 'text-anchor': 'end', class: 'fill-slate-400 text-[10px] uppercase tracking-wide' }, k.label),
+      h('text', { x: '14', y: '44', class: 'fill-slate-500 text-[11px] dark:fill-slate-400' }, fit(k.tech, 28)),
+      h('text', { x: '14', y: '58', class: 'fill-slate-500 text-[10px] dark:fill-slate-400' }, fit(blockFacts(b), 33)),
+      h('title', {}, b.name + ' · ' + blockFacts(b)));
+    // Drag to move; a press without moving selects. Arrow keys move a focused block.
+    g.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return;
+      const svg = g.ownerSVGElement, start = { x: e.clientX, y: e.clientY, bx: b.x, by: b.y };
+      const scale = svg.getBoundingClientRect().width / Number(svg.getAttribute('width')) || 1;
+      let moved = false;
+      g.setPointerCapture(e.pointerId);
+      const onMove = (ev) => {
+        const dx = (ev.clientX - start.x) / scale, dy = (ev.clientY - start.y) / scale;
+        if (!moved && Math.hypot(dx, dy) < 4) return;
+        moved = true;
+        g.setAttribute('transform', `translate(${Math.max(0, start.bx + dx)} ${Math.max(0, start.by + dy)})`);
+      };
+      const onUp = (ev) => {
+        g.removeEventListener('pointermove', onMove);
+        g.removeEventListener('pointerup', onUp);
+        if (moved) change(moveBlock(bp, b.id, start.bx + (ev.clientX - start.x) / scale, start.by + (ev.clientY - start.y) / scale));
+        else select(b.id === selected ? '' : b.id);
+      };
+      g.addEventListener('pointermove', onMove);
+      g.addEventListener('pointerup', onUp);
+    });
+    g.addEventListener('keydown', (e) => {
+      const step = e.shiftKey ? 40 : 10, d = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[e.key];
+      if (d) { e.preventDefault(); change(moveBlock(bp, b.id, b.x + d[0], b.y + d[1])); canvasBox.querySelector(`[data-block="${b.id}"]`)?.focus(); }
+      else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); select(b.id === selected ? '' : b.id); }
+    });
+    return g;
+  }
+
+  function select(id) {
+    selected = id;
+    draw();
+    drawInspector();
+  }
+
+  // ---------------------------------------------------------------- the panel
+
+  function input(label, value, onChange, attrs = {}) {
+    const id = 'f-' + label.toLowerCase().replace(/[^a-z]+/g, '-');
+    const el = h('input', { id, class: 'input', value: value ?? '', ...attrs });
+    el.addEventListener('change', () => onChange(attrs.type === 'number' ? (el.value === '' ? '' : Number(el.value)) : el.value.trim()));
+    return h('div', {}, h('label', { class: 'label', for: id }, label), el);
+  }
+  function select_(label, value, options, onChange) {
+    const id = 'f-' + label.toLowerCase().replace(/[^a-z]+/g, '-');
+    const el = h('select', { id, class: 'input' }, options.map(([v, t]) => h('option', { value: String(v), selected: String(v) === String(value) }, t)));
+    el.addEventListener('change', () => onChange(el.value));
+    return h('div', {}, h('label', { class: 'label', for: id }, label), el);
+  }
+
+  function drawInspector() {
+    const b = bp.blocks.find(x => x.id === selected);
+    if (!b) {
+      mount(inspector, h('h2', { class: 'h-section mb-3' }, 'Blueprint'),
+        h('div', { class: 'space-y-3' },
+          input('Name', bp.name, v => change({ ...bp, name: v }, { redraw: false })),
+          h('p', { class: 'hint' }, 'Pick a block to change it. Drag blocks to move them; arrow keys move the one in focus.')));
+      return;
+    }
+    const set = (fields) => change(updateBlock(bp, b.id, fields));
+    const k = KINDS[b.kind];
+    const fields = [input('Name', b.name, v => set({ name: v }))];
+    switch (b.kind) {
+      case 'service':
+        fields.push(input('Container image', b.image, v => set({ image: v }), { placeholder: 'nginx:1.29' }),
+          h('div', { class: 'grid grid-cols-2 gap-2' },
+            select_('CPU', b.cpu, Object.keys(FARGATE).map(c => [c, c / 1024 + ' vCPU']), v => set({ cpu: Number(v), memory: FARGATE[v][0] })),
+            select_('Memory', b.memory, (FARGATE[b.cpu] || []).map(m => [m, m / 1024 + ' GB']), v => set({ memory: Number(v) }))),
+          h('div', { class: 'grid grid-cols-2 gap-2' },
+            input('Tasks', b.count ?? 0, v => set({ count: v }), { type: 'number', min: '0', max: '10' }),
+            input('Port', b.port ?? '', v => set({ port: v }), { type: 'number', min: '1', max: '65535', placeholder: 'none' })));
+        {
+          const id = 'f-settings';
+          const ta = h('textarea', { id, class: 'input font-mono text-xs', rows: '3', placeholder: 'MODE=production' }, Object.entries(b.env || {}).map(([k2, v]) => k2 + '=' + v).join('\n'));
+          ta.addEventListener('change', () => {
+            const env = {};
+            for (const line of ta.value.split('\n')) { const i = line.indexOf('='); if (i > 0) env[line.slice(0, i).trim()] = line.slice(i + 1); }
+            set({ env: Object.keys(env).length ? env : null });
+          });
+          fields.push(h('div', {}, h('label', { class: 'label', for: id }, 'Settings'), ta, h('p', { class: 'hint' }, 'One NAME=value per line. Not for secrets.')));
+        }
+        break;
+      case 'frontdoor':
+        fields.push(input('Health check path', b.health_path, v => set({ health_path: v }), { placeholder: '/' }),
+          input('Certificate (for HTTPS)', b.certificate, v => set({ certificate: v }), { placeholder: 'arn:aws:acm:…' }));
+        break;
+      case 'table':
+        fields.push(h('div', { class: 'grid grid-cols-[1fr_auto] gap-2' }, input('Key', b.partition_key, v => set({ partition_key: v })),
+          select_('Key type', b.partition_type, [['S', 'Text'], ['N', 'Number']], v => set({ partition_type: v }))),
+        h('div', { class: 'grid grid-cols-[1fr_auto] gap-2' }, input('Sort key', b.sort_key, v => set({ sort_key: v, sort_type: v ? (b.sort_type || 'S') : null }), { placeholder: 'optional' }),
+          select_('Sort type', b.sort_type || 'S', [['S', 'Text'], ['N', 'Number']], v => set({ sort_type: b.sort_key ? v : null }))));
+        break;
+      case 'bucket': {
+        const cb = h('input', { id: 'f-versions', type: 'checkbox', class: 'size-4', checked: !!b.versioning });
+        cb.addEventListener('change', () => set({ versioning: cb.checked }));
+        fields.push(h('label', { class: 'flex items-center gap-2 text-sm', for: 'f-versions' }, cb, 'Keep old versions of files'));
+        break;
+      }
+      case 'queue':
+        fields.push(input('Keep messages (days)', b.retention_days ?? '', v => set({ retention_days: v }), { type: 'number', min: '1', max: '14', placeholder: '4' }));
+        break;
+      case 'logs':
+        fields.push(select_('Keep logs', b.retention_days, LOG_DAYS.map(d => [d, d + ' days']), v => set({ retention_days: Number(v) })));
+        break;
+      case 'existing':
+        fields.push(select_('What it is', b.existing?.type, [['table', 'DynamoDB table'], ['bucket', 'S3 bucket'], ['queue', 'SQS queue']], v => set({ existing: { ...b.existing, type: v } })),
+          input('Its name in AWS', b.existing?.name, v => set({ existing: { ...b.existing, name: v } })),
+          h('p', { class: 'hint' }, 'Used as it is. Forgeline never creates, changes or deletes it.'));
+        break;
+    }
+
+    // Links from and to this block, in words, and the ones it may add.
+    const mine = bp.links.filter(l => l.from === b.id || l.to === b.id);
+    const targets = linkTargets(bp, b.id);
+    let linkUI = null;
+    if (targets.length) {
+      const to = h('select', { id: 'f-link-to', class: 'input', 'aria-label': 'Link to' }, targets.map(t => h('option', { value: t.id }, t.name)));
+      const access = h('select', { id: 'f-link-access', class: 'input w-auto', 'aria-label': 'Access' }, h('option', { value: 'readwrite' }, 'reads and writes'), h('option', { value: 'read' }, 'reads'));
+      const sync = () => { access.hidden = !targets.find(t => t.id === to.value)?.access; };
+      to.addEventListener('change', sync); sync();
+      linkUI = h('div', { class: 'mt-2 flex flex-wrap gap-2' }, to, access,
+        h('button', { class: 'btn-secondary btn-sm', type: 'button', id: 'f-link-add', onclick: () => {
+          const t = targets.find(x => x.id === to.value);
+          change(addLink(bp, b.id, to.value, t?.access ? access.value : ''));
+          drawInspector();
+        } }, icon('link', 'size-3.5'), 'Link'));
+    }
+    mount(inspector,
+      h('div', { class: 'mb-3 flex items-center justify-between gap-2' }, h('h2', { class: 'h-section' }, k.label + ' · ' + k.tech),
+        h('button', { class: 'btn-ghost btn-sm', type: 'button', 'aria-label': 'Close', onclick: () => select('') }, icon('x', 'size-4'))),
+      h('div', { class: 'space-y-3' }, fields),
+      h('div', { class: 'mt-5 border-t border-slate-200 pt-4 dark:border-slate-800' }, h('h3', { class: 'h-section mb-2' }, 'Links'),
+        mine.length ? h('ul', { class: 'space-y-1 text-sm', id: 'f-links' }, mine.map(l => h('li', { class: 'flex items-center justify-between gap-2' }, linkWords(bp, l),
+          h('button', { class: 'btn-ghost btn-sm', type: 'button', 'aria-label': 'Remove the link: ' + linkWords(bp, l), onclick: () => { change(removeLink(bp, l.from, l.to)); drawInspector(); } }, icon('x', 'size-3.5'))))) : h('p', { class: 'muted text-xs' }, 'No links yet.'),
+        linkUI),
+      h('div', { class: 'mt-5 flex justify-end' }, h('button', { class: 'btn-ghost btn-sm text-rose-600 dark:text-rose-400', type: 'button', id: 'f-remove', onclick: () => { const next = removeBlock(bp, b.id); selected = ''; change(next); drawInspector(); } }, icon('trash', 'size-3.5'), 'Remove block')));
+  }
+
+  mount(el,
+    pageHeader(saved.name, 'Changed by ' + saved.updated_by + ' ' + relTime(saved.updated_at) + '. Drag blocks to arrange them; pick one to change it.'),
+    bar,
+    h('div', { class: 'grid gap-4 xl:grid-cols-[minmax(0,1fr)_18rem]' },
+      h('div', { class: 'min-w-0 space-y-4' }, h('section', { class: 'card overflow-hidden' }, tools, h('div', { class: 'p-2' }, canvasBox)), side), inspector),
+    h('p', { class: 'hint mt-3' }, 'Orange lines carry traffic from the internet; grey lines are an app using data; dashed lines are logs; dashed blocks already exist and are kept as they are.'));
+  drawBar(); drawTools(); drawSide(); draw(); drawInspector();
+  return el;
+}
