@@ -1,6 +1,6 @@
 # 039: More blueprint blocks: databases, Redis, secrets, service calls, scaling and paths
 
-Status: **Design (2026-11-08), being built.** Extends note 035.
+Status: **Built (2026-11-08).** Extends note 035.
 
 ## Question
 
@@ -16,9 +16,9 @@ without Forgeline ever seeing a password?
 | A relational database | **database** block: `engine` mysql or postgres, `size` (small, medium, large: db.t4g.micro/small/medium), `storage_gb` 20 to 1000, `multi_az`, `backup_days` 1 to 35 | `aws_db_instance` in a subnet group of the default VPC's subnets, with `manage_master_user_password`: **AWS creates and keeps the password in Secrets Manager**; Forgeline never sees it | Encrypted, not public, deletion protection, `prevent_destroy`, a final snapshot, backups 7 days by default |
 | Redis | **cache** block: `size` (small, medium: cache.t4g.micro/small), `nodes` 1 to 3 | `aws_elasticache_replication_group` (Redis OSS) in a subnet group, encryption at rest and in transit | Not public; only linked services may connect |
 | A secret the app needs | **secret** block: a name and a description | `aws_secretsmanager_secret` **with no value**: a person sets the value in AWS (the page says where); Forgeline never reads or stores it | `prevent_destroy`; only linked services may read it |
-| A service uses a database | link service → database (`access` readwrite) | The database's security group accepts the service on its port; the container gets `DB_HOST`, `DB_PORT`, `DB_NAME`, and `DB_USERNAME` and `DB_PASSWORD` **injected by ECS from the AWS-managed secret** at start; the task's execution role may read only that secret | |
-| A service uses Redis | link service → cache | Port 6379 opened to the service only; `REDIS_HOST`, `REDIS_PORT` | TLS on |
-| A service reads a secret | link service → secret | ECS injects it as an environment variable named after the block (`SECRET_<ID>`), from Secrets Manager at start; only that secret's ARN is readable | The value never passes through Forgeline |
+| A service uses a database | link service → database (no access level: the link is the access) | The database's security group accepts the service on its port; the container gets `<ID>_HOST`, `<ID>_PORT`, `<ID>_NAME`, and `<ID>_USERNAME` and `<ID>_PASSWORD` (a block `db` gives `DB_HOST` and so on) **injected by ECS from the AWS-managed secret** at start; the task's execution role may read only that secret | |
+| A service uses Redis | link service → cache | Port 6379 opened to the service only; `<ID>_HOST`, `<ID>_PORT`, `<ID>_TLS=true` | TLS on |
+| A service reads a secret | link service → secret | ECS injects it as an environment variable named after the block (`stripe-key` gives `STRIPE_KEY`), from Secrets Manager at start; only that secret's ARN is readable | The value never passes through Forgeline |
 | A service calls another | link service → service (`calls`) | A private DNS namespace (Cloud Map) for the blueprint; the called service registers there; its security group accepts the caller on its port; the caller gets `<ID>_URL=http://<id>.<namespace>:<port>` | The called service stays private |
 | Scaling | service fields `min`, `max` (1 to 20), `cpu_target` (percent) | `aws_appautoscaling_target` and a target-tracking policy on average CPU; `count` is the starting number | Only when `max` is above `min` |
 | One door, several services | link front door → service with a `path` (for example `/api/*`) | A listener rule per path to that service's target group; the link without a path is the default | At most 10 paths; exactly one default |

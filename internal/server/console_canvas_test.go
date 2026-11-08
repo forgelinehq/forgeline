@@ -26,7 +26,7 @@ eq('ids', [door, app, table, logs], ['door', 'app', 'table', 'logs']);
 eq('the original is not changed', empty.blocks.length, 0);
 eq('columns: doors, apps, then data', bp.blocks.map(b => b.x), [96, 346, 596, 596]);
 eq('stacked in a column', bp.blocks.filter(b => b.x === 596).map(b => b.y), [40, 140]);
-eq('a door may send traffic to the app', linkTargets(bp, door), [{ id: 'app', name: 'App', access: false }]);
+eq('a door may send traffic to the app', linkTargets(bp, door), [{ id: 'app', name: 'App', access: false, path: false }]);
 eq('an app may use data and logs', linkTargets(bp, app).map(t => [t.id, t.access]), [['table', true], ['logs', false]]);
 eq('a table links to nothing', linkTargets(bp, table), []);
 bp = addLink(bp, door, app);
@@ -70,6 +70,24 @@ eq('logs flow out of the app', flowOf(fb, { from: 'a', to: 'l' }), 'forward');
 eq('reading brings data back to the app', flowOf(fb, { from: 'a', to: 't', access: 'read' }), 'back');
 eq('reading and writing goes both ways', flowOf(fb, { from: 'a', to: 'q', access: 'readwrite' }), 'both');
 eq('a link to nothing has no flow', flowOf(fb, { from: 'a', to: 'gone' }), null);
+
+// Note 039: databases, caches, secrets, service calls and paths.
+{
+  let w = { blocks: [], links: [] };
+  const add = (k, f) => { const r = addBlock(w, k); w = updateBlock(r.bp, r.id, f || {}); return r.id; };
+  const d = add('frontdoor'), fe = add('service', { name: 'Frontend' }), be = add('service', { name: 'Backend', port: 8080 }), wk = add('service', { name: 'Worker', port: null });
+  const db = add('database'), rc = add('cache'), sc = add('secret'), old = add('existing', { existing: { type: 'database', name: 'legacy' } });
+  eq('new kinds start valid', [db, rc, sc], ['db', 'cache', 'secret']);
+  eq('the first front-door link is the default', linkTargets(w, d).map(t => [t.id, t.path]), [[fe, false], [be, false]]);
+  w = addLink(w, d, fe);
+  eq('then other services take a path', linkTargets(w, d).map(t => [t.id, t.path]), [[be, true]]);
+  w = addLink(w, d, be, '', '/api/*');
+  eq('the path is kept', w.links[1], { from: d, to: be, path: '/api/*' });
+  const t = Object.fromEntries(linkTargets(w, fe).map(x => [x.id, x.access]));
+  eq('a service may call one with a port, not itself or one without', [be in t, fe in t, wk in t], [true, false, false]);
+  eq('databases, caches, secrets and existing ones need no access', [t[db], t[rc], t[sc], t[old]], [false, false, false, false]);
+  eq('calls and databases flow both ways, secrets come back', [flowOf(w, { from: fe, to: be }), flowOf(w, { from: be, to: db }), flowOf(w, { from: be, to: sc }), flowOf(w, { from: be, to: old })], ['both', 'both', 'back', 'both']);
+}
 console.log(JSON.stringify({ built: toBody(bp, 3), defaults: DEFAULTS }));
 if (failed) process.exit(1);
 `

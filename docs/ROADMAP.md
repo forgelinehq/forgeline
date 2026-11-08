@@ -23,7 +23,7 @@ in [PLAN.md](PLAN.md).
 
 ## Next: more blueprint blocks (note 039)
 
-Status: **designed, being built.** Databases (RDS MySQL or Postgres, with the password created and kept by AWS),
+Status: **built (2026-11-08).** Databases (RDS MySQL or Postgres, with the password created and kept by AWS),
 Redis, secrets whose values Forgeline never sees, one service calling another, autoscaling, and several paths behind
 one front door. See [note 039](design/039-more-blueprint-blocks.md).
 

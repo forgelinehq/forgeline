@@ -4,7 +4,7 @@
 import { h, icon, mount, pageHeader, relTime, spinner, errorBox, notice, toast, emptyState, modal, field } from '../lib/dom.js';
 import { get, post, put } from '../lib/api.js';
 import { navigate } from '../lib/router.js';
-import { KINDS, blockFacts, linkWords } from '../lib/blueprint.js';
+import { KINDS, EXISTING, DB_SIZES, CACHE_SIZES, blockFacts, linkWords } from '../lib/blueprint.js';
 import { flowPath } from '../lib/flow.js';
 import {
   BLOCK_W, BLOCK_H, FARGATE, LOG_DAYS, autoLayout, addBlock, removeBlock, updateBlock, moveBlock, linkTargets,
@@ -326,6 +326,16 @@ export async function designPage({ params }) {
             input('Tasks', b.count ?? 0, v => set({ count: v }), { type: 'number', min: '0', max: '10' }),
             input('Port', b.port ?? '', v => set({ port: v }), { type: 'number', min: '1', max: '65535', placeholder: 'none' })));
         {
+          const cb = h('input', { id: 'f-scale', type: 'checkbox', class: 'size-4', checked: !!b.max });
+          cb.addEventListener('change', () => set(cb.checked ? { min: Math.max(1, b.count || 1), max: Math.max(2, (b.count || 1) * 2), cpu_target: 60, count: Math.max(1, b.count || 1) } : { min: null, max: null, cpu_target: null }));
+          fields.push(h('label', { class: 'flex items-center gap-2 text-sm', for: 'f-scale' }, cb, 'Scale with load'));
+          if (b.max) fields.push(h('div', { class: 'grid grid-cols-3 gap-2' },
+            input('Fewest', b.min, v => set({ min: v }), { type: 'number', min: '1', max: '20' }),
+            input('Most', b.max, v => set({ max: v }), { type: 'number', min: '1', max: '20' }),
+            input('CPU aim %', b.cpu_target ?? 60, v => set({ cpu_target: v }), { type: 'number', min: '20', max: '90' })),
+            h('p', { class: 'hint' }, 'Adds tasks when average CPU is above the aim and removes them when it is below. Tasks is where it starts.'));
+        }
+        {
           const id = 'f-settings';
           const ta = h('textarea', { id, class: 'input font-mono text-xs', rows: '3', placeholder: 'MODE=production' }, Object.entries(b.env || {}).map(([k2, v]) => k2 + '=' + v).join('\n'));
           ta.addEventListener('change', () => {
@@ -358,8 +368,31 @@ export async function designPage({ params }) {
       case 'logs':
         fields.push(select_('Keep logs', b.retention_days, LOG_DAYS.map(d => [d, d + ' days']), v => set({ retention_days: Number(v) })));
         break;
+      case 'database': {
+        const cb = h('input', { id: 'f-multi-az', type: 'checkbox', class: 'size-4', checked: !!b.multi_az });
+        cb.addEventListener('change', () => set({ multi_az: cb.checked }));
+        fields.push(h('div', { class: 'grid grid-cols-2 gap-2' },
+          select_('Engine', b.engine, [['mysql', 'MySQL'], ['postgres', 'PostgreSQL']], v => set({ engine: v })),
+          select_('Size', b.size, Object.entries(DB_SIZES).map(([k2, v]) => [k2, k2 + ' (' + v + ')']), v => set({ size: v }))),
+        h('div', { class: 'grid grid-cols-2 gap-2' },
+          input('Storage (GB)', b.storage_gb, v => set({ storage_gb: v }), { type: 'number', min: '20', max: '1000' }),
+          input('Backups (days)', b.backup_days ?? '', v => set({ backup_days: v }), { type: 'number', min: '1', max: '35', placeholder: '7' })),
+        h('label', { class: 'flex items-center gap-2 text-sm', for: 'f-multi-az' }, cb, 'Run in two zones'),
+        h('p', { class: 'hint' }, 'Private and encrypted, protected from deletion. AWS creates the password and keeps it in Secrets Manager; linked apps get it when they start. Forgeline never sees it.'));
+        break;
+      }
+      case 'cache':
+        fields.push(h('div', { class: 'grid grid-cols-2 gap-2' },
+          select_('Size', b.size, Object.entries(CACHE_SIZES).map(([k2, v]) => [k2, k2 + ' (' + v + ')']), v => set({ size: v })),
+          input('Nodes', b.nodes ?? 1, v => set({ nodes: v === 1 ? null : v }), { type: 'number', min: '1', max: '3' })),
+        h('p', { class: 'hint' }, 'Redis, private, encrypted in transit and at rest. Two or three nodes fail over on their own.'));
+        break;
+      case 'secret':
+        fields.push(input('What it holds', b.description, v => set({ description: v }), { placeholder: 'the payments API key' }),
+          h('p', { class: 'hint' }, 'Created empty. Set its value in AWS Secrets Manager after it is built; linked apps get it when they start. Forgeline never reads or stores it.'));
+        break;
       case 'existing':
-        fields.push(select_('What it is', b.existing?.type, [['table', 'DynamoDB table'], ['bucket', 'S3 bucket'], ['queue', 'SQS queue']], v => set({ existing: { ...b.existing, type: v } })),
+        fields.push(select_('What it is', b.existing?.type, Object.entries(EXISTING), v => set({ existing: { ...b.existing, type: v } })),
           input('Its name in AWS', b.existing?.name, v => set({ existing: { ...b.existing, name: v } })),
           h('p', { class: 'hint' }, 'Used as it is. Forgeline never creates, changes or deletes it.'));
         break;
@@ -372,12 +405,13 @@ export async function designPage({ params }) {
     if (targets.length) {
       const to = h('select', { id: 'f-link-to', class: 'input', 'aria-label': 'Link to' }, targets.map(t => h('option', { value: t.id }, t.name)));
       const access = h('select', { id: 'f-link-access', class: 'input w-auto', 'aria-label': 'Access' }, h('option', { value: 'readwrite' }, 'reads and writes'), h('option', { value: 'read' }, 'reads'));
-      const sync = () => { access.hidden = !targets.find(t => t.id === to.value)?.access; };
+      const path = h('input', { id: 'f-link-path', class: 'input w-28', 'aria-label': 'Path', placeholder: '/api/*' });
+      const sync = () => { const t = targets.find(x => x.id === to.value); access.hidden = !t?.access; path.hidden = !t?.path; };
       to.addEventListener('change', sync); sync();
-      linkUI = h('div', { class: 'mt-2 flex flex-wrap gap-2' }, to, access,
+      linkUI = h('div', { class: 'mt-2 flex flex-wrap gap-2' }, to, access, path,
         h('button', { class: 'btn-secondary btn-sm', type: 'button', id: 'f-link-add', onclick: () => {
           const t = targets.find(x => x.id === to.value);
-          change(addLink(bp, b.id, to.value, t?.access ? access.value : ''));
+          change(addLink(bp, b.id, to.value, t?.access ? access.value : '', t?.path ? path.value.trim() : ''));
           drawInspector();
         } }, icon('link', 'size-3.5'), 'Link'));
     }

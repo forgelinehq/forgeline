@@ -19,10 +19,13 @@ const (
 	KindQueue     = "queue"     // an SQS queue
 	KindLogs      = "logs"      // a CloudWatch log group
 	KindExisting  = "existing"  // something that already exists: drawn, linked to, never created or changed
+	KindDatabase  = "database"  // an RDS database, MySQL or Postgres (note 039)
+	KindCache     = "cache"     // a Redis cache (ElastiCache)
+	KindSecret    = "secret"    // a Secrets Manager secret whose value a person sets in AWS
 )
 
 // Kinds lists the block kinds in the order the canvas offers them.
-var Kinds = []string{KindFrontDoor, KindService, KindTable, KindBucket, KindQueue, KindLogs, KindExisting}
+var Kinds = []string{KindFrontDoor, KindService, KindTable, KindBucket, KindQueue, KindLogs, KindDatabase, KindCache, KindSecret, KindExisting}
 
 // Access a service has to what it uses.
 const (
@@ -69,6 +72,10 @@ type Block struct {
 	Count  int               `json:"count,omitempty"`  // tasks to run, 0 to 10
 	Port   int               `json:"port,omitempty"`   // the port the container listens on
 	Env    map[string]string `json:"env,omitempty"`    // plain settings, not secrets
+	// Scaling: between Min and Max tasks, keeping average CPU near CPUTarget percent. Off when Max is 0.
+	Min       int `json:"min,omitempty"`
+	Max       int `json:"max,omitempty"`
+	CPUTarget int `json:"cpu_target,omitempty"`
 
 	// frontdoor
 	HealthPath  string `json:"health_path,omitempty"`
@@ -86,13 +93,26 @@ type Block struct {
 	// queue and logs
 	RetentionDays int `json:"retention_days,omitempty"`
 
+	// database
+	Engine     string `json:"engine,omitempty"` // mysql or postgres
+	Size       string `json:"size,omitempty"`   // database and cache: small, medium or large
+	StorageGB  int    `json:"storage_gb,omitempty"`
+	MultiAZ    bool   `json:"multi_az,omitempty"`
+	BackupDays int    `json:"backup_days,omitempty"`
+
+	// cache
+	Nodes int `json:"nodes,omitempty"`
+
+	// secret
+	Description string `json:"description,omitempty"`
+
 	// existing
 	Existing *Existing `json:"existing,omitempty"`
 }
 
 // Existing names something already in the account.
 type Existing struct {
-	Type string `json:"type"` // table, bucket or queue
+	Type string `json:"type"` // table, bucket, queue, database, cache or secret
 	Name string `json:"name"`
 }
 
@@ -101,7 +121,8 @@ type Existing struct {
 type Link struct {
 	From   string `json:"from"`
 	To     string `json:"to"`
-	Access string `json:"access,omitempty"` // read or readwrite, for a service using data
+	Access string `json:"access,omitempty"` // read or readwrite, for a service using a table, bucket or queue
+	Path   string `json:"path,omitempty"`   // for a front door: the path it sends to this service (/api/*); empty is the default
 }
 
 var (
@@ -115,7 +136,40 @@ var (
 	tableRE   = regexp.MustCompile(`^[A-Za-z0-9_.-]{3,255}$`)
 	bucketRE  = regexp.MustCompile(`^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$`)
 	queueRE   = regexp.MustCompile(`^[A-Za-z0-9_-]{1,80}(\.fifo)?$`)
+	dbIDRE    = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9-]{0,62}$`)
+	cacheIDRE = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9-]{0,39}$`)
+	secretRE  = regexp.MustCompile(`^[A-Za-z0-9/_+=.@-]{1,512}$`)
+	pathRE    = regexp.MustCompile(`^/[A-Za-z0-9._~/*-]{0,100}$`)
 )
+
+// Instance sizes behind the plain names (note 039).
+var (
+	DatabaseSizes = map[string]string{"small": "db.t4g.micro", "medium": "db.t4g.small", "large": "db.t4g.medium"}
+	CacheSizes    = map[string]string{"small": "cache.t4g.micro", "medium": "cache.t4g.small"}
+	DatabasePorts = map[string]int{"mysql": 3306, "postgres": 5432}
+)
+
+// usesData is a link a service makes to something it uses (not traffic, not logs, not another service).
+func usesData(kind string, e *Existing) bool {
+	switch kind {
+	case KindTable, KindBucket, KindQueue:
+		return true
+	case KindExisting:
+		return e != nil && (e.Type == "table" || e.Type == "bucket" || e.Type == "queue")
+	}
+	return false
+}
+
+// connects is a link a service makes to a database, a cache or a secret: no access level, the link is the access.
+func connects(kind string, e *Existing) bool {
+	switch kind {
+	case KindDatabase, KindCache, KindSecret:
+		return true
+	case KindExisting:
+		return e != nil && (e.Type == "database" || e.Type == "cache" || e.Type == "secret")
+	}
+	return false
+}
 
 // Fargate's allowed memory sizes (MiB) for each CPU size.
 var fargateMemory = map[int][]int{
@@ -176,7 +230,9 @@ func (b Blueprint) Validate() error {
 		byID[bl.ID] = bl
 	}
 	fronted := map[string]string{} // service -> front door
-	doors := map[string]int{}
+	doors := map[string]int{}      // front door -> links without a path (its default service)
+	paths := map[string]int{}      // front door -> links with a path
+	doorPaths := map[[2]string]bool{}
 	logsOf := map[string]bool{}
 	seen := map[[2]string]bool{}
 	for i, l := range b.Links {
@@ -205,7 +261,22 @@ func (b Blueprint) Validate() error {
 				return fmt.Errorf("%s: %s already takes traffic from %s", at, to.ID, d)
 			}
 			fronted[to.ID] = from.ID
-			doors[from.ID]++
+			if l.Path == "" {
+				doors[from.ID]++
+			} else {
+				if !pathRE.MatchString(l.Path) {
+					return fmt.Errorf("%s.path: a path such as /api/*", at)
+				}
+				if doorPaths[[2]string{from.ID, l.Path}] {
+					return fmt.Errorf("%s.path: %s already sends %s somewhere", at, from.ID, l.Path)
+				}
+				doorPaths[[2]string{from.ID, l.Path}] = true
+				if paths[from.ID]++; paths[from.ID] > 10 {
+					return fmt.Errorf("%s: a front door takes at most 10 paths", at)
+				}
+			}
+		case l.Path != "":
+			return fmt.Errorf("%s.path: only a front door's links have a path", at)
 		case from.Kind == KindService && to.Kind == KindLogs:
 			if l.Access != "" {
 				return fmt.Errorf("%s.access: logs take no access level", at)
@@ -214,17 +285,31 @@ func (b Blueprint) Validate() error {
 				return fmt.Errorf("%s: %s already writes its logs to another logs block", at, from.ID)
 			}
 			logsOf[from.ID] = true
-		case from.Kind == KindService && (to.Kind == KindTable || to.Kind == KindBucket || to.Kind == KindQueue || to.Kind == KindExisting):
+		case from.Kind == KindService && usesData(to.Kind, to.Existing):
 			if l.Access != AccessRead && l.Access != AccessReadWrite {
 				return fmt.Errorf("%s.access: say read or readwrite, got %q", at, l.Access)
 			}
+		case from.Kind == KindService && connects(to.Kind, to.Existing):
+			if l.Access != "" {
+				return fmt.Errorf("%s.access: a link to a database, cache or secret is the access; leave access out", at)
+			}
+		case from.Kind == KindService && to.Kind == KindService:
+			if l.Access != "" {
+				return fmt.Errorf("%s.access: one service calling another takes no access level", at)
+			}
+			if from.ID == to.ID {
+				return fmt.Errorf("%s: a service cannot call itself", at)
+			}
+			if to.Port == 0 {
+				return fmt.Errorf("%s: %s needs a port to be called", at, to.ID)
+			}
 		default:
-			return fmt.Errorf("%s: a %s cannot link to a %s (a front door sends traffic to a service; a service uses data or writes logs)", at, from.Kind, to.Kind)
+			return fmt.Errorf("%s: a %s cannot link to a %s (a front door sends traffic to a service; a service uses data, a database, a cache or a secret, calls another service, or writes logs)", at, from.Kind, to.Kind)
 		}
 	}
 	for i, bl := range b.Blocks {
 		if bl.Kind == KindFrontDoor && doors[bl.ID] != 1 {
-			return fmt.Errorf("blocks[%d]: front door %s must send traffic to exactly one service", i, bl.ID)
+			return fmt.Errorf("blocks[%d]: front door %s must send its default traffic (a link without a path) to exactly one service", i, bl.ID)
 		}
 	}
 	return nil
@@ -236,12 +321,15 @@ func (bl Block) validate(at string) error {
 	}
 	set := bl.setFields()
 	allowed := map[string][]string{
-		KindService:   {"image", "cpu", "memory", "count", "port", "env"},
+		KindService:   {"image", "cpu", "memory", "count", "port", "env", "min", "max", "cpu_target"},
 		KindFrontDoor: {"health_path", "certificate"},
 		KindTable:     {"partition_key", "partition_type", "sort_key", "sort_type"},
 		KindBucket:    {"versioning"},
 		KindQueue:     {"retention_days"},
 		KindLogs:      {"retention_days"},
+		KindDatabase:  {"engine", "size", "storage_gb", "multi_az", "backup_days"},
+		KindCache:     {"size", "nodes"},
+		KindSecret:    {"description"},
 		KindExisting:  {"existing"},
 	}
 	ok, known := allowed[bl.Kind]
@@ -273,6 +361,17 @@ func (bl Block) validate(at string) error {
 		}
 		if len(bl.Env) > MaxEnv {
 			return fmt.Errorf("%s.env: at most %d settings", at, MaxEnv)
+		}
+		if bl.Max > 0 || bl.Min > 0 || bl.CPUTarget > 0 {
+			if bl.Min < 1 || bl.Max < bl.Min || bl.Max > 20 {
+				return fmt.Errorf("%s.max: scaling needs 1 <= min <= max <= 20, got min %d and max %d", at, bl.Min, bl.Max)
+			}
+			if bl.CPUTarget != 0 && (bl.CPUTarget < 20 || bl.CPUTarget > 90) {
+				return fmt.Errorf("%s.cpu_target: a percentage from 20 to 90, got %d", at, bl.CPUTarget)
+			}
+			if bl.Count < bl.Min || bl.Count > bl.Max {
+				return fmt.Errorf("%s.count: with scaling, start between min (%d) and max (%d)", at, bl.Min, bl.Max)
+			}
 		}
 		for k, v := range bl.Env {
 			if !envRE.MatchString(k) {
@@ -312,14 +411,38 @@ func (bl Block) validate(at string) error {
 		if !slices.Contains(logRetention, bl.RetentionDays) {
 			return fmt.Errorf("%s.retention_days: CloudWatch keeps logs for one of %v days", at, logRetention)
 		}
+	case KindDatabase:
+		if _, ok := DatabasePorts[bl.Engine]; !ok {
+			return fmt.Errorf("%s.engine: mysql or postgres, got %q", at, bl.Engine)
+		}
+		if _, ok := DatabaseSizes[bl.Size]; !ok {
+			return fmt.Errorf("%s.size: small, medium or large, got %q", at, bl.Size)
+		}
+		if bl.StorageGB < 20 || bl.StorageGB > 1000 {
+			return fmt.Errorf("%s.storage_gb: 20 to 1000, got %d", at, bl.StorageGB)
+		}
+		if bl.BackupDays != 0 && (bl.BackupDays < 1 || bl.BackupDays > 35) {
+			return fmt.Errorf("%s.backup_days: 1 to 35, got %d", at, bl.BackupDays)
+		}
+	case KindCache:
+		if _, ok := CacheSizes[bl.Size]; !ok {
+			return fmt.Errorf("%s.size: small or medium, got %q", at, bl.Size)
+		}
+		if bl.Nodes < 0 || bl.Nodes > 3 {
+			return fmt.Errorf("%s.nodes: 1 to 3, got %d", at, bl.Nodes)
+		}
+	case KindSecret:
+		if len(bl.Description) > 200 || strings.ContainsAny(bl.Description, "$%{}") {
+			return fmt.Errorf("%s.description: at most 200 characters, without $, %%, { or }", at)
+		}
 	case KindExisting:
 		e := bl.Existing
 		if e == nil {
-			return fmt.Errorf("%s.existing: say which table, bucket or queue", at)
+			return fmt.Errorf("%s.existing: say which table, bucket, queue, database, cache or secret", at)
 		}
-		re := map[string]*regexp.Regexp{"table": tableRE, "bucket": bucketRE, "queue": queueRE}[e.Type]
+		re := map[string]*regexp.Regexp{"table": tableRE, "bucket": bucketRE, "queue": queueRE, "database": dbIDRE, "cache": cacheIDRE, "secret": secretRE}[e.Type]
 		if re == nil {
-			return fmt.Errorf("%s.existing.type: table, bucket or queue, got %q", at, e.Type)
+			return fmt.Errorf("%s.existing.type: table, bucket, queue, database, cache or secret, got %q", at, e.Type)
 		}
 		if !re.MatchString(e.Name) {
 			return fmt.Errorf("%s.existing.name: %q is not a valid %s name", at, e.Name, e.Type)
@@ -350,6 +473,16 @@ func (bl Block) setFields() []string {
 	add(bl.SortType != "", "sort_type")
 	add(bl.Versioning, "versioning")
 	add(bl.RetentionDays != 0, "retention_days")
+	add(bl.Min != 0, "min")
+	add(bl.Max != 0, "max")
+	add(bl.CPUTarget != 0, "cpu_target")
+	add(bl.Engine != "", "engine")
+	add(bl.Size != "", "size")
+	add(bl.StorageGB != 0, "storage_gb")
+	add(bl.MultiAZ, "multi_az")
+	add(bl.BackupDays != 0, "backup_days")
+	add(bl.Nodes != 0, "nodes")
+	add(bl.Description != "", "description")
 	add(bl.Existing != nil, "existing")
 	return out
 }
@@ -407,6 +540,45 @@ func (b Blueprint) Checks() []Check {
 		}
 		if !logged[s.ID] {
 			ok(s.Name + " writes its logs to its own log group, kept 30 days.")
+		}
+	}
+	for _, d := range byKind[KindDatabase] {
+		days := d.BackupDays
+		if days == 0 {
+			days = 7
+		}
+		ok(fmt.Sprintf("%s (%s) is private and encrypted, keeps backups %d days, cannot be deleted by mistake, and AWS keeps its password: Forgeline never sees it.", d.Name, d.Engine, days))
+		if !d.MultiAZ {
+			warn(d.Name + " runs in one availability zone; turn on multi-AZ to survive a zone failure.")
+		}
+	}
+	for _, c := range byKind[KindCache] {
+		ok(c.Name + " (Redis) is private, encrypted in transit and at rest, and only linked services can connect.")
+	}
+	for _, sc := range byKind[KindSecret] {
+		warn(sc.Name + " starts empty: set its value in AWS Secrets Manager after it is built. Forgeline never reads or stores it.")
+	}
+	for _, l := range b.Links {
+		var from, to Block
+		for _, bl := range b.Blocks {
+			if bl.ID == l.From {
+				from = bl
+			}
+			if bl.ID == l.To {
+				to = bl
+			}
+		}
+		if from.Kind == KindService && to.Kind == KindService {
+			ok(fmt.Sprintf("%s calls %s privately inside the account (%s is not reachable from the internet through this link).", from.Name, to.Name, to.Name))
+		}
+	}
+	for _, s := range byKind[KindService] {
+		if s.Max > 0 {
+			target := s.CPUTarget
+			if target == 0 {
+				target = 60
+			}
+			ok(fmt.Sprintf("%s scales between %d and %d tasks, keeping CPU near %d%%.", s.Name, s.Min, s.Max, target))
 		}
 	}
 	for _, l := range byKind[KindLogs] {

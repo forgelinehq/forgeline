@@ -15,9 +15,12 @@ export const DEFAULTS = {
   bucket: { name: 'Files', versioning: true },
   queue: { name: 'Queue', retention_days: 4 },
   logs: { name: 'Logs', retention_days: 30 },
+  database: { name: 'Database', engine: 'mysql', size: 'small', storage_gb: 20 },
+  cache: { name: 'Cache', size: 'small' },
+  secret: { name: 'Secret', description: '' },
   existing: { name: 'Existing table', existing: { type: 'table', name: 'my-table' } },
 };
-const ID_BASE = { frontdoor: 'door', service: 'app', table: 'table', bucket: 'files', queue: 'queue', logs: 'logs', existing: 'existing' };
+const ID_BASE = { frontdoor: 'door', service: 'app', table: 'table', bucket: 'files', queue: 'queue', logs: 'logs', database: 'db', cache: 'cache', secret: 'secret', existing: 'existing' };
 // Which column a kind sits in: front doors, then apps, then what apps use.
 const COLUMN = { frontdoor: 0, service: 1 };
 
@@ -93,10 +96,15 @@ export function moveBlock(bp, id, x, y) {
   return updateBlock(bp, id, { x: Math.max(0, Math.round(x)), y: Math.max(0, Math.round(y)) });
 }
 
+const DATA = ['table', 'bucket', 'queue'];
+const usesData = (b) => DATA.includes(b.kind) || (b.kind === 'existing' && DATA.includes(b.existing?.type));
+
 /**
- * What a block may link to now: [{ id, name, access }] where access says the link needs read or readwrite.
- * The same rules as the server: a front door sends traffic to one service that has a port and no other front
- * door; a service uses data (once each) and writes logs to at most one logs block.
+ * What a block may link to now: [{ id, name, access, path }]. access says the link needs read or readwrite;
+ * path says it takes a path (a front door's second and later services, such as /api/*).
+ * The same rules as the server: a front door sends its default traffic to one service with a port and further
+ * paths to others; a service uses data, a database, a cache or a secret (once each), calls another service that
+ * has a port, and writes logs to at most one logs block.
  */
 export function linkTargets(bp, fromId) {
   const from = bp.blocks.find(b => b.id === fromId);
@@ -104,20 +112,23 @@ export function linkTargets(bp, fromId) {
   const linked = new Set(bp.links.filter(l => l.from === fromId).map(l => l.to));
   const kindOf = Object.fromEntries(bp.blocks.map(b => [b.id, b.kind]));
   if (from.kind === 'frontdoor') {
-    if (linked.size) return [];
     const fronted = new Set(bp.links.filter(l => kindOf[l.from] === 'frontdoor').map(l => l.to));
-    return bp.blocks.filter(b => b.kind === 'service' && b.port && !fronted.has(b.id)).map(b => ({ id: b.id, name: b.name, access: false }));
+    const hasDefault = bp.links.some(l => l.from === fromId && !l.path);
+    if (bp.links.filter(l => l.from === fromId && l.path).length >= 10) return [];
+    return bp.blocks.filter(b => b.kind === 'service' && b.port && !fronted.has(b.id)).map(b => ({ id: b.id, name: b.name, access: false, path: hasDefault }));
   }
   if (from.kind !== 'service') return [];
   const hasLogs = bp.links.some(l => l.from === fromId && kindOf[l.to] === 'logs');
-  return bp.blocks.filter(b => !linked.has(b.id) && (['table', 'bucket', 'queue', 'existing'].includes(b.kind) || (b.kind === 'logs' && !hasLogs)))
-    .map(b => ({ id: b.id, name: b.name, access: b.kind !== 'logs' }));
+  return bp.blocks.filter(b => b.id !== fromId && !linked.has(b.id) && (b.kind !== 'existing' || b.existing?.type) &&
+      (usesData(b) || ['database', 'cache', 'secret', 'existing'].includes(b.kind) || (b.kind === 'service' && b.port) || (b.kind === 'logs' && !hasLogs)))
+    .map(b => ({ id: b.id, name: b.name, access: usesData(b), path: false }));
 }
 
-export function addLink(bp, from, to, access) {
+export function addLink(bp, from, to, access, path) {
   const out = clone(bp);
   const l = { from, to };
   if (access) l.access = access;
+  if (path) l.path = path;
   out.links.push(l);
   return out;
 }
@@ -136,6 +147,8 @@ export function toBody(bp, revision) {
 /** The drawn path of a link: from the right edge of one block to the left edge of the other. */
 export function linkPath(a, b) {
   const x1 = a.x + BLOCK_W, y1 = a.y + BLOCK_H / 2, x2 = b.x, y2 = b.y + BLOCK_H / 2;
+  // In the same column (one service calling another): a bracket on the right, from one block to the other.
+  if (Math.abs(a.x - b.x) < BLOCK_W / 2) return `M${x1} ${y1} C${x1 + 50} ${y1}, ${b.x + BLOCK_W + 50} ${y2}, ${b.x + BLOCK_W} ${y2}`;
   if (x2 >= x1) {
     const mid = (x1 + x2) / 2;
     return `M${x1} ${y1} C${mid} ${y1}, ${mid} ${y2}, ${x2} ${y2}`;
@@ -222,5 +235,8 @@ export function flowOf(bp, link) {
   const from = bp.blocks.find(b => b.id === link.from), to = bp.blocks.find(b => b.id === link.to);
   if (!from || !to) return null;
   if (from.kind === 'frontdoor' || to.kind === 'logs') return 'forward';
+  const t = to.kind === 'existing' ? to.existing?.type : to.kind;
+  if (t === 'secret') return 'back';
+  if (to.kind === 'service' || t === 'database' || t === 'cache') return 'both';
   return link.access === 'readwrite' ? 'both' : 'back';
 }
