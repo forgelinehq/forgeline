@@ -1,6 +1,6 @@
 # 030: Service switches for the AI
 
-Status: **Built for AWS.** Date: 2026-11-07. Builds on notes 025 (integrations hub), 026 (access policy),
+Status: **Built for AWS, with three levels (Off, Look only, Change with approval) since 2026-11-08.** Date: 2026-11-07. Builds on notes 025 (integrations hub), 026 (access policy),
 016 and 021 (AWS MCP Server, per-account writes) and 029 (console redesign). Facts about the code are from
 `origin/main` at `d7a9450`.
 
@@ -25,6 +25,16 @@ off for the AI, in plain words, without adding a second way to reach AWS?
 | Storage and API | In the same stored policy as the tool levels, under `services`, so one read gives both. Saved through its own `PUT /v1/integrations/aws/services`, administrators only, so saving tool levels never resets services and the other way round. Audited as `policy.services` with before and after |
 | Console | The AWS Access tab starts with "Services the AI may use": a switch per service, read-only for developers |
 | Coding engines, Codex and Copilot | Not part of this note. The maintainer will add them later; they will run under the same switches because they will reach AWS only through these tools |
+
+## Look only (added 2026-11-08, frame 2 of note 029)
+
+The screen frames the maintainer confirmed show three levels per service. The third, **Look only**, is stored as
+`services_read` beside `services` (off). A look-only service can be read like any other, but `propose_aws_change`
+and `propose_cloud_change` refuse it before anything is filed, and approval refuses an AI proposal for it if it was
+set to Look only after the proposal was filed. A service cannot be both off and look only (400). The console shows
+the three levels as one control per service in the AWS connection's **Services** tab. Tested: reads still work;
+proposals and MCP cloud changes are refused; approval refuses; overlap refused; saved and shown; each rule removed
+in turn fails a test (six mutations).
 
 ## Decisions recorded for the redesign (maintainer, 2026-11-07)
 

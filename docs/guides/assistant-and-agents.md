@@ -20,7 +20,7 @@ Click **Assistant** in the top bar. It sees the page you are on (a run, a pipeli
 
 ![Assistant]({{ '/console/21-assistant.png' | relative_url }})
 
-Set it up under **Integrations**: open the **Claude** card and choose **Connect** (or **Open settings**). A **Test connection** button in the same popup sends one short question to check it.
+Set it up under **Settings → Connections**: open **Claude** (under Add a connection until it is set up) and choose **Connect** (or **Open settings**). A **Test connection** button in the same popup sends one short question to check it.
 
 The settings offer three ways to sign in:
 

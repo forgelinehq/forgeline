@@ -513,11 +513,14 @@ func (s *Server) handleApproveProposal(w http.ResponseWriter, r *http.Request) {
 	}
 	st, _, target, werr := s.writeTarget(ctx, p.Account)
 	// A service an administrator turned off for the AI after this was filed is refused here too (note 030).
-	off, offErr := s.awsServicesOff(ctx)
-	offHit := ""
+	off, readOnly, offErr := s.awsServiceLevels(ctx)
+	offHit, roHit := "", ""
 	for _, id := range scriptSwitches(p.Calls) {
 		if off[id] && offHit == "" {
 			offHit = id
+		}
+		if readOnly[id] && roHit == "" {
+			roHit = id
 		}
 	}
 	switch {
@@ -547,6 +550,9 @@ func (s *Server) handleApproveProposal(w http.ResponseWriter, r *http.Request) {
 		return
 	case offHit != "":
 		refuse(http.StatusConflict, awsServiceName(offHit)+" was turned off for the AI after this was proposed, so it cannot be applied")
+		return
+	case roHit != "":
+		refuse(http.StatusConflict, awsServiceName(roHit)+" was set to Look only for the AI after this was proposed, so it cannot be applied")
 		return
 	case s.aiBusy:
 		refuse(http.StatusConflict, "another approved change is being applied; try again in a moment")

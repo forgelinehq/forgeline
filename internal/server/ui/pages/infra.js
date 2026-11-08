@@ -16,7 +16,7 @@ export async function infraPage({ query }) {
   const body = h('div', {});
   let timer = null, pending = 0;
 
-  const tabs = h('div', { class: 'mb-6 flex gap-1 overflow-x-auto border-b border-slate-200 dark:border-slate-800', role: 'tablist' }, TABS.map(([k, label]) =>
+  const tabs = h('div', { class: 'mb-6 flex gap-1 overflow-x-auto overflow-y-hidden border-b border-slate-200 dark:border-slate-800', role: 'tablist' }, TABS.map(([k, label]) =>
     h('a', { href: '#/infrastructure?tab=' + k, role: 'tab', 'aria-selected': k === tab ? 'true' : 'false',
       class: '-mb-px flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium ' + (k === tab ? 'border-brand-600 text-brand-700 dark:border-brand-400 dark:text-brand-200' : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200') },
       label, k === 'changes' && h('span', { id: 'pending-badge', class: 'pill-wait hidden' }))));

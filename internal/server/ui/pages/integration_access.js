@@ -2,12 +2,13 @@
 // which of its tools may run, and what each agent can actually do. Blocked beats everything. Only administrators change it; developers can read it.
 import { h, mount, spinner, errorBox, toast, notice } from '../lib/dom.js';
 import { get, put } from '../lib/api.js';
-import { toolChoice, policyRequest, agentStateText } from '../lib/hub.js';
+import { toolChoice, policyRequest, agentStateText, SERVICE_LEVELS, serviceLevelsRequest } from '../lib/hub.js';
 
 const SEG = { allow: 'bg-emerald-50 font-medium text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300', ask: 'bg-amber-50 font-medium text-amber-700 dark:bg-amber-500/15 dark:text-amber-300', block: 'bg-rose-50 font-medium text-rose-700 dark:bg-rose-500/15 dark:text-rose-300' };
 const STATE = { allowed: 'pill-ok', blocked: 'pill-bad', not_listed: 'pill-idle', needs_person: 'pill-wait' };
 
-export function accessPane(it, admin, onChange) {
+/** part: 'services' (AWS service levels), 'tools' (the tool ceiling and what each agent can do), or both when left out. */
+export function accessPane(it, admin, onChange, part) {
   const box = h('div', { class: 'space-y-4', id: 'integration-access' }, spinner());
   let view = null;
 
@@ -22,31 +23,37 @@ export function accessPane(it, admin, onChange) {
     draw();
   }
 
-  // Service switches (note 030, AWS only): which services the AI may touch at all.
-  async function setService(id, on) {
-    const off = view.services.filter(x => (x.id === id ? !on : !x.on)).map(x => x.id);
-    const label = (view.services.find(x => x.id === id) || {}).label || id;
-    try { view = await put('/v1/integrations/' + encodeURIComponent(it.id) + '/services', { off }); toast(label + (on ? ' is on for the AI' : ' is off for the AI'), 'ok'); onChange && onChange(); }
+  // Service levels (notes 030 and 029, AWS only): Off, Look only, or Change with approval, per service.
+  async function setLevel(id, level) {
+    const x = view.services.find(v => v.id === id) || {};
+    const word = (SERVICE_LEVELS.find(l => l.key === level) || {}).label || level;
+    try { view = await put('/v1/integrations/' + encodeURIComponent(it.id) + '/services', serviceLevelsRequest(view.services, id, level)); toast(x.label + ': ' + word, 'ok'); onChange && onChange(); }
     catch (e) { toast(e.message, 'error'); }
     draw();
   }
 
   function servicesSection() {
     if (!view.services || !view.services.length) return null;
-    const offCount = view.services.filter(x => !x.on).length;
-    const sw = (x) => h('button', {
-      type: 'button', role: 'switch', 'aria-checked': String(x.on), 'data-service': x.id, disabled: !admin,
-      'aria-label': x.label + ' (' + x.tech + ') for the AI',
-      class: 'relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors disabled:opacity-60 ' + (x.on ? 'bg-brand-600' : 'bg-slate-300 dark:bg-slate-700'),
-      onclick: () => setService(x.id, !x.on) },
-      h('span', { class: 'inline-block size-3.5 rounded-full bg-white shadow transition-transform ' + (x.on ? 'translate-x-[18px]' : 'translate-x-[3px]') }));
-    return h('div', { id: 'access-services' },
-      h('div', { class: 'h-section mb-1' }, 'Services the AI may use'),
-      h('p', { class: 'muted mb-2 text-xs' }, 'Turn off what the assistant, agents and AI tools should not touch. An off service is left out of what they read and refused in what they run or propose, and a proposal for it cannot be approved. People still see everything in the explorer. '
-        + (admin ? '' : 'Only administrators can change this.')),
-      h('ul', { class: 'grid gap-x-6 gap-y-1 sm:grid-cols-2' }, view.services.map(x => h('li', { class: 'flex items-center justify-between gap-3 border-b border-slate-100 py-1.5 dark:border-slate-800' },
-        h('div', { class: 'min-w-0' }, h('div', { class: 'truncate text-sm ' + (x.on ? 'font-medium' : 'muted') }, x.label), h('div', { class: 'muted truncate text-xs' }, x.tech)), sw(x)))),
-      h('p', { class: 'muted mt-1 text-xs' }, offCount ? `${offCount} of ${view.services.length} turned off for the AI.` : 'Every service is on.'));
+    const lvl = (x) => x.level || (x.on ? 'change' : 'off');
+    const seg = (x) => h('div', { class: 'inline-flex rounded-lg bg-slate-100 p-0.5 text-xs dark:bg-slate-800', role: 'radiogroup', 'aria-label': 'What the AI may do with ' + x.label },
+      SERVICE_LEVELS.map(l => {
+        const on = lvl(x) === l.key;
+        return h('button', { type: 'button', role: 'radio', 'aria-checked': String(on), 'data-service': x.id, 'data-level': l.key, disabled: !admin, title: l.text,
+          class: 'whitespace-nowrap rounded-md px-2.5 py-1 font-medium disabled:cursor-default ' + (on
+            ? (l.key === 'off' ? 'bg-white text-slate-700 shadow-sm dark:bg-slate-700 dark:text-slate-100' : l.key === 'read' ? 'bg-white text-sky-700 shadow-sm dark:bg-slate-700 dark:text-sky-300' : 'bg-white text-brand-700 shadow-sm dark:bg-slate-700 dark:text-brand-200')
+            : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white'),
+          onclick: () => { if (!on) setLevel(x.id, l.key); } }, l.label);
+      }));
+    const counts = { off: 0, read: 0, change: 0 };
+    view.services.forEach(x => counts[lvl(x)]++);
+    return h('div', { id: 'access-services', class: 'space-y-3' },
+      h('div', {}, h('div', { class: 'h-section mb-1' }, 'What the AI may do with each service'),
+        h('p', { class: 'muted text-xs' }, 'For the assistant, agents and AI tools. Off: they cannot see it. Look only: they can read it but never propose a change. Change, with approval: they can propose changes, and a different administrator approves each one. People always see everything in Watch. '
+          + (admin ? '' : 'Only administrators can change this.'))),
+      h('div', { class: 'overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800' }, h('ul', { class: 'divide-y divide-slate-100 dark:divide-slate-800' }, view.services.map(x => h('li', { class: 'flex flex-wrap items-center justify-between gap-3 px-4 py-3', 'data-service-row': x.id },
+        h('div', { class: 'min-w-0' }, h('div', { class: 'text-sm ' + (lvl(x) === 'off' ? 'muted' : 'font-medium') }, x.label, h('span', { class: 'muted ml-2 font-normal' }, x.tech))),
+        seg(x))))),
+      h('p', { class: 'muted text-xs', id: 'services-summary' }, `${counts.change} may change with approval · ${counts.read} look only · ${counts.off} off.`));
   }
 
   const toolIsWrite = (name) => (view.tools.find(t => t.name === name) || {}).kind === 'write';
@@ -64,10 +71,15 @@ export function accessPane(it, admin, onChange) {
   }
 
   function draw() {
-    const blocked = view.tools.filter(t => t.level === 'block').length, asks = view.tools.filter(t => t.level === 'ask').length;
     mount(box,
       !view.readable ? notice('warn', 'The stored access policy cannot be read, so every tool of this integration is refused until it is fixed. It will not be changed over from here.') : null,
-      servicesSection(),
+      part !== 'tools' ? servicesSection() : null,
+      part === 'services' ? null : toolsSection());
+  }
+
+  function toolsSection() {
+    const blocked = view.tools.filter(t => t.level === 'block').length, asks = view.tools.filter(t => t.level === 'ask').length;
+    return h('div', { class: 'space-y-4' },
       h('div', {}, h('div', { class: 'h-section mb-1' }, 'The ceiling for this connection'),
         h('p', { class: 'muted text-xs' }, 'No agent, assistant or MCP client can use a blocked tool, whatever its own list says. A tool that needs approval asks the person in the assistant before each call, and is refused wherever nobody is present (an agent run, an MCP client). Changes are never Allow: they stay proposals that a different administrator approves. '
           + (admin ? '' : 'Only administrators can change this.'))),

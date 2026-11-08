@@ -359,12 +359,12 @@ func (s *Server) handleGHAppLaunch(w http.ResponseWriter, r *http.Request) {
 	st, ok := s.ghApp.peek(id)
 	p := principalFrom(r.Context())
 	if !ok || st.by != p.Name {
-		http.Error(w, "this setup link expired. Start again from Integrations.", http.StatusGone)
+		http.Error(w, "this setup link expired. Start again from Settings › Connections.", http.StatusGone)
 		return
 	}
 	f, ok := s.ghAppForm.Load(id)
 	if !ok {
-		http.Error(w, "this setup link expired. Start again from Integrations.", http.StatusGone)
+		http.Error(w, "this setup link expired. Start again from Settings › Connections.", http.StatusGone)
 		return
 	}
 	form := f.(ghAppForm)

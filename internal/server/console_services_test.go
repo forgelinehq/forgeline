@@ -253,3 +253,71 @@ func TestAnMcpClientCannotProposeAChangeToAnOffService(t *testing.T) {
 		t.Errorf("with only stacks off, an instance change should be filed: %q", out)
 	}
 }
+
+func levelsOf(t *testing.T, v PolicyJSON) map[string]string {
+	t.Helper()
+	out := map[string]string{}
+	for _, s := range v.Services {
+		out[s.ID] = s.Level
+	}
+	return out
+}
+
+func TestLookOnlyServicesAreReadableButNeverProposedOrApproved(t *testing.T) {
+	m := newMCPHarness(t)
+	m.turnOn()
+	ctx := context.Background()
+	ada := Principal{Name: "ada", Role: authn.Admin}
+
+	// The levels: everything starts at change; off and look only cannot overlap; unknown ids are refused.
+	if l := levelsOf(t, policyOf(t, m.dev, "aws")); l["ecs"] != "change" || l["s3"] != "change" {
+		t.Fatalf("levels = %v", l)
+	}
+	m.admin.expect(400, "PUT", "/v1/integrations/aws/services", map[string]any{"off": []string{"ecs"}, "read_only": []string{"ecs"}})
+	m.admin.expect(400, "PUT", "/v1/integrations/aws/services", map[string]any{"read_only": []string{"nope"}})
+	m.dev.expect(403, "PUT", "/v1/integrations/aws/services", map[string]any{"read_only": []string{"ecs"}})
+
+	// Filed while ECS may change.
+	_, id := m.propose(m.dev, changeScript)
+	if id == "" {
+		t.Fatal("no proposal")
+	}
+	var p AIProposal
+	json.Unmarshal(m.v.expect(200, "GET", "/v1/ai/proposals/"+id, nil), &p)
+
+	m.admin.expect(200, "PUT", "/v1/integrations/aws/services", map[string]any{"read_only": []string{"ecs", "ec2"}, "off": []string{"sqs"}})
+	if l := levelsOf(t, policyOf(t, m.dev, "aws")); l["ecs"] != "read" || l["ec2"] != "read" || l["sqs"] != "off" || l["s3"] != "change" {
+		t.Errorf("levels = %v", l)
+	}
+
+	// Reading a look-only service still works; proposing a change to it does not.
+	if _, err := m.srv.runLookup(ctx, ada, lookupCall{Tool: "aws_script", Args: json.RawMessage(`{"code":` + jsonString(readScript) + `}`)}); err != nil {
+		t.Errorf("a read of a look-only service was refused: %v", err)
+	}
+	before := m.mcp.count("aws___run_script")
+	if _, err := m.srv.runLookup(ctx, polDev, lookupCall{Tool: toolProposeAWS, Args: json.RawMessage(`{"title":"t","reason":"r","code":` + jsonString(changeScript) + `}`)}); err == nil || !strings.Contains(err.Error(), "Look only") {
+		t.Errorf("a change to a look-only service was proposed: %v", err)
+	}
+	// Over MCP too: an instance action is EC2, which is look only.
+	dev := m.newToken(m.dev, map[string]any{"name": "d"})
+	if out, isErr := m.tool(dev, toolProposeCloud, map[string]any{"kind": "instance-action", "instance_id": "i-0123456789abcdef0", "action": "stop", "reason": "idle over the weekend"}); !isErr || !strings.Contains(out, "Look only") {
+		t.Errorf("an EC2 change was proposed over MCP: %q", out)
+	}
+	// The proposal filed earlier cannot be approved now; nothing runs.
+	m.admin2.expect(409, "POST", "/v1/ai/proposals/"+id+"/approve", map[string]any{"hash": p.Hash})
+	if m.mcp.count("aws___run_script") != before {
+		t.Fatal("a refused approval ran the script")
+	}
+	// Back to change: the same approval goes through.
+	m.admin.expect(200, "PUT", "/v1/integrations/aws/services", map[string]any{"off": []string{}})
+	if l := levelsOf(t, policyOf(t, m.dev, "aws")); l["ecs"] != "change" {
+		t.Errorf("an empty request should clear look only too: %v", l)
+	}
+	m.admin2.expect(202, "POST", "/v1/ai/proposals/"+id+"/approve", map[string]any{"hash": p.Hash})
+	if done := m.waitProposal(id, apApplying); done.Status != apApplied {
+		t.Errorf("after setting ECS back to change: %+v", done)
+	}
+	if a := string(m.admin.expect(200, "GET", "/v1/audit", nil)); !strings.Contains(a, "look only: [ec2, ecs]") {
+		t.Error("the audit log does not record look-only services")
+	}
+}

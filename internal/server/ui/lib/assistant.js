@@ -419,7 +419,7 @@ function build(close, role) {
     ready = cfg.ready;
     if (!cfg.ready) {
       form.classList.add('hidden');
-      mount(list, notice('info', 'The assistant is not set up yet. ', atLeast(role, 'admin') ? h('a', { href: '#/integrations/claude/settings', class: 'underline', onclick: close }, 'Turn it on under Integrations.') : 'Ask an administrator to turn it on.'));
+      mount(list, notice('info', 'The assistant is not set up yet. ', atLeast(role, 'admin') ? h('a', { href: '#/integrations/claude/settings', class: 'underline', onclick: close }, 'Turn it on under Settings › Connections.') : 'Ask an administrator to turn it on.'));
     } else if (!history.length && !busy) empty();
   }).catch(e => mount(list, errorBox(e.message)));
   panel.ask = (q) => checked.then(() => { if (ready) ask(q); });

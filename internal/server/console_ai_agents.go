@@ -717,7 +717,7 @@ func (s *Server) handleAgentChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if s.loadAssistant(r.Context()).Backend == assistOff {
-		writeError(w, http.StatusConflict, "the assistant is not set up. An administrator can turn it on under Integrations")
+		writeError(w, http.StatusConflict, "the assistant is not set up. An administrator can turn it on under Settings › Connections")
 		return
 	}
 	a, err := s.loadAgent(r.Context(), r.PathValue("id"))

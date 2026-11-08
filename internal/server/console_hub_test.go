@@ -10,7 +10,7 @@ import (
 // The hub's filtering, sorting and wording (ui/lib/hub.js) are plain functions, so they run under Node.
 // Skipped where Node is not installed.
 const hubCases = `
-import { matches, group, counts, summaryLine, logo, testSummary, statusPill, statusText, tierText, readOnlyText, attentionList, isPlanned, CATEGORIES, activityLabel, normalizeGcpScope, normalizeAzureSubs, toolChoice, policyRequest, agentStateText } from './hub.mjs';
+import { matches, group, counts, summaryLine, logo, testSummary, statusPill, statusText, tierText, readOnlyText, attentionList, isPlanned, CATEGORIES, activityLabel, normalizeGcpScope, normalizeAzureSubs, toolChoice, policyRequest, agentStateText, connectionGroups, defaultConnection, SERVICE_LEVELS, serviceLevelsRequest } from './hub.mjs';
 
 let failed = 0;
 const eq = (name, got, want) => {
@@ -119,6 +119,25 @@ eq('a write tool asked is not sent', policyRequest([wr('p')], 'p', 'ask'), { too
 eq('a blocked write tool is sent as a block', policyRequest([wr('p')], 'p', 'block'), { tools: { p: 'block' } });
 eq('unblocking a write tool sends nothing for it', policyRequest([wr('p', 'block'), rd('a')], 'p', 'ask'), { tools: {} });
 eq('agent state words', ['allowed', 'blocked', 'not_listed', 'needs_person', 'x'].map(agentStateText), ['Allowed', 'Blocked', 'Not listed', 'Needs a person', 'x']);
+
+// The Connections page (frame 2): the left column and what it opens on.
+const cl = [
+  { id: 'gcp', name: 'Google Cloud', status: 'off' }, { id: 'aws', name: 'AWS', status: 'connected' }, { id: 'k8s', name: 'Kubernetes', status: 'attention' },
+  { id: 'prof', name: 'AWS profile "x"', status: 'detected' }, { id: 'lambda', name: 'Lambda', status: 'next' }, { id: 'gh', name: 'GitHub', status: 'connected' },
+];
+const cg = connectionGroups(cl);
+eq('connected: needs attention first, then by name', cg.connected.map(i => i.id), ['k8s', 'aws', 'gh']);
+eq('found on the server', cg.found.map(i => i.id), ['prof']);
+eq('the rest is behind Add a connection', cg.rest.map(i => i.id), ['gcp', 'lambda']);
+eq('every item lands in exactly one group', cg.connected.length + cg.found.length + cg.rest.length, cl.length);
+eq('opens on the one asked for', defaultConnection(cl, 'gcp'), 'gcp');
+eq('an unknown one falls back to the first connected', defaultConnection(cl, 'nope'), 'k8s');
+eq('nothing connected opens the add view', defaultConnection([{ id: 'gcp', name: 'G', status: 'off' }], null), null);
+eq('three levels', SERVICE_LEVELS.map(l => l.key), ['off', 'read', 'change']);
+const svcs = [{ id: 's3', level: 'change' }, { id: 'ecs', level: 'read' }, { id: 'ec2', level: 'off' }, { id: 'sqs', on: false }];
+eq('set one to look only', serviceLevelsRequest(svcs, 's3', 'read'), { off: ['ec2', 'sqs'], read_only: ['s3', 'ecs'] });
+eq('set one back to change', serviceLevelsRequest(svcs, 'ecs', 'change'), { off: ['ec2', 'sqs'], read_only: [] });
+eq('turn one off', serviceLevelsRequest(svcs, 's3', 'off'), { off: ['s3', 'ec2', 'sqs'], read_only: ['ecs'] });
 
 if (failed) process.exit(1);
 console.log('ok');
