@@ -17,6 +17,7 @@ const DOCS = path.resolve(SITE, '..', 'docs');
 const OUT = path.join(SITE, 'src', 'content', 'docs');
 const PUBLIC = path.join(SITE, 'public');
 const BASE = '/forgeline';
+const SITE_URL = 'https://forgelinehq.github.io' + BASE;
 const REPO = 'https://github.com/forgelinehq/forgeline/blob/main/';
 // Written for people working on Forgeline, or replaced by a page of the site itself.
 const SKIP = new Set(['PLAN.md', 'index.md']);
@@ -79,6 +80,16 @@ export function transform(rel, text, exists = () => true) {
   return head + body;
 }
 
+/** The plain Markdown a reader (or an AI tool) gets from "View as Markdown": the title as a heading, then the page. */
+export function markdownCopy(page) {
+  const m = page.match(/^---\n([\s\S]*?)\n---\n?/);
+  const title = (m && m[1].match(/^title: (.*)$/m)) ? JSON.parse(m[1].match(/^title: (.*)$/m)[1]) : '';
+  const body = m ? page.slice(m[0].length) : page;
+  // Asides read as quotes; site paths become full addresses so the copy works anywhere.
+  return ('# ' + title + '\n\n' + body.replace(/^:::(\w+)\n([\s\S]*?)\n:::$/gm, (_, kind, text) => '> **' + kind[0].toUpperCase() + kind.slice(1) + ':** ' + text.replace(/\n/g, '\n> ')))
+    .replace(/\]\((\/forgeline\/[^)]*)\)/g, (_, p) => '](https://forgelinehq.github.io' + p + ')');
+}
+
 function walk(dir, rel = '') {
   const out = [];
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -89,9 +100,20 @@ function walk(dir, rel = '') {
   return out;
 }
 
+// Removes what an earlier run generated in public/: the Markdown copies and llms.txt.
+function clearGenerated(dir) {
+  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+    const p = path.join(dir, e.name);
+    if (e.isDirectory()) { if (e.name !== 'fonts') clearGenerated(p); }
+    else if (e.name.endsWith('.md') || e.name === 'llms.txt') fs.rmSync(p);
+  }
+}
+
 function main() {
   fs.rmSync(OUT, { recursive: true, force: true });
   fs.rmSync(path.join(PUBLIC, 'console'), { recursive: true, force: true });
+  clearGenerated(PUBLIC);
+  const index = [];
   const files = walk(DOCS);
   const has = new Set(files);
   let pages = 0, images = 0;
@@ -103,7 +125,14 @@ function main() {
       const isFolderPage = /^(readme|index)\.md$/i.test(path.basename(rel));
       const dest = path.join(OUT, isFolderPage ? path.join(slugOf(rel), 'index.md') : rel.toLowerCase());
       fs.mkdirSync(path.dirname(dest), { recursive: true });
-      fs.writeFileSync(dest, transform(rel, fs.readFileSync(src, 'utf8'), (p) => has.has(p)));
+      const page = transform(rel, fs.readFileSync(src, 'utf8'), (p) => has.has(p));
+      fs.writeFileSync(dest, page);
+      // public/<slug>.md, served next to the page for "View as Markdown" and AI tools.
+      const slug = slugOf(rel) || 'index';
+      const copy = markdownCopy(page);
+      fs.mkdirSync(path.dirname(path.join(PUBLIC, slug + '.md')), { recursive: true });
+      fs.writeFileSync(path.join(PUBLIC, slug + '.md'), copy);
+      index.push({ slug, title: copy.slice(2, copy.indexOf('\n')) });
       pages++;
     } else if (/^console\/.+\.(png|jpe?g|gif|svg|webp)$/i.test(rel)) {
       const dest = path.join(PUBLIC, rel);
@@ -114,7 +143,21 @@ function main() {
   }
   // The home page is written for the site itself (a hero and cards), so it lives here, not in docs/.
   fs.copyFileSync(path.join(SITE, 'src', 'home.mdx'), path.join(OUT, 'index.mdx'));
+  fs.writeFileSync(path.join(PUBLIC, 'llms.txt'), llmsTxt(index));
   console.log(`sync: ${pages} pages and ${images} images from docs/, and the home page`);
+}
+
+/** llms.txt (llmstxt.org): what the site is, and every page's Markdown copy, grouped by section. */
+export function llmsTxt(pages) {
+  const group = (s) => s.startsWith('design/') ? 'Design notes' : s.startsWith('guides') ? 'Guides' : s.startsWith('api') || s === 'console' ? 'Reference' : s === 'roadmap' || s === 'architecture' ? 'Project' : 'Start here';
+  const order = ['Start here', 'Guides', 'Reference', 'Project', 'Design notes'];
+  let out = '# Forgeline\n\n> Delivery where AI agents run safely: pipelines, cloud changes and an AI team on your own server, with a person approving every change.\n';
+  for (const g of order) {
+    const items = pages.filter(p => group(p.slug) === g).sort((a, b) => a.slug.localeCompare(b.slug));
+    if (!items.length) continue;
+    out += '\n## ' + g + '\n\n' + items.map(p => `- [${p.title}](${SITE_URL}/${p.slug}.md)`).join('\n') + '\n';
+  }
+  return out;
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) main();

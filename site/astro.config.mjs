@@ -15,6 +15,7 @@ export default defineConfig({
       favicon: '/favicon.svg',
       social: [{ icon: 'github', label: 'GitHub', href: 'https://github.com/forgelinehq/forgeline' }],
       customCss: ['./src/styles/custom.css'],
+      components: { PageTitle: './src/components/PageTitle.astro' },
       lastUpdated: false,
       sidebar: [
         { label: 'Start here', items: [{ label: 'Overview', link: '/' }, 'get-started', 'status'] },

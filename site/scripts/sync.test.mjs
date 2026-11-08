@@ -50,3 +50,23 @@ test('links to other pages become site links; links out of docs go to GitHub', (
 test('every page links back to its source for editing', () => {
   assert.ok(transform('guides/x.md', '# X\n').includes('editUrl: "https://github.com/forgelinehq/forgeline/edit/main/docs/guides/x.md"'));
 });
+
+test('the Markdown copy has the title as a heading, asides as quotes, and full addresses', async () => {
+  const { markdownCopy } = await import('./sync.mjs');
+  const page = transform('guides/x.md', "---\ntitle: Tour\n---\n\n{: .note }\nRead this.\n\nSee [map]({{ '/console/m.png' | relative_url }}).\n");
+  const copy = markdownCopy(page);
+  assert.ok(copy.startsWith('# Tour\n\n'));
+  assert.ok(copy.includes('> **Note:** Read this.'));
+  assert.ok(copy.includes('](https://forgelinehq.github.io/forgeline/console/m.png)'));
+  assert.ok(!copy.includes('editUrl'));
+});
+
+test('llms.txt lists every page by section, with links to the Markdown copies', async () => {
+  const { llmsTxt } = await import('./sync.mjs');
+  const out = llmsTxt([{ slug: 'design/037-missions', title: '037: Missions' }, { slug: 'guides/console-tour', title: 'Console tour' }, { slug: 'get-started', title: 'Get started' }, { slug: 'roadmap', title: 'Roadmap' }]);
+  assert.ok(out.startsWith('# Forgeline\n\n> '));
+  const at = (s) => out.indexOf(s);
+  assert.ok(at('## Start here') < at('## Guides') && at('## Guides') < at('## Project') && at('## Project') < at('## Design notes'));
+  assert.ok(out.includes('- [Console tour](https://forgelinehq.github.io/forgeline/guides/console-tour.md)'));
+  assert.ok(out.includes('- [Roadmap](https://forgelinehq.github.io/forgeline/roadmap.md)'));
+});

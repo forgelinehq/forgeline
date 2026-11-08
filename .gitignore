@@ -22,3 +22,5 @@ site/dist/
 site/.astro/
 site/src/content/docs/
 site/public/console/
+site/public/**/*.md
+site/public/llms.txt
