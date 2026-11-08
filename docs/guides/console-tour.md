@@ -101,7 +101,7 @@ The assistant can also read Google Cloud and Azure now (`gcp_resources` and `azu
 See [Connect GitHub]({{ '/guides/connect-github/' | relative_url }}), [Connect AWS]({{ '/guides/connect-aws/' | relative_url }}) and [Assistant and agents]({{ '/guides/assistant-and-agents/' | relative_url }}). The design, and what is coming, is in [note 025](https://github.com/forgelinehq/forgeline/blob/main/docs/design/025-integrations-hub-and-settings.md). Google Cloud and Azure have tabs under Infrastructure; see [Connect Google Cloud]({{ '/guides/connect-gcp/' | relative_url }}) and [Connect Azure]({{ '/guides/connect-azure/' | relative_url }}). Not built yet: wizards for the systems other than Google Cloud and Azure.
 
 ## People and audit log
-Users and roles, and an append-only record of who did what, including refused actions and failed logins.
+Users and roles, and an append-only record of who did what, including refused actions and failed logins. Administrators can filter it by person, action and dates, download it as CSV or JSON Lines, and choose how long it is kept (forever by default).
 
 ![Audit log]({{ '/console/26-audit-log.png' | relative_url }})
 

@@ -73,6 +73,20 @@ will review their changes; only administrators change them, and every change is 
 
 ![Approval rules]({{ '/console/86-approval-rules.png' | relative_url }})
 
+## Downloading the audit log, and how long it is kept
+
+Under **Settings → Audit log**, filter by person, action or dates and choose **Download CSV** (for a spreadsheet or
+an auditor) or **JSON Lines** (for a SIEM or a script). The download has every event that matches, oldest first,
+not only the 200 shown. Each download is itself recorded in the log, with what was taken. In the CSV, a cell that
+would start a spreadsheet formula gets a leading `'`, so opening the file never runs one.
+
+**How long to keep it**, at the bottom of the same page, is **Forever** unless you choose 90 days, 180 days, 1, 2 or
+7 years (the API takes any period from 30 to 3650 days). Older events are deleted once an hour and cannot be
+brought back, so the console asks you to confirm and suggests downloading first. Each deletion and each change of
+the period is recorded. Nobody can edit or delete a single event.
+
+![Audit log with download buttons]({{ '/console/87-audit-export.png' | relative_url }})
+
 ## What protects you
 
 - Passwords use PBKDF2-SHA256, at least 12 characters, with login throttling per account and per address.

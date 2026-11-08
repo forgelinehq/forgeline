@@ -73,7 +73,10 @@ A run's `status` is one of `queued`, `running`, `succeeded`, `failed`, `canceled
 | `POST /v1/users` | admin | Body: `username`, `name`, `password`, `role`. |
 | `PATCH /v1/users/{id}` | admin | Any of `name`, `role`, `disabled`, `password`. The last admin cannot be removed or demoted. |
 | `DELETE /v1/users/{id}` | admin | Remove. |
-| `GET /v1/audit` | admin | The audit log, newest first. Filters by query string. |
+| `GET /v1/audit` | admin | The audit log, newest first. Filters by query string: `actor`, `action` (prefix), `denied=1`, `from` and `to` (dates, `to` included), `limit` (1 to 1000). |
+| `GET /v1/audit/export` | admin | The whole audit log, or the part the same filters select, oldest first, as a download: `format=csv` (default; cells that would start a spreadsheet formula are prefixed with `'`) or `format=jsonl`. At most 200,000 events per export. Each export is audited as `audit.export` before the file is sent (design note 033). |
+| `GET /v1/settings/audit` | admin | How long the audit log is kept: `retention_days` (0 keeps it forever, the default), `count`, `oldest`, `last_prune`, `last_pruned`. |
+| `PUT /v1/settings/audit` | admin | Body: `retention_days`, 0 or 30 to 3650. Events older than the period are deleted once an hour; each deletion is audited as `audit.pruned` and each change as `audit.retention`. |
 
 ## GitHub
 

@@ -59,6 +59,9 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("PATCH /v1/users/{id}", s.requireRole(authn.Admin, s.handleUpdateUser))
 	mux.Handle("DELETE /v1/users/{id}", s.requireRole(authn.Admin, s.handleDeleteUser))
 	mux.Handle("GET /v1/audit", s.requireRole(authn.Admin, s.handleAudit))
+	mux.Handle("GET /v1/audit/export", s.requireRole(authn.Admin, s.handleAuditExport))
+	mux.Handle("GET /v1/settings/audit", s.requireRole(authn.Admin, s.handleGetAuditSettings))
+	mux.Handle("PUT /v1/settings/audit", s.requireRole(authn.Admin, s.handlePutAuditSettings))
 
 	mux.Handle("GET /v1/overview", s.requireRole(authn.Viewer, s.handleOverview))
 	mux.Handle("POST /v1/pipelines/validate", s.requireRole(authn.Viewer, s.handleValidatePipeline))

@@ -255,6 +255,7 @@ func (s *Server) Start(ctx context.Context) error {
 		}
 	}
 	s.startWorkflows(ctx)
+	s.startAuditPruner(ctx)
 	s.startMarketGit(ctx)
 	for i := 0; i < s.cfg.MaxRuns; i++ {
 		s.wg.Add(1)
