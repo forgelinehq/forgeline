@@ -10,8 +10,8 @@ import (
 // Home's inbox (ui/lib/inbox.js) and the sidebar (ui/lib/nav.js) are plain data and functions, so
 // they run under Node. Skipped where Node is not installed.
 const homeCases = `
-import { buildInbox, pulse } from './inbox.mjs';
-import { NAV, navFor, isActivePath } from './nav.mjs';
+import { buildInbox, pulse, greeting, summaryLine, recentChanges } from './inbox.mjs';
+import { SPACES, spacesFor, tabsFor, activeSpace, activeTab, tabMatches } from './nav.mjs';
 
 let failed = 0;
 const eq = (name, got, want) => {
@@ -76,17 +76,35 @@ eq('no finished scan is "not scanned", not "no problems"', pulse({ findings: { f
 const scanned = pulse({ findings: { findings: [] }, scans: { scans: [{ status: 'done', finished_at: '2026-11-04T00:00:00Z' }, { status: 'done', finished_at: '2026-11-06T00:00:00Z' }] } }, []).security;
 eq('the latest finished scan', [scanned.scanned, scanned.last], [true, '2026-11-06T00:00:00Z']);
 
-// The sidebar: same pages and role checks as before, grouped by job.
-const paths = role => navFor(role).map(i => i.path);
-eq('a viewer', paths('viewer'), ['/', '/proposals', '/pipelines', '/infrastructure', '/kubernetes', '/guard']);
-eq('a developer sees every daily page', paths('developer'), NAV.map(i => i.path));
-eq('an administrator too', paths('admin'), NAV.map(i => i.path));
-eq('an unknown role sees nothing', paths('nobody'), []);
-eq('groups in order', [...new Set(NAV.filter(i => i.group).map(i => i.group))], ['Ship', 'Build', 'Team', 'Watch']);
-eq('Home matches only itself', [isActivePath(NAV[0], '/'), isActivePath(NAV[0], '/pipelines')], [true, false]);
-const agents = NAV.find(i => i.path === '/agents');
-eq('agents covers skills and workflows', ['/agents', '/skills/x', '/workflow-runs/y', '/agentsx'].map(p => isActivePath(agents, p)), [true, true, true, false]);
-eq('a query string is ignored', isActivePath(NAV.find(i => i.path === '/infrastructure'), '/infrastructure?tab=aws'), true);
+// Greeting, summary and recent changes.
+eq('greetings by hour', [greeting(3, 'vicky'), greeting(9, 'vicky'), greeting(14, 'Ada Lovelace'), greeting(20, ''), greeting(9, null)], ['Hello, Vicky', 'Good morning, Vicky', 'Good afternoon, Ada', 'Good evening', 'Good morning']);
+eq('summary', [summaryLine([]), summaryLine(a.slice(0, 2)), summaryLine([{ rank: 3, tone: 'wait' }])], ['Nothing needs you. Everything is quiet.', 'Two things need you. Everything else is quiet.', 'Nothing needs you. Everything is quiet.']);
+const rc = recentChanges({ proposals: [
+  { id: 'x1', title: 'Queue', status: 'applied', proposed_by: 'claude-agent', decided_by: 'vicky', finished_at: '2026-11-07T19:55:29Z', account_name: 'Old account' },
+  { id: 'x2', title: 'Waiting', status: 'proposed' },
+  { id: 'x3', title: 'No', status: 'rejected', decided_by: 'vicky', decided_at: '2026-11-07T20:00:00Z' },
+], changes: [{ id: 'c9', title: 'Deploy', status: 'succeeded', finished_at: '2026-11-06T10:00:00Z' }] });
+eq('recent: decided only, newest first', rc.map(r => r.key), ['proposal:x3', 'proposal:x1', 'change:c9']);
+eq('recent detail', rc[1].detail, 'applied · Old account · proposed by claude-agent · approved by vicky');
+eq('recent tones', rc.map(r => r.tone), ['bad', 'ok', 'ok']);
+eq('rejected says rejected', rc[0].detail, 'rejected · rejected by vicky');
+eq('recent limit', recentChanges({ proposals: Array.from({ length: 9 }, (_, i) => ({ id: 'p' + i, title: 't', status: 'applied' })) }).length, 4);
+
+// The sidebar: five spaces, the pages as tabs inside them, the same role checks as before.
+const ids = role => spacesFor(role).map(s => s.id);
+eq('a viewer has no Build or Team (nothing there a viewer may open)', ids('viewer'), ['home', 'ship', 'watch']);
+eq('a developer sees all five', ids('developer'), ['home', 'build', 'ship', 'team', 'watch']);
+eq('an unknown role sees nothing', ids('nobody'), []);
+eq('a space links to its first tab the role may open', spacesFor('developer').map(s => s.path), ['/', '/environments', '/pipelines', '/agents', '/infrastructure']);
+eq('a viewer sees only the Ship tabs they may open', tabsFor(SPACES.find(s => s.id === 'ship'), 'viewer').map(t => t.label), ['Pipelines']);
+eq('planned tabs are listed and never links', tabsFor(SPACES.find(s => s.id === 'build'), 'developer').map(t => (t.planned ? '~' : '') + t.label), ['~Design', 'Environments', '~Blueprints']);
+eq('planned tabs have no path', SPACES.every(s => s.tabs.every(t => !t.planned || !t.path)), true);
+eq('every page belongs to its space', ['/', '/proposals/abc', '/environments', '/pipelines/new', '/runs/r1', '/actions', '/agents/x', '/skills/y', '/workflow-runs/z', '/marketplace', '/infrastructure?tab=aws', '/kubernetes/k1', '/guard'].map(p => activeSpace(p)?.id),
+  ['home', 'home', 'build', 'ship', 'ship', 'ship', 'team', 'team', 'team', 'team', 'watch', 'watch', 'watch']);
+eq('settings pages belong to no space', ['/settings', '/integrations', '/people', '/account'].map(p => activeSpace(p)), [null, null, null, null]);
+eq('Home matches only itself', [tabMatches(SPACES[0].tabs[0], '/'), tabMatches(SPACES[0].tabs[0], '/pipelines')], [true, false]);
+eq('active tab', [activeTab('/skills/a')?.label, activeTab('/guard')?.label, activeTab('/agentsx')], ['Agents', 'Security', null]);
+eq('a path that only starts like a page is not that page', activeSpace('/pipelinesx'), null);
 
 if (failed) process.exit(1);
 console.log('ok');

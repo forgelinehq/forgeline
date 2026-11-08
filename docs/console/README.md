@@ -300,3 +300,5 @@ Retaken after the redesign (grouped menu, ember colour), on stand-ins for AWS, G
 Not retaken, so they still show the earlier indigo colour and flat menu: 20, 21 and 22 (they need a real Claude login), and 39 onward (Kubernetes, Guard, environments, marketplace, plugins, signed packages, account writes, API tokens). They are listed above and used only here, not in the guides.
 
 Taken after the visual system of note 029 (warm neutrals, Bricolage Grotesque and IBM Plex served by Forgeline): 82 and 83. Other pictures still show the earlier fonts and the cooler grey.
+
+Retaken on a fresh server after frame 1 of note 029 (five spaces with tabs, the new Home): 01 (first run), 05 (a run) and 07 (Home).

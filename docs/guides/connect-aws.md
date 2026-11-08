@@ -6,7 +6,7 @@ nav_order: 5
 
 # Connect AWS
 
-Go to **Infrastructure → AWS account → Connect**. Two tabs:
+Go to **Watch → Infrastructure → AWS account → Connect**. Two tabs:
 
 ## Sign in with AWS (IAM Identity Center)
 

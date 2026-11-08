@@ -8,12 +8,14 @@ nav_order: 1
 
 Everything below is done from the web console. Pictures were taken from a running server in a real browser, after the redesign, on stand-ins for AWS and GitHub with demo data. The agent-step and assistant pictures are older and still show the previous indigo colour; those pages work the same.
 
-The sidebar holds the daily work, grouped by the job you are doing (design note 029): **Home** and **Approvals** at the top, then **Ship** (Pipelines, GitHub Actions), **Build** (Environments), **Team** (Agents, Marketplace) and **Watch** (Infrastructure, Kubernetes, Guard). Setup lives behind the **Settings** gear at the bottom: People and roles, Integrations, Secrets, Models, the Audit log and API tokens, grouped on one page with a menu on the left. Entries that are planned (single sign-on, access policy, budgets, approval rules) are listed dimmed as coming soon. What you see depends on your role, and old addresses still work.
+The sidebar has five spaces, named after the job you are doing (design note 029): **Home** (what needs you), **Build** (what should exist), **Ship** (getting code out), **Team** (your AI agents) and **Watch** (how it is running). The pages live as tabs at the top of each space: Home has Today and Approvals; Build has Environments; Ship has Pipelines and GitHub Actions; Team has Agents and Marketplace; Watch has Infrastructure, Kubernetes and Security. Tabs marked **soon** (Design, Blueprints, Missions) are planned and have no page yet. **Approvals** is also a button at the top right of every page, with the number of changes waiting. Setup lives behind the **Settings** gear at the bottom: People and roles, Integrations, Secrets, Models, the Audit log and API tokens, grouped on one page with a menu on the left. Entries that are planned (single sign-on, access policy, budgets, approval rules) are listed dimmed as coming soon. What you see depends on your role, and old addresses still work.
 
 ## Home
+At the top, **Ask or tell Forgeline** opens the assistant with your question (developers and administrators). Below it a greeting says how much needs you, and four tiles count your pipelines, your AWS **spend** (loaded only when you press **Load from AWS**, because AWS bills each look), your **AI team** and **security** findings. **Start something** offers the next steps (build and test a GitHub repository with the assistant, write a pipeline, hire an agent) and **Recent changes** lists the last changes that were approved, rejected or applied.
+
 **Needs you** lists what is waiting for you, most urgent first: changes you can approve (only ones someone else proposed, because a different administrator must approve), pipelines whose last run failed, open critical and high Guard findings, and connections that need attention. Changes you proposed are listed as waiting. Tiles above it count the same things, and leave out anything your role cannot read. Below are every pipeline with its status, a sparkline of its last runs, success rate and average time, and a strip with platform health.
 
-The picture below is from before Home had the Needs you list.
+
 
 ![Overview]({{ '/console/07-overview.png' | relative_url }})
 

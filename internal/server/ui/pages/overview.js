@@ -1,12 +1,15 @@
-import { h, icon, mount, pill, sparkline, relTime, absTime, fmtSeconds, duration, pct, kpi, pageHeader, emptyState, spinner, errorBox, toast, bytes } from '../lib/dom.js';
+import { h, icon, mount, pill, sparkline, relTime, absTime, fmtSeconds, duration, pct, emptyState, spinner, errorBox, toast, bytes } from '../lib/dom.js';
 import { versionLabel } from '../lib/version.js';
 import { get, post, atLeast } from '../lib/api.js';
 import { navigate } from '../lib/router.js';
 import { session } from '../app.js';
-import { buildInbox, pulse } from '../lib/inbox.js';
+import { buildInbox, pulse, greeting, summaryLine, recentChanges } from '../lib/inbox.js';
+import { openAssistant } from '../lib/assistant.js';
 
 export async function overviewPage() {
-  const el = h('div', {});
+  const el = h('div', { class: 'space-y-6' });
+  const dyn = h('div', {}); // redrawn every few seconds; the ask bar above it is not, so typing is never lost
+  let spend = null; // { text, sub } once loaded: Cost Explorer bills each call, so only on request
   let timer = null;
   let first = true;
   let extra = {}; // the inbox's other sources, read every INBOX_EVERY loads
@@ -17,14 +20,15 @@ export async function overviewPage() {
   // inbox then says less, never something wrong.
   async function loadExtra() {
     const dev = atLeast(session.role, 'developer');
-    const [proposals, changes, findings, scans, integrations] = await Promise.all([
+    const [proposals, changes, findings, scans, integrations, agents] = await Promise.all([
       get('/v1/ai/proposals').catch(() => null),
       get('/v1/cloud/changes').catch(() => null),
       get('/v1/guard/findings').catch(() => null),
       get('/v1/guard/scans').catch(() => null),
       dev ? get('/v1/integrations').catch(() => null) : null,
+      dev ? get('/v1/ai/agents').catch(() => null) : null,
     ]);
-    extra = { proposals: proposals?.proposals, changes: changes?.changes, findings, scans, integrations };
+    extra = { proposals: proposals?.proposals, changes: changes?.changes, findings, scans, integrations, agents: agents?.agents };
   }
 
   async function load() {
@@ -33,7 +37,7 @@ export async function overviewPage() {
       const [ov, rt] = await Promise.all([get('/v1/overview'), get('/v1/infra/runtime').catch(() => null)]);
       render(ov, rt);
     } catch (e) {
-      if (first) mount(el, errorBox(e.message));
+      if (first) mount(dyn, errorBox(e.message));
     }
     first = false;
   }
@@ -76,11 +80,15 @@ export async function overviewPage() {
     const inbox = buildInbox({ ...extra, overview: ov }, { name: session.name, role: session.role });
     const pl = pulse({ ...extra, overview: ov }, inbox);
 
-    mount(el,
-      pageHeader('Home', 'What needs you, and how everything is doing.',
-        canRun && h('a', { href: '#/pipelines/new', class: 'btn-primary' }, icon('plus'), 'New pipeline')),
+    const recent = recentChanges(extra);
+    mount(dyn, h('div', { class: 'space-y-6' },
+      h('div', { class: 'flex flex-wrap items-end justify-between gap-3' },
+        h('div', { class: 'min-w-0' }, h('h1', { class: 'h-page', id: 'home-greeting' }, greeting(new Date().getHours(), session.user?.name || session.name)),
+          h('p', { class: 'muted mt-1 text-sm', id: 'home-summary' }, summaryLine(inbox))),
+        canRun && h('a', { href: '#/pipelines/new', class: 'btn-secondary' }, icon('plus'), 'New pipeline')),
       pulseTiles(pl),
       inboxSection(inbox),
+      h('div', { class: 'grid gap-4 lg:grid-cols-2' }, startCard(), recentCard(recent)),
       platformStrip(rt),
       h('section', { class: 'mt-8' },
         h('div', { class: 'mb-3 flex flex-wrap items-baseline justify-between gap-2' },
@@ -93,21 +101,77 @@ export async function overviewPage() {
       ov.recent.length > 0 && h('section', { class: 'mt-8' },
         h('h2', { class: 'h-section mb-3' }, 'Recent runs'),
         h('div', { class: 'card overflow-x-auto' }, h('table', { class: 'tbl' },
-          h('thead', {}, h('tr', {}, ['Pipeline', 'Status', 'Started by', 'Duration', 'When'].map(x => h('th', {}, x)))), h('tbody', {}, recentRows)))));
+          h('thead', {}, h('tr', {}, ['Pipeline', 'Status', 'Started by', 'Duration', 'When'].map(x => h('th', {}, x)))), h('tbody', {}, recentRows))))));
+  }
+
+  // A tile: a label, a figure and a line under it; `sub` may be an element (a button).
+  function tile(id, label, value, sub, tone) {
+    const toneCls = tone === 'bad' ? 'text-rose-600 dark:text-rose-400' : tone === 'ok' ? 'text-emerald-600 dark:text-emerald-400' : '';
+    return h('div', { class: 'card card-pad', 'data-tile': id }, h('div', { class: 'h-section' }, label),
+      h('div', { class: 'mt-2 font-display text-[1.7rem] font-bold leading-tight tabular-nums ' + toneCls }, value), h('div', { class: 'muted mt-1 text-xs' }, sub));
+  }
+
+  async function loadSpend(btn) {
+    btn.disabled = true; btn.textContent = 'Loading…';
+    try {
+      const c = await get('/v1/infra/aws/cost');
+      spend = c.available ? { text: c.unit + ' ' + Number(c.total).toFixed(2), sub: 'last 30 days · ' + (c.services?.[0] ? 'most on ' + c.services[0].service : 'all services') }
+        : { text: '–', sub: c.error || 'Cost data is not available for this account' };
+    } catch (e) { spend = { text: '–', sub: e.message }; }
+    load();
   }
 
   function pulseTiles(pl) {
+    const dev = atLeast(session.role, 'developer');
     const tiles = [];
-    tiles.push(kpi('Approvals', pl.act, pl.act ? 'waiting for you' : (pl.waiting ? pl.waiting + ' waiting on someone else' : 'nothing waiting'), pl.act ? 'bad' : null));
-    if (pl.pipelines) tiles.push(kpi('Pipelines', pl.pipelines.ran ? `${pl.pipelines.healthy} of ${pl.pipelines.ran}` : '–',
-      pl.pipelines.ran ? 'passed on their last run' : (pl.pipelines.total ? 'none has run yet' : 'none saved yet'),
+    if (pl.pipelines) tiles.push(tile('pipelines', 'Apps and pipelines', pl.pipelines.ran ? `${pl.pipelines.healthy} of ${pl.pipelines.ran}` : pl.pipelines.total + ' saved',
+      pl.pipelines.ran ? 'passed on their last run' : (pl.pipelines.total ? 'none has run yet' : 'create one to start'),
       pl.pipelines.ran ? (pl.pipelines.healthy === pl.pipelines.ran ? 'ok' : 'bad') : null));
+    if (dev) tiles.push(tile('spend', 'Spend', spend ? spend.text : '–', spend ? spend.sub
+      : h('button', { type: 'button', class: 'font-medium text-brand-700 underline dark:text-brand-300', title: 'AWS bills each look at Cost Explorer, about a cent', onclick: (e) => loadSpend(e.target) }, 'Load from AWS')));
+    if (dev && extra.agents) {
+      const on = extra.agents.filter(a => !a.disabled);
+      tiles.push(tile('team', 'Your AI team', on.length + ' on', extra.agents.length ? (extra.agents.length - on.length) + ' off · ' + extra.agents.length + ' in all' : 'no agents yet'));
+    }
     const sec = pl.security;
-    if (sec && sec.scanned === false) tiles.push(kpi('Security', '–', 'Guard has not scanned yet'));
-    else if (sec) tiles.push(kpi('Security', sec.serious,
-      (sec.serious ? 'serious findings open · ' + sec.open + ' in all' : sec.open + ' minor findings open') + (sec.last ? ' · scanned ' + relTime(sec.last) : ''), sec.serious ? 'bad' : 'ok'));
-    if (pl.connections) tiles.push(kpi('Connections', pl.connections.connected, pl.connections.attention ? pl.connections.attention + ' need attention' : 'connected and working', pl.connections.attention ? 'bad' : 'ok'));
+    if (sec && sec.scanned === false) tiles.push(tile('security', 'Security', '–', 'Guard has not scanned yet'));
+    else if (sec) tiles.push(tile('security', 'Security', sec.serious ? sec.serious + ' serious' : 'All clear',
+      (sec.serious ? (sec.open - sec.serious) + ' minor' : sec.open + ' minor findings') + (sec.last ? ' · scanned ' + relTime(sec.last) : ''), sec.serious ? 'bad' : 'ok'));
     return h('div', { class: 'grid grid-cols-2 gap-4 lg:grid-cols-4' }, tiles);
+  }
+
+  function startCard() {
+    const item = (n, title, text, attrs) => h(attrs.href ? 'a' : 'button', { type: attrs.href ? null : 'button', ...attrs,
+      class: 'flex w-full items-center gap-3 rounded-xl border border-slate-200 p-3 text-left transition-colors hover:border-brand-300 dark:border-slate-700 dark:hover:border-brand-500/50' },
+      h('span', { class: 'flex size-8 shrink-0 items-center justify-center rounded-lg bg-brand-50 font-display font-bold text-brand-700 dark:bg-brand-500/15 dark:text-brand-200' }, String(n)),
+      h('span', { class: 'min-w-0' }, h('span', { class: 'block text-sm font-medium' }, title), h('span', { class: 'muted block text-xs' }, text)));
+    const dev = atLeast(session.role, 'developer');
+    return h('section', { class: 'card card-pad space-y-3', id: 'home-start' }, h('h2', { class: 'font-display text-lg font-bold' }, 'Start something'),
+      atLeast(session.role, 'developer') && item(1, 'Build and test a GitHub repository', 'The assistant writes the pipeline; you press Confirm', { onclick: () => openAssistant('Set up a pipeline that builds and tests one of my GitHub repositories.') }),
+      atLeast(session.role, 'developer') && item(2, 'Write a pipeline yourself', 'YAML with a live check and a graph', { href: '#/pipelines/new' }),
+      dev && item(3, 'Hire an agent', 'From the marketplace: cost watcher, cluster doctor and more', { href: '#/marketplace' }),
+      !dev && h('p', { class: 'muted text-sm' }, 'Ask an administrator for the developer role to create pipelines and agents.'));
+  }
+
+  function recentCard(items) {
+    const dot = { ok: 'bg-emerald-500', bad: 'bg-rose-500', idle: 'bg-slate-400' };
+    return h('section', { class: 'card card-pad flex flex-col gap-3', id: 'home-recent' }, h('h2', { class: 'font-display text-lg font-bold' }, 'Recent changes'),
+      items.length ? h('ul', { class: 'space-y-2.5' }, items.map(r => h('li', {}, h('a', { href: '#' + r.href, class: 'flex gap-2.5 text-sm hover:underline' },
+        h('span', { class: 'mt-1.5 size-2 shrink-0 rounded-full ' + dot[r.tone], 'aria-hidden': 'true' }),
+        h('span', { class: 'min-w-0' }, h('span', { class: 'block truncate font-medium' }, r.title), h('span', { class: 'muted block truncate text-xs' }, r.detail, r.at ? ' · ' + relTime(r.at) : ''))))))
+        : h('p', { class: 'muted text-sm' }, 'No changes yet. A change the assistant or a person proposes shows here once it is decided.'),
+      h('a', { href: '#/proposals', class: 'mt-auto text-sm font-medium text-brand-700 underline dark:text-brand-300' }, 'All approvals'));
+  }
+
+  // Ask or tell Forgeline: opens the assistant with the question (design note 029). Developers and up.
+  function askBar() {
+    if (!atLeast(session.role, 'developer')) return null;
+    const input = h('input', { id: 'home-ask', class: 'min-w-0 flex-1 bg-transparent py-1 text-[15px] placeholder:text-slate-400 focus:outline-none', maxlength: '4000', autocomplete: 'off',
+      placeholder: 'Ask or tell Forgeline… “why did my last run fail?”', 'aria-label': 'Ask or tell Forgeline' });
+    return h('form', { class: 'flex items-center gap-3 rounded-2xl border-[1.5px] border-brand-500 bg-white px-4 py-2.5 shadow-sm focus-within:ring-4 focus-within:ring-brand-500/15 dark:bg-slate-900', id: 'home-ask-form',
+      onsubmit: (e) => { e.preventDefault(); const q = input.value.trim(); if (!q) return; if (openAssistant(q)) input.value = ''; } },
+      icon('sparkle', 'size-5 text-brand-600 dark:text-brand-300'), input,
+      h('button', { type: 'submit', class: 'btn-primary btn-sm' }, 'Ask'));
   }
 
   function inboxSection(items) {
@@ -143,7 +207,8 @@ export async function overviewPage() {
       h('span', { class: 'muted ml-auto flex items-center gap-1 text-xs' }, 'Infrastructure', icon('chevron', 'size-3')));
   }
 
-  mount(el, spinner());
+  mount(el, askBar(), dyn);
+  mount(dyn, spinner());
   await load();
   timer = setInterval(() => { if (!document.hidden) load(); }, 4000);
   el.cleanup = () => clearInterval(timer);

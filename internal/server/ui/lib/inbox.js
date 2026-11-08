@@ -81,3 +81,42 @@ export function pulse(src, inbox) {
     connections: ints ? { connected: ints.filter(i => i.status === 'connected').length, attention: ints.filter(i => i.status === 'attention').length } : null,
   };
 }
+
+/** Home's greeting: by the hour of the person's own clock, with the first word of their name. */
+export function greeting(hour, name) {
+  const part = hour < 5 ? 'Hello' : hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+  const first = String(name || '').trim().split(/\s+/)[0];
+  return first ? part + ', ' + first.charAt(0).toUpperCase() + first.slice(1) : part;
+}
+
+/** The line under the greeting, from the inbox. */
+export function summaryLine(inbox) {
+  const act = inbox.filter(i => i.rank === 0).length;
+  const problems = inbox.filter(i => i.rank > 0 && i.tone !== 'wait').length;
+  const n = act + problems;
+  if (!n) return 'Nothing needs you. Everything is quiet.';
+  const words = ['', 'One thing needs', 'Two things need', 'Three things need', 'Four things need', 'Five things need'];
+  return (words[n] || n + ' things need') + ' you.' + (n <= 3 ? ' Everything else is quiet.' : '');
+}
+
+const DONE = { applied: 'ok', succeeded: 'ok', rejected: 'bad', failed: 'bad', canceled: 'idle', cancelled: 'idle', expired: 'idle' };
+
+/**
+ * Changes that were decided recently, newest first: AI proposals and console cloud changes.
+ * Each: { key, title, detail, tone: 'ok'|'bad'|'idle', at, href }.
+ */
+export function recentChanges(src, n = 4) {
+  const out = [];
+  const add = (kind, list, hrefFor) => {
+    for (const p of list || []) {
+      const tone = DONE[p.status];
+      if (!tone) continue;
+      const at = p.finished_at || p.decided_at || p.proposed_at || null;
+      const who = [p.proposed_by && 'proposed by ' + p.proposed_by, p.decided_by && (p.status === 'rejected' ? 'rejected by ' : 'approved by ') + p.decided_by].filter(Boolean).join(' · ');
+      out.push({ key: kind + ':' + p.id, title: p.title, detail: [p.status, p.account_name, who].filter(Boolean).join(' · '), tone, at, href: hrefFor(p) });
+    }
+  };
+  add('proposal', src.proposals, p => '/proposals/' + encodeURIComponent(p.id));
+  add('change', src.changes, () => '/infrastructure?tab=changes');
+  return out.sort((a, b) => String(b.at || '').localeCompare(String(a.at || '')) || a.key.localeCompare(b.key)).slice(0, n);
+}

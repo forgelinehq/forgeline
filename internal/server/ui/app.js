@@ -26,39 +26,52 @@ import { memoryPage } from './pages/memory.js';
 import { assistantButton } from './lib/assistant.js';
 import { visibleGroups, isSettingsPath, activeItem, canOpenSettings } from './lib/settingsnav.js';
 import { settingsPage } from './pages/settings.js';
-import { navFor, isActivePath } from './lib/nav.js';
+import { spacesFor, activeSpace, tabsFor, tabMatches } from './lib/nav.js';
 
 const root = document.getElementById('root');
 export const session = { role: 'viewer', name: '', user: null };
+let approvalsTimer = 0; // one poll of the approvals count, kept across sign-ins
 
 function setTheme(dark) {
   document.documentElement.classList.toggle('dark', dark);
   try { localStorage.setItem('forgeline-theme', dark ? 'dark' : 'light'); } catch { /* storage blocked */ }
 }
 
-function isActive(item) { return isActivePath(item, currentPath()); }
 
 function shell() {
   const outlet = h('main', { id: 'main', tabindex: '-1', class: 'mx-auto w-full max-w-7xl flex-1 px-4 py-6 outline-none sm:px-6 lg:px-8 min-[1800px]:max-w-[96rem] min-[2300px]:max-w-[120rem]' });
   const nav = h('nav', { class: 'flex flex-col gap-0.5 px-3', 'aria-label': 'Main' });
   const gearSlot = h('div', { class: 'mt-auto' });
-  const navLink = i =>
+  const tabBar = h('div', { id: 'space-tabs' });
+  const spaceLink = (s, on) =>
     h('a', {
-      href: '#' + i.path, onclick: () => sidebar.classList.add('hidden'),
-      class: 'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ' + (isActive(i)
+      href: '#' + s.path, onclick: () => sidebar.classList.add('hidden'), 'data-space': s.id,
+      class: 'flex items-center gap-3 rounded-xl px-3 py-2.5 text-[15px] font-medium transition-colors ' + (on
         ? 'bg-white text-brand-700 shadow-sm ring-1 ring-slate-200 dark:bg-brand-500/15 dark:text-brand-200 dark:ring-0'
         : 'text-slate-600 hover:bg-slate-200/60 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800'),
-      'aria-current': isActive(i) ? 'page' : null,
-    }, icon(i.icon, 'size-[18px]'), i.label);
+      'aria-current': on ? 'page' : null,
+    }, icon(s.icon, 'size-[18px]'), s.label);
+  // The tabs of the space the page belongs to, above the page. Settings has its own menu, so none there.
+  const renderTabs = () => {
+    const path = currentPath();
+    const sp = activeSpace(path);
+    const tabs = sp && !isSettingsPath(path) ? tabsFor(sp, session.role) : [];
+    if (tabs.length < 2) return mount(tabBar);
+    mount(tabBar, h('div', { class: 'border-b border-slate-200 bg-white/60 dark:border-slate-800 dark:bg-slate-900/40' },
+      h('nav', { class: 'mx-auto flex w-full max-w-7xl items-center gap-1 overflow-x-auto px-4 sm:px-6 lg:px-8 min-[1800px]:max-w-[96rem]', 'aria-label': sp.label },
+        h('span', { class: 'mr-3 hidden font-display text-base font-bold sm:block' }, sp.label),
+        tabs.map(t => t.planned
+          ? h('span', { class: 'flex items-center gap-1.5 whitespace-nowrap px-3 py-3 text-sm text-slate-400 dark:text-slate-600', title: 'Coming soon' }, t.label, h('span', { class: 'rounded bg-slate-100 px-1 font-mono text-[9px] uppercase tracking-wider dark:bg-slate-800' }, 'soon'))
+          : h('a', { href: '#' + t.path, 'data-tab': t.path, 'aria-current': tabMatches(t, path) ? 'page' : null,
+              class: 'whitespace-nowrap border-b-2 px-3 py-3 text-sm font-medium transition-colors ' + (tabMatches(t, path)
+                ? 'border-brand-600 text-brand-700 dark:border-brand-400 dark:text-brand-200'
+                : 'border-transparent text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white') }, t.label,
+              t.path === '/proposals' ? approvalsBadge(true) : null)))));
+  };
   const renderNav = () => {
-    const out = [];
-    let last;
-    for (const i of navFor(session.role)) {
-      if (i.group && i.group !== last) out.push(h('div', { class: 'h-section mb-1 mt-4 px-3' }, i.group));
-      last = i.group;
-      out.push(navLink(i));
-    }
-    mount(nav, out);
+    const sp = activeSpace(currentPath());
+    mount(nav, spacesFor(session.role).map(s => spaceLink(s, !isSettingsPath(currentPath()) && sp && sp.id === s.id)));
+    renderTabs();
     mount(gearSlot, canOpenSettings(session.role) ? h('a', { href: '#/settings', 'aria-current': isSettingsPath(currentPath()) ? 'page' : null,
       class: 'mx-3 mb-2 flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ' + (isSettingsPath(currentPath())
         ? 'bg-brand-50 text-brand-700 dark:bg-brand-500/15 dark:text-brand-200'
@@ -89,13 +102,29 @@ function shell() {
     mount(userMenu, btn, menu);
   };
 
+  // Approvals waiting, in the header on every page (design note 029). Counts what is waiting; whether this
+  // person may approve it is the server's decision, shown on the Approvals page.
+  let waiting = 0;
+  const approvalsBadge = (small) => waiting ? h('span', { class: (small ? 'ml-1.5 ' : '') + 'rounded-full bg-brand-600 px-1.5 text-[11px] font-semibold leading-5 text-white' }, String(waiting)) : null;
+  const approvalsButton = h('a', { href: '#/proposals', class: 'btn-ghost btn-sm', id: 'approvals-button', title: 'Changes waiting for approval' });
+  const renderApprovals = () => { mount(approvalsButton, icon('check', 'size-4'), h('span', { class: 'hidden sm:inline' }, 'Approvals'), approvalsBadge(false)); approvalsButton.setAttribute('aria-label', 'Approvals, ' + waiting + ' waiting'); };
+  const loadApprovals = async () => {
+    const [a, c] = await Promise.all([get('/v1/ai/proposals').catch(() => null), get('/v1/cloud/changes').catch(() => null)]);
+    const n = [...(a?.proposals || []), ...(c?.changes || [])].filter(x => x.status === 'proposed').length;
+    if (n !== waiting) { waiting = n; renderApprovals(); renderTabs(); }
+  };
+  renderApprovals(); loadApprovals();
+  clearInterval(approvalsTimer);
+  approvalsTimer = setInterval(() => { if (!document.hidden) loadApprovals(); }, 60000);
+  addEventListener('hashchange', loadApprovals);
+
   const top = h('header', { class: 'sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-slate-200 bg-white/85 px-4 backdrop-blur lg:pl-72 dark:border-slate-800 dark:bg-slate-900/85' },
     h('button', { class: 'btn-ghost btn-sm lg:hidden', type: 'button', 'aria-label': 'Open menu', onclick: () => { sidebar.classList.toggle('hidden'); sidebar.classList.toggle('flex'); } }, icon('menu', 'size-5')),
-    h('div', { class: 'flex-1' }), assistantButton(session.role), themeBtn, userMenu);
+    h('div', { class: 'flex-1' }), approvalsButton, assistantButton(session.role), themeBtn, userMenu);
 
   renderUser(); renderNav();
   addEventListener('hashchange', renderNav);
-  mount(root, sidebar, top, h('div', { class: 'flex min-h-[calc(100vh-3.5rem)] flex-col lg:pl-64 lg:pr-[var(--assistant-w,0px)]' }, outlet));
+  mount(root, sidebar, top, h('div', { class: 'flex min-h-[calc(100vh-3.5rem)] flex-col lg:pl-64 lg:pr-[var(--assistant-w,0px)]' }, tabBar, outlet));
   fetch('/healthz').catch(() => {});
   return outlet;
 }
