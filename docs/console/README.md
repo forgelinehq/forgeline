@@ -285,6 +285,7 @@ update that asks for different hosts needs a fresh grant.
 | [86-approval-rules](86-approval-rules.png) | Settings › Approval rules: a rule asking for two approvals for AI-drafted changes to the Primary account (note 032) |
 | [87-audit-export](87-audit-export.png) | Settings › Audit log with person, action and date filters and the CSV and JSON Lines downloads (note 033) |
 | [88-team](88-team.png) | Team › Team: the agents as an org chart with who reports to whom, each agent's state and mode (note 029, frame 5) |
+| [117-setup](117-setup.png) | Home on a new server: Set up Forgeline, 5 of 7 steps done (note 038) |
 | [116-built](116-built.png) | Build › Built: a built blueprint as a diagram, its app's AWS resources, and a check against AWS |
 | [100-home](100-home.png) to [115-aws-services](115-aws-services.png) | The current console, one picture per space and settings page (2026-11-08), used by the console tour |
 | [97-mission-done](97-mission-done.png) | A finished mission: all five stages, the report, findings with what was proposed and found afterwards (note 037) |

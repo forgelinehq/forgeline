@@ -1,6 +1,6 @@
 # 038: Onboarding by conversation, with a small model that runs on a CPU
 
-Status: **Research and proposal (2026-11-08). Nothing is built.** Needs a decision (see the end).
+Status: **Step 1 built (2026-11-08): the first-run steps, in the console and `forgeline onboard`.** The maintainer chose to build steps 1 and 2; step 2 (the local-model backend) is next.
 
 ## Question
 
@@ -71,3 +71,19 @@ with or without a model.
 - OpenClaw onboarding: [wizard](https://docs.openclaw.ai/start/wizard/index.html), [CLI reference](https://docs.openclaw.ai/start/wizard-cli-reference/index.html), [onboard on Mintlify](https://www.mintlify.com/openclaw/openclaw/cli/onboard)
 - Hermes Agent: [quickstart](https://hermes-agent.nousresearch.com/docs/getting-started/quickstart), [local models with Unsloth](https://unsloth.ai/docs/integrations/hermes-agent), [NVIDIA playbook](https://build.nvidia.com/playbooks/hermes-agent/instructions), [with Ollama](https://fast.io/resources/hermes-agent-ollama-local-llm/)
 - Small models: [5 small language models for agentic tool calling](https://www.kdnuggets.com/5-small-language-models-for-agentic-tool-calling), [tiny models for Raspberry Pi](https://www.kdnuggets.com/7-tiny-ai-models-for-raspberry-pi), [best CPU-only local LLMs in 2026](https://www.popularai.org/p/best-cpu-only-local-llm-2026), [small LLM tool-calling benchmark](https://ai-radar.it/article/valutazione-di-llm-piccoli-l-importanza-del-parsing-negli-agenti-locali)
+
+## Step 1: built
+
+| Decision | Choice |
+| --- | --- |
+| Steps | Create the first administrator; bring in your team (single sign-on, or more than one person); connect GitHub; connect a cloud account (AWS, Google Cloud or Azure); turn on the assistant; choose what the AI may touch (the access policy saved at least once); make a first pipeline or blueprint |
+| Done | Read from the server's own state each time (`GET /v1/onboarding`), never ticked by hand, so a step done another way still counts |
+| Skip | Administrators skip a step or bring it back (`PUT /v1/onboarding/{step}`); audited. A done step is never shown as skipped |
+| Console | Home shows **Set up Forgeline** (progress, the next step's button, every step) until all are done or skipped; **Settings › Setup** any time |
+| Terminal | `forgeline onboard` prints the steps and asks what a terminal can answer: the assistant (the claude program on the server, or not now) and AWS (a profile the server's user has, and a region). Everything else is linked to its console page. It never asks for a key or a token, which are entered in the console where they are stored write-only. `--non-interactive` prints the list (exit 0 when finished, 3 otherwise); `--json` prints it as JSON |
+| Nothing new can change | Each answer goes through the endpoint the console uses, with the same checks |
+
+Tested: each step turns done when its thing exists; skipping is for administrators, audited, finishes the list and can be
+undone; a done step is never skipped. The command against a stand-in server: the token header, a skip, AWS connected with a
+profile and region, the claude program chosen, no key or token ever sent, the exit codes. Run against the demo server, and
+in a browser: the card on Home, skipping from it, bringing a step back from Settings › Setup.

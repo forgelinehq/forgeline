@@ -33,6 +33,7 @@ import { watchMapPage } from './pages/watch_map.js';
 import { aiUsePage } from './pages/ai_use.js';
 import { missionsPage, missionPage } from './pages/missions.js';
 import { builtPage } from './pages/built.js';
+import { setupPage as setupStepsPage } from './pages/setup.js';
 import { blueprintsPage, blueprintPage } from './pages/blueprints.js';
 import { designHomePage, designPage } from './pages/design.js';
 import { spacesFor, activeSpace, tabsFor, tabMatches } from './lib/nav.js';
@@ -234,6 +235,7 @@ async function boot() {
     route('/ai-use', guard('developer', aiUsePage));
     route('/missions', guard('developer', missionsPage));
     route('/built', guard('developer', builtPage));
+    route('/setup', guard('developer', setupStepsPage));
     route('/missions/:id', guard('developer', missionPage));
     route('/infrastructure', guard('viewer', infraPage));
     route('/settings', guard('developer', settingsPage));

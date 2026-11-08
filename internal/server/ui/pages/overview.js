@@ -5,6 +5,7 @@ import { navigate } from '../lib/router.js';
 import { session } from '../app.js';
 import { buildInbox, pulse, greeting, summaryLine, recentChanges } from '../lib/inbox.js';
 import { openAssistant } from '../lib/assistant.js';
+import { setupCard } from './setup.js';
 
 export async function overviewPage() {
   const el = h('div', { class: 'space-y-6' });
@@ -207,7 +208,7 @@ export async function overviewPage() {
       h('span', { class: 'muted ml-auto flex items-center gap-1 text-xs' }, 'Infrastructure', icon('chevron', 'size-3')));
   }
 
-  mount(el, askBar(), dyn);
+  mount(el, askBar(), setupCard(), dyn);
   mount(dyn, spinner());
   await load();
   timer = setInterval(() => { if (!document.hidden) load(); }, 4000);
