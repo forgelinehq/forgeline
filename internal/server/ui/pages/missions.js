@@ -7,6 +7,7 @@ import { session } from '../app.js';
 import { avatar } from './agents.js';
 import { STAGES, COLUMNS, stageStates, columnOf, missionLine, findingsByRisk, outcome } from '../lib/missions.js';
 import { tokens } from '../lib/usage.js';
+import { workingBar, waitingDot } from '../lib/flow.js';
 
 const SEV = { high: 'pill-bad', medium: 'pill-wait', low: 'pill-idle', info: 'pill-idle' };
 const STEP = {
@@ -91,8 +92,9 @@ export async function missionPage({ params }) {
     const graph = h('ol', { class: 'grid grid-cols-2 gap-2 sm:grid-cols-5', id: 'mission-stages', 'aria-label': 'Stages' }, st.map((s, i) =>
       h('li', { class: 'relative rounded-xl border px-3 py-2.5 text-sm ' + STEP[s.state], 'data-stage': s.key, 'data-state': s.state },
         h('b', { class: 'block' }, (i + 1) + '. ' + s.label),
-        h('span', { class: 'text-xs ' + (s.state === 'wait' ? 'text-brand-700 dark:text-brand-300' : 'muted') },
-          { now: 'working…', wait: 'waiting for you', done: 'done', failed: m.status === 'stopped' ? 'stopped' : m.status === 'cancelled' ? 'cancelled' : 'failed', skipped: 'not needed', todo: s.note }[s.state]))));
+        h('span', { class: 'text-xs ' + (s.state === 'wait' ? 'text-brand-700 dark:text-brand-300' : 'muted') }, s.state === 'wait' ? waitingDot() : null,
+          { now: 'working…', wait: 'waiting for you', done: 'done', failed: m.status === 'stopped' ? 'stopped' : m.status === 'cancelled' ? 'cancelled' : 'failed', skipped: 'not needed', todo: s.note }[s.state]),
+        s.state === 'now' ? workingBar() : null)));
     const findings = findingsByRisk(m);
     const findingList = findings.length ? h('ul', { class: 'divide-y divide-slate-100 dark:divide-slate-800', id: 'mission-findings' }, findings.map(f => {
       const o = outcome(m, f.n);

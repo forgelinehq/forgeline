@@ -7,6 +7,15 @@ section in the pull request that makes the change; a release moves it under its 
 ## [Unreleased]
 
 ### Added
+- **Built by Forgeline** (Build › Built): everything Forgeline created and keeps in your cloud accounts in one place. Each
+  built blueprint is an interactive diagram whose blocks list the AWS resources they made (name, id, ARN only; the state
+  stays sealed), plus stacks from approved changes and environments that are up. **Check against AWS** marks each resource
+  as still there or missing.
+- **Moving diagrams.** Dots move along lines to show which way things flow: into a pipeline step while it runs, along a
+  blueprint's links on the canvas and on the Built page (the internet into a front door, data to and from an app, logs
+  out), and along enabled Lambda event sources on the Watch map. The stage a mission or workflow is working on shows a
+  moving bar, and one waiting for you a pulsing dot. They show configuration and progress, not measured traffic, and stop
+  for people who ask their system for less motion.
 - **Docs pages like docs.openclaw.ai's:** breadcrumbs and the section above each title, and a **Copy page** menu (copy the
   page as Markdown, view it as Markdown, or open it in ChatGPT or Claude to ask about it). Every page has a plain Markdown
   copy next to it, and `llms.txt` lists them for AI tools.

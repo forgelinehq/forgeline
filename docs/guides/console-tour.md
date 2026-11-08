@@ -17,7 +17,7 @@ with the number of changes waiting. What you see depends on your role, and old a
 | Space | Tabs |
 | --- | --- |
 | Home | Today, Approvals |
-| Build | Design, Environments, Blueprints |
+| Build | Design, Environments, Blueprints, Built |
 | Ship | Pipelines, GitHub Actions |
 | Team | Team, Agents, Missions, Marketplace |
 | Watch | Map, Infrastructure, Kubernetes, Security |
@@ -49,7 +49,9 @@ changes (stacks, blueprints, environments). Each shows who asked, why, the previ
 ECS, tables, file buckets, queues, logs, and things that already exist, which are used but never changed). Add blocks from
 the toolbar, drag them into place (arrow keys move the one in focus), and pick one to change it on the right. Under
 **Links** you join blocks; only links that make sense are offered. Orange lines carry traffic from the internet, grey
-lines are an app using data, dashed lines are logs, and dashed blocks already exist. Every change is checked as you go,
+lines are an app using data, dashed lines are logs, and dashed blocks already exist. Moving dots show which way things
+flow: the internet into a front door, traffic to the app, data back from what it reads, logs out. They show what the
+blueprint configures, not measured traffic. Every change is checked as you go,
 and **Save** stays off until a problem is fixed.
 
 ![The design canvas]({{ '/console/91-design-canvas.png' | relative_url }})
@@ -73,6 +75,14 @@ keep their data if you remove them, and only a front door is reachable from the 
 
 ![A blueprint]({{ '/console/90-blueprint.png' | relative_url }})
 
+**Built** lists everything Forgeline created and keeps in your cloud accounts: each blueprint that was built, drawn as
+an interactive diagram (its blocks as on the canvas, with moving dots showing which way things flow), stacks deployed
+through approved changes, and environments that are up. Pick a block to see the AWS resources it made, by name, id and
+ARN (nothing else from the saved state leaves the server). **Check against AWS** looks each one up in the account and
+marks it as still there or missing, so you notice something deleted outside Forgeline.
+
+![Built by Forgeline]({{ '/console/116-built.png' | relative_url }})
+
 **Environments** are temporary stacks from templates, with an owner, a time to live and a cost estimate, approved like
 any cloud change and removed when their time is up.
 
@@ -88,7 +98,8 @@ restore.
 
 ![A pipeline]({{ '/console/103-pipeline.png' | relative_url }})
 
-A **run** shows its steps as a graph coloured by status, with live logs. When it fails, **What went wrong** names the
+A **run** shows its steps as a graph coloured by status, with live logs; dots move along the lines into a step while it
+runs. When it fails, **What went wrong** names the
 failing step and its exit code, shows the end of its output, and offers **Ask the assistant**.
 
 ![A failed run]({{ '/console/104-run-failed.png' | relative_url }})
@@ -123,8 +134,8 @@ it; a claim that names no lookup the agent ran is left out and counted.
 ## Watch
 
 **Map** shows your AWS account: resources inside the CloudFormation stack that made them, then the VPC they are in, then
-the rest by kind. A line joins a Lambda function to the queue or table stream it reads; nothing is linked by similar
-names. A strip lists what **needs a look** (a failing state, a security group open to the internet, an unencrypted volume,
+the rest by kind. A line joins a Lambda function to the queue or table stream it reads, with moving dots when Lambda reports the link as
+enabled (in the direction data goes; traffic itself is not measured); nothing is linked by similar names. A strip lists what **needs a look** (a failing state, a security group open to the internet, an unencrypted volume,
 an alarm in alarm). Pick anything to see which stack made it, what it uses and what uses it, and, when something is
 flagged, **Ask the assistant to fix it**. A switch at the top changes account.
 

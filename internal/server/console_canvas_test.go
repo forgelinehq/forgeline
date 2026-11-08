@@ -12,7 +12,7 @@ import (
 )
 
 const canvasCases = `
-import { DEFAULTS, autoLayout, addBlock, removeBlock, updateBlock, moveBlock, linkTargets, addLink, removeLink, toBody, explainError, linkPath, bounds, fit, newID, planByBlock, planState, planWords, placeNew } from './canvas.mjs';
+import { DEFAULTS, autoLayout, addBlock, removeBlock, updateBlock, moveBlock, linkTargets, addLink, removeLink, toBody, explainError, linkPath, bounds, fit, newID, planByBlock, planState, planWords, placeNew, flowOf } from './canvas.mjs';
 let failed = 0;
 const eq = (name, got, want) => { const g = JSON.stringify(got), w = JSON.stringify(want); if (g !== w) { failed++; console.error('FAIL ' + name + '\n  got  ' + g + '\n  want ' + w); } };
 const empty = { name: 'T', target: { cloud: 'aws', account: 'primary', region: 'ap-south-1' }, blocks: [], links: [] };
@@ -24,8 +24,8 @@ r = addBlock(bp, 'table'); bp = r.bp; const table = r.id;
 r = addBlock(bp, 'logs'); bp = r.bp; const logs = r.id;
 eq('ids', [door, app, table, logs], ['door', 'app', 'table', 'logs']);
 eq('the original is not changed', empty.blocks.length, 0);
-eq('columns: doors, apps, then data', bp.blocks.map(b => b.x), [40, 290, 540, 540]);
-eq('stacked in a column', bp.blocks.filter(b => b.x === 540).map(b => b.y), [40, 140]);
+eq('columns: doors, apps, then data', bp.blocks.map(b => b.x), [96, 346, 596, 596]);
+eq('stacked in a column', bp.blocks.filter(b => b.x === 596).map(b => b.y), [40, 140]);
 eq('a door may send traffic to the app', linkTargets(bp, door), [{ id: 'app', name: 'App', access: false }]);
 eq('an app may use data and logs', linkTargets(bp, app).map(t => [t.id, t.access]), [['table', true], ['logs', false]]);
 eq('a table links to nothing', linkTargets(bp, table), []);
@@ -44,7 +44,7 @@ eq('unset fields are removed', 'port' in portless.blocks.find(b => b.id === 'app
 eq('remove a block takes its links', removeBlock(bp, app).links, []);
 eq('remove a link', removeLink(bp, app, logs).links.length, 2);
 eq('moving keeps to the canvas', moveBlock(bp, door, -50, 12.6).blocks[0], { ...bp.blocks[0], x: 0, y: 13 });
-eq('layout only when nothing has a place', autoLayout({ ...empty, blocks: [{ id: 'a', kind: 'table' }, { id: 'b', kind: 'frontdoor' }] }).blocks.map(b => [b.x, b.y]), [[540, 40], [40, 40]]);
+eq('layout only when nothing has a place', autoLayout({ ...empty, blocks: [{ id: 'a', kind: 'table' }, { id: 'b', kind: 'frontdoor' }] }).blocks.map(b => [b.x, b.y]), [[596, 40], [96, 40]]);
 eq('a placed blueprint keeps its places', autoLayout(bp).blocks.map(b => b.x), bp.blocks.map(b => b.x));
 eq('messages use names', explainError(bp, 'links[1].access: say read; blocks[0]: front door'), 'the link from “App” to “Table”.access: say read; “Front door”: front door');
 eq('a path leaves right and enters left', linkPath({ x: 0, y: 0 }, { x: 300, y: 0 }).startsWith('M190 33'), true);
@@ -62,8 +62,14 @@ eq('planning and failed', [planState({ status: 'planning' }, 3, false), planStat
 eq('words', planWords(plan), '2 to add, 1 to change, 1 to remove');
 eq('no words', planWords({ add: 0, change: 0, remove: 0 }), 'Nothing to change: AWS already matches the blueprint');
 const withNew = { ...bp, blocks: [...bp.blocks, { id: 'q', kind: 'queue', name: 'Q' }, { id: 'd2', kind: 'frontdoor', name: 'D2' }] };
-eq('new blocks go below their column; placed ones stay', placeNew(withNew).blocks.map(b => [b.id, b.x, b.y]), [['door', 40, 40], ['app', 290, 40], ['table', 540, 40], ['logs', 540, 140], ['q', 540, 240], ['d2', 40, 140]]);
-eq('nothing placed: lay it all out', placeNew({ ...empty, blocks: [{ id: 'a', kind: 'service' }] }).blocks[0].x, 290);
+eq('new blocks go below their column; placed ones stay', placeNew(withNew).blocks.map(b => [b.id, b.x, b.y]), [['door', 96, 40], ['app', 346, 40], ['table', 596, 40], ['logs', 596, 140], ['q', 596, 240], ['d2', 96, 140]]);
+eq('nothing placed: lay it all out', placeNew({ ...empty, blocks: [{ id: 'a', kind: 'service' }] }).blocks[0].x, 346);
+const fb = { blocks: [{ id: 'd', kind: 'frontdoor' }, { id: 'a', kind: 'service' }, { id: 't', kind: 'table' }, { id: 'l', kind: 'logs' }, { id: 'q', kind: 'queue' }] };
+eq('traffic flows from the door to the app', flowOf(fb, { from: 'd', to: 'a' }), 'forward');
+eq('logs flow out of the app', flowOf(fb, { from: 'a', to: 'l' }), 'forward');
+eq('reading brings data back to the app', flowOf(fb, { from: 'a', to: 't', access: 'read' }), 'back');
+eq('reading and writing goes both ways', flowOf(fb, { from: 'a', to: 'q', access: 'readwrite' }), 'both');
+eq('a link to nothing has no flow', flowOf(fb, { from: 'a', to: 'gone' }), null);
 console.log(JSON.stringify({ built: toBody(bp, 3), defaults: DEFAULTS }));
 if (failed) process.exit(1);
 `

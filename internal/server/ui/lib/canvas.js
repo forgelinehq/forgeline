@@ -5,7 +5,7 @@
 // internal/blueprint (Go), which stays the authority: the server checks every save.
 
 export const BLOCK_W = 190, BLOCK_H = 66;
-const COL_X = 40, COL_W = 250, ROW_Y = 40, ROW_H = 100;
+const COL_X = 96, COL_W = 250, ROW_Y = 40, ROW_H = 100;
 
 // What a new block of each kind starts as. Each is valid on its own.
 export const DEFAULTS = {
@@ -211,4 +211,16 @@ export function placeNew(bp) {
     placed.blocks.push(b);
   }
   return out;
+}
+
+/**
+ * Which way things flow along a link, for the moving dots: 'forward' (from the first block to the second), 'back', or
+ * 'both'. A front door sends traffic to its app; an app writes logs; reading data brings it back to the app; reading
+ * and writing goes both ways. This is what the blueprint configures, not measured traffic.
+ */
+export function flowOf(bp, link) {
+  const from = bp.blocks.find(b => b.id === link.from), to = bp.blocks.find(b => b.id === link.to);
+  if (!from || !to) return null;
+  if (from.kind === 'frontdoor' || to.kind === 'logs') return 'forward';
+  return link.access === 'readwrite' ? 'both' : 'back';
 }

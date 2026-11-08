@@ -7,6 +7,7 @@ import { avatar } from './agents.js';
 import { buildTree, stateLine, factsLine, missionSteps } from '../lib/team.js';
 import { budgetLine, tokens } from '../lib/usage.js';
 import { budgetBar } from './ai_use.js';
+import { workingBar, waitingDot } from '../lib/flow.js';
 
 const TONE = {
   work: 'text-sky-700 dark:text-sky-300', wait: 'text-amber-700 dark:text-amber-300',
@@ -100,7 +101,8 @@ export async function teamPage() {
       h('span', { class: 'muted text-xs' }, (run.trigger === 'schedule' ? 'on schedule' : 'started by ' + run.by) + ' · ' + relTime(run.started_at))),
     h('ol', { class: 'mt-3 grid grid-cols-2 gap-2 text-center text-xs ' + (COLS[steps.length] || 'sm:grid-cols-6'), 'data-steps': String(steps.length) },
       steps.map(s => h('li', { class: 'rounded-lg border px-2 py-2.5 ' + STEP[s.state], 'data-step': s.state },
-        h('b', { class: 'block text-sm' }, s.name), s.note && h('span', { class: s.state === 'wait' ? 'text-brand-700 dark:text-brand-300' : 'muted' }, s.note)))),
+        h('b', { class: 'block text-sm' }, s.name), s.note && h('span', { class: s.state === 'wait' ? 'text-brand-700 dark:text-brand-300' : 'muted' }, s.state === 'wait' ? waitingDot() : null, s.note),
+        s.state === 'now' ? workingBar() : null))),
     steps.some(s => s.state === 'wait') && h('p', { class: 'mt-3 text-sm' }, 'It is waiting for an administrator. ', h('a', { href: '#/workflow-runs/' + run.id, class: 'font-medium text-brand-700 underline dark:text-brand-300' }, 'Review it')));
 
   mount(el, header(),
