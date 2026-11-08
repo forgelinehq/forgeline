@@ -21,6 +21,14 @@ in [PLAN.md](PLAN.md).
 | M6 | AI agents | Governed agent steps with scoped credentials and cost tracking; failure triage; fix suggestions as pull requests, never auto-applied | In progress: Claude Code agent steps built (note 007); Codex, Copilot, triage and cost tracking open |
 | M7 | Migration and breadth | Importers for Jenkinsfile and GitHub Actions workflows; Bitbucket and GitLab triggers; additional cloud targets | Not started |
 
+## Next: onboarding by conversation (note 038)
+
+Status: **research done, needs a decision.** New-generation agents (OpenClaw's `openclaw onboard`, Hermes Agent's
+`hermes setup`) get people working by asking questions, and can use a small model on the person's own machine.
+Proposal: first-run steps in the console and `forgeline onboard` (no model needed), a local-model backend for small
+CPU models through llama.cpp or Ollama, an evaluation on the Raspberry Pi, and conversational answers only if the
+evaluation shows they are reliable. See [note 038](design/038-conversational-onboarding.md).
+
 ## Open decisions
 
 - Step execution engine. Proposed: write a minimal executor behind an interface and treat

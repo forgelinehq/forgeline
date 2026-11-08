@@ -307,22 +307,35 @@ Design: [docs/design/006-console.md](design/006-console.md). Pictures: [docs/con
 
 > Agentic missions (discover, propose, approve, apply, verify; ECS to IaC, CI/CD and canary as the worked example) are in `docs/design/014-agentic-missions.md`. AI use cases and how Claude can reach our infrastructure safely are in `docs/design/013-ai-use-cases.md`. Market research (2026-10-30) is in `docs/design/012-market-research.md`: pain points, enterprise gaps, integrations, a UI plan and a ranked backlog of 16 items. Pick from its ranking once the items below that need a real-service check are done or blocked.
 
-> **Console redesign (notes 029 and 030, 2026-11-07), enterprise focus.** Built: the sidebar grouped into
-> Home, Ship, Build, Team and Watch; Home's Needs you list; AWS service switches for the AI; the visual
-> system (warm neutrals, self-served fonts), the assistant panel, the agent and skill screens, and frame 1
-> of the confirmed screen frames (five spaces with tabs, the new Home) and frame 2 (Connections, with Off /
-> Look only / Change with approval per AWS service). Single sign-on with OpenID Connect is built
-> (note 031; tested against a stand-in, not yet a real provider). Approval rules are built (note 032:
-> two approvals, named approvers, by account, kind and risk). Audit export and retention are built (note 033).
-> Frame 5 (Team: the org chart with live states and the mission strip) and frame 6 (Watch map: stacks and
-> stated links, note 034) are built. Frame 4 has started: blueprints (note 035: the model, its checks and the
-> OpenTofu it generates) the canvas, and Preview changes / Send for approval (`tofu plan`, then exactly that plan applied after a
-> different administrator approves) are built, and so is the assistant beside the canvas (frame 4 done), and so are AI use and budgets per agent (note 036) and missions (note 037); next removing what a blueprint
-> built, then audit-log forwarding to a SIEM, then spend measurement and budgets per agent. Decided: no
-> automatic apply anywhere, OpenTofu for blueprints, our own graph layout, Codex and Copilot later. Next, in
-> order: single sign-on (OIDC, group-to-role mapping), approval rules, audit export and retention; then
-> foundations (tokens, component kit, one SVG graph component, Playwright screenshot suite), blueprints and
-> the design canvas, missions and budgets, snapshots and restore.
+> **Console redesign and enterprise work (notes 029 to 038), state on 2026-11-08.**
+>
+> **Built:** the five spaces (Home, Build, Ship, Team, Watch) and Settings; Connections with AWS service switches for the
+> AI (030); single sign-on with OpenID Connect (031, tested against a stand-in, not yet a real provider); approval rules
+> (032); audit export and retention (033); Team as an org chart (frame 5); the Watch map with stacks and stated links (034);
+> blueprints, the design canvas, preview with `tofu plan`, approval and apply of exactly that plan, and the assistant
+> beside the canvas (035; a real build verified on the Pi); AI use and budgets per agent (036); missions with a board and
+> a live view (037; a real advisory mission verified on the Pi). Decided: no automatic apply anywhere, OpenTofu for
+> blueprints, our own graph layout, Codex and Copilot later.
+>
+> **Pending, in order** (each its own design note or pull request):
+>
+> 1. **Onboarding by conversation** (note 038, needs a decision): first-run steps in the console and `forgeline onboard`,
+>    then a local-model backend (OpenAI-compatible: llama.cpp or Ollama, small models such as Gemma 4 E4B or Qwen 3.5 4B on
+>    a CPU), an evaluation on the Pi, and only then conversational answers.
+> 2. **Documentation site** in the style of docs.openclaw.ai (Starlight on GitHub Pages), organised as Get started,
+>    Guides, Concepts and Reference.
+> 3. **Removing what a blueprint built**: a destroy plan through the same preview and approval; tables and buckets kept
+>    unless the person chooses otherwise.
+> 4. **Audit forwarding to a SIEM and tamper evidence** (p2-11): stream audit events out (syslog, HTTPS webhook) and chain
+>    their hashes.
+> 5. **A lead agent that hands out work** (p4-05): reporting lines become delegation, still within approvals and budgets.
+> 6. **Missions, next steps** (note 014): IaC adoption proposals, several agents per mission, pre-approved low-risk classes.
+> 7. **Cost estimates** for blueprints and missions, from a real price source.
+> 8. **Source checkout for agent runs** (note 012 item 1), then the coding engines (Codex, Copilot) when the maintainer asks.
+> 9. **Small fixes:** "turned off" when a switched-off AWS service is asked for by name; AWS account numbers accepted as
+>    account ids; the Connections screenshot made with demo data.
+> 10. **Verify against real services:** single sign-on with a real provider (Google, Entra ID or Okta); an app block built
+>     on AWS (needs the scoped IAM permission in note 035).
 
 Do these top to bottom. Items marked **needs a decision** must wait for the maintainer; ask once,
 with a recommendation, and do something else meanwhile.
