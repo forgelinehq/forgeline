@@ -19,7 +19,7 @@ export async function proposalsPage({ params }) {
           h('td', {}, pill(p.status)),
           h('td', {}, h('span', { class: p.risk === 'high' ? 'pill-bad' : 'pill-idle' }, p.risk)),
           h('td', { class: 'text-sm' }, String(p.calls.length)),
-          h('td', { class: 'text-sm' }, p.proposed_by, p.via_ai && h('span', { class: 'muted ml-1 text-xs' }, '· drafted by the assistant')),
+          h('td', { class: 'text-sm' }, p.proposed_by, p.via_ai && h('span', { class: 'muted ml-1 text-xs' }, p.mission ? '· from a mission' : '· drafted by the assistant')),
           h('td', { class: 'muted text-sm', title: absTime(p.proposed_at) }, relTime(p.proposed_at)))))))
         : emptyState('check', 'No proposals yet', 'Ask the assistant to change something in AWS. It files a proposal here instead of acting.'));
   }
@@ -45,6 +45,7 @@ export async function proposalsPage({ params }) {
     mount(el,
       h('nav', { class: 'mb-2 text-sm', 'aria-label': 'Breadcrumb' }, h('a', { href: '#/proposals', class: 'muted hover:underline' }, 'Approvals'), h('span', { class: 'muted' }, ' › '), h('span', {}, p.id)),
       pageHeader(p.title, 'Drafted by ' + p.proposed_by + (p.via_ai ? ' with the assistant' : '') + ' · ' + relTime(p.proposed_at), pill(p.status)),
+      p.mission && h('p', { class: 'mb-4 text-sm', id: 'proposal-mission' }, 'Filed by an agent on mission ', h('code', { class: 'text-xs' }, p.mission), '. Approving it is your decision alone: the agent cannot approve, and the person who started the mission cannot either.'),
       p.status === 'failed' && h('div', { class: 'mb-4' }, errorBox('The change did not complete cleanly. Check the account by hand.')),
       h('section', { class: 'card card-pad mb-4' }, h('h2', { class: 'h-section mb-2' }, 'Why'), h('p', { class: 'whitespace-pre-wrap text-sm' }, p.reason)),
       h('section', { class: 'card mb-4' }, h('div', { class: 'border-b border-slate-200 px-5 py-3 dark:border-slate-800' }, h('h2', { class: 'h-section' }, 'What it will do'),

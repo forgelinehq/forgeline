@@ -165,6 +165,9 @@ func (s *Server) runLookup(ctx context.Context, p Principal, c lookupCall) (stri
 		if err := s.policyGate(ctx, p, c); err != nil {
 			return "", err
 		}
+		if err := missionGate(ctx, c); err != nil {
+			return "", err
+		}
 		if err := s.servicesGate(ctx, p, c); err != nil {
 			return "", err
 		}
