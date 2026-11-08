@@ -102,9 +102,10 @@ func TestParseInventoryRejectsTheWrongShape(t *testing.T) {
 
 // awsStub answers the CLI calls the explorer makes and records them.
 type awsStub struct {
-	mu    sync.Mutex
-	calls []string
-	deny  map[string]bool // "ecs list-services" -> AccessDenied
+	mu     sync.Mutex
+	calls  []string
+	deny   map[string]bool // "ecs list-services" -> AccessDenied
+	stacks bool            // describe-stacks answers with three stacks (links tests)
 }
 
 func (a *awsStub) run(_ context.Context, name string, args ...string) ([]byte, string, error) {
@@ -139,6 +140,23 @@ func (a *awsStub) run(_ context.Context, name string, args ...string) ([]byte, s
 {"AlarmName":"b-ok","StateValue":"OK","Namespace":"AWS/EC2","MetricName":"CPUUtilization","Dimensions":[{"Name":"InstanceId","Value":"i-1"}]},
 {"AlarmName":"c-nodata","StateValue":"INSUFFICIENT_DATA"},
 {"AlarmName":"a-hot","StateValue":"ALARM","StateReason":"Threshold Crossed","StateUpdatedTimestamp":"2026-11-01T10:00:00Z","Namespace":"AWS/RDS","MetricName":"CPUUtilization","Dimensions":[{"Name":"DBInstanceIdentifier","Value":"orders-db"}]}]}`), "", nil
+	case strings.HasPrefix(key, "cloudformation describe-stacks") && a.stacks:
+		return []byte(`{"Stacks":[{"StackName":"shop","StackStatus":"ROLLBACK_COMPLETE","StackId":"arn:aws:cloudformation:ap-south-1:111122223333:stack/shop/1"},{"StackName":"gone","StackStatus":"DELETE_COMPLETE"},{"StackName":"locked","StackStatus":"CREATE_COMPLETE"}]}`), "", nil
+	case key == "cloudformation list-stack-resources --stack-name shop":
+		return []byte(`{"StackResourceSummaries":[
+{"ResourceType":"AWS::DynamoDB::Table","LogicalResourceId":"Orders","PhysicalResourceId":"orders","ResourceStatus":"DELETE_SKIPPED"},
+{"ResourceType":"AWS::Lambda::Function","LogicalResourceId":"Worker","PhysicalResourceId":"shop-worker","ResourceStatus":"CREATE_COMPLETE"},
+{"ResourceType":"AWS::IAM::Role","LogicalResourceId":"Old","PhysicalResourceId":"shop-old","ResourceStatus":"DELETE_COMPLETE"}]}`), "", nil
+	case key == "cloudformation list-stack-resources --stack-name locked":
+		return nil, "An error occurred (AccessDenied) when calling the ListStackResources operation: not authorized", errors.New("exit 254")
+	case strings.HasPrefix(key, "lambda list-event-source-mappings"):
+		return []byte(`{"EventSourceMappings":[
+{"FunctionArn":"arn:aws:lambda:ap-south-1:111122223333:function:shop-worker","EventSourceArn":"arn:aws:sqs:ap-south-1:111122223333:jobs","State":"Enabled"},
+{"FunctionArn":"arn:aws:lambda:ap-south-1:111122223333:function:shop-worker:live","EventSourceArn":"arn:aws:dynamodb:ap-south-1:111122223333:table/orders/stream/2026-01-01T00:00:00.000","State":"Disabled"},
+{"FunctionArn":"arn:aws:lambda:ap-south-1:111122223333:function:feed","EventSourceArn":"arn:aws:kinesis:ap-south-1:111122223333:stream/clicks","State":"Enabled"},
+{"FunctionArn":"not-an-arn","EventSourceArn":"arn:aws:sqs:ap-south-1:111122223333:x"},
+{"FunctionArn":"arn:aws:lambda:ap-south-1:111122223333:layer:shared:3","EventSourceArn":"arn:aws:sqs:ap-south-1:111122223333:x"},
+{"FunctionArn":"arn:aws:lambda:ap-south-1:111122223333:function:feed","EventSourceArn":"arn:aws:dynamodb:ap-south-1:111122223333:global-table/clicks","State":"Enabled"}]}`), "", nil
 	case strings.HasPrefix(key, "s3api list-buckets"):
 		return []byte(`{"Buckets":[{"Name":"assets-111122223333","CreationDate":"2026-01-01T00:00:00Z"}]}`), "", nil
 	}

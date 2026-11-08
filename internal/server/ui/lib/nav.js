@@ -29,7 +29,8 @@ export const SPACES = [
     { label: 'Missions', planned: true },
     { path: '/marketplace', label: 'Marketplace', min: 'developer' },
   ] },
-  { id: 'watch', label: 'Watch', icon: 'eye', path: '/infrastructure', tabs: [
+  { id: 'watch', label: 'Watch', icon: 'eye', path: '/map', tabs: [
+    { path: '/map', label: 'Map', min: 'viewer' },
     { path: '/infrastructure', label: 'Infrastructure', min: 'viewer' },
     { path: '/kubernetes', label: 'Kubernetes', min: 'viewer' },
     { path: '/guard', label: 'Security', min: 'viewer' },

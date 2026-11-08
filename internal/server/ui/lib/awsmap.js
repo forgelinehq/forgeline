@@ -20,6 +20,16 @@ export function stateKind(state) {
   return 'idle';
 }
 
+/** What a CloudFormation stack state means for the person looking at it, or '' when it needs no words. */
+export function stackStateWords(state) {
+  const s = String(state || '').toUpperCase();
+  if (s === 'ROLLBACK_COMPLETE') return 'Its first deploy failed and AWS undid it. A stack in this state cannot be updated, only deleted and deployed again.';
+  if (s === 'UPDATE_ROLLBACK_COMPLETE') return 'Its last update failed and AWS put back the version before, which is what runs now.';
+  if (s.endsWith('_FAILED')) return 'AWS could not finish the last change to this stack, and it is stuck until someone acts on it.';
+  if (s.endsWith('_IN_PROGRESS')) return 'AWS is changing this stack right now.';
+  return '';
+}
+
 /** The value of a labelled field, or ''. */
 export function field(r, label) {
   const f = (r.fields || []).find(x => x.label === label);
@@ -90,6 +100,63 @@ export function matches(r, query) {
     .some(v => v && String(v).toLowerCase().includes(q));
 }
 
+// What CloudFormation calls a resource type, as the inventory's service id (design note 034). A VPC is left
+// out: it stays a container of its own. Types not here are counted as parts the map does not list.
+export const CFN_TYPES = {
+  'AWS::DynamoDB::Table': 'dynamodb', 'AWS::Lambda::Function': 'lambda', 'AWS::S3::Bucket': 's3', 'AWS::EC2::Instance': 'ec2',
+  'AWS::EC2::Volume': 'ebs', 'AWS::EC2::SecurityGroup': 'sg', 'AWS::ECR::Repository': 'ecr', 'AWS::RDS::DBInstance': 'rds',
+  'AWS::SQS::Queue': 'sqs', 'AWS::SNS::Topic': 'sns', 'AWS::Logs::LogGroup': 'logs', 'AWS::ElasticLoadBalancingV2::LoadBalancer': 'elb',
+  'AWS::ECS::Cluster': 'ecs', 'AWS::ECS::Service': 'ecs-services',
+};
+
+/** An index from "service|id, name or ARN" to { svc, r }, so a link or a stack part finds its resource exactly. */
+export function indexResources(inv) {
+  const idx = new Map();
+  for (const svc of inv.services || []) for (const r of svc.resources || []) {
+    for (const k of [r.id, r.name, r.arn]) if (k && !idx.has(svc.id + '|' + k)) idx.set(svc.id + '|' + k, { svc, r });
+  }
+  return idx;
+}
+
+/**
+ * Which stack made each resource, from `GET /v1/infra/aws/links`: a Map from keyOf-style "svc|id" to
+ * { stack, part }. Only parts whose type and physical id name a listed resource are placed.
+ */
+export function stackOwners(inv, links) {
+  const idx = indexResources(inv), out = new Map();
+  for (const st of links?.stacks || []) for (const p of st.parts || []) {
+    const svcId = CFN_TYPES[p.type];
+    const hit = svcId && p.physical ? idx.get(svcId + '|' + p.physical) : null;
+    if (hit) out.set(hit.svc.id + '|' + hit.r.id, { stack: st.name, part: p });
+  }
+  return out;
+}
+
+/**
+ * What a resource uses and what uses it, from the links AWS states: { uses: [end], usedBy: [end] } where an
+ * end is { svc, r } for a listed resource or { text } (its ARN) for one the map does not list, plus `state`.
+ */
+export function linksOf(inv, links, svcId, r) {
+  const idx = indexResources(inv), uses = [], usedBy = [];
+  const me = e => e.service === svcId && (e.id === r.id || e.id === r.name || e.id === r.arn);
+  const resolve = e => (e.service && idx.get(e.service + '|' + e.id)) || { text: e.id };
+  for (const l of links?.links || []) {
+    if (me(l.from)) uses.push({ ...resolve(l.to), state: l.state });
+    else if (me(l.to)) usedBy.push({ ...resolve(l.from), state: l.state });
+  }
+  return { uses, usedBy };
+}
+
+/** The pairs of map keys ("svc|id") to draw a line between, for the links AWS states between listed resources. */
+export function linePairs(inv, links) {
+  const idx = indexResources(inv), out = [];
+  for (const l of links?.links || []) {
+    const a = l.from.service && idx.get(l.from.service + '|' + l.from.id), b = l.to.service && idx.get(l.to.service + '|' + l.to.id);
+    if (a && b) out.push({ from: a.svc.id + '|' + a.r.id, to: b.svc.id + '|' + b.r.id, state: l.state });
+  }
+  return out;
+}
+
 function addTo(groups, svc, r) {
   let g = groups.find(x => x.svc.id === svc.id);
   if (!g) { g = { svc, items: [] }; groups.push(g); }
@@ -97,13 +164,15 @@ function addTo(groups, svc, r) {
 }
 
 /**
- * Lays the inventory out as { vpcs, regional, attention, total }.
+ * Lays the inventory out as { stacks, vpcs, regional, attention, total }.
+ *   stacks:    one entry per CloudFormation stack that was read (when `links` is given), with the listed
+ *              resources it made; a resource a stack made sits in its stack, not in its VPC
  *   vpcs:      one entry per VPC with the resources whose "VPC" field names it
  *   regional:  everything else, by category
  *   attention: flagged resources, failing ones first
  * Services that could not be listed or are empty are left out; the caller reports those itself.
  */
-export function buildMap(inv, query = '', alarms = null) {
+export function buildMap(inv, query = '', alarms = null, links = null) {
   const services = (inv.services || []).filter(s => s.count > 0 && !s.error);
   const vpcs = [];
   const byId = new Map();
@@ -112,6 +181,18 @@ export function buildMap(inv, query = '', alarms = null) {
     const v = { id: r.id, name: r.name || r.id, cidr: field(r, 'CIDR'), isDefault: field(r, 'Default') === 'true', synthetic: false, groups: [], count: 0, resource: r, svc: vpcSvc };
     vpcs.push(v);
     byId.set(r.id, v);
+  }
+  // Stacks that were read become containers; the stack's own entry in the inventory is their header.
+  const owners = links ? stackOwners(inv, links) : new Map();
+  const stacks = [], stackBy = new Map();
+  const cfn = services.find(s => s.id === 'cfn');
+  for (const st of links?.stacks || []) {
+    const res = cfn?.resources.find(r => r.id === st.name) || null;
+    const listed = [...owners.values()].filter(o => o.stack === st.name).length;
+    const v = { id: st.name, name: st.name, resource: res, svc: cfn || null, error: st.error || '', groups: [], count: 0,
+      others: (st.parts || []).length - listed, kept: (st.parts || []).filter(p => p.status === 'DELETE_SKIPPED').length };
+    stacks.push(v);
+    stackBy.set(st.name, v);
   }
   const regionalByCat = new Map();
   const flagged = [];
@@ -123,6 +204,14 @@ export function buildMap(inv, query = '', alarms = null) {
       const why = attention(svc.id, r, alarms);
       if (why.length) flagged.push({ svc, r, why });
       if (svc.id === 'vpc') continue; // a VPC is the container, not an item in one
+      if (svc.id === 'cfn' && stackBy.has(r.id)) continue; // shown as its box
+      const own = owners.get(svc.id + '|' + r.id);
+      if (own && stackBy.has(own.stack)) {
+        const st = stackBy.get(own.stack);
+        addTo(st.groups, svc, r);
+        st.count++;
+        continue;
+      }
       const vid = field(r, 'VPC');
       if (vid) {
         let v = byId.get(vid);
@@ -140,5 +229,6 @@ export function buildMap(inv, query = '', alarms = null) {
   flagged.sort((a, b) => (b.why.some(w => w.level === 'bad') ? 1 : 0) - (a.why.some(w => w.level === 'bad') ? 1 : 0));
   // With a search active, hide containers that hold nothing that matches.
   const shown = query ? vpcs.filter(v => v.count > 0 || matches(v.resource || { name: v.name, id: v.id }, query)) : vpcs;
-  return { vpcs: shown, regional, attention: flagged, total };
+  const shownStacks = query ? stacks.filter(v => v.count > 0 || matches(v.resource || { name: v.name, id: v.id }, query)) : stacks;
+  return { stacks: shownStacks, vpcs: shown, regional, attention: flagged, total };
 }

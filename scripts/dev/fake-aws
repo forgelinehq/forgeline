@@ -65,7 +65,10 @@ if key == "cloudformation describe-stacks":
                 st["stacks"][name] = status
             save(st)
         out({"Stacks": [stack(name, status)]})
-    out({"Stacks": [stack(n, s) for n, s in st["stacks"].items()]})
+    # A fixed stack whose deploy failed and was undone, so the map has a stack box with parts in it.
+    rolled = {"StackName": "media-pipeline", "StackStatus": "ROLLBACK_COMPLETE", "CreationTime": "2026-10-22T09:00:00Z",
+              "StackStatusReason": "The following resource(s) failed to create: [ResizeAlarm].", "Outputs": []}
+    out({"Stacks": [stack(n, s) for n, s in st["stacks"].items()] + [rolled]})
 
 if key == "cloudformation create-change-set":
     name, cs = flag("--stack-name"), flag("--change-set-name")
@@ -104,6 +107,19 @@ if key == "ec2 describe-vpcs":
 
 if key == "ec2 describe-subnets":
     out({"Subnets": [{"SubnetId": "subnet-0aaa0aaa0aaa0aaa0"}, {"SubnetId": "subnet-0bbb0bbb0bbb0bbb0"}]})
+
+if key == "cloudformation list-stack-resources" and flag("--stack-name") == "media-pipeline":
+    out({"StackResourceSummaries": [{"LogicalResourceId": l, "ResourceType": t, "PhysicalResourceId": p, "ResourceStatus": s} for l, t, p, s in
+        [("Resize", "AWS::Lambda::Function", "image-resize", "DELETE_SKIPPED"), ("Media", "AWS::S3::Bucket", "media-assets-demo", "DELETE_SKIPPED"),
+         ("Jobs", "AWS::SQS::Queue", "https://sqs.ap-south-1.amazonaws.com/%s/resize-jobs" % ACCOUNT, "DELETE_SKIPPED"),
+         ("ResizeRole", "AWS::IAM::Role", "media-pipeline-ResizeRole-X", "DELETE_COMPLETE"), ("ResizeAlarm", "AWS::CloudWatch::Alarm", "", "DELETE_COMPLETE")]]})
+
+if key == "sqs list-queues":
+    out({"QueueUrls": ["https://sqs.ap-south-1.amazonaws.com/%s/resize-jobs" % ACCOUNT, "https://sqs.ap-south-1.amazonaws.com/%s/emails" % ACCOUNT]})
+
+if key == "lambda list-event-source-mappings":
+    out({"EventSourceMappings": [{"FunctionArn": "arn:aws:lambda:ap-south-1:%s:function:image-resize" % ACCOUNT,
+        "EventSourceArn": "arn:aws:sqs:ap-south-1:%s:resize-jobs" % ACCOUNT, "State": "Enabled"}]})
 
 if key == "cloudformation list-stack-resources":
     out({"StackResourceSummaries": [{"LogicalResourceId": l, "ResourceType": t, "PhysicalResourceId": p} for l, t, p in

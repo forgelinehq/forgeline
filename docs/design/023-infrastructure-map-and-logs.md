@@ -74,6 +74,8 @@ missing, the panel must say which one, per group, instead of showing an empty li
 3. **Logs.** The endpoint, the allowlist, masking, audit and the log panel.
 4. **Metrics.**
 
+Stacks and the first stated links (Lambda event sources) are added by [note 034](034-watch-map.md).
+
 ## Tests to write with step 3
 
 Go, with the race detector, using a fake CLI (extend `scripts/dev/fake-aws` with `logs` and

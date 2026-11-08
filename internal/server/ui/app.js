@@ -29,6 +29,7 @@ import { settingsPage } from './pages/settings.js';
 import { ssoPage } from './pages/sso.js';
 import { approvalRulesPage } from './pages/approval_rules.js';
 import { teamPage } from './pages/team.js';
+import { watchMapPage } from './pages/watch_map.js';
 import { spacesFor, activeSpace, tabsFor, tabMatches } from './lib/nav.js';
 
 const root = document.getElementById('root');
@@ -220,6 +221,7 @@ async function boot() {
     route('/workflow-runs/:id', guard('developer', workflowRunPage));
     route('/proposals', guard('viewer', proposalsPage));
     route('/proposals/:id', guard('viewer', proposalsPage));
+    route('/map', guard('viewer', watchMapPage));
     route('/infrastructure', guard('viewer', infraPage));
     route('/settings', guard('developer', settingsPage));
     route('/integrations', guard('developer', inSettings(integrationsHubPage)));

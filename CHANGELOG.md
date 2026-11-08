@@ -7,6 +7,12 @@ section in the pull request that makes the change; a release moves it under its 
 ## [Unreleased]
 
 ### Added
+- **Watch › Map** (design note 034, frame 6). The AWS map gets its own page, first in Watch, with a switch between accounts.
+  Resources a CloudFormation stack made sit inside that stack's dashed box (from `list-stack-resources`, matched by exact
+  type and id; parts the stack kept after a rollback are marked as no longer managed). A line joins a Lambda function to the
+  queue or table stream it reads (from `list-event-source-mappings`); nothing is linked by name. Picking a resource shows
+  which stack made it, what it uses and what uses it; a stack's state is explained in plain words, and a flagged resource
+  offers **Ask the assistant to fix it**. New read-only `GET /v1/infra/aws/links`.
 - **Morning check, and the assistant can read your repositories** (design note 028). A new `morning_check` lookup gives one
   look at what needs a person: the Docker host, failed runs in the last 24 hours, change proposals waiting and the worst open
   Guard findings. New `github_repos` and `github_files` lookups let the assistant see which repositories an administrator

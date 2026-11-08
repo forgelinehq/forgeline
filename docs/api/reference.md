@@ -183,6 +183,7 @@ A run's `status` is one of `queued`, `running`, `succeeded`, `failed`, `canceled
 | `GET /v1/infra/aws` | viewer | Identity, stacks, instances. `?account=<id>` reads an added account. |
 | `GET /v1/infra/aws/resources` | viewer | Every resource in the account by service (ECS, EC2, S3, Lambda, RDS and more), read-only; `?account=<id>` picks the account; `?refresh=1` skips the 60 s cache. |
 | `GET /v1/infra/aws/alarms` | viewer | The account's CloudWatch metric alarms (name, state, reason, namespace, dimensions), alarms in ALARM first, at most 500; read-only, one `describe-alarms` call. `?account=<id>` picks the account. If the role may not read them, `error` names the missing permission (`cloudwatch:DescribeAlarms`). |
+| `GET /v1/infra/aws/links` | viewer | What AWS states connects the map's resources (note 034): for each CloudFormation stack the inventory found (at most 25; `stacks_skipped` counts the rest), the resources it made from `list-stack-resources` (type, logical and physical id, status; deleted parts left out), and each Lambda event source mapping (a function and the queue, table stream or stream it reads, with its state). Read-only, cached for a minute like the inventory; `?account=<id>` picks the account, `?refresh=1` reads again. A refused part names the missing permission (`cloudformation:ListStackResources`, `lambda:ListEventSourceMappings`). |
 | `GET /v1/infra/aws/cost` | developer | Spend for 30 days (each call is billed by AWS). |
 | `GET /v1/infra/runtime` | viewer | The Forgeline server, Docker host, running steps, disk. |
 
