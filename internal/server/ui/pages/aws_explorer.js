@@ -2,7 +2,7 @@
 // changed there, and a detail view per resource. Read-only; changes go through Proposals.
 import { h, icon, mount, pill, relTime, absTime, spinner, errorBox, notice, modal, emptyState, copyButton } from '../lib/dom.js';
 import { get } from '../lib/api.js';
-import { stateKind, health } from '../lib/awsmap.js';
+import { stateKind, health, attention, stackOwners, linksOf, stackStateWords, CFN_TYPES } from '../lib/awsmap.js';
 import { mapView, keyOf } from './aws_map.js';
 
 const CATEGORIES = ['Compute', 'Containers', 'Storage', 'Databases', 'Network', 'Messaging', 'AI', 'Management'];
@@ -30,7 +30,7 @@ function touchedBy(res, proposals) {
 
 export function explorer({ dev, account = 'primary', url = '', scope = 'region' }) {
   const root = h('section', { class: 'card', id: 'aws-explorer' }, spinner());
-  let inv = null, alarmData = null, proposals = [], selected = '', query = '', shown = PAGE;
+  let inv = null, alarmData = null, linkData = null, proposals = [], selected = '', query = '', shown = PAGE;
   // The map is the default view for AWS; Kubernetes (which passes a url) keeps the list.
   let view = url ? 'list' : 'map', selRes = '';
   const expanded = new Set();
@@ -38,12 +38,14 @@ export function explorer({ dev, account = 'primary', url = '', scope = 'region' 
   async function load(refresh) {
     mount(root, spinner());
     try {
-      [inv, proposals, alarmData] = await Promise.all([
+      [inv, proposals, alarmData, linkData] = await Promise.all([
         get(url ? url + (refresh ? '?refresh=1' : '') : '/v1/infra/aws/resources?account=' + encodeURIComponent(account) + (refresh ? '&refresh=1' : '')),
         // Proposals are for the primary account, so only it can show "changed through Forgeline".
         account === 'primary' && !url ? get('/v1/ai/proposals').then(r => r.proposals).catch(() => []) : [],
         // Alarms are optional: a role that cannot read them still gets the map, and says so.
         url ? null : get('/v1/infra/aws/alarms?account=' + encodeURIComponent(account)).catch(e => ({ enabled: true, error: e.message, alarms: [] })),
+        // Stacks and links are optional too: without them the map groups by VPC and draws no lines.
+        url ? null : get('/v1/infra/aws/links?account=' + encodeURIComponent(account) + (refresh ? '&refresh=1' : '')).catch(() => null),
       ]);
     } catch (e) { return mount(root, h('div', { class: 'p-5' }, errorBox(e.message))); }
     draw();
@@ -81,6 +83,8 @@ export function explorer({ dev, account = 'primary', url = '', scope = 'region' 
         h('div', { class: 'flex flex-wrap items-center gap-2' }, switcher, search,
           h('button', { class: 'btn-secondary btn-sm', type: 'button', id: 'explorer-refresh', onclick: () => load(true) }, icon('refresh', 'size-3.5'), 'Refresh'))),
       ...(alarmData && alarmData.enabled && !url ? [alarmLine()] : []),
+      ...(linkData && (linkData.links_error || linkData.stacks_skipped) ? [h('p', { class: 'border-b border-slate-200 px-5 py-2 text-xs text-amber-700 dark:border-slate-800 dark:text-amber-400', id: 'links-line' },
+        [linkData.links_error ? 'Links between functions and queues could not be read: ' + linkData.links_error + '.' : '', linkData.stacks_skipped ? ` ${linkData.stacks_skipped} more stack${linkData.stacks_skipped === 1 ? ' was' : 's were'} not opened; only the first 25 are.` : ''].join('').trim())] : []),
       ...(inv.notice ? [h('p', { class: 'border-b border-slate-200 px-5 py-2 text-xs text-amber-700 dark:border-slate-800 dark:text-amber-400', id: 'inventory-notice' }, inv.notice)] : []),
       ...(mapOn ? [h('div', { id: 'explorer-map' }), h('div', { class: 'px-5 pb-4' }, notes())] : [tiles, tableBox]),
       url ? null : changesPanel(applied)); // a read-only explorer (Kubernetes, Google Cloud) has no changes to list
@@ -126,7 +130,7 @@ export function explorer({ dev, account = 'primary', url = '', scope = 'region' 
     const found = selRes ? findRes(selRes) : null;
     if (selRes && !found) selRes = ''; // it was removed by a refresh
     mount(box, h('div', { class: 'grid gap-4 px-5 py-4 ' + (found ? 'lg:grid-cols-[minmax(0,1fr)_22rem]' : '') },
-      mapView(inv, { query, alarms: alarmList(), selected: selRes, expanded, onSelect: pick, onExpand: (k) => { expanded.add(k); drawMap(false); } }),
+      mapView(inv, { query, alarms: alarmList(), links: linkData, selected: selRes, expanded, onSelect: pick, onExpand: (k) => { expanded.add(k); drawMap(false); } }),
       found ? h('aside', { class: 'lg:sticky lg:top-20 lg:self-start', 'aria-label': 'Resource details' },
         h('div', { class: 'rounded-xl border border-slate-200 p-4 dark:border-slate-800' },
           h('div', { class: 'mb-3 flex items-start justify-between gap-2' }, h('h3', { class: 'min-w-0 break-all font-medium' }, found.r.name),
@@ -182,17 +186,44 @@ export function explorer({ dev, account = 'primary', url = '', scope = 'region' 
         a.reason && a.state !== 'OK' ? h('span', { class: 'muted block w-full text-xs' }, a.reason) : null))));
   }
 
+  /** Which stack made it, what it uses and what uses it: only what CloudFormation and Lambda state (note 034). */
+  function linksSection(svc, r, closeModal) {
+    if (url || !linkData) return null;
+    const go = (s2, r2) => () => { if (closeModal) closeModal(); if (view === 'map') { selRes = keyOf(s2, r2); drawMap(true); } };
+    const end = (e) => e.r ? h('button', { type: 'button', class: 'font-medium text-brand-700 hover:underline dark:text-brand-300', onclick: go(e.svc, e.r) }, e.r.name, h('span', { class: 'muted font-normal' }, ' · ' + e.svc.label.replace(/s$/, '')))
+      : h('code', { class: 'break-all text-xs' }, e.text);
+    const own = stackOwners(inv, linkData).get(svc.id + '|' + r.id);
+    const stackRes = own ? inv.services.find(x => x.id === 'cfn')?.resources.find(x => x.id === own.stack) : null;
+    const { uses, usedBy } = linksOf(inv, linkData, svc.id, r);
+    const made = svc.id === 'cfn' ? linkData.stacks.find(st => st.name === r.id) : null;
+    const list = (title, items) => items.length ? h('div', {}, h('div', { class: 'h-section mb-1' }, title),
+      h('ul', { class: 'space-y-1 text-sm' }, items.map(e => h('li', { class: 'flex flex-wrap items-baseline gap-x-2' }, end(e), e.state && e.state !== 'Enabled' ? h('span', { class: 'pill-idle' }, e.state.toLowerCase()) : null)))) : null;
+    const byType = made ? Object.entries(made.parts.reduce((n, p) => (n[p.type] = (n[p.type] || 0) + 1, n), {})).sort((a, b) => b[1] - a[1]) : [];
+    return h('div', { class: 'space-y-3', id: 'resource-links' },
+      own && h('p', { class: 'text-sm' }, 'Made by the stack ', stackRes ? h('button', { type: 'button', class: 'font-medium text-brand-700 hover:underline dark:text-brand-300', onclick: go(inv.services.find(x => x.id === 'cfn'), stackRes) }, own.stack) : h('b', {}, own.stack),
+        ' as ', h('code', { class: 'text-xs' }, own.part.logical), own.part.status === 'DELETE_SKIPPED' ? h('span', { class: 'muted block text-xs' }, 'Kept when the stack rolled back or was deleted: the stack no longer manages it.') : null),
+      list('Uses', uses), list('Used by', usedBy),
+      made && (made.error ? h('p', { class: 'text-xs text-amber-700 dark:text-amber-400' }, 'What it made could not be read: ' + made.error)
+        : h('div', {}, h('div', { class: 'h-section mb-1' }, `What it made · ${made.parts.length}`),
+          made.parts.length ? h('ul', { class: 'space-y-0.5 text-sm' }, byType.map(([t, n]) => h('li', { class: 'flex justify-between gap-3' }, h('span', {}, t.replace(/^AWS::/, '').replace('::', ' ')), h('span', { class: 'muted tabular-nums' }, String(n) + (CFN_TYPES[t] ? '' : ' · not on the map')))))
+            : h('p', { class: 'muted text-xs' }, 'Nothing it made is still there.'))));
+  }
+
   function detailBody(svc, r, closeModal) {
     const by = touchedBy(r, proposals);
+    const why = attention(svc.id, r, alarmList());
     return h('div', { class: 'space-y-4', id: 'resource-detail' },
       h('div', { class: 'flex flex-wrap items-center gap-3' }, stateBadge(r.state), h('span', { class: 'muted text-sm' }, svc.label + (r.created ? ' · created ' + relTime(r.created) : ''))),
+      why.length ? h('ul', { class: 'space-y-0.5 text-sm text-amber-800 dark:text-amber-300' }, why.map(w => h('li', { class: 'flex items-start gap-1.5' }, icon('alert', 'mt-0.5 size-3.5'), w.text))) : null,
+      svc.id === 'cfn' && stackStateWords(r.state) ? h('p', { class: 'text-sm', id: 'stack-words' }, stackStateWords(r.state)) : null,
       healthSection(svc, r),
+      linksSection(svc, r, closeModal),
       r.fields?.length ? h('dl', { class: 'grid grid-cols-[auto_1fr] gap-x-6 gap-y-1.5 text-sm' }, r.fields.map(f => [h('dt', { class: 'muted' }, f.label), h('dd', { class: 'break-all font-mono text-xs leading-5' }, f.value)])) : null,
       h('div', {}, h('div', { class: 'h-section mb-1' }, 'Identifier'), h('div', { class: 'flex items-center gap-2' }, h('code', { class: 'break-all text-xs' }, r.arn || r.id), copyButton(r.arn || r.id, 'Copy'))),
       r.tags ? h('div', {}, h('div', { class: 'h-section mb-1' }, 'Tags'), h('div', { class: 'flex flex-wrap gap-1.5' }, Object.entries(r.tags).map(([k, v]) => h('span', { class: 'rounded-md bg-slate-100 px-2 py-0.5 text-xs dark:bg-slate-800' }, h('span', { class: 'muted' }, k + ': '), v)))) : null,
       by.length ? h('div', {}, h('div', { class: 'h-section mb-1' }, 'Changed through Forgeline'),
         h('ul', { class: 'space-y-1 text-sm' }, by.map(p => h('li', {}, h('a', { href: '#/proposals/' + encodeURIComponent(p.id), class: 'font-medium hover:underline', onclick: () => closeModal && closeModal() }, p.title), h('span', { class: 'muted text-xs' }, ` · ${relTime(p.finished_at || p.decided_at)}`))))) : null,
-      dev && h('div', { class: 'flex justify-end' }, h('button', { class: 'btn-secondary btn-sm', type: 'button', onclick: () => { if (closeModal) closeModal(); ask(svc, r); } }, icon('sparkle', 'size-3.5'), 'Ask the assistant about this'))  );
+      dev && h('div', { class: 'flex justify-end' }, h('button', { class: (why.length ? 'btn-primary' : 'btn-secondary') + ' btn-sm', type: 'button', id: 'resource-ask', onclick: () => { if (closeModal) closeModal(); ask(svc, r, why); } }, icon('sparkle', 'size-3.5'), why.length ? 'Ask the assistant to fix it' : 'Ask the assistant about this')));
   }
 
   function detail(svc, r) {
@@ -200,9 +231,16 @@ export function explorer({ dev, account = 'primary', url = '', scope = 'region' 
   }
 
   /** Open the assistant with a question about this resource filled in, for the person to send. */
-  function ask(svc, r) {
+  // Nothing is sent: the person reads the question and sends it. A fix is always a proposal someone approves.
+  function ask(svc, r, why = []) {
     const panel = document.querySelector('#assistant-input') || (document.querySelector('#assistant-open')?.click(), document.querySelector('#assistant-input'));
-    if (panel) { panel.value = `Review the ${svc.label.replace(/s$/, '')} "${r.name}" (${r.arn || r.id}) in ${inv.region}: how is it configured, is anything risky or wasteful, and what would you improve?`; panel.focus(); }
+    const what = `the ${svc.label.replace(/s$/, '')} "${r.name}" (${r.arn || r.id}) in ${inv.region}` + (account !== 'primary' ? ` (account ${account})` : '');
+    if (panel) {
+      panel.value = why.length
+        ? `Look at ${what}. Forgeline flags it: ${why.map(w => w.text).join('; ')}. What went wrong, and how would you fix it? Propose any change for approval.`
+        : `Review ${what}: how is it configured, is anything risky or wasteful, and what would you improve?`;
+      panel.focus();
+    }
   }
 
   load(false);

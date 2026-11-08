@@ -40,4 +40,4 @@ already has credentials (for example an instance role). Sign in on the server wi
 
 ## What you see once connected
 
-The **AWS account** tab shows the account's resources as a map, grouped by VPC, with a list of what needs a look. See the [Console tour]({{ '/guides/console-tour/' | relative_url }}#infrastructure). It is read-only and uses the same connection; it adds no permissions.
+The **AWS account** tab shows the account's resources as a map, grouped by VPC, with a list of what needs a look. See the [Console tour]({{ '/guides/console-tour/' | relative_url }}#infrastructure). It is read-only and uses the same connection. Stack boxes and lines on the map use two more read permissions, `cloudformation:ListStackResources` and `lambda:ListEventSourceMappings`, which `ReadOnlyAccess` includes; without them the map says what is missing. Watch › Map shows the same map on its own page.

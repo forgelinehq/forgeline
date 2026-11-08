@@ -11,7 +11,7 @@ import (
 // Skipped where Node is not installed. Each case says what it protects: the map must state only
 // what the inventory states.
 const awsMapCases = `
-import { stateKind, attention, buildMap, matches, alarmsFor, health } from './awsmap.mjs';
+import { stateKind, attention, buildMap, matches, alarmsFor, health, stackOwners, linksOf, linePairs, stackStateWords } from './awsmap.mjs';
 
 let failed = 0;
 const eq = (name, got, want) => {
@@ -118,6 +118,44 @@ eq('no data flags nothing', attention('ec2', res('i-3', { state: 'running' }), a
 eq('alarms not read flags nothing', attention('ec2', res('i-1', { state: 'running' }), null), []);
 const am = buildMap({ services: [svc('ec2', 'Compute', [res('i-1', { state: 'running' }), res('i-2', { state: 'running' })])] }, '', alarms);
 eq('map lists the alarmed resource', am.attention.map(a => a.r.id), ['i-1']);
+
+// Stacks and links (note 034): only what CloudFormation and Lambda state.
+const sinv = { services: [
+  svc('cfn', 'Management', [res('shop', { state: 'ROLLBACK_COMPLETE' }), res('other', { state: 'CREATE_COMPLETE' })]),
+  svc('dynamodb', 'Databases', [res('orders'), res('orders-copy')]),
+  svc('lambda', 'Compute', [res('shop-worker', { fields: [f('VPC', 'vpc-a')] }), res('feed')]),
+  svc('sqs', 'Messaging', [{ id: 'https://sqs.ap-south-1.amazonaws.com/1/jobs', name: 'jobs' }]),
+  svc('vpc', 'Network', [res('vpc-a')]),
+] };
+const links = {
+  stacks: [{ name: 'shop', parts: [
+    { type: 'AWS::DynamoDB::Table', logical: 'Orders', physical: 'orders', status: 'DELETE_SKIPPED' },
+    { type: 'AWS::Lambda::Function', logical: 'Worker', physical: 'shop-worker', status: 'CREATE_COMPLETE' },
+    { type: 'AWS::IAM::Role', logical: 'Role', physical: 'shop-role', status: 'CREATE_COMPLETE' },
+    { type: 'AWS::DynamoDB::Table', logical: 'Gone', physical: 'not-listed', status: 'CREATE_COMPLETE' },
+    { type: 'AWS::EC2::VPC', logical: 'Net', physical: 'vpc-a', status: 'CREATE_COMPLETE' }] }],
+  links: [
+    { from: { service: 'lambda', id: 'shop-worker' }, to: { service: 'sqs', id: 'jobs' }, kind: 'event-source', state: 'Enabled' },
+    { from: { service: 'lambda', id: 'feed' }, to: { id: 'arn:aws:kinesis:x:1:stream/clicks' }, kind: 'event-source', state: 'Enabled' }],
+};
+const owners = stackOwners(sinv, links);
+eq('a part is placed by type and physical id, a VPC never', [...owners.keys()], ['dynamodb|orders', 'lambda|shop-worker']);
+eq('a similar name is not a part', owners.has('dynamodb|orders-copy'), false);
+const sm = buildMap(sinv, '', null, links);
+eq('one box per stack read', sm.stacks.map(s => [s.name, s.count, s.others, s.kept, !!s.resource]), [['shop', 2, 3, 1, true]]);
+eq('a stack part sits in its stack, not its VPC', sm.vpcs.find(v => v.id === 'vpc-a').count, 0);
+eq('the stack is its box, not a tile; a stack not read stays a tile', sm.regional.find(c => c.category === 'Management').groups[0].items.map(r => r.id), ['other']);
+eq('without links nothing changes', buildMap(sinv).stacks, []);
+eq('a search hides an empty stack', buildMap(sinv, 'feed', null, links).stacks, []);
+const lw = linksOf(sinv, links, 'lambda', res('shop-worker'));
+eq('uses resolves to the listed queue', lw.uses.map(u => u.r ? u.r.name : u.text), ['jobs']);
+eq('used by, from the other side', linksOf(sinv, links, 'sqs', { id: 'https://sqs.ap-south-1.amazonaws.com/1/jobs', name: 'jobs' }).usedBy.map(u => u.r.id), ['shop-worker']);
+eq('an unlisted source keeps its ARN', linksOf(sinv, links, 'lambda', res('feed')).uses, [{ text: 'arn:aws:kinesis:x:1:stream/clicks', state: 'Enabled' }]);
+eq('lines only between listed resources', linePairs(sinv, links), [{ from: 'lambda|shop-worker', to: 'sqs|https://sqs.ap-south-1.amazonaws.com/1/jobs', state: 'Enabled' }]);
+
+eq('a rolled-back stack is explained', stackStateWords('ROLLBACK_COMPLETE').includes('only deleted and deployed again'), true);
+eq('a stuck stack is explained', stackStateWords('UPDATE_ROLLBACK_FAILED').includes('stuck'), true);
+eq('a healthy stack needs no words', stackStateWords('CREATE_COMPLETE'), '');
 
 if (failed) process.exit(1);
 console.log('ok');

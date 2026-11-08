@@ -107,6 +107,7 @@ type Server struct {
 	run        cmdRunner // runs docker and aws; replaced in tests
 	awsCache   awsCache
 	awsInv     invCache
+	awsLinks   linksCache
 	gcpInv     invCache       // Google Cloud inventories, by scope
 	approvals  approvalBook   // read calls waiting for the person who asked to approve them
 	azureInv   invCache       // Azure inventories, by subscription set
