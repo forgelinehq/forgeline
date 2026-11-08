@@ -7,6 +7,10 @@ section in the pull request that makes the change; a release moves it under its 
 ## [Unreleased]
 
 ### Added
+- **The assistant beside the design canvas** (design note 035, slice 4). Describe a change in your own words; the assistant
+  suggests an edited draft, checked by the same rules as a save (with one retry), kept on the blueprint's account and region
+  and within the AI service switches, with its changes listed as sentences. Use this puts it on the canvas unsaved; the
+  assistant never saves, previews or proposes. It gets no lookups or tools.
 - **Preview and build blueprints** (design note 035, slice 3). Preview changes runs OpenTofu 1.13.9 (downloaded once and
   checked against its published checksum) to plan the saved blueprint, reading only; each block on the canvas is marked add,
   change, replace or remove. Send for approval files a cloud change; a different administrator approves under the approval
