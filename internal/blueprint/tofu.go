@@ -109,6 +109,15 @@ func (g *gen) build() {
 			needNet = true
 		case KindService:
 			needNet, needCluster = true, true
+		case KindDatabase, KindCache:
+			needNet = true
+		}
+	}
+	// A private DNS namespace when one service calls another (Cloud Map).
+	for _, l := range g.b.Links {
+		if g.byID[l.From].Kind == KindService && g.byID[l.To].Kind == KindService {
+			g.add("aws_service_discovery_private_dns_namespace", "main", obj{"name": g.namespace(), "vpc": "${data.aws_vpc.default.id}", "description": "Forgeline blueprint " + esc(g.b.Name)})
+			break
 		}
 	}
 	if needNet {
@@ -141,6 +150,13 @@ func (g *gen) build() {
 			g.existing(bl)
 		case KindFrontDoor:
 			g.frontDoor(bl)
+		case KindDatabase:
+			g.database(bl)
+		case KindCache:
+			g.cache(bl)
+		case KindSecret:
+			g.add("aws_secretsmanager_secret", bl.ID, obj{"name": "forgeline/" + g.short + "/" + bl.ID, "description": esc(bl.Description), "recovery_window_in_days": 7,
+				"lifecycle": obj{"prevent_destroy": true}, "tags": tags(bl)})
 		}
 	}
 	for _, id := range ids {
@@ -193,7 +209,60 @@ func (g *gen) existing(bl Block) {
 		g.addData("aws_s3_bucket", bl.ID, obj{"bucket": bl.Existing.Name})
 	case "queue":
 		g.addData("aws_sqs_queue", bl.ID, obj{"name": bl.Existing.Name})
+	case "database":
+		g.addData("aws_db_instance", bl.ID, obj{"db_instance_identifier": bl.Existing.Name})
+	case "cache":
+		g.addData("aws_elasticache_replication_group", bl.ID, obj{"replication_group_id": bl.Existing.Name})
+	case "secret":
+		g.addData("aws_secretsmanager_secret", bl.ID, obj{"name": bl.Existing.Name})
 	}
+}
+
+// namespace is the private DNS name services call each other by: <id>.<namespace>.
+func (g *gen) namespace() string { return "fl-" + g.short + ".internal" }
+
+func (g *gen) subnetGroupNet() obj { return obj{"subnet_ids": "${data.aws_subnets.default.ids}"} }
+
+// database is an RDS instance whose password AWS creates and keeps in Secrets Manager (manage_master_user_password):
+// Forgeline never sees it. Encrypted, private, protected from deletion, with backups and a final snapshot.
+func (g *gen) database(bl Block) {
+	sub := g.subnetGroupNet()
+	sub["name"], sub["tags"] = g.awsName(bl.ID, 255), tags(bl)
+	g.add("aws_db_subnet_group", bl.ID, sub)
+	sg := bl.ID + "_db"
+	g.add("aws_security_group", sg, obj{"name": g.awsName(bl.ID+"-db", 255), "description": "Database " + bl.ID + ": only linked services may connect", "vpc_id": "${data.aws_vpc.default.id}", "tags": tags(bl)})
+	days := bl.BackupDays
+	if days == 0 {
+		days = 7
+	}
+	g.add("aws_db_instance", bl.ID, obj{
+		"identifier": g.awsName(bl.ID, 63), "engine": bl.Engine, "instance_class": DatabaseSizes[bl.Size],
+		"allocated_storage": bl.StorageGB, "storage_type": "gp3", "storage_encrypted": true,
+		"db_name": "app", "username": "app_admin", "manage_master_user_password": true,
+		"multi_az": bl.MultiAZ, "backup_retention_period": days, "publicly_accessible": false,
+		"deletion_protection": true, "skip_final_snapshot": false, "final_snapshot_identifier": g.awsName(bl.ID+"-final", 255), "copy_tags_to_snapshot": true,
+		"db_subnet_group_name": ref("aws_db_subnet_group", bl.ID, "name"), "vpc_security_group_ids": []string{ref("aws_security_group", sg, "id")},
+		"lifecycle": obj{"prevent_destroy": true}, "tags": tags(bl),
+	})
+}
+
+// cache is a Redis replication group, encrypted at rest and in transit, private.
+func (g *gen) cache(bl Block) {
+	sub := g.subnetGroupNet()
+	sub["name"] = g.awsName(bl.ID, 255)
+	g.add("aws_elasticache_subnet_group", bl.ID, sub)
+	sg := bl.ID + "_cache"
+	g.add("aws_security_group", sg, obj{"name": g.awsName(bl.ID+"-cache", 255), "description": "Cache " + bl.ID + ": only linked services may connect", "vpc_id": "${data.aws_vpc.default.id}", "tags": tags(bl)})
+	nodes := bl.Nodes
+	if nodes == 0 {
+		nodes = 1
+	}
+	g.add("aws_elasticache_replication_group", bl.ID, obj{
+		"replication_group_id": strings.ToLower(g.awsName(bl.ID, 40)), "description": "Forgeline: " + esc(bl.Name), "engine": "redis",
+		"node_type": CacheSizes[bl.Size], "num_cache_clusters": nodes, "automatic_failover_enabled": nodes > 1, "port": 6379,
+		"at_rest_encryption_enabled": true, "transit_encryption_enabled": true,
+		"subnet_group_name": ref("aws_elasticache_subnet_group", bl.ID, "name"), "security_group_ids": []string{ref("aws_security_group", sg, "id")}, "tags": tags(bl),
+	})
 }
 
 func (g *gen) frontDoor(bl Block) {
@@ -217,6 +286,25 @@ func (g *gen) frontDoor(bl Block) {
 	g.add("aws_lb_target_group", bl.ID, obj{"name": g.awsName(bl.ID, 32), "port": svc.Port, "protocol": "HTTP", "target_type": "ip",
 		"vpc_id": "${data.aws_vpc.default.id}", "health_check": obj{"path": health, "matcher": "200-399"}, "tags": tags(bl)})
 	forward := []obj{{"type": "forward", "target_group_arn": ref("aws_lb_target_group", bl.ID, "arn")}}
+	// Paths: each to its own target group, by a listener rule on the listener that forwards.
+	listener := bl.ID + "_http"
+	if bl.Certificate != "" {
+		listener = bl.ID + "_https"
+	}
+	prio := 100
+	for _, l := range g.b.Links {
+		if l.From != bl.ID || l.Path == "" {
+			continue
+		}
+		to := g.byID[l.To]
+		tg := bl.ID + "_" + to.ID
+		g.add("aws_lb_target_group", tg, obj{"name": g.awsName(bl.ID+"-"+to.ID, 32), "port": to.Port, "protocol": "HTTP", "target_type": "ip",
+			"vpc_id": "${data.aws_vpc.default.id}", "health_check": obj{"path": health, "matcher": "200-399"}, "tags": tags(to)})
+		g.add("aws_lb_listener_rule", tg, obj{"listener_arn": ref("aws_lb_listener", listener, "arn"), "priority": prio,
+			"action":    []obj{{"type": "forward", "target_group_arn": ref("aws_lb_target_group", tg, "arn")}},
+			"condition": []obj{{"path_pattern": obj{"values": []string{l.Path}}}}})
+		prio++
+	}
 	scheme := "http"
 	if bl.Certificate != "" {
 		scheme = "https"
@@ -233,7 +321,7 @@ func (g *gen) frontDoor(bl Block) {
 // servedBy is the service a front door sends traffic to (Validate makes sure there is exactly one).
 func (g *gen) servedBy(door string) Block {
 	for _, l := range g.b.Links {
-		if l.From == door {
+		if l.From == door && l.Path == "" {
 			return g.byID[l.To]
 		}
 	}
@@ -278,6 +366,9 @@ func (g *gen) dataRef(bl Block) (kind, arn, value string) {
 	return "queue", ref("aws_sqs_queue", bl.ID, "arn"), ref("aws_sqs_queue", bl.ID, "url")
 }
 
+// envKey turns a block id into an environment name: payments-db is PAYMENTS_DB.
+func envKey(id string) string { return strings.ToUpper(strings.ReplaceAll(id, "-", "_")) }
+
 func envName(kind, id string) string {
 	prefix := map[string]string{"table": "TABLE_", "bucket": "BUCKET_", "queue": "QUEUE_URL_"}[kind]
 	return prefix + strings.ToUpper(strings.ReplaceAll(id, "-", "_"))
@@ -293,12 +384,19 @@ func (g *gen) service(bl Block) {
 	for k, v := range bl.Env {
 		env[k] = esc(v)
 	}
-	logGroup, door := "", ""
+	logGroup, door, doorPath := "", "", ""
 	var statements []obj
+	var secrets []obj       // injected by ECS at start from Secrets Manager; Forgeline never sees the values
+	var secretARNs []string // what the execution role may read
+	var callers []string    // services that call this one
+	sg := bl.ID + "_svc"
 	for _, l := range g.b.Links {
 		if l.To == bl.ID {
-			if from := g.byID[l.From]; from.Kind == KindFrontDoor {
-				door = from.ID
+			switch from := g.byID[l.From]; from.Kind {
+			case KindFrontDoor:
+				door, doorPath = from.ID, l.Path
+			case KindService:
+				callers = append(callers, from.ID)
 			}
 			continue
 		}
@@ -306,8 +404,41 @@ func (g *gen) service(bl Block) {
 			continue
 		}
 		to := g.byID[l.To]
-		if to.Kind == KindLogs {
+		key := envKey(to.ID)
+		switch {
+		case to.Kind == KindLogs:
 			logGroup = ref("aws_cloudwatch_log_group", to.ID, "name")
+			continue
+		case to.Kind == KindService:
+			env[key+"_URL"] = fmt.Sprintf("http://%s.%s:%d", to.ID, g.namespace(), to.Port)
+			continue
+		case to.Kind == KindDatabase:
+			port := DatabasePorts[to.Engine]
+			g.add("aws_vpc_security_group_ingress_rule", to.ID+"_db_from_"+bl.ID, obj{"security_group_id": ref("aws_security_group", to.ID+"_db", "id"),
+				"referenced_security_group_id": ref("aws_security_group", sg, "id"), "ip_protocol": "tcp", "from_port": port, "to_port": port})
+			env[key+"_HOST"], env[key+"_PORT"], env[key+"_NAME"] = ref("aws_db_instance", to.ID, "address"), fmt.Sprint(port), "app"
+			arn := "${aws_db_instance." + to.ID + ".master_user_secret[0].secret_arn}"
+			secrets = append(secrets, obj{"name": key + "_USERNAME", "valueFrom": arn + ":username::"}, obj{"name": key + "_PASSWORD", "valueFrom": arn + ":password::"})
+			secretARNs = append(secretARNs, arn)
+			continue
+		case to.Kind == KindCache:
+			g.add("aws_vpc_security_group_ingress_rule", to.ID+"_cache_from_"+bl.ID, obj{"security_group_id": ref("aws_security_group", to.ID+"_cache", "id"),
+				"referenced_security_group_id": ref("aws_security_group", sg, "id"), "ip_protocol": "tcp", "from_port": 6379, "to_port": 6379})
+			env[key+"_HOST"], env[key+"_PORT"], env[key+"_TLS"] = ref("aws_elasticache_replication_group", to.ID, "primary_endpoint_address"), "6379", "true"
+			continue
+		case to.Kind == KindSecret:
+			secrets = append(secrets, obj{"name": key, "valueFrom": ref("aws_secretsmanager_secret", to.ID, "arn")})
+			secretARNs = append(secretARNs, ref("aws_secretsmanager_secret", to.ID, "arn"))
+			continue
+		case to.Kind == KindExisting && to.Existing.Type == "database":
+			env[key+"_HOST"], env[key+"_PORT"] = "${data.aws_db_instance."+to.ID+".address}", "${data.aws_db_instance."+to.ID+".port}"
+			continue
+		case to.Kind == KindExisting && to.Existing.Type == "cache":
+			env[key+"_HOST"], env[key+"_PORT"] = "${data.aws_elasticache_replication_group."+to.ID+".primary_endpoint_address}", "6379"
+			continue
+		case to.Kind == KindExisting && to.Existing.Type == "secret":
+			secrets = append(secrets, obj{"name": key, "valueFrom": "${data.aws_secretsmanager_secret." + to.ID + ".arn}"})
+			secretARNs = append(secretARNs, "${data.aws_secretsmanager_secret."+to.ID+".arn}")
 			continue
 		}
 		kind, arn, value := g.dataRef(to)
@@ -324,6 +455,11 @@ func (g *gen) service(bl Block) {
 	if len(statements) > 0 {
 		policy, _ := json.Marshal(obj{"Version": "2012-10-17", "Statement": statements})
 		g.add("aws_iam_role_policy", task, obj{"name": "uses", "role": ref("aws_iam_role", task, "id"), "policy": string(policy)})
+	}
+	if len(secretARNs) > 0 {
+		// Only the execution role (ECS, at start) may read the secrets this service links to, and nothing else.
+		policy, _ := json.Marshal(obj{"Version": "2012-10-17", "Statement": []obj{{"Effect": "Allow", "Action": []string{"secretsmanager:GetSecretValue"}, "Resource": secretARNs}}})
+		g.add("aws_iam_role_policy", exec+"_secrets", obj{"name": "secrets", "role": ref("aws_iam_role", exec, "id"), "policy": string(policy)})
 	}
 	if logGroup == "" {
 		g.add("aws_cloudwatch_log_group", bl.ID, obj{"name": "/forgeline/" + esc(g.b.ID) + "/" + bl.ID, "retention_in_days": 30, "tags": tags(bl)})
@@ -346,6 +482,9 @@ func (g *gen) service(bl Block) {
 	if bl.Port > 0 {
 		container["portMappings"] = []obj{{"containerPort": bl.Port, "protocol": "tcp"}}
 	}
+	if len(secrets) > 0 {
+		container["secrets"] = secrets
+	}
 	var cbuf bytes.Buffer
 	enc := json.NewEncoder(&cbuf)
 	enc.SetEscapeHTML(false)
@@ -357,8 +496,7 @@ func (g *gen) service(bl Block) {
 		"container_definitions": strings.TrimSpace(cbuf.String()), "tags": tags(bl),
 	})
 
-	sg := bl.ID + "_svc"
-	g.add("aws_security_group", sg, obj{"name": g.awsName(bl.ID+"-svc", 255), "description": "Service " + bl.ID + ": only its front door may connect", "vpc_id": "${data.aws_vpc.default.id}", "tags": tags(bl)})
+	g.add("aws_security_group", sg, obj{"name": g.awsName(bl.ID+"-svc", 255), "description": "Service " + bl.ID + ": only its front door and the services that call it may connect", "vpc_id": "${data.aws_vpc.default.id}", "tags": tags(bl)})
 	g.add("aws_vpc_security_group_egress_rule", sg, obj{"security_group_id": ref("aws_security_group", sg, "id"), "cidr_ipv4": "0.0.0.0/0", "ip_protocol": "-1"})
 	svc := obj{
 		"name": g.awsName(bl.ID, 255), "cluster": "${aws_ecs_cluster.main.id}", "task_definition": ref("aws_ecs_task_definition", bl.ID, "arn"),
@@ -371,12 +509,47 @@ func (g *gen) service(bl Block) {
 	if door != "" {
 		g.add("aws_vpc_security_group_ingress_rule", sg+"_from_"+door, obj{"security_group_id": ref("aws_security_group", sg, "id"),
 			"referenced_security_group_id": ref("aws_security_group", door+"_lb", "id"), "ip_protocol": "tcp", "from_port": bl.Port, "to_port": bl.Port})
-		svc["load_balancer"] = []obj{{"target_group_arn": ref("aws_lb_target_group", door, "arn"), "container_name": "app", "container_port": bl.Port}}
+		tg := door
+		if doorPath != "" {
+			tg = door + "_" + bl.ID
+		}
+		svc["load_balancer"] = []obj{{"target_group_arn": ref("aws_lb_target_group", tg, "arn"), "container_name": "app", "container_port": bl.Port}}
 		listener := door + "_http"
 		if g.byID[door].Certificate != "" {
 			listener = door + "_https"
 		}
-		svc["depends_on"] = []string{"aws_lb_listener." + listener}
+		deps := []string{"aws_lb_listener." + listener}
+		if doorPath != "" {
+			deps = append(deps, "aws_lb_listener_rule."+tg)
+		}
+		svc["depends_on"] = deps
+	}
+	if len(callers) > 0 {
+		// Other services find this one by name in the blueprint's private namespace, and only they may connect.
+		g.add("aws_service_discovery_service", bl.ID, obj{"name": bl.ID, "dns_config": obj{"namespace_id": "${aws_service_discovery_private_dns_namespace.main.id}",
+			"dns_records": []obj{{"ttl": 10, "type": "A"}}, "routing_policy": "MULTIVALUE"}, "tags": tags(bl)})
+		svc["service_registries"] = obj{"registry_arn": ref("aws_service_discovery_service", bl.ID, "arn")}
+		sort.Strings(callers)
+		for _, c := range callers {
+			g.add("aws_vpc_security_group_ingress_rule", sg+"_from_"+c, obj{"security_group_id": ref("aws_security_group", sg, "id"),
+				"referenced_security_group_id": ref("aws_security_group", c+"_svc", "id"), "ip_protocol": "tcp", "from_port": bl.Port, "to_port": bl.Port})
+		}
+	}
+	if bl.Max > 0 {
+		// Scaling on average CPU; the service's own count is only where it starts.
+		svc["lifecycle"] = obj{"ignore_changes": []string{"desired_count"}}
+		target := bl.CPUTarget
+		if target == 0 {
+			target = 60
+		}
+		resource := "service/${aws_ecs_cluster.main.name}/${aws_ecs_service." + bl.ID + ".name}"
+		g.add("aws_appautoscaling_target", bl.ID, obj{"min_capacity": bl.Min, "max_capacity": bl.Max, "resource_id": resource,
+			"scalable_dimension": "ecs:service:DesiredCount", "service_namespace": "ecs"})
+		g.add("aws_appautoscaling_policy", bl.ID, obj{"name": g.awsName(bl.ID+"-cpu", 255), "policy_type": "TargetTrackingScaling",
+			"resource_id": ref("aws_appautoscaling_target", bl.ID, "resource_id"), "scalable_dimension": ref("aws_appautoscaling_target", bl.ID, "scalable_dimension"),
+			"service_namespace": ref("aws_appautoscaling_target", bl.ID, "service_namespace"),
+			"target_tracking_scaling_policy_configuration": obj{"target_value": target, "scale_in_cooldown": 120, "scale_out_cooldown": 60,
+				"predefined_metric_specification": obj{"predefined_metric_type": "ECSServiceAverageCPUUtilization"}}})
 	}
 	g.add("aws_ecs_service", bl.ID, svc)
 }

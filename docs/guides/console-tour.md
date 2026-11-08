@@ -50,7 +50,9 @@ changes (stacks, blueprints, environments). Each shows who asked, why, the previ
 ## Build
 
 **Design** opens a blueprint on the canvas: what should exist in an AWS account, drawn as blocks (a front door, apps on
-ECS, tables, file buckets, queues, logs, and things that already exist, which are used but never changed). Add blocks from
+ECS, tables, file buckets, queues, logs, MySQL or Postgres databases, Redis caches, secrets, and things that already
+exist, which are used but never changed). An app can call another app, connect to a database or a cache, read a secret,
+and scale between a fewest and a most number of tasks; a front door can send paths such as `/api/*` to a second app. Add blocks from
 the toolbar, drag them into place (arrow keys move the one in focus), and pick one to change it on the right. Under
 **Links** you join blocks; only links that make sense are offered. Orange lines carry traffic from the internet, grey
 lines are an app using data, dashed lines are logs, and dashed blocks already exist. Moving dots show which way things
@@ -75,7 +77,10 @@ account or do anything itself, and it will not touch a service an administrator 
 **Blueprints** lists them. **New blueprint** starts from **Empty**, **Small web app** or **Queue worker**. Each blueprint
 says in plain words what it means (what is open to the internet, whether data is kept, how long logs are kept) and shows
 the OpenTofu code it generates. The safe settings are not options: files are private and encrypted, tables and buckets
-keep their data if you remove them, and only a front door is reachable from the internet.
+keep their data if you remove them, and only a front door is reachable from the internet. Databases are private,
+encrypted and protected from deletion, and AWS creates their passwords and keeps them in Secrets Manager: an app gets
+the password when it starts (as `DB_PASSWORD` for a database block called `db`), and Forgeline never sees it. A secret
+block is created empty; you set its value in AWS, and only the apps linked to it can read it.
 
 ![A blueprint]({{ '/console/90-blueprint.png' | relative_url }})
 

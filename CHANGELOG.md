@@ -7,6 +7,12 @@ section in the pull request that makes the change; a release moves it under its 
 ## [Unreleased]
 
 ### Added
+- **More blueprint blocks** (design note 039). Databases (RDS MySQL or Postgres: private, encrypted, protected from
+  deletion, with backups; AWS creates the password and keeps it in Secrets Manager, and apps get it at start without
+  Forgeline ever seeing it), Redis caches (ElastiCache, encrypted), and secrets created empty for a person to fill in AWS.
+  An app can call another app privately by name, scale between a fewest and a most number of tasks on CPU, and a front
+  door can send paths such as `/api/*` to other apps. Existing databases, caches and secrets can be used as they are.
+  The canvas assistant knows all of them.
 - **Set up Forgeline** (design note 038, step 1). A new server's Home lists the first-run steps (your team, GitHub, a cloud
   account, the assistant, what the AI may touch, a first pipeline or blueprint), each linking to the page that does it and
   ticking itself when done; administrators can skip one. Settings › Setup shows them any time. `forgeline onboard` shows

@@ -319,7 +319,7 @@ Design: [docs/design/006-console.md](design/006-console.md). Pictures: [docs/con
 >
 > **Pending, in order** (each its own design note or pull request):
 >
-> 1. **More blueprint blocks** (note 039): databases (RDS MySQL or Postgres, password kept by AWS), Redis, secrets (value
+> 1. ~~More blueprint blocks~~ **built** (note 039): databases (RDS MySQL or Postgres, password kept by AWS), Redis, secrets (value
 >    never seen by Forgeline), service-to-service calls, autoscaling, and several paths behind one front door.
 > 2. **A very light helper model** (note 038, step 2, revised by the maintainer: no llama.cpp or Ollama, well under
 >    500 MB): a 25 MB embedding model in the browser to match answers and find pages, then FunctionGemma 270M (fine-tuned
