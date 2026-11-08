@@ -172,6 +172,8 @@ eq('mission', missionSteps({ stages: [
   { name: 'Check', gate: true, status: 'pending', steps: [{}] }] }).map(s => s.state + ':' + s.note),
   ['done:2 done', 'failed:1 of 2 failed', 'wait:waiting for you', 'todo:', 'todo:needs your OK']);
 eq('no run', missionSteps(null), []);
+eq('a stopped budget is said', stateLine({ state: 'scheduled', next_at: '2026-01-01T00:00:00Z', budget: { level: 'stop' } }).text, 'Stopped: its monthly budget is used up');
+eq('off stays off', stateLine({ state: 'off', budget: { level: 'stop' } }).text, 'Off');
 if (failed) process.exit(1);
 console.log('ok');
 `

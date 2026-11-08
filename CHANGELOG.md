@@ -7,6 +7,10 @@ section in the pull request that makes the change; a release moves it under its 
 ## [Unreleased]
 
 ### Added
+- **AI use and budgets** (design note 036). Every model call is counted against the agent that made it (or people): tokens
+  as the backend reports them, model time, and cost where the claude program reports it (it is now asked for JSON output).
+  Administrators set monthly budgets in tokens and minutes per agent; at 80% the console warns, and once used up the
+  agent stops before its next model call. Settings › AI use and budgets lists it all; Team cards show the bar.
 - **The assistant beside the design canvas** (design note 035, slice 4). Describe a change in your own words; the assistant
   suggests an edited draft, checked by the same rules as a save (with one retry), kept on the blueprint's account and region
   and within the AI service switches, with its changes listed as sentences. Use this puts it on the canvas unsaved; the

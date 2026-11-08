@@ -46,6 +46,8 @@ export function every(min) {
 
 /** The state line on a card: { text, tone } where tone is work, wait, sleep, idle or off. */
 export function stateLine(m, now = Date.now()) {
+  // An agent that used up its budget answers nothing until next month or a higher budget (note 036).
+  if (m.budget?.level === 'stop' && m.state !== 'off' && m.state !== 'working') return { text: 'Stopped: its monthly budget is used up', tone: 'off' };
   switch (m.state) {
     case 'working': return { text: 'Working on ' + (m.doing || 'a workflow'), tone: 'work' };
     case 'waiting': return { text: 'Waiting for your OK in ' + (m.doing || 'a workflow'), tone: 'wait' };

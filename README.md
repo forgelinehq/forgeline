@@ -27,7 +27,8 @@ or propose changes that someone else approves. People can sign in with
 your company login (OpenID Connect: Google, Entra ID, Okta, Keycloak) with roles from their groups, and
 approval rules can ask for two approvals, or named approvers, for the changes that matter. Administrators can
 download the audit log as CSV or JSON Lines and choose how long it is kept. Team shows your agents as an
-org chart with what each is doing and when it wakes next. Watch › Map shows your AWS account with
+org chart with what each is doing, when it wakes next and how much of its monthly budget it has used; an
+agent that uses up its budget stops before its next model call. Watch › Map shows your AWS account with
 resources inside the stack that made them and lines where AWS says one uses another. Build › Design and
 Blueprints draw what should exist (a front door, apps, tables, files, queues) with safe settings chosen for you, say
 in plain words what it means, and show the OpenTofu code it generates. Preview changes shows what OpenTofu would do in AWS; a different

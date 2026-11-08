@@ -5,6 +5,8 @@ import { get, put, atLeast } from '../lib/api.js';
 import { session } from '../app.js';
 import { avatar } from './agents.js';
 import { buildTree, stateLine, factsLine, missionSteps } from '../lib/team.js';
+import { budgetLine, tokens } from '../lib/usage.js';
+import { budgetBar } from './ai_use.js';
 
 const TONE = {
   work: 'text-sky-700 dark:text-sky-300', wait: 'text-amber-700 dark:text-amber-300',
@@ -52,7 +54,17 @@ export async function teamPage() {
       h('span', { class: 'flex items-center gap-1.5 text-xs ' + TONE[st.tone], 'data-state': m.state, title: st.text }, h('span', { class: 'size-2 shrink-0 rounded-full ' + DOT[st.tone] }),
         m.run_id ? h('a', { href: '#/workflow-runs/' + m.run_id, class: 'truncate underline-offset-2 hover:underline' }, st.text) : h('span', { class: 'truncate' }, st.text)),
       h('span', { class: 'muted text-xs' }, factsLine(m)),
+      budgetPart(m),
       admin && leadPicker(m));
+  }
+
+  // Its budget, or what it used this month when it has none (note 036).
+  function budgetPart(m) {
+    const line = budgetLine(m.budget);
+    if (line) return h('a', { href: '#/ai-use', class: 'block space-y-1', 'data-budget-level': line.level, title: line.text }, budgetBar(line),
+      h('span', { class: 'block text-xs ' + (line.level === 'stop' ? 'text-rose-700 dark:text-rose-300' : line.level === 'warn' ? 'text-amber-700 dark:text-amber-300' : 'muted') }, line.text));
+    const used = (m.budget?.used?.input_tokens || 0) + (m.budget?.used?.output_tokens || 0);
+    return used ? h('a', { href: '#/ai-use', class: 'muted text-xs hover:underline' }, tokens(used) + ' tokens this month · no budget') : null;
   }
 
   // A node: its card, then a line down to a row of its reports.
@@ -94,6 +106,6 @@ export async function teamPage() {
   mount(el, header(),
     team.schedules_stopped && h('div', { class: 'mb-4' }, notice('warn', 'The assistant is off, so no agent wakes on a schedule. ', h('a', { href: '#/integrations/claude/settings', class: 'underline' }, 'Turn it on'))),
     chart, mission,
-    h('p', { class: 'hint mt-4' }, 'A reporting line shows how your team is organised; a lead does not hand out work yet. Spending limits per agent are coming: Forgeline does not yet measure what each agent spends.'));
+    h('p', { class: 'hint mt-4' }, 'A reporting line shows how your team is organised; a lead does not hand out work yet. Budgets limit the tokens and model time each agent uses in a month (Settings › AI use and budgets); cloud spend an agent causes is not counted yet.'));
   return el;
 }

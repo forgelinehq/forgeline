@@ -20,8 +20,8 @@ const eq = (name, got, want) => {
 const links = (role) => visibleGroups(role).flatMap(g => g.items.filter(i => !i.planned).map(i => i.path));
 
 // Who sees what.
-eq('an administrator sees every page', links('admin'), ['/people', '/sso', '/integrations', '/secrets', '/integrations/claude/settings', '/memory', '/audit', '/approval-rules', '/account']);
-eq('a developer does not see People or the audit log', links('developer'), ['/integrations', '/secrets', '/integrations/claude/settings', '/memory', '/approval-rules', '/account']);
+eq('an administrator sees every page', links('admin'), ['/people', '/sso', '/integrations', '/secrets', '/integrations/claude/settings', '/memory', '/ai-use', '/audit', '/approval-rules', '/account']);
+eq('a developer does not see People or the audit log', links('developer'), ['/integrations', '/secrets', '/integrations/claude/settings', '/memory', '/ai-use', '/approval-rules', '/account']);
 eq('a viewer sees only their own tokens', links('viewer'), ['/account']);
 eq('an unknown role sees nothing', links('nobody'), []);
 eq('a group with no pages for the role is left out', visibleGroups('developer').map(g => g.title), ['Connections', 'AI', 'Security', 'Developer']);
@@ -30,7 +30,7 @@ eq('settings open for developers and administrators only', [canOpenSettings('vie
 // Planned entries are shown but are never links.
 const planned = SETTINGS.flatMap(g => g.items).filter(i => i.planned);
 eq('planned entries have no path', planned.every(i => !i.path), true);
-eq('planned entries are listed for administrators', visibleGroups('admin').flatMap(g => g.items).filter(i => i.planned).map(i => i.label), ['Budgets and limits']);
+eq('planned entries are listed for administrators', visibleGroups('admin').flatMap(g => g.items).filter(i => i.planned).map(i => i.label), []);
 eq('a real page is never marked planned', SETTINGS.flatMap(g => g.items).filter(i => i.path).every(i => !i.planned && i.min), true);
 
 // Which pages are part of Settings.

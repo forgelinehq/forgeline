@@ -455,6 +455,19 @@ func (s *Server) askAssistant(ctx context.Context, role authn.Role, turns []chat
 
 // askModel sends one request to the configured backend with the given instructions.
 func (s *Server) askModel(ctx context.Context, system string, turns []chatTurn) (string, error) {
+	// Budgets (note 036): an agent over its monthly budget stops here, before the call.
+	if err := s.checkBudget(ctx); err != nil {
+		return "", err
+	}
+	start := time.Now()
+	reply, use, err := s.callModel(ctx, system, turns)
+	use.Millis = time.Since(start).Milliseconds()
+	s.recordUsage(ctx, use)
+	return reply, err
+}
+
+// callModel sends one request to the configured backend and says what it used.
+func (s *Server) callModel(ctx context.Context, system string, turns []chatTurn) (string, modelUsage, error) {
 	st := s.loadAssistant(ctx)
 	model := st.Model
 	if model == "" {
@@ -466,7 +479,7 @@ func (s *Server) askModel(ctx context.Context, system string, turns []chatTurn) 
 	case assistAPI:
 		key, ok := s.internalSecretValue(ctx, assistantKeyName)
 		if !ok {
-			return "", errors.New("the assistant has no API key")
+			return "", modelUsage{}, errors.New("the assistant has no API key")
 		}
 		return s.askAPI(ctx, st, model, key, system, turns)
 	case assistCLI:
@@ -474,14 +487,14 @@ func (s *Server) askModel(ctx context.Context, system string, turns []chatTurn) 
 	case assistToken:
 		tok, ok := s.internalSecretValue(ctx, claudeTokenName)
 		if !ok {
-			return "", errors.New("the assistant has no Claude Code token")
+			return "", modelUsage{}, errors.New("the assistant has no Claude Code token")
 		}
 		return askCLI(ctx, model, system, turns, tok)
 	}
-	return "", errors.New("the assistant is not set up")
+	return "", modelUsage{}, errors.New("the assistant is not set up")
 }
 
-func (s *Server) askAPI(ctx context.Context, st assistantSettings, model, key, system string, turns []chatTurn) (string, error) {
+func (s *Server) askAPI(ctx context.Context, st assistantSettings, model, key, system string, turns []chatTurn) (string, modelUsage, error) {
 	base := st.APIBase
 	if base == "" {
 		base = defaultAnthropic
@@ -489,7 +502,7 @@ func (s *Server) askAPI(ctx context.Context, st assistantSettings, model, key, s
 	body, _ := json.Marshal(map[string]any{"model": model, "max_tokens": 2000, "system": system, "messages": turns})
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(base, "/")+"/v1/messages", bytes.NewReader(body))
 	if err != nil {
-		return "", err
+		return "", modelUsage{}, err
 	}
 	req.Header.Set("content-type", "application/json")
 	req.Header.Set("x-api-key", key)
@@ -497,7 +510,7 @@ func (s *Server) askAPI(ctx context.Context, st assistantSettings, model, key, s
 	client := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", errors.New("could not reach the Anthropic API")
+		return "", modelUsage{}, errors.New("could not reach the Anthropic API")
 	}
 	defer resp.Body.Close()
 	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
@@ -510,13 +523,14 @@ func (s *Server) askAPI(ctx context.Context, st assistantSettings, model, key, s
 		if msg == "" {
 			msg = resp.Status
 		}
-		return "", fmt.Errorf("the Anthropic API refused the request (%d): %s", resp.StatusCode, truncate(msg, 200))
+		return "", modelUsage{}, fmt.Errorf("the Anthropic API refused the request (%d): %s", resp.StatusCode, truncate(msg, 200))
 	}
 	var out struct {
 		Content []struct{ Type, Text string } `json:"content"`
+		Usage   tokenCounts                   `json:"usage"`
 	}
 	if err := json.Unmarshal(raw, &out); err != nil {
-		return "", errors.New("the Anthropic API sent a reply that could not be read")
+		return "", modelUsage{}, errors.New("the Anthropic API sent a reply that could not be read")
 	}
 	var sb strings.Builder
 	for _, c := range out.Content {
@@ -525,18 +539,18 @@ func (s *Server) askAPI(ctx context.Context, st assistantSettings, model, key, s
 		}
 	}
 	if strings.TrimSpace(sb.String()) == "" {
-		return "", errors.New("the assistant sent an empty reply")
+		return "", modelUsage{}, errors.New("the assistant sent an empty reply")
 	}
-	return sb.String(), nil
+	return sb.String(), modelUsage{Calls: 1, Input: out.Usage.input(), Output: out.Usage.OutputTokens}, nil
 }
 
 // askCLI runs the claude program on the server, as the server's user, with no tools, in an empty
 // directory and with a clean environment. It uses whatever login that user has, so it is meant
 // for a single-person server; the settings page says so.
-func askCLI(ctx context.Context, model, system string, turns []chatTurn, token string) (string, error) {
+func askCLI(ctx context.Context, model, system string, turns []chatTurn, token string) (string, modelUsage, error) {
 	dir, err := os.MkdirTemp("", "forgeline-assist-")
 	if err != nil {
-		return "", err
+		return "", modelUsage{}, err
 	}
 	defer os.RemoveAll(dir)
 	var prompt strings.Builder
@@ -558,9 +572,9 @@ func askCLI(ctx context.Context, model, system string, turns []chatTurn, token s
 	// line, where any local user could read it in the process list.
 	sysFile := filepath.Join(dir, "system.md")
 	if err := os.WriteFile(sysFile, []byte(system), 0o600); err != nil {
-		return "", err
+		return "", modelUsage{}, err
 	}
-	args := []string{"-p", "--output-format", "text", "--max-turns", "1", "--tools", "",
+	args := []string{"-p", "--output-format", "json", "--max-turns", "1", "--tools", "",
 		"--disable-slash-commands", "--no-session-persistence",
 		// --tools "" removes the built-in tools only. Without this the program would also load the MCP
 		// servers of the server user's own setup and could call them.
@@ -578,7 +592,7 @@ func askCLI(ctx context.Context, model, system string, turns []chatTurn, token s
 		// user's own ~/.claude is read, and the token is the only credential the program has.
 		home := filepath.Join(dir, "home")
 		if err := os.Mkdir(home, 0o700); err != nil {
-			return "", err
+			return "", modelUsage{}, err
 		}
 		cmd.Env = []string{"HOME=" + home, "PATH=" + os.Getenv("PATH"), "LANG=C.UTF-8", claudeTokenName + "=" + token}
 	}
@@ -589,18 +603,41 @@ func askCLI(ctx context.Context, model, system string, turns []chatTurn, token s
 	if err := cmd.Run(); err != nil {
 		var nf *exec.Error
 		if errors.As(err, &nf) {
-			return "", errors.New("the claude program is not installed on the server")
+			return "", modelUsage{}, errors.New("the claude program is not installed on the server")
 		}
 		if ctx.Err() != nil {
-			return "", errors.New("the assistant took too long")
+			return "", modelUsage{}, errors.New("the assistant took too long")
 		}
-		return "", fmt.Errorf("claude failed: %s", truncate(firstLine(strings.TrimSpace(errb.b.String()+" "+out.b.String())), 240))
+		return "", modelUsage{}, fmt.Errorf("claude failed: %s", truncate(firstLine(strings.TrimSpace(errb.b.String()+" "+out.b.String())), 240))
 	}
-	reply := strings.TrimSpace(out.b.String())
+	reply, use, failed := readCLIOutput(out.b.Bytes())
+	if failed {
+		return "", use, fmt.Errorf("claude failed: %s", truncate(firstLine(reply), 240))
+	}
 	if reply == "" {
-		return "", errors.New("the assistant sent an empty reply")
+		return "", use, errors.New("the assistant sent an empty reply")
 	}
-	return reply, nil
+	return reply, use, nil
+}
+
+// readCLIOutput reads `claude -p --output-format json`: the reply, the tokens and the cost it reports. Output
+// that is not that JSON (an older program, or a stand-in) is taken as the reply, with the use unknown.
+func readCLIOutput(raw []byte) (reply string, use modelUsage, failed bool) {
+	var r struct {
+		Type    string      `json:"type"`
+		Result  *string     `json:"result"`
+		IsError bool        `json:"is_error"`
+		Cost    *float64    `json:"total_cost_usd"`
+		Usage   tokenCounts `json:"usage"`
+	}
+	if err := json.Unmarshal(raw, &r); err != nil || r.Type != "result" || r.Result == nil {
+		return strings.TrimSpace(string(raw)), modelUsage{Calls: 1, Unknown: true}, false
+	}
+	use = modelUsage{Calls: 1, Input: r.Usage.input(), Output: r.Usage.OutputTokens}
+	if r.Cost != nil {
+		use.CostUSD, use.Costed = *r.Cost, 1
+	}
+	return strings.TrimSpace(*r.Result), use, r.IsError
 }
 
 // --- rate limit ---
