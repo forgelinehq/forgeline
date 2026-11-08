@@ -135,7 +135,7 @@ The canvas assistant chooses from installed templates and blocks; it may not wri
 
 ## Plan
 
-In order, each step its own design-note addendum or pull request, tested on the Pi:
+AWS first: steps 1 to 8 are AWS only. In order, each step its own design-note addendum or pull request, tested on the Pi:
 
 1. Guardrails on every plan: built-in rules, the deny/warn display, audit (layer 4, first part).
 2. The template format, and the AgentCore agent template.
@@ -143,9 +143,10 @@ In order, each step its own design-note addendum or pull request, tested on the 
 4. Repositories linked to blocks, with suggested pipelines (layer 3).
 5. EKS with namespaces (two-stage apply), data pipeline and code pipeline templates.
 6. Policy packs in containers: Conftest, Checkov or Trivy (layer 4, second part).
-7. The generic resource block from provider schemas, with the administrator's allow list (layer 5).
-8. Cloud connections for Azure, Google Cloud and RunPod, with first blocks and templates (layer 6).
-9. The library for templates, skills, tools, agents and guardrail packs (layer 7).
+7. The generic resource block from provider schemas, with the administrator's allow list (layer 5), for AWS.
+8. The library for templates, skills, tools, agents and guardrail packs (layer 7).
+9. **Only after AWS is complete** (maintainer, 2026-11-08): Google Cloud, then Azure, then RunPod and others (layer 6),
+   each with its first blocks, templates and guardrails.
 
 ## Not decided
 
