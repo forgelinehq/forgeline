@@ -7,6 +7,9 @@ section in the pull request that makes the change; a release moves it under its 
 ## [Unreleased]
 
 ### Added
+- **The design canvas** (design note 035, slice 2). Build › Design opens a blueprint as blocks you drag into place, add from
+  a toolbar and change in a panel beside them, including the links between them; only links the server would accept are
+  offered. Each change is checked as you type, with problems named by block, and Save keeps it unless someone saved first.
 - **Blueprints** (design note 035). Build › Blueprints keeps designs of what should exist in an AWS account: a front door,
   apps on ECS Fargate, DynamoDB tables, S3 buckets, SQS queues, log groups, and existing resources that are used but never
   changed, joined by links that open exactly the port and grant exactly the access they say. Each blueprint is checked in

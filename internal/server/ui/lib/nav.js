@@ -15,7 +15,7 @@ export const SPACES = [
     { path: '/proposals', label: 'Approvals', min: 'viewer' },
   ] },
   { id: 'build', label: 'Build', icon: 'grid', path: '/environments', tabs: [
-    { label: 'Design', planned: true },
+    { path: '/design', label: 'Design', min: 'developer' },
     { path: '/environments', label: 'Environments', min: 'developer' },
     { path: '/blueprints', label: 'Blueprints', min: 'developer' },
   ] },

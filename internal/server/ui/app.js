@@ -31,6 +31,7 @@ import { approvalRulesPage } from './pages/approval_rules.js';
 import { teamPage } from './pages/team.js';
 import { watchMapPage } from './pages/watch_map.js';
 import { blueprintsPage, blueprintPage } from './pages/blueprints.js';
+import { designHomePage, designPage } from './pages/design.js';
 import { spacesFor, activeSpace, tabsFor, tabMatches } from './lib/nav.js';
 
 const root = document.getElementById('root');
@@ -210,6 +211,8 @@ async function boot() {
     route('/runs/:id', guard('viewer', runPage));
     route('/actions', guard('developer', actionsPage));
     route('/environments', guard('developer', environmentsPage));
+    route('/design', guard('developer', designHomePage));
+    route('/design/:id', guard('developer', designPage));
     route('/blueprints', guard('developer', blueprintsPage));
     route('/blueprints/:id', guard('developer', blueprintPage));
     route('/marketplace', guard('developer', marketplacePage));

@@ -94,7 +94,8 @@ The maintainer confirmed six screen frames (Home, Connections, the assistant, th
 | Decision | Choice |
 | --- | --- |
 | Blueprints | Build › Blueprints (`#/blueprints`): drafts with blocks, links in words, plain-words checks and the OpenTofu code. The model, its rules and the code are in note 035 |
-| Not yet | The canvas to edit blocks (Build › Design), Preview changes (`tofu plan`), Send for approval, and the assistant drafting |
+| Canvas | Build › Design (`#/design/{id}`): blocks in SVG, dragged into place, edited on the right, links offered only where valid, checked as you go, saved with revisions |
+| Not yet | Preview changes (`tofu plan`), Send for approval, and the assistant drafting |
 
 ## Decisions taken since (2026-11-07)
 
