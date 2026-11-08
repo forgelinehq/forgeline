@@ -43,7 +43,7 @@ The maintainer chose an enterprise focus and left the remaining choices from not
 - **No automatic apply**, not even in sandboxes. Every change stays a proposal approved by a different
   administrator. Enterprises expect this, and "approval rules" (who may approve which change) is the way to
   relax it later, not auto-apply.
-- **OpenTofu** for the code blueprints will generate; CloudFormation stays where it is used.
+- **OpenTofu** for the code blueprints will generate; CloudFormation stays where it is used. Confirmed by the maintainer on 2026-11-08 (note 035).
 - **Our own graph layout**, grown from `ui/lib/dag.js`; dagre (MIT) only if needed; no elkjs (EPL-2.0).
 - Codex and Copilot CLI engines: later.
 - Next, in order: single sign-on (OIDC), approval rules, audit export; then blueprints and the design canvas.

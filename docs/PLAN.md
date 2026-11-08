@@ -315,7 +315,8 @@ Design: [docs/design/006-console.md](design/006-console.md). Pictures: [docs/con
 > (note 031; tested against a stand-in, not yet a real provider). Approval rules are built (note 032:
 > two approvals, named approvers, by account, kind and risk). Audit export and retention are built (note 033).
 > Frame 5 (Team: the org chart with live states and the mission strip) and frame 6 (Watch map: stacks and
-> stated links, note 034) are built. Next: frame 4 (Design canvas), then spend measurement and budgets per agent. Decided: no
+> stated links, note 034) are built. Frame 4 has started: blueprints (note 035: the model, its checks and the
+> OpenTofu it generates) are built; next the canvas, then Preview changes and Send for approval, then spend measurement and budgets per agent. Decided: no
 > automatic apply anywhere, OpenTofu for blueprints, our own graph layout, Codex and Copilot later. Next, in
 > order: single sign-on (OIDC, group-to-role mapping), approval rules, audit export and retention; then
 > foundations (tokens, component kit, one SVG graph component, Playwright screenshot suite), blueprints and

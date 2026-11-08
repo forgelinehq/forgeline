@@ -97,7 +97,7 @@ eq('a developer sees all five', ids('developer'), ['home', 'build', 'ship', 'tea
 eq('an unknown role sees nothing', ids('nobody'), []);
 eq('a space links to its first tab the role may open', spacesFor('developer').map(s => s.path), ['/', '/environments', '/pipelines', '/team', '/map']);
 eq('a viewer sees only the Ship tabs they may open', tabsFor(SPACES.find(s => s.id === 'ship'), 'viewer').map(t => t.label), ['Pipelines']);
-eq('planned tabs are listed and never links', tabsFor(SPACES.find(s => s.id === 'build'), 'developer').map(t => (t.planned ? '~' : '') + t.label), ['~Design', 'Environments', '~Blueprints']);
+eq('planned tabs are listed and never links', tabsFor(SPACES.find(s => s.id === 'build'), 'developer').map(t => (t.planned ? '~' : '') + t.label), ['~Design', 'Environments', 'Blueprints']);
 eq('planned tabs have no path', SPACES.every(s => s.tabs.every(t => !t.planned || !t.path)), true);
 eq('every page belongs to its space', ['/', '/proposals/abc', '/environments', '/pipelines/new', '/runs/r1', '/actions', '/team', '/agents/x', '/skills/y', '/workflow-runs/z', '/marketplace', '/map', '/infrastructure?tab=aws', '/kubernetes/k1', '/guard'].map(p => activeSpace(p)?.id),
   ['home', 'home', 'build', 'ship', 'ship', 'ship', 'team', 'team', 'team', 'team', 'team', 'watch', 'watch', 'watch', 'watch']);
