@@ -319,20 +319,22 @@ Design: [docs/design/006-console.md](design/006-console.md). Pictures: [docs/con
 >
 > **Pending, in order** (each its own design note or pull request):
 >
-> 1. **Onboarding by conversation** (note 038): first-run steps in the console and `forgeline onboard` are built; next a
->    local-model backend (OpenAI-compatible: llama.cpp or Ollama, small models such as Gemma 4 E4B or Qwen 3.5 4B on
->    a CPU), an evaluation on the Pi, and only then conversational answers.
-> 2. **Removing what a blueprint built**: a destroy plan through the same preview and approval; tables and buckets kept
+> 1. **More blueprint blocks** (note 039): databases (RDS MySQL or Postgres, password kept by AWS), Redis, secrets (value
+>    never seen by Forgeline), service-to-service calls, autoscaling, and several paths behind one front door.
+> 2. **A very light helper model** (note 038, step 2, revised by the maintainer: no llama.cpp or Ollama, well under
+>    500 MB): a 25 MB embedding model in the browser to match answers and find pages, then FunctionGemma 270M (fine-tuned
+>    on Forgeline's own steps) only if a 60-case evaluation on a laptop and the Pi's browser shows it is reliable.
+> 3. **Removing what a blueprint built**: a destroy plan through the same preview and approval; tables and buckets kept
 >    unless the person chooses otherwise.
-> 3. **Audit forwarding to a SIEM and tamper evidence** (p2-11): stream audit events out (syslog, HTTPS webhook) and chain
+> 4. **Audit forwarding to a SIEM and tamper evidence** (p2-11): stream audit events out (syslog, HTTPS webhook) and chain
 >    their hashes.
-> 4. **A lead agent that hands out work** (p4-05): reporting lines become delegation, still within approvals and budgets.
-> 5. **Missions, next steps** (note 014): IaC adoption proposals, several agents per mission, pre-approved low-risk classes.
-> 6. **Cost estimates** for blueprints and missions, from a real price source.
-> 7. **Source checkout for agent runs** (note 012 item 1), then the coding engines (Codex, Copilot) when the maintainer asks.
-> 8. **Small fixes:** "turned off" when a switched-off AWS service is asked for by name; AWS account numbers accepted as
+> 5. **A lead agent that hands out work** (p4-05): reporting lines become delegation, still within approvals and budgets.
+> 6. **Missions, next steps** (note 014): IaC adoption proposals, several agents per mission, pre-approved low-risk classes.
+> 7. **Cost estimates** for blueprints and missions, from a real price source.
+> 8. **Source checkout for agent runs** (note 012 item 1), then the coding engines (Codex, Copilot) when the maintainer asks.
+> 9. **Small fixes:** "turned off" when a switched-off AWS service is asked for by name; AWS account numbers accepted as
 >    account ids; the Connections screenshot made with demo data.
-> 9. **Verify against real services:** single sign-on with a real provider (Google, Entra ID or Okta); an app block built
+> 10. **Verify against real services:** single sign-on with a real provider (Google, Entra ID or Okta); an app block built
 >     on AWS (needs the scoped IAM permission in note 035).
 
 Do these top to bottom. Items marked **needs a decision** must wait for the maintainer; ask once,

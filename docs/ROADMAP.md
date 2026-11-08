@@ -21,13 +21,19 @@ in [PLAN.md](PLAN.md).
 | M6 | AI agents | Governed agent steps with scoped credentials and cost tracking; failure triage; fix suggestions as pull requests, never auto-applied | In progress: Claude Code agent steps built (note 007); Codex, Copilot, triage and cost tracking open |
 | M7 | Migration and breadth | Importers for Jenkinsfile and GitHub Actions workflows; Bitbucket and GitLab triggers; additional cloud targets | Not started |
 
+## Next: more blueprint blocks (note 039)
+
+Status: **designed, being built.** Databases (RDS MySQL or Postgres, with the password created and kept by AWS),
+Redis, secrets whose values Forgeline never sees, one service calling another, autoscaling, and several paths behind
+one front door. See [note 039](design/039-more-blueprint-blocks.md).
+
 ## Next: onboarding by conversation (note 038)
 
 Status: **research done, needs a decision.** New-generation agents (OpenClaw's `openclaw onboard`, Hermes Agent's
 `hermes setup`) get people working by asking questions, and can use a small model on the person's own machine.
-Proposal: first-run steps in the console and `forgeline onboard` (no model needed), a local-model backend for small
-CPU models through llama.cpp or Ollama, an evaluation on the Raspberry Pi, and conversational answers only if the
-evaluation shows they are reliable. See [note 038](design/038-conversational-onboarding.md).
+First-run steps in the console and `forgeline onboard` are built. Next, revised by the maintainer: no llama.cpp or Ollama
+and well under 500 MB, so a 25 MB embedding model running in the browser to match answers and find pages, then
+FunctionGemma 270M fine-tuned on Forgeline's own steps only if an evaluation on the Pi shows it is reliable. See [note 038](design/038-conversational-onboarding.md).
 
 ## Open decisions
 

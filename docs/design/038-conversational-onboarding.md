@@ -87,3 +87,38 @@ Tested: each step turns done when its thing exists; skipping is for administrato
 undone; a done step is never skipped. The command against a stand-in server: the token header, a skip, AWS connected with a
 profile and region, the claude program chosen, no key or token ever sent, the exit codes. Run against the demo server, and
 in a browser: the card on Home, skipping from it, bringing a step back from Settings › Setup.
+
+## Step 2, revised (2026-11-08): very light, not llama.cpp or Ollama
+
+The maintainer does not want llama.cpp, Ollama or a multi-gigabyte model: the helper must stay **within about 500 MB,
+ideally far less**, and only do regular things (map an answer to a choice, fill a step's fields, pick the right page),
+not be a general assistant. What the research found (vendor docs and blogs; nothing below is benchmarked by us yet):
+
+| Option | Size | What it can do | Runtime |
+| --- | --- | --- | --- |
+| **Tiny embedding model** (for example all-MiniLM-L6-v2 or bge-small) | about 25 to 35 MB | Match a free answer to the closest known choice or page ("the company SSO one" to the SSO step); rank docs for a question. No text generation | ONNX Runtime Web or Transformers.js, in the browser |
+| **FunctionGemma 270M** (Gemma 3 270M tuned for function calling, 32K context) | roughly 150 to 300 MB quantized (to measure) | Turn a sentence into one call with fixed fields, for example `connect_aws(profile, region)`. Built to be fine-tuned: Google reports 58% to 85% on its own task after fine-tuning. An ONNX build exists | Transformers.js or ONNX Runtime Web; LiteRT-LM on devices |
+| **Qwen3-0.6B** | about 400 MB at 4-bit | Short answers and tool calls; reported, not verified | GGUF or ONNX |
+| BitNet b1.58 2B | about 0.4 GB without embeddings, 1.19 GB file | General text | Needs bitnet.cpp; too large here |
+
+**Proposal for step 2:**
+
+1. **Run it in the browser, not on the server.** The console already runs in the person's browser; ONNX Runtime Web or
+   Transformers.js run small models there on the CPU (WebAssembly) or the GPU (WebGPU). The Forgeline server, even on a
+   Raspberry Pi, carries nothing new: it only serves the model files, downloaded once on the administrator's request and
+   checked against their published checksums, like OpenTofu (note 035). The JavaScript runtime is vendored and pinned in
+   the binary, so the CSP stays `'self'`.
+2. **Tier 1 first: the 25 MB embedding model** for matching answers and finding pages. It cannot write anything, so it
+   cannot write anything wrong.
+3. **Tier 2 only if the evaluation earns it: FunctionGemma 270M**, fine-tuned on Forgeline's own onboarding calls, turning
+   a sentence into the fields of one step. The person always sees and confirms what it filled in.
+4. **The evaluation** (before tier 2 ships): 60 cases (30 onboarding answers, 30 "where do I…" questions) with the
+   expected step, page or fields; run on a laptop and on the Pi's browser; published here with sizes and timings.
+5. Not a general assistant: questions and agent work stay with Claude.
+
+Sources: [small models under 500 MB](https://www.premai.io/blog/best-lightweight-language-models-worth-running/),
+[small LLMs guide](https://codersera.com/blog/best-small-llms-to-run-locally-a-comprehensive-guide/),
+[FunctionGemma](https://deepmind.google/models/gemma/functiongemma/), [FunctionGemma fine-tuning](https://ai.google.dev/gemma/docs/mobile-actions),
+[FunctionGemma ONNX](https://huggingface.co/onnx-community/functiongemma-270m-it-ONNX), [FunctionGemma at InfoQ](https://infoq.com/news/2026/01/functiongemma-edge-function-call),
+[LLMs in the browser with WebGPU](https://pinggy.io/blog/run_llm_in_browser_webgpu/), [WebLLM](https://blog.mlc.ai/2024/06/13/webllm-a-high-performance-in-browser-llm-inference-engine),
+[BitNet on CPU](https://wavect.io/blog/bitnet-cpu-llm-ram-requirements/), [llama.cpp alternatives](https://infrabase.ai/alternatives/llama-cpp).
