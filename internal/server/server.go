@@ -112,6 +112,7 @@ type Server struct {
 	tofuBin    tofuState      // the OpenTofu binary, once found
 	tofuRun    tofuRunner     // tests replace OpenTofu
 	usage      usageState     // serialises updates to the AI use ledger
+	missions   missionState   // missions (note 037)
 	gcpInv     invCache       // Google Cloud inventories, by scope
 	approvals  approvalBook   // read calls waiting for the person who asked to approve them
 	azureInv   invCache       // Azure inventories, by subscription set
@@ -260,6 +261,7 @@ func (s *Server) Start(ctx context.Context) error {
 		}
 	}
 	s.startWorkflows(ctx)
+	s.startMissions(ctx)
 	s.startAuditPruner(ctx)
 	s.startMarketGit(ctx)
 	for i := 0; i < s.cfg.MaxRuns; i++ {

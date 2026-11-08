@@ -7,6 +7,11 @@ section in the pull request that makes the change; a release moves it under its 
 ## [Unreleased]
 
 ### Added
+- **Missions, part 1** (design note 037). `POST /v1/missions` gives one agent a goal and one AWS account. It discovers (read
+  only), proposes fixes (change proposals a different administrator approves; an advisory agent only recommends), waits for
+  the decisions, verifies after anything was applied, and Forgeline writes the report from the record. Findings and
+  evidence must name a lookup the agent really ran, or they are dropped and counted. Lookups outside the mission's account
+  are refused on the server. Each mission has a token budget. Approvers see which mission filed a proposal.
 - **AI use and budgets** (design note 036). Every model call is counted against the agent that made it (or people): tokens
   as the backend reports them, model time, and cost where the claude program reports it (it is now asked for JSON output).
   Administrators set monthly budgets in tokens and minutes per agent; at 80% the console warns, and once used up the

@@ -332,6 +332,7 @@ type AIProposal struct {
 	RanCalls    []scriptCall `json:"ran_calls,omitempty"`
 	FinishedAt  *time.Time   `json:"finished_at,omitempty"`
 	ViaAI       bool         `json:"via_ai"`
+	Mission     string       `json:"mission,omitempty"` // the mission (note 037) that filed it, shown to the approver
 	// Approvals given so far, when the approval rules ask for more than one (note 032).
 	Approvals []approvalVote `json:"approvals,omitempty"`
 	// Approval is filled in on reads: how many approvals the rules ask for now, and who may give them.
@@ -421,6 +422,9 @@ func (s *Server) lookupProposeChange(ctx context.Context, raw json.RawMessage) (
 	prop := AIProposal{ID: authn.NewID(), Title: a.Title, Reason: a.Reason, Code: a.Code, Calls: calls,
 		Hash: proposalHash(a.Title, a.Code, target), Risk: riskOf(calls), Target: target, Status: apProposed,
 		ProposedBy: p.Name, ProposedAt: time.Now().UTC(), ViaAI: true, Account: acct.ID, AccountName: acct.Name}
+	if mr := missionFrom(ctx); mr != nil {
+		prop.Mission = mr.id
+	}
 	if err := s.docs.Put(ctx, kindAIProposal, prop.ID, prop); err != nil {
 		return "", errors.New("could not save the proposal")
 	}

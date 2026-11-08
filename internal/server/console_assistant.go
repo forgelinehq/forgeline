@@ -460,10 +460,19 @@ func (s *Server) askModel(ctx context.Context, system string, turns []chatTurn) 
 	if err := s.checkBudget(ctx); err != nil {
 		return "", err
 	}
+	mission := missionFrom(ctx)
+	if mission != nil {
+		if err := mission.check(); err != nil {
+			return "", err
+		}
+	}
 	start := time.Now()
 	reply, use, err := s.callModel(ctx, system, turns)
 	use.Millis = time.Since(start).Milliseconds()
 	s.recordUsage(ctx, use)
+	if mission != nil {
+		mission.add(use)
+	}
 	return reply, err
 }
 
