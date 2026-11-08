@@ -15,7 +15,7 @@ const tierPill = (t) => h('span', { class: t === 'T1' ? 'pill-wait' : 'pill-idle
 
 // An agent's face: its initials on a colour picked from its id, so it is the same everywhere.
 const AVATAR = ['bg-brand-600', 'bg-teal-700', 'bg-violet-600', 'bg-sky-700', 'bg-rose-600', 'bg-amber-700'];
-function avatar(name, id, size = 'size-10 text-sm') {
+export function avatar(name, id, size = 'size-10 text-sm') {
   let n = 0;
   for (const c of String(id || name)) n = (n * 31 + c.charCodeAt(0)) >>> 0;
   const initials = String(name || '?').split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join('') || '?';

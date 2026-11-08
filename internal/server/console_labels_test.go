@@ -143,3 +143,53 @@ func TestConsoleApprovalWords(t *testing.T) {
 		t.Fatalf("approval cases failed:\n%s", out)
 	}
 }
+
+// The team chart's words and shape (ui/lib/team.js).
+const teamCases = `
+import { buildTree, stateLine, factsLine, missionSteps, every } from './team.mjs';
+let failed = 0;
+const eq = (name, got, want) => { const g = JSON.stringify(got), w = JSON.stringify(want); if (g !== w) { failed++; console.error('FAIL ' + name + '\n  got  ' + g + '\n  want ' + w); } };
+const shape = t => t.map(m => m.name + (m.reports.length ? '(' + shape(m.reports) + ')' : '')).join(',');
+eq('tree', shape(buildTree([{ id: 'c', name: 'Cost', reports_to: 'l' }, { id: 'l', name: 'Lead' }, { id: 'g', name: 'Guard', reports_to: 'l' }, { id: 'd', name: 'Doc', reports_to: 'g' }, { id: 'z', name: 'Alone' }])), 'Alone,Lead(Cost,Guard(Doc))');
+eq('unknown lead reports to people', shape(buildTree([{ id: 'a', name: 'A', reports_to: 'gone' }])), 'A');
+eq('a loop is still shown, once each', shape(buildTree([{ id: 'a', name: 'A', reports_to: 'b' }, { id: 'b', name: 'B', reports_to: 'a' }])).split(/[(),]/).filter(Boolean).sort(), ['A', 'B']);
+eq('empty', buildTree(null), []);
+const now = new Date(2026, 10, 8, 10, 0).getTime();
+eq('working', stateLine({ state: 'working', doing: 'Clean tables' }, now), { text: 'Working on Clean tables', tone: 'work' });
+eq('waiting', stateLine({ state: 'waiting', doing: 'Release' }, now).text, 'Waiting for your OK in Release');
+eq('asleep soon', stateLine({ state: 'scheduled', next_at: new Date(2026, 10, 8, 10, 14).toISOString(), every_minutes: 15 }, now).text, 'Asleep · wakes in 14 min (every 15 min)');
+eq('asleep later today', stateLine({ state: 'scheduled', next_at: new Date(2026, 10, 8, 14, 5).toISOString(), every_minutes: 1440 }, now).text, 'Asleep · wakes at 14:05 (daily)');
+eq('asleep now', stateLine({ state: 'scheduled', next_at: new Date(now).toISOString() }, now).text, 'Asleep · wakes any minute');
+eq('off', stateLine({ state: 'off' }).tone, 'off');
+eq('idle', stateLine({ state: 'idle' }).text, 'Waits to be asked');
+eq('every', [every(15), every(60), every(120), every(1440), every(2880), every(0)], ['every 15 min', 'hourly', 'every 2 hours', 'daily', 'every 2 days', '']);
+eq('facts', [factsLine({ mode: 'advises' }), factsLine({ mode: 'proposes', steps_week: 1 }), factsLine({ mode: 'advises', steps_week: 4, failed_week: 1 })], ['Advises', 'Proposes changes · 1 task this week', 'Advises · 4 tasks this week, 1 failed']);
+eq('mission', missionSteps({ stages: [
+  { name: 'Look', status: 'succeeded', steps: [{ status: 'succeeded' }, { status: 'succeeded' }] },
+  { name: 'Plan', status: 'succeeded', steps: [{ status: 'failed' }, { status: 'succeeded' }] },
+  { name: 'OK', gate: true, status: 'waiting', steps: [] },
+  { name: 'Apply', status: 'pending', steps: [{}] },
+  { name: 'Check', gate: true, status: 'pending', steps: [{}] }] }).map(s => s.state + ':' + s.note),
+  ['done:2 done', 'failed:1 of 2 failed', 'wait:Your OK', 'todo:', 'todo:needs your OK']);
+eq('no run', missionSteps(null), []);
+if (failed) process.exit(1);
+console.log('ok');
+`
+
+func TestConsoleTeamWords(t *testing.T) {
+	node, err := exec.LookPath("node")
+	if err != nil {
+		t.Skip("node is not installed")
+	}
+	tmp := t.TempDir()
+	src, err := uiFiles.ReadFile("ui/lib/team.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.WriteFile(filepath.Join(tmp, "team.mjs"), src, 0o600)
+	test := filepath.Join(tmp, "cases.mjs")
+	os.WriteFile(test, []byte(teamCases), 0o600)
+	if out, err := exec.Command(node, test).CombinedOutput(); err != nil {
+		t.Fatalf("team cases failed:\n%s", out)
+	}
+}
