@@ -84,6 +84,7 @@ type AIAgent struct {
 	Description string         `json:"description"`
 	Current     int            `json:"current"`
 	Disabled    bool           `json:"disabled,omitempty"`
+	ReportsTo   string         `json:"reports_to,omitempty"` // another agent; empty reports to people (frame 5)
 	Versions    []AgentVersion `json:"versions"`
 }
 

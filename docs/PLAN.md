@@ -314,7 +314,8 @@ Design: [docs/design/006-console.md](design/006-console.md). Pictures: [docs/con
 > Look only / Change with approval per AWS service). Single sign-on with OpenID Connect is built
 > (note 031; tested against a stand-in, not yet a real provider). Approval rules are built (note 032:
 > two approvals, named approvers, by account, kind and risk). Audit export and retention are built (note 033).
-> Next: frames 5 (Team), 6 (Watch map) and 4 (Design canvas). Decided: no
+> Frame 5 (Team: the org chart with live states and the mission strip) is built. Next: frames 6 (Watch map)
+> and 4 (Design canvas), then spend measurement and budgets per agent. Decided: no
 > automatic apply anywhere, OpenTofu for blueprints, our own graph layout, Codex and Copilot later. Next, in
 > order: single sign-on (OIDC, group-to-role mapping), approval rules, audit export and retention; then
 > foundations (tokens, component kit, one SVG graph component, Playwright screenshot suite), blueprints and

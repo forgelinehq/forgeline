@@ -23,7 +23,8 @@ export const SPACES = [
     { path: '/pipelines', label: 'Pipelines', min: 'viewer', also: ['/runs/'] },
     { path: '/actions', label: 'GitHub Actions', min: 'developer' },
   ] },
-  { id: 'team', label: 'Team', icon: 'sparkle', path: '/agents', tabs: [
+  { id: 'team', label: 'Team', icon: 'sparkle', path: '/team', tabs: [
+    { path: '/team', label: 'Team', min: 'developer' },
     { path: '/agents', label: 'Agents', min: 'developer', also: ['/skills/', '/workflows/', '/workflow-runs/'] },
     { label: 'Missions', planned: true },
     { path: '/marketplace', label: 'Marketplace', min: 'developer' },

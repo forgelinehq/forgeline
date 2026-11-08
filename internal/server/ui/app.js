@@ -28,6 +28,7 @@ import { visibleGroups, isSettingsPath, activeItem, canOpenSettings } from './li
 import { settingsPage } from './pages/settings.js';
 import { ssoPage } from './pages/sso.js';
 import { approvalRulesPage } from './pages/approval_rules.js';
+import { teamPage } from './pages/team.js';
 import { spacesFor, activeSpace, tabsFor, tabMatches } from './lib/nav.js';
 
 const root = document.getElementById('root');
@@ -211,6 +212,7 @@ async function boot() {
     route('/kubernetes', guard('viewer', kubernetesPage));
     route('/kubernetes/:id', guard('viewer', kubernetesPage));
     route('/guard', guard('viewer', guardPage));
+    route('/team', guard('developer', teamPage));
     route('/agents', guard('developer', agentsPage));
     route('/agents/:id', guard('developer', agentPage));
     route('/skills/:id', guard('developer', skillPage));

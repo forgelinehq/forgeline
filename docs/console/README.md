@@ -284,6 +284,7 @@ update that asks for different hosts needs a fresh grant.
 | [85-sso-sign-in](85-sso-sign-in.png) | The sign-in page with "Sign in with …" above the password form |
 | [86-approval-rules](86-approval-rules.png) | Settings › Approval rules: a rule asking for two approvals for AI-drafted changes to the Primary account (note 032) |
 | [87-audit-export](87-audit-export.png) | Settings › Audit log with person, action and date filters and the CSV and JSON Lines downloads (note 033) |
+| [88-team](88-team.png) | Team › Team: the agents as an org chart with who reports to whom, each agent's state and mode (note 029, frame 5) |
 | [72-integrations-hub](72-integrations-hub.png) | The integrations hub (note 025): cards grouped by category with a status, AWS profiles found on the server by name, and planned systems shown dashed. Stand-in AWS and Claude |
 | [73-integration-test](73-integration-test.png) | The popup of a connected system with the result of a read-only test: each check, what it found, how long it took, and "created nothing, changed nothing" |
 | [74-gcp-explorer](74-gcp-explorer.png) | The Google Cloud tab: connected scope, and the explorer grouped by kind with Vertex AI under an AI group, from a stand-in `gcloud` (made-up resources) |

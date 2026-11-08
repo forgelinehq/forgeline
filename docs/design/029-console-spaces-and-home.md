@@ -70,6 +70,17 @@ The maintainer confirmed six screen frames (Home, Connections, the assistant, th
 | Words | "Integrations" is "Connections" in the menu and in messages; the addresses stay `#/integrations/…` so links keep working |
 | Tested | Under Node: the left column's groups (each item in exactly one), what the page opens on, the levels request |
 
+## Slice 5: frame 5, Team (built 2026-11-08)
+
+| Decision | Choice |
+| --- | --- |
+| Page | Team › Team (`#/team`), the Team space's first tab: you at the top, the agents that report to you, then theirs; a Hire an agent card for administrators; the mission strip below |
+| Reporting lines | An agent may report to another agent (`reports_to`, kept on the agent, not in its versions, so a line change is not a new version). Administrators set it from the card; loops are refused, and a stored loop is shown cut rather than followed. A line describes the team only: a lead does not hand out work, and it changes nothing about what an agent may do or who approves its proposals |
+| States | Read from what exists, nothing new is recorded: off (turned off), working (a step of a running workflow), waiting (in a run stopped at a gate for a person), asleep until the next scheduled run of an enabled workflow it is a step of, or waiting to be asked. With the assistant off, nothing is promised on a schedule and the page says why |
+| Mission strip | The workflow run in progress, else the latest, stage by stage; a gate that waits is **Your OK**, with a link to review it |
+| Not yet | Budgets and spend per agent (Forgeline does not measure spend yet, so the frame's spend bar is left out rather than invented); a lead that hands out work; missions as their own model (note 014) |
+| Tested | Server: lines, loops refused (directly and further up), self, unknown agent, roles, audit, a new version keeps the line, each state, the week's counts, the mission choice, the assistant off; 11 of 12 rules caught when removed (the twelfth is an equivalent guard). Node: the tree (including a stored loop), the state and facts words, schedules, the mission steps |
+
 ## Decisions taken since (2026-11-07)
 
 The maintainer chose an enterprise focus; the open questions below are settled in [note 030](030-service-switches.md): no automatic apply anywhere, OpenTofu, our own graph layout without elkjs, coding engines later. Service switches (phase 2) are built.

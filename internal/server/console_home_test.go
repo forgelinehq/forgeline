@@ -95,15 +95,15 @@ const ids = role => spacesFor(role).map(s => s.id);
 eq('a viewer has no Build or Team (nothing there a viewer may open)', ids('viewer'), ['home', 'ship', 'watch']);
 eq('a developer sees all five', ids('developer'), ['home', 'build', 'ship', 'team', 'watch']);
 eq('an unknown role sees nothing', ids('nobody'), []);
-eq('a space links to its first tab the role may open', spacesFor('developer').map(s => s.path), ['/', '/environments', '/pipelines', '/agents', '/infrastructure']);
+eq('a space links to its first tab the role may open', spacesFor('developer').map(s => s.path), ['/', '/environments', '/pipelines', '/team', '/infrastructure']);
 eq('a viewer sees only the Ship tabs they may open', tabsFor(SPACES.find(s => s.id === 'ship'), 'viewer').map(t => t.label), ['Pipelines']);
 eq('planned tabs are listed and never links', tabsFor(SPACES.find(s => s.id === 'build'), 'developer').map(t => (t.planned ? '~' : '') + t.label), ['~Design', 'Environments', '~Blueprints']);
 eq('planned tabs have no path', SPACES.every(s => s.tabs.every(t => !t.planned || !t.path)), true);
-eq('every page belongs to its space', ['/', '/proposals/abc', '/environments', '/pipelines/new', '/runs/r1', '/actions', '/agents/x', '/skills/y', '/workflow-runs/z', '/marketplace', '/infrastructure?tab=aws', '/kubernetes/k1', '/guard'].map(p => activeSpace(p)?.id),
-  ['home', 'home', 'build', 'ship', 'ship', 'ship', 'team', 'team', 'team', 'team', 'watch', 'watch', 'watch']);
+eq('every page belongs to its space', ['/', '/proposals/abc', '/environments', '/pipelines/new', '/runs/r1', '/actions', '/team', '/agents/x', '/skills/y', '/workflow-runs/z', '/marketplace', '/infrastructure?tab=aws', '/kubernetes/k1', '/guard'].map(p => activeSpace(p)?.id),
+  ['home', 'home', 'build', 'ship', 'ship', 'ship', 'team', 'team', 'team', 'team', 'team', 'watch', 'watch', 'watch']);
 eq('settings pages belong to no space', ['/settings', '/integrations', '/people', '/account'].map(p => activeSpace(p)), [null, null, null, null]);
 eq('Home matches only itself', [tabMatches(SPACES[0].tabs[0], '/'), tabMatches(SPACES[0].tabs[0], '/pipelines')], [true, false]);
-eq('active tab', [activeTab('/skills/a')?.label, activeTab('/guard')?.label, activeTab('/agentsx')], ['Agents', 'Security', null]);
+eq('active tab', [activeTab('/skills/a')?.label, activeTab('/guard')?.label, activeTab('/agentsx')?.label, activeTab('/team')?.label], ['Agents', 'Security', undefined, 'Team']);
 eq('a path that only starts like a page is not that page', activeSpace('/pipelinesx'), null);
 
 if (failed) process.exit(1);

@@ -34,6 +34,22 @@ The assistant is a panel that docks at the side (drag its edge, or use the wide 
 
 Questions are rate limited (20 a minute per person) and audited by page and length, not by text.
 
+## Your AI team
+
+**Team → Team** draws your agents as an org chart: you at the top, then the agents that report to you, then
+theirs. Each card says what the agent is doing in plain words: working on a workflow, waiting for your OK at a
+workflow's gate, asleep until its next scheduled run (and how often it runs), waiting to be asked, or off. It
+also shows whether it only advises or may propose changes, and how many tasks it did this week. Below the chart,
+the mission strip shows the workflow run in progress (or the last one) stage by stage, with the stage that waits
+for you marked **Your OK**.
+
+Administrators choose who each agent reports to from the menu on its card. A line that would make a loop is
+refused. A reporting line describes how your team is organised: a lead does not hand out work yet, and it gives no
+agent any power over another. Every change of a line is in the audit log. Spending limits per agent are planned;
+Forgeline does not yet measure what each agent spends.
+
+![Your AI team]({{ '/console/88-team.png' | relative_url }})
+
 ## Agents you define
 
 Under **Team → Agents** you can define named agents with instructions, skills and a short list of tools. The instructions are written in Markdown, with a live preview and advisory checks; the model receives exactly the text you wrote. See the [Console tour]({{ '/guides/console-tour/' | relative_url }}#agents).
