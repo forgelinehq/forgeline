@@ -42,7 +42,7 @@ func newScriptedLLM(t *testing.T, replies ...string) *scriptedLLM {
 		if blk != nil {
 			<-blk
 		}
-		json.NewEncoder(w).Encode(map[string]any{"content": []map[string]string{{"type": "text", "text": text}}})
+		json.NewEncoder(w).Encode(map[string]any{"content": []map[string]string{{"type": "text", "text": text}}, "usage": map[string]int{"input_tokens": 1000, "cache_read_input_tokens": 200, "output_tokens": 300}})
 	}))
 	t.Cleanup(f.srv.Close)
 	return f

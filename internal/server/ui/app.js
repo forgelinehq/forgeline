@@ -30,6 +30,7 @@ import { ssoPage } from './pages/sso.js';
 import { approvalRulesPage } from './pages/approval_rules.js';
 import { teamPage } from './pages/team.js';
 import { watchMapPage } from './pages/watch_map.js';
+import { aiUsePage } from './pages/ai_use.js';
 import { blueprintsPage, blueprintPage } from './pages/blueprints.js';
 import { designHomePage, designPage } from './pages/design.js';
 import { spacesFor, activeSpace, tabsFor, tabMatches } from './lib/nav.js';
@@ -228,6 +229,7 @@ async function boot() {
     route('/proposals', guard('viewer', proposalsPage));
     route('/proposals/:id', guard('viewer', proposalsPage));
     route('/map', guard('viewer', watchMapPage));
+    route('/ai-use', guard('developer', aiUsePage));
     route('/infrastructure', guard('viewer', infraPage));
     route('/settings', guard('developer', settingsPage));
     route('/integrations', guard('developer', inSettings(integrationsHubPage)));

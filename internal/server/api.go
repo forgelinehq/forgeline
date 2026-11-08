@@ -121,6 +121,8 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /v1/ai/agents/{id}/enable", s.requireRole(authn.Admin, s.handleAgentEnable(false)))
 	mux.Handle("PUT /v1/ai/agents/{id}/reports-to", s.requireRole(authn.Admin, s.handleAgentReportsTo))
 	mux.Handle("GET /v1/ai/team", s.requireRole(authn.Developer, s.handleTeam))
+	mux.Handle("GET /v1/ai/usage", s.requireRole(authn.Developer, s.handleAIUsage))
+	mux.Handle("PUT /v1/ai/agents/{id}/budget", s.requireRole(authn.Admin, s.handleAgentBudget))
 	mux.Handle("GET /v1/blueprints", s.requireRole(authn.Developer, s.handleListBlueprints))
 	mux.Handle("POST /v1/blueprints", s.requireRole(authn.Developer, s.handleCreateBlueprint))
 	mux.Handle("POST /v1/blueprints/check", s.requireRole(authn.Developer, s.handleCheckBlueprint))

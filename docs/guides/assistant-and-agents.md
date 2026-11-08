@@ -45,10 +45,21 @@ for you marked **waiting for you**.
 
 Administrators choose who each agent reports to from the menu on its card. A line that would make a loop is
 refused. A reporting line describes how your team is organised: a lead does not hand out work yet, and it gives no
-agent any power over another. Every change of a line is in the audit log. Spending limits per agent are planned;
-Forgeline does not yet measure what each agent spends.
+agent any power over another. Every change of a line is in the audit log. Each card also shows the agent's budget
+for the month (see Budgets below).
 
 ![Your AI team]({{ '/console/88-team.png' | relative_url }})
+
+### Budgets
+
+Settings › **AI use and budgets** shows what each agent used this month (tokens, model time, calls, and the cost where
+the claude program reports it) and what people used asking the assistant themselves. An administrator can give an agent a
+monthly budget in tokens, minutes or both. At 80% the agent's card and the page warn; once a budget is used up the agent
+stops before its next model call, its card says **Stopped**, and a workflow step it was running fails with a message
+saying why. Raise the budget, or wait for the next month (UTC), to let it run again. Every budget change and every crossing
+is in the audit log. Cloud spend an agent causes is not counted here yet.
+
+![AI use and budgets]({{ '/console/95-ai-use.png' | relative_url }})
 
 ## Agents you define
 

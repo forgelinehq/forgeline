@@ -38,6 +38,8 @@ type TeamMember struct {
 	StepsWeek   int        `json:"steps_week"`
 	FailedWeek  int        `json:"failed_week"`
 	LastAt      *time.Time `json:"last_at,omitempty"`
+	// What it used this month, and its budget (note 036).
+	Budget BudgetStateJSON `json:"budget"`
 }
 
 type TeamJSON struct {
@@ -76,6 +78,8 @@ func (s *Server) team(ctx context.Context, now time.Time) (TeamJSON, error) {
 		if a.Disabled {
 			m.State = teamStateOff
 		}
+		u, _ := s.usageFor(ctx, a.ID, monthOf(now))
+		m.Budget = budgetState(a.Budget, u.modelUsage)
 		out.Members = append(out.Members, m)
 	}
 	for i := range out.Members {

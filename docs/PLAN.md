@@ -317,7 +317,7 @@ Design: [docs/design/006-console.md](design/006-console.md). Pictures: [docs/con
 > Frame 5 (Team: the org chart with live states and the mission strip) and frame 6 (Watch map: stacks and
 > stated links, note 034) are built. Frame 4 has started: blueprints (note 035: the model, its checks and the
 > OpenTofu it generates) the canvas, and Preview changes / Send for approval (`tofu plan`, then exactly that plan applied after a
-> different administrator approves) are built, and so is the assistant beside the canvas (frame 4 done); next spend measurement and budgets per agent, then spend measurement and budgets per agent. Decided: no
+> different administrator approves) are built, and so is the assistant beside the canvas (frame 4 done), and so are AI use and budgets per agent (note 036); next the remaining items in the plan, then spend measurement and budgets per agent. Decided: no
 > automatic apply anywhere, OpenTofu for blueprints, our own graph layout, Codex and Copilot later. Next, in
 > order: single sign-on (OIDC, group-to-role mapping), approval rules, audit export and retention; then
 > foundations (tokens, component kit, one SVG graph component, Playwright screenshot suite), blueprints and

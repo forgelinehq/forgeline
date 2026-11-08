@@ -85,6 +85,7 @@ type AIAgent struct {
 	Current     int            `json:"current"`
 	Disabled    bool           `json:"disabled,omitempty"`
 	ReportsTo   string         `json:"reports_to,omitempty"` // another agent; empty reports to people (frame 5)
+	Budget      *AgentBudget   `json:"budget,omitempty"`     // a monthly limit (note 036); kept on the agent, not in its versions
 	Versions    []AgentVersion `json:"versions"`
 }
 
@@ -131,9 +132,11 @@ type agentScopeKey struct{}
 
 // agentScope narrows the assistant while an agent runs.
 type agentScope struct {
-	persona string
-	tools   map[string]bool
-	label   string // "agent-id@version", for the audit log
+	persona   string
+	tools     map[string]bool
+	label     string // "agent-id@version", for the audit log
+	agent     string // the agent's id, whose use and budget a call counts against (note 036)
+	agentName string
 }
 
 func scopeFrom(ctx context.Context) *agentScope {
@@ -202,7 +205,7 @@ func (s *Server) composeAgent(ctx context.Context, a AIAgent, v AgentVersion) (*
 	for _, t := range v.Tools {
 		tools[t] = true
 	}
-	return &agentScope{persona: b.String(), tools: tools, label: fmt.Sprintf("%s@%d", a.ID, v.N)}, nil
+	return &agentScope{persona: b.String(), tools: tools, label: fmt.Sprintf("%s@%d", a.ID, v.N), agent: a.ID, agentName: a.Name}, nil
 }
 
 // --- storage helpers ---
