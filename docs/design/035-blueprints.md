@@ -107,3 +107,15 @@ retry and a second failure gives a reason and no draft; a plain question gets no
 service blocks an added queue, a turned-off service blocks removing a table, and the model is told; with the
 assistant off it says so. 8 rules removed one at a time, each fails a test. Browser with a stand-in `claude`:
 ask, see the suggested changes, use it, the new block is placed and the checks pass.
+
+## Built by Forgeline (built 2026-11-08)
+
+Build › **Built** (`#/built`, `GET /v1/built`) lists what Forgeline created and keeps: each blueprint with a saved state
+(its resources read from the sealed state, with only the address, type, name, id and ARN leaving the server; each resource
+tied to its block by its OpenTofu name), stacks deployed by an approved change and not deleted by a later one, and
+environments that are up. Each blueprint is drawn as an interactive diagram (its blocks where they sit on the canvas, the
+flow along its links animated); picking a block lists its resources. **Check against AWS** (`?check=1`) looks each
+resource up in the account's inventory: present, missing (deleted outside Forgeline), or not checked (a kind the inventory
+does not list, such as a role, or a state that names no id). Tested: a state attribute that is not a name, id or ARN never
+reaches the API, data sources are left out, deleted and failed stacks are not listed, finished environments are not
+listed, and the check marks present, missing and unchecked.

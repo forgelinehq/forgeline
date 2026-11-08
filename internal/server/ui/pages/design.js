@@ -5,9 +5,10 @@ import { h, icon, mount, pageHeader, relTime, spinner, errorBox, notice, toast, 
 import { get, post, put } from '../lib/api.js';
 import { navigate } from '../lib/router.js';
 import { KINDS, blockFacts, linkWords } from '../lib/blueprint.js';
+import { flowPath } from '../lib/flow.js';
 import {
   BLOCK_W, BLOCK_H, FARGATE, LOG_DAYS, autoLayout, addBlock, removeBlock, updateBlock, moveBlock, linkTargets,
-  addLink, removeLink, toBody, linkPath, bounds, fit, explainError, planByBlock, planState, planWords, placeNew,
+  addLink, removeLink, toBody, linkPath, bounds, fit, explainError, planByBlock, planState, planWords, placeNew, flowOf,
 } from '../lib/canvas.js';
 
 /** Build › Design without a blueprint: open the one changed last, or say how to make one. */
@@ -179,6 +180,16 @@ export async function designPage({ params }) {
       svg.append(h('path', { d: linkPath(a, b), fill: 'none', 'stroke-width': on ? '2.5' : '1.75', 'stroke-dasharray': logs ? '5 4' : '',
         class: traffic ? 'stroke-brand-500' : on ? 'stroke-slate-600 dark:stroke-slate-300' : 'stroke-slate-400 dark:stroke-slate-500', 'data-link': l.from + '>' + l.to },
         h('title', {}, linkWords(bp, l))));
+      // Moving dots show which way things flow along the link.
+      const way = flowOf(bp, l), d = linkPath(a, b), dots = traffic ? 'stroke-brand-500' : 'stroke-slate-500 dark:stroke-slate-300';
+      if (way === 'forward' || way === 'both') svg.append(flowPath(d, dots));
+      if (way === 'back' || way === 'both') svg.append(flowPath(d, dots, { back: true }));
+    }
+    // The internet reaches each front door from the left, as in the design.
+    for (const b of bp.blocks.filter(x => x.kind === 'frontdoor')) {
+      const y = b.y + BLOCK_H / 2, x0 = Math.max(0, b.x - 56), d = `M${x0} ${y} L${b.x} ${y}`;
+      svg.append(h('path', { d, fill: 'none', 'stroke-width': '1.75', class: 'stroke-brand-500', 'data-internet': b.id }), flowPath(d, 'stroke-brand-500'),
+        h('text', { x: String(x0), y: String(y - 8), class: 'fill-slate-400 text-[10px]' }, 'internet'));
     }
     for (const b of bp.blocks) svg.append(blockNode(b));
     mount(canvasBox, svg);
@@ -387,7 +398,7 @@ export async function designPage({ params }) {
     h('div', { class: 'grid gap-4 xl:grid-cols-[minmax(0,1fr)_18rem]' },
       h('div', { class: 'min-w-0 space-y-4' }, h('section', { class: 'card overflow-hidden' }, tools, h('div', { class: 'p-2' }, canvasBox)), side),
       h('div', { class: 'space-y-4 self-start' }, helper, inspector)),
-    h('p', { class: 'hint mt-3' }, 'Orange lines carry traffic from the internet; grey lines are an app using data; dashed lines are logs; dashed blocks already exist and are kept as they are. After a preview, each block says whether it would be added, changed, replaced or removed.'));
+    h('p', { class: 'hint mt-3' }, 'Orange lines carry traffic from the internet; grey lines are an app using data; dashed lines are logs; moving dots show which way things flow (as configured, not measured). Dashed blocks already exist and are kept as they are. After a preview, each block says whether it would be added, changed, replaced or removed.'));
   drawBar(); drawTools(); drawSide(); draw(); drawInspector(); drawHelper(); poll();
   return el;
 }

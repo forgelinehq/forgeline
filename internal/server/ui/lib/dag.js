@@ -1,5 +1,6 @@
 // Forgeline web console: pipeline graph drawing.
 import { h, dotClass } from './dom.js';
+import { flowPath } from './flow.js';
 
 const NODE_W = 196, NODE_H = 58, GAP_X = 72, GAP_Y = 22, PAD = 16;
 
@@ -62,7 +63,10 @@ export function dag(steps, { selected = null, onSelect = null, fit = false } = {
       const a = pos.get(n), b = pos.get(s.id);
       if (!a || !b) continue;
       const x1 = a.x + NODE_W, y1 = a.y + NODE_H / 2, x2 = b.x - 2, y2 = b.y + NODE_H / 2, mx = (x1 + x2) / 2;
-      svg.append(h('path', { d: `M${x1} ${y1} C${mx} ${y1} ${mx} ${y2} ${x2} ${y2}`, fill: 'none', class: 'stroke-slate-300 dark:stroke-slate-600', 'stroke-width': '1.8', 'marker-end': 'url(#arrow)' }));
+      const d = `M${x1} ${y1} C${mx} ${y1} ${mx} ${y2} ${x2} ${y2}`;
+      svg.append(h('path', { d, fill: 'none', class: 'stroke-slate-300 dark:stroke-slate-600', 'stroke-width': '1.8', 'marker-end': 'url(#arrow)' }));
+      // While a step runs, dots move along the lines into it: the work has reached it.
+      if (s.status === 'running') svg.append(flowPath(d, 'stroke-sky-500'));
     }
   }
   for (const s of steps) {

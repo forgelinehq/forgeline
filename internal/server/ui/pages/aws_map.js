@@ -3,6 +3,7 @@
 // Nothing here is guessed: a line is drawn only where AWS states the link, and no health that was not measured.
 import { h, icon, emptyState } from '../lib/dom.js';
 import { buildMap, stateKind, attention, linePairs } from '../lib/awsmap.js';
+import { flowPath } from '../lib/flow.js';
 
 const STATE_DOT = { ok: 'bg-emerald-500', bad: 'bg-rose-500', wait: 'bg-amber-500', idle: 'bg-slate-400', none: 'bg-slate-300 dark:bg-slate-600' };
 const CAT_DOT = { Compute: 'bg-sky-500', Containers: 'bg-violet-500', Storage: 'bg-emerald-500', Databases: 'bg-amber-500', Network: 'bg-cyan-500', Messaging: 'bg-pink-500', AI: 'bg-fuchsia-500', Management: 'bg-slate-500' };
@@ -97,7 +98,7 @@ export function mapView(inv, { query = '', alarms = null, links = null, selected
   const legend = h('div', { class: 'muted flex flex-wrap items-center gap-x-4 gap-y-1 text-xs', 'aria-label': 'Legend' },
     [['ok', 'running or available'], ['wait', 'changing'], ['bad', 'failing'], ['idle', 'other state']].map(([k, label]) => h('span', { class: 'flex items-center gap-1.5' }, h('span', { class: 'size-2 rounded-full ' + STATE_DOT[k] }), label)),
     h('span', { class: 'flex items-center gap-1.5' }, icon('alert', 'size-3.5 text-amber-600 dark:text-amber-400'), 'needs a look'),
-    h('span', {}, 'Dashed box: what one CloudFormation stack made, or one VPC. Lines: a function that reads a queue or a table’s stream, as Lambda states it. Nothing else is linked.'));
+    h('span', {}, 'Dashed box: what one CloudFormation stack made, or one VPC. Lines: a function that reads a queue or a table’s stream, as Lambda states it; moving dots mean the link is enabled and show which way data goes (traffic is not measured). Nothing else is linked.'));
 
   const pairs = links ? linePairs(inv, links) : [];
   // Under the tiles (isolate + -z-10), so a line shows between boxes and never across a name.
@@ -137,8 +138,11 @@ function drawLines(wrap, svg, pairs, selected) {
     const x1 = ra.left - box.left, y1 = ra.top + ra.height / 2 - box.top, x2 = rb.left - box.left, y2 = rb.top + rb.height / 2 - box.top;
     const bow = Math.min(x1, x2) - Math.max(10, Math.min(28, Math.min(x1, x2) - 2));
     const cls = on ? 'text-brand-600 dark:text-brand-400' : '';
-    svg.append(h('path', { d: `M${x1} ${y1} C${bow} ${y1}, ${bow} ${y2}, ${x2} ${y2}`, fill: 'none', class: cls, stroke: 'currentColor',
+    const d = `M${x1} ${y1} C${bow} ${y1}, ${bow} ${y2}, ${x2} ${y2}`;
+    svg.append(h('path', { d, fill: 'none', class: cls, stroke: 'currentColor',
       'stroke-width': on ? '2.5' : '1.5', 'stroke-dasharray': p.state === 'Enabled' ? '' : '4 4', 'data-line': p.from + '>' + p.to }));
+    // An enabled event source hands data from the queue or stream (the line's end) to the function: dots run back.
+    if (p.state === 'Enabled') svg.append(flowPath(d, on ? 'stroke-brand-600 dark:stroke-brand-400' : 'stroke-slate-500 dark:stroke-slate-300', { back: true, width: on ? 6 : 5 }));
     svg.append(h('circle', { cx: String(x2), cy: String(y2), r: on ? '4' : '3', class: cls, fill: 'currentColor' }));
   }
 }

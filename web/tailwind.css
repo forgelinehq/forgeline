@@ -44,6 +44,14 @@
   --color-brand-900: #5f240f;
   --color-brand-950: #431407;
   --animate-pulse-dot: pulse-dot 1.6s ease-in-out infinite;
+  /* Dots moving along a line (ui/lib/flow.js): forward from the line's start, or back from its end. */
+  --animate-flow: flow 1.1s linear infinite;
+  --animate-flow-back: flow-back 1.1s linear infinite;
+  @keyframes flow { to { stroke-dashoffset: -24; } }
+  @keyframes flow-back { to { stroke-dashoffset: 24; } }
+  /* A stage at work: a short bar sliding across (ui/lib/flow.js). */
+  --animate-slide: slide 1.4s ease-in-out infinite;
+  @keyframes slide { from { transform: translateX(-100%); } to { transform: translateX(300%); } }
   @keyframes pulse-dot {
     0%, 100% { opacity: 1; transform: scale(1); }
     50% { opacity: .45; transform: scale(.82); }
