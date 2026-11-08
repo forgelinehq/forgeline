@@ -647,7 +647,10 @@ func missionReport(m Mission) string {
 	} else {
 		fmt.Fprintf(&b, "Findings: %d (%d high, %d medium, %d low, %d info).", len(m.Findings), sev["high"], sev["medium"], sev["low"], sev["info"])
 	}
-	if m.Unsupported > 0 {
+	switch {
+	case m.Unsupported == 1:
+		b.WriteString(" 1 claim was left out because it named no lookup the agent ran.")
+	case m.Unsupported > 1:
 		fmt.Fprintf(&b, " %d claims were left out because they named no lookup the agent ran.", m.Unsupported)
 	}
 	if len(m.Proposals) > 0 {

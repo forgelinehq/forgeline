@@ -50,6 +50,25 @@ for the month (see Budgets below).
 
 ![Your AI team]({{ '/console/88-team.png' | relative_url }})
 
+### Missions
+
+Team › **Missions** gives one agent a goal in your own words, for example "check the payments service for anything
+fragile and fix what you can", and one AWS account to look at. The mission goes through five stages, drawn live on its
+page: **Discover** (the agent only reads), **Propose** (an agent allowed to propose files change proposals for what it can
+fix; one that only advises recommends), **Your OK** (a different administrator approves or rejects each proposal; the
+approver sees which mission filed it), **Verify** (if anything was applied, the agent looks again and says whether each
+finding is fixed) and **Report** (written by Forgeline from the record, not by the model).
+
+Two rules keep a mission honest. Every finding must name the lookup that showed it, and the server keeps only findings
+whose lookup the agent really ran: the rest are left out and counted on the page. And the agent may only look at the
+account you chose: a lookup for any other account is refused by the server. Each mission has a token budget (200,000 by
+default); it stops before its next model call once that is used. You can cancel a mission you started; an administrator
+can cancel any.
+
+![A mission waiting for approval]({{ '/console/96-mission-waiting.png' | relative_url }})
+
+![A finished mission]({{ '/console/97-mission-done.png' | relative_url }})
+
 ### Budgets
 
 Settings › **AI use and budgets** shows what each agent used this month (tokens, model time, calls, and the cost where

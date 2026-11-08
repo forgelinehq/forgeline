@@ -1,6 +1,6 @@
 # 037: Missions
 
-Status: **Part 1 (the mission and its runner) is built; part 2 (the board and the live view) is next.** Date: 2026-11-08. Builds note 014 (agentic missions) on
+Status: **Built (2026-11-08): part 1 (the mission and its runner) and part 2 (the board and the live view).** Date: 2026-11-08. Builds note 014 (agentic missions) on
 what exists now: agents and their tools (note 024), AI proposals and the approval rules (notes 016, 032), budgets (036).
 
 ## Question
@@ -45,3 +45,19 @@ primary one. An advisory agent only recommends. The token budget stops a mission
 does not answer in the agreed form gets one retry, then the mission fails. Cancel: the starter or an administrator,
 and a cancelled mission is never overwritten. A restart fails a mission mid-stage and leaves a waiting one waiting; a
 mission waits at most a week. 16 rules removed one at a time, each fails a test.
+
+## Part 2: the board and the live view (built)
+
+Team › **Missions** (`#/missions`): **New mission** (goal, agent, account, token budget) and a board in three columns,
+Working, Waiting for your OK, and Ended, each card with the goal, the agent, where it stands and a five-part stage bar.
+A mission's page (`#/missions/{id}`) draws the five stages live (it refreshes every few seconds while the agent works and
+every 15 seconds while it waits), the token use, a notice with links when proposals wait, the report, the findings worst
+first (each with the lookup that showed it, what the agent proposed or recommended, and what the check afterwards found),
+the claims left out, and what the agent did in each stage (its lookups and what it said). The starter or an
+administrator can cancel. An approver sees on the proposal which mission filed it.
+
+Tested under Node: the stage states for each path (nothing found, advisory, full, failed), the board columns, the card
+line, findings worst first with their numbers kept, and each finding's outcome. Browser with stand-ins (a scripted
+claude that looks something up in each stage, `fake-aws` and `fake-aws-mcp`): start a mission from the board; discover
+drops a claim naming a lookup it never ran; the proposal waits; a second administrator sees the mission on it and
+approves; the change is applied; the mission verifies (fixed) and reports; the board shows it ended.

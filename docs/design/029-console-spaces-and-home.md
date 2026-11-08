@@ -99,6 +99,12 @@ The maintainer confirmed six screen frames (Home, Connections, the assistant, th
 | Assistant | A panel beside the canvas suggests checked drafts in words; the person uses, saves, previews and sends them (note 035, slice 4) |
 | Not yet | Removing what a blueprint built, cost estimates, starting from an existing stack |
 
+## Slice 8: missions (built 2026-11-08)
+
+| Decision | Choice |
+| --- | --- |
+| Page | Team › Missions (`#/missions`): a board by where missions stand, and each mission live, stage by stage. Details in note 037 |
+
 ## Decisions taken since (2026-11-07)
 
 The maintainer chose an enterprise focus; the open questions below are settled in [note 030](030-service-switches.md): no automatic apply anywhere, OpenTofu, our own graph layout without elkjs, coding engines later. Service switches (phase 2) are built.

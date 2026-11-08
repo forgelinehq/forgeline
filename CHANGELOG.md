@@ -7,6 +7,8 @@ section in the pull request that makes the change; a release moves it under its 
 ## [Unreleased]
 
 ### Added
+- **Missions board and live view** (design note 037, part 2). Team › Missions: start a mission, see missions by where
+  they stand, and follow one live, stage by stage, with its findings, proposals, evidence and report.
 - **Missions, part 1** (design note 037). `POST /v1/missions` gives one agent a goal and one AWS account. It discovers (read
   only), proposes fixes (change proposals a different administrator approves; an advisory agent only recommends), waits for
   the decisions, verifies after anything was applied, and Forgeline writes the report from the record. Findings and
