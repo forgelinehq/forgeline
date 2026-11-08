@@ -26,7 +26,8 @@ fi
 mkdir -p "$ROOT/.tools"
 TMP=$(mktemp "$ROOT/.tools/dl.XXXXXX")
 trap 'rm -f "$TMP"' EXIT
-curl -fsSL -o "$TMP" "https://github.com/tailwindlabs/tailwindcss/releases/download/$VERSION/$ASSET"
+# GitHub release downloads sometimes answer 504; retry those instead of failing the build.
+curl -fsSL --retry 4 --retry-delay 5 --retry-all-errors -o "$TMP" "https://github.com/tailwindlabs/tailwindcss/releases/download/$VERSION/$ASSET"
 if ! check "$TMP"; then
   echo "scripts/tailwind.sh: checksum mismatch for $ASSET $VERSION; refusing to use it" >&2
   exit 1
