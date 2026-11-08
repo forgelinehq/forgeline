@@ -41,7 +41,7 @@ theirs. Each card says what the agent is doing in plain words: working on a work
 workflow's gate, asleep until its next scheduled run (and how often it runs), waiting to be asked, or off. It
 also shows whether it only advises or may propose changes, and how many tasks it did this week. Below the chart,
 the mission strip shows the workflow run in progress (or the last one) stage by stage, with the stage that waits
-for you marked **Your OK**.
+for you marked **waiting for you**.
 
 Administrators choose who each agent reports to from the menu on its card. A line that would make a loop is
 refused. A reporting line describes how your team is organised: a lead does not hand out work yet, and it gives no

@@ -117,6 +117,13 @@ func TestTeamStatesComeFromWorkflowsAndRuns(t *testing.T) {
 	if tj.Mission == nil || tj.Mission.ID != "r3" || len(tj.Mission.Stages) != 2 {
 		t.Errorf("mission: %+v", tj.Mission)
 	}
+	// While a run of its workflow is in progress the scheduler skips it, so no time is promised.
+	m.srv.docs.Put(t.Context(), kindWorkflowRun, "r5", WFRun{ID: "r5", Workflow: wf.ID, WorkflowName: "Nightly scan", Status: wfWaiting, StartedAt: started})
+	if _, by = teamOf(t, m.dev); by["Sleeper"].NextAt != nil || by["Sleeper"].State != teamStateIdle {
+		t.Errorf("a busy workflow promised a time: %+v", by["Sleeper"])
+	}
+	m.srv.docs.Delete(t.Context(), kindWorkflowRun, "r5")
+
 	// With the assistant off nothing runs on a schedule, and the team says so instead of promising a time.
 	m.admin.expect(200, "PUT", "/v1/integrations/assistant", map[string]any{"backend": "off"})
 	tj, by = teamOf(t, m.dev)

@@ -67,7 +67,7 @@ export function missionSteps(run) {
   return (run?.stages || []).map(st => {
     const steps = st.steps || [];
     const failed = steps.filter(s => s.status === 'failed').length;
-    if (st.gate && st.status === 'waiting') return { name: st.name, state: 'wait', note: 'Your OK' };
+    if (st.gate && st.status === 'waiting') return { name: st.name, state: 'wait', note: 'waiting for you' };
     switch (st.status) {
       case 'succeeded': return { name: st.name, state: failed ? 'failed' : 'done', note: failed ? failed + ' of ' + steps.length + ' failed' : (steps.length === 1 ? 'done' : steps.length + ' done') };
       case 'running': return { name: st.name, state: 'now', note: 'working' };
