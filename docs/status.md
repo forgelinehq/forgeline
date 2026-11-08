@@ -5,17 +5,45 @@ nav_order: 5
 
 # Status
 
-Pre-alpha. Built and tested, with the race detector, real Docker and real browsers:
-pipelines and runs, the console, secrets, roles and audit, GitHub triggers, agent steps, the
-assistant, AWS sign-in, the GitHub App.
+**Pre-alpha**, maintained by one person. Built to be tried on a laptop or a small server. Updated 2026-11-08.
 
-**Checked on real services:** AWS sign-in, an approved deploy and delete of a stack on a real account, a GitHub App created and installed on github.com, the assistant on a real Claude Code login token, and (2026-11-07) AI-proposed changes in two real AWS accounts: the assistant filed one proposal per account, a different administrator approved each, and Forgeline applied exactly the approved call through the AWS MCP Server, signed in with IAM Roles Anywhere.
+## What works
 
-**Not checked against the real service:** a real GitHub webhook delivery and commit status; the assistant's API-key mode against the real
-Anthropic API; TLS behind a real proxy; more than one server sharing a database; single sign-on against a real provider (built and tested against a stand-in, design note 031).
+Everything below is built and tested with the race detector, and the console in a real browser.
 
-**Console redesign for teams that are not infrastructure specialists ([note 029](https://github.com/forgelinehq/forgeline/blob/main/docs/design/029-console-spaces-and-home.md)):** Home lists what needs you, and the sidebar is grouped by job (Ship, Build, Team, Watch). AWS service switches for the AI are built ([note 030](https://github.com/forgelinehq/forgeline/blob/main/docs/design/030-service-switches.md)). Single sign-on (note 031), approval rules (note 032) and audit export with retention (note 033) are built. The Team screen (agents as an org chart) and the Watch map (resources by stack, lines where AWS states a link, [note 034](https://github.com/forgelinehq/forgeline/blob/main/docs/design/034-watch-map.md)) are built. Blueprints are built as drafts with plain-words checks and generated OpenTofu ([note 035](https://github.com/forgelinehq/forgeline/blob/main/docs/design/035-blueprints.md)); the design canvas edits them, previews them with `tofu plan`, and sends them for approval; exactly the approved plan is applied. The assistant beside the canvas suggests checked changes. Missions carry a goal through discover, propose, approval, verify and report ([note 037](https://github.com/forgelinehq/forgeline/blob/main/docs/design/037-missions.md)). AI use is measured per agent and capped by monthly budgets ([note 036](https://github.com/forgelinehq/forgeline/blob/main/docs/design/036-ai-use-and-budgets.md)).
+| Area | What is there |
+| --- | --- |
+| Pipelines | Typed YAML, steps in Docker, parallel steps, a cache, versions, live logs, a failure explained, GitHub triggers and commit statuses, GitHub Actions |
+| Cloud | AWS sign-in (IAM Identity Center, profiles, IAM Roles Anywhere), several accounts, an explorer and the Watch map, Google Cloud and Azure read-only, Kubernetes read-only |
+| Changes | Every change is a proposal a different administrator approves: stacks, environments, the AWS calls an agent drafted, and blueprints (OpenTofu, with exactly the previewed plan applied) |
+| AI | The assistant (Claude by API key, the claude program, or a Claude Code token), agents with skills and tools, workflows with gates, missions, the canvas assistant, memory, per-service switches for the AI, an access policy per tool, budgets per agent |
+| People and security | Roles, single sign-on with OpenID Connect, approval rules, an audit log with export and retention, secrets that are write-only and masked |
+| Docs | This site, with search, a Markdown copy of each page and `llms.txt` |
 
-**Earlier console redesign:** grouped navigation, the ember colour, the Markdown instruction editor and the AWS map are built, and so are CloudWatch alarms on the map and the assistant as an event stream with cards ([note 022](https://github.com/forgelinehq/forgeline/blob/main/docs/design/022-console-redesign.md)). Designed but **not built**: the log viewer and metrics ([023](https://github.com/forgelinehq/forgeline/blob/main/docs/design/023-infrastructure-map-and-logs.md)), and the assistant answering word by word ([024](https://github.com/forgelinehq/forgeline/blob/main/docs/design/024-assistant-agent-surface.md)); its steps do stream. The redesign was checked in a browser on a fake AWS account, not on a real one; the alarms in particular have not been read from real CloudWatch.
+## Checked on real services
 
-Roadmap and plan: [ROADMAP](https://github.com/forgelinehq/forgeline/blob/main/docs/ROADMAP.md), [PLAN](https://github.com/forgelinehq/forgeline/blob/main/docs/PLAN.md), [ARCHITECTURE](https://github.com/forgelinehq/forgeline/blob/main/docs/ARCHITECTURE.md).
+- AWS sign-in, and an approved deploy and delete of a stack, on a real account.
+- A GitHub App created and installed on github.com.
+- The assistant on a real Claude Code login token, and (2026-11-08) its use counted from the real claude program's report.
+- AI-proposed changes in two real AWS accounts (2026-11-07): one proposal per account, approved by a different
+  administrator, applied exactly as approved.
+- The Watch map on two real accounts (2026-11-08): stacks, their parts and what they kept after a rollback.
+- A blueprint previewed with real OpenTofu 1.13.9 on a Raspberry Pi and, after a different administrator approved it,
+  built in a real account (2026-11-08).
+- A mission with the real Claude model on the Pi (2026-11-08): it reported correctly, citing the lookup it ran.
+
+## Not checked against the real service yet
+
+- A real GitHub webhook delivery and commit status.
+- The assistant's API-key mode against the real Anthropic API.
+- Single sign-on against a real provider (Google, Entra ID, Okta); built and tested against a stand-in.
+- A blueprint with an app (ECS) built on AWS: it needs a scoped IAM permission ([note 035](https://github.com/forgelinehq/forgeline/blob/main/docs/design/035-blueprints.md)).
+- A mission that files a proposal, with the real model.
+- TLS behind a real proxy, and more than one server sharing a database.
+
+## Not built yet
+
+See the [roadmap]({{ '/roadmap/' | relative_url }}). The next items are: a first-run setup that asks questions (and can use
+a small model on your own machine), a page of everything Forgeline built with a diagram, removing what a blueprint built,
+forwarding the audit log to a SIEM, and a lead agent that hands out work. Coding engines other than Claude Code (Codex,
+Copilot) come later.
