@@ -38,6 +38,9 @@ func TestApprovalRuleMatchingAndStrictestWins(t *testing.T) {
 	if none.Approvers == nil || len(none.Approvers) != 0 || none.mayApprove("ada") || none.mayApprove("grace") {
 		t.Errorf("disjoint approver lists: %+v", none)
 	}
+	if st := (&Server{}).approvalStateFromNeed(none, nil); !st.Nobody {
+		t.Error("the console is not told that nobody may approve")
+	}
 	if !(approvalNeed{}).mayApprove("anyone") {
 		t.Error("no approver list means any administrator")
 	}

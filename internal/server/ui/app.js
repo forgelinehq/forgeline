@@ -27,6 +27,7 @@ import { assistantButton } from './lib/assistant.js';
 import { visibleGroups, isSettingsPath, activeItem, canOpenSettings } from './lib/settingsnav.js';
 import { settingsPage } from './pages/settings.js';
 import { ssoPage } from './pages/sso.js';
+import { approvalRulesPage } from './pages/approval_rules.js';
 import { spacesFor, activeSpace, tabsFor, tabMatches } from './lib/nav.js';
 
 const root = document.getElementById('root');
@@ -227,6 +228,7 @@ async function boot() {
     route('/memory', guard('developer', inSettings(memoryPage)));
     route('/people', guard('admin', inSettings(peoplePage)));
     route('/sso', guard('admin', inSettings(ssoPage)));
+    route('/approval-rules', guard('developer', inSettings(approvalRulesPage)));
     route('/audit', guard('admin', inSettings(auditPage)));
     route('/account', guard('viewer', accountPage));
   }

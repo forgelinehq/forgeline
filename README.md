@@ -24,7 +24,8 @@ security at a glance), **Build**, **Ship**, **Team** and **Watch**, with the pag
 each, and setup behind the Settings gear. In Settings › Connections › AWS › Services you choose,
 for each AWS service (S3, ECS, ECR and so on), whether the assistant and agents may not see it, only look,
 or propose changes that someone else approves. People can sign in with
-your company login (OpenID Connect: Google, Entra ID, Okta, Keycloak) with roles from their groups. The
+your company login (OpenID Connect: Google, Entra ID, Okta, Keycloak) with roles from their groups, and
+approval rules can ask for two approvals, or named approvers, for the changes that matter. The
 console serves its own fonts and loads nothing from other hosts. [Screenshots](docs/console/README.md) and [design note 006](docs/design/006-console.md)
 show what each page does and what has not been checked.
 

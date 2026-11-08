@@ -20,7 +20,7 @@ export const SETTINGS = [
   ] },
   { title: 'Security', items: [
     { path: '/audit', label: 'Audit log', note: 'Who did what, including refusals and failed sign-ins', min: 'admin' },
-    { label: 'Approval rules', note: 'Who may approve which kinds of change', planned: true },
+    { path: '/approval-rules', label: 'Approval rules', note: 'Which changes need two approvals, and who may approve them', min: 'developer' },
   ] },
   { title: 'Developer', items: [
     { path: '/account', label: 'API tokens', note: 'Personal tokens for AI tools that connect over MCP', min: 'viewer' },

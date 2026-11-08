@@ -1,4 +1,5 @@
 import { h, icon, mount, pageHeader, relTime, absTime, pill, emptyState, spinner, errorBox, notice, toast, confirmDialog } from '../lib/dom.js';
+import { approvalView } from '../lib/approval.js';
 import { get, post, atLeast } from '../lib/api.js';
 import { session } from '../app.js';
 
@@ -30,14 +31,17 @@ export async function proposalsPage({ params }) {
     const mine = p.proposed_by === session.name;
     const waiting = p.status === 'proposed';
     const note = h('input', { id: 'proposal-note', class: 'input', placeholder: 'Optional note for the record', 'aria-label': 'Note' });
+    const av = approvalView(p.approval, session.name, p.proposed_by);
     const act = async (what, body) => {
-      try { await post('/v1/ai/proposals/' + p.id + '/' + what, body); toast(what === 'approve' ? 'Approved. Applying…' : 'Done', 'ok'); } catch (e) { toast(e.message, 'error'); }
+      try { await post('/v1/ai/proposals/' + p.id + '/' + what, body); toast(what === 'approve' ? (av.last ? 'Approved. Applying…' : 'Your approval is recorded. It needs another administrator.') : 'Done', 'ok'); } catch (e) { toast(e.message, 'error'); }
       detail(id);
     };
-    const approve = h('button', { class: 'btn-primary', type: 'button', id: 'approve-proposal', onclick: async () => {
-      const ok = await confirmDialog({ title: 'Approve and apply this change?', body: 'Forgeline will run exactly the script shown, against ' + targetLabel(p.target, p) + '. This changes your AWS account.', confirmLabel: 'Approve and apply' });
+    const approve = h('button', { class: 'btn-primary', type: 'button', id: 'approve-proposal', disabled: !av.may, title: av.why || null, onclick: async () => {
+      const ok = await confirmDialog(av.last
+        ? { title: 'Approve and apply this change?', body: 'Forgeline will run exactly the script shown, against ' + targetLabel(p.target, p) + '. This changes your AWS account.', confirmLabel: 'Approve and apply' }
+        : { title: 'Approve this change?', body: 'Your approval is recorded. Nothing runs until another administrator approves the same script.', confirmLabel: 'Approve' });
       if (ok) act('approve', { hash: p.hash, note: note.value });
-    } }, icon('check', 'size-4'), 'Approve and apply');
+    } }, icon('check', 'size-4'), av.label);
     mount(el,
       h('nav', { class: 'mb-2 text-sm', 'aria-label': 'Breadcrumb' }, h('a', { href: '#/proposals', class: 'muted hover:underline' }, 'Approvals'), h('span', { class: 'muted' }, ' › '), h('span', {}, p.id)),
       pageHeader(p.title, 'Drafted by ' + p.proposed_by + (p.via_ai ? ' with the assistant' : '') + ' · ' + relTime(p.proposed_at), pill(p.status)),
@@ -49,6 +53,8 @@ export async function proposalsPage({ params }) {
           h('tbody', {}, p.calls.map(c => h('tr', {}, h('td', { class: 'font-mono text-sm' }, c.service), h('td', { class: 'font-mono text-sm font-semibold' }, c.operation), h('td', { class: 'font-mono text-xs break-all' }, c.args || '')))))),
       h('section', { class: 'card card-pad mb-4' }, h('h2', { class: 'h-section mb-2' }, 'The exact script'), h('pre', { class: 'overflow-x-auto rounded-lg bg-slate-950 p-3 font-mono text-xs text-slate-100', id: 'proposal-code' }, p.code),
         h('p', { class: 'muted mt-2 break-all font-mono text-[11px]' }, 'sha256 ' + p.hash)),
+      waiting && av.line ? h('div', { class: 'mb-4', id: 'approval-state' }, notice('info', av.line + '.')) : null,
+      waiting && admin && !mine && !av.may ? h('div', { class: 'mb-4' }, notice('warn', av.why)) : null,
       waiting && (admin
         ? (mine ? notice('info', 'You proposed this, so someone else must approve it.')
           : h('section', { class: 'card card-pad mb-4' }, h('div', { class: 'flex flex-wrap items-end gap-3' }, h('div', { class: 'min-w-64 flex-1' }, note), approve,

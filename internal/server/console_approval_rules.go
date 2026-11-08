@@ -147,7 +147,8 @@ func (s *Server) vote(ctx context.Context, kind, account string, high bool, vote
 type ApprovalStateJSON struct {
 	Needed    int            `json:"needed"`
 	Given     []approvalVote `json:"given"`
-	Approvers []string       `json:"approvers,omitempty"` // empty: any administrator
+	Approvers []string       `json:"approvers,omitempty"` // empty: any administrator, unless Nobody
+	Nobody    bool           `json:"nobody,omitempty"`    // the matching rules name lists that share nobody
 	Rules     []string       `json:"rules,omitempty"`
 }
 
@@ -156,11 +157,14 @@ func (s *Server) approvalState(ctx context.Context, kind, account string, high b
 	if err != nil {
 		return nil
 	}
-	n := rs.needFor(kind, account, high)
+	return s.approvalStateFromNeed(rs.needFor(kind, account, high), votes)
+}
+
+func (s *Server) approvalStateFromNeed(n approvalNeed, votes []approvalVote) *ApprovalStateJSON {
 	if votes == nil {
 		votes = []approvalVote{}
 	}
-	return &ApprovalStateJSON{Needed: n.Needed, Given: votes, Approvers: n.Approvers, Rules: n.Rules}
+	return &ApprovalStateJSON{Needed: n.Needed, Given: votes, Approvers: n.Approvers, Nobody: n.Approvers != nil && len(n.Approvers) == 0, Rules: n.Rules}
 }
 
 // --- the API ---
