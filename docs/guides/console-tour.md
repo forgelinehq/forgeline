@@ -61,11 +61,15 @@ The map shows only what AWS states about each resource. Lines come only from wha
 
 **Build › Blueprints** holds designs of what should exist in an AWS account (design note 035). Click **New blueprint**, name it, pick the account and region, and start from **Empty**, **Small web app** (a front door, one small app, a table and logs) or **Queue worker**. A blueprint is made of blocks (a front door, apps on ECS, tables, file buckets, queues, logs, and things that already exist, which are used but never changed) and the links between them, written as sentences such as "App reads and writes Data". **What it means** lists in plain words what is open to the internet, whether data is kept, how long logs are kept, and what deserves a look. **Code** shows the OpenTofu configuration it generates, which you can download.
 
-The safe settings are not options: files are private and encrypted, tables keep their data if you remove them from the blueprint, an app only takes traffic from its front door, and only a front door is reachable from the internet. Nothing is built yet: previewing what AWS would do and sending it for approval come next, and building will always need a different administrator's approval.
+The safe settings are not options: files are private and encrypted, tables keep their data if you remove them from the blueprint, an app only takes traffic from its front door, and only a front door is reachable from the internet. Building always needs a different administrator's approval (see the design canvas below).
 
 ![A blueprint]({{ '/console/90-blueprint.png' | relative_url }})
 
 **Build › Design** opens a blueprint on the canvas (the one changed last, or use **Open on the canvas**). Add blocks from the toolbar, drag them to arrange them (arrow keys move the one in focus), and pick one to change it on the right: an app's image, size, number of tasks, port and settings; a table's keys; how long a queue or log group keeps things; which existing table, bucket or queue to use. Under **Links** you join blocks; the list only offers links that make sense (a front door to one app with a port, an app to the data it uses and to one logs block). Orange lines carry traffic from the internet, grey lines are an app using data, dashed lines are logs, and dashed blocks already exist. Every change is checked as you go: a problem is named by the block it is in, and **Save** stays off until it is fixed. If someone else saved the blueprint after you opened it, Save says so instead of overwriting their work.
+
+**Preview changes** asks OpenTofu what building the saved blueprint would do in AWS. It only reads. Each block then says whether it would be added, changed, replaced or removed, and the preview lists every resource. Any edit makes the preview out of date. **Send for approval** asks why, and files the preview as a cloud change under Infrastructure › Cloud changes. A different administrator approves it there, and exactly that preview is applied; if something was built in between, nothing runs and you preview again. Afterwards the canvas shows **Built**, and the result shows the front door's address.
+
+![A preview on the canvas]({{ '/console/92-design-preview.png' | relative_url }})
 
 ![The design canvas]({{ '/console/91-design-canvas.png' | relative_url }})
 

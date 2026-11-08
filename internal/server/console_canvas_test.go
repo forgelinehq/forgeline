@@ -12,7 +12,7 @@ import (
 )
 
 const canvasCases = `
-import { DEFAULTS, autoLayout, addBlock, removeBlock, updateBlock, moveBlock, linkTargets, addLink, removeLink, toBody, explainError, linkPath, bounds, fit, newID } from './canvas.mjs';
+import { DEFAULTS, autoLayout, addBlock, removeBlock, updateBlock, moveBlock, linkTargets, addLink, removeLink, toBody, explainError, linkPath, bounds, fit, newID, planByBlock, planState, planWords } from './canvas.mjs';
 let failed = 0;
 const eq = (name, got, want) => { const g = JSON.stringify(got), w = JSON.stringify(want); if (g !== w) { failed++; console.error('FAIL ' + name + '\n  got  ' + g + '\n  want ' + w); } };
 const empty = { name: 'T', target: { cloud: 'aws', account: 'primary', region: 'ap-south-1' }, blocks: [], links: [] };
@@ -50,6 +50,17 @@ eq('messages use names', explainError(bp, 'links[1].access: say read; blocks[0]:
 eq('a path leaves right and enters left', linkPath({ x: 0, y: 0 }, { x: 300, y: 0 }).startsWith('M190 33'), true);
 eq('bounds grow with blocks', bounds(moveBlock(bp, door, 2000, 900)).w, 2230);
 eq('fit', fit('abcdef', 4), 'abc…');
+const plan = { status: 'ready', revision: 3, finished_at: new Date(1000e3).toISOString(), add: 2, change: 1, remove: 1, changes: [
+  { block: 'app', action: 'add' }, { block: 'app', action: 'remove' }, { block: 'data', action: 'change' }, { block: '', action: 'add' }] };
+eq('the worst action per block; shared pieces have none', planByBlock(plan), { app: 'remove', data: 'change' });
+eq('ready', planState(plan, 3, false, 1001e3), 'ready');
+eq('unsaved edits make it stale', planState(plan, 3, true, 1001e3), 'stale');
+eq('a newer revision makes it stale', planState(plan, 4, false, 1001e3), 'stale');
+eq('an hour makes it stale', planState(plan, 3, false, 1000e3 + 3601e3), 'stale');
+eq('nothing to do', planState({ ...plan, add: 0, change: 0, remove: 0 }, 3, false, 1001e3), 'nothing');
+eq('planning and failed', [planState({ status: 'planning' }, 3, false), planState({ status: 'failed' }, 3, false), planState(null, 3, false)], ['planning', 'failed', 'none']);
+eq('words', planWords(plan), '2 to add, 1 to change, 1 to remove');
+eq('no words', planWords({ add: 0, change: 0, remove: 0 }), 'Nothing to change: AWS already matches the blueprint');
 console.log(JSON.stringify({ built: toBody(bp, 3), defaults: DEFAULTS }));
 if (failed) process.exit(1);
 `

@@ -108,6 +108,9 @@ type Server struct {
 	awsCache   awsCache
 	awsInv     invCache
 	awsLinks   linksCache
+	bp         bpBusy         // one blueprint preview or apply at a time
+	tofuBin    tofuState      // the OpenTofu binary, once found
+	tofuRun    tofuRunner     // tests replace OpenTofu
 	gcpInv     invCache       // Google Cloud inventories, by scope
 	approvals  approvalBook   // read calls waiting for the person who asked to approve them
 	azureInv   invCache       // Azure inventories, by subscription set

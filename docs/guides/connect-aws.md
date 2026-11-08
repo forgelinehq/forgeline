@@ -41,3 +41,12 @@ already has credentials (for example an instance role). Sign in on the server wi
 ## What you see once connected
 
 The **AWS account** tab shows the account's resources as a map, grouped by VPC, with a list of what needs a look. See the [Console tour]({{ '/guides/console-tour/' | relative_url }}#infrastructure). It is read-only and uses the same connection. Stack boxes and lines on the map use two more read permissions, `cloudformation:ListStackResources` and `lambda:ListEventSourceMappings`, which `ReadOnlyAccess` includes; without them the map says what is missing. Watch › Map shows the same map on its own page.
+
+## Building blueprints
+
+Blueprints (Build › Design) are built with OpenTofu, which Forgeline downloads on first use and checks against the
+release's published checksum (set `FORGELINE_TOFU` to use your own). Building needs the AWS permissions for what a
+blueprint makes. Tables, buckets, queues and log groups are covered by `PowerUserAccess`. An app block also makes two
+IAM roles, which `PowerUserAccess` does not allow; to build apps, add a policy that allows the IAM role actions listed
+in [design note 035](https://github.com/forgelinehq/forgeline/blob/main/docs/design/035-blueprints.md) on
+`arn:aws:iam::<account>:role/fl-*` only, so Forgeline cannot change any other role.

@@ -30,7 +30,8 @@ download the audit log as CSV or JSON Lines and choose how long it is kept. Team
 org chart with what each is doing and when it wakes next. Watch › Map shows your AWS account with
 resources inside the stack that made them and lines where AWS says one uses another. Build › Design and
 Blueprints draw what should exist (a front door, apps, tables, files, queues) with safe settings chosen for you, say
-in plain words what it means, and show the OpenTofu code it generates. The
+in plain words what it means, and show the OpenTofu code it generates. Preview changes shows what OpenTofu would do in AWS; a different
+administrator approves, and exactly that plan is applied. The
 console serves its own fonts and loads nothing from other hosts. [Screenshots](docs/console/README.md) and [design note 006](docs/design/006-console.md)
 show what each page does and what has not been checked.
 

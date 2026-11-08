@@ -32,6 +32,7 @@ const (
 	kindStackDeploy    = "stack-deploy"
 	kindStackDelete    = "stack-delete"
 	kindInstanceAction = "instance-action"
+	// kindBlueprintApply (console_blueprint_apply.go) applies a blueprint's previewed OpenTofu plan.
 
 	stPreparing = "preparing"
 	stProposed  = "proposed"
@@ -80,6 +81,7 @@ type CloudChange struct {
 	Params     map[string]string `json:"params,omitempty"`
 	InstanceID string            `json:"instance_id,omitempty"`
 	Action     string            `json:"action,omitempty"`
+	Blueprint  string            `json:"blueprint,omitempty"` // for blueprint-apply: the blueprint's id
 
 	ChangeSet     string          `json:"change_set,omitempty"`
 	ChangeSetType string          `json:"change_set_type,omitempty"`
@@ -113,10 +115,28 @@ func (c CloudChange) target() string {
 	return c.targetLocal()
 }
 
+// highRisk is what the approval rules (note 032) call a high-risk change: deleting a stack, or a blueprint plan
+// that removes or replaces something.
+func (c CloudChange) highRisk() bool {
+	if c.Kind == kindStackDelete {
+		return true
+	}
+	if c.Kind == kindBlueprintApply {
+		for _, p := range c.Preview {
+			if strings.HasPrefix(p.Action, "Remove") {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func (c CloudChange) targetLocal() string {
 	switch c.Kind {
 	case kindInstanceAction:
 		return "instance/" + c.InstanceID
+	case kindBlueprintApply:
+		return "blueprint/" + c.Blueprint
 	default:
 		return "stack/" + c.Stack
 	}
@@ -212,7 +232,7 @@ func (s *Server) handleListChanges(w http.ResponseWriter, r *http.Request) {
 	}
 	for i := range changes {
 		if changes[i].Status == stProposed {
-			changes[i].Approval = s.approvalState(r.Context(), approvalKindCons, changes[i].Conn, changes[i].Kind == kindStackDelete, changes[i].Approvals)
+			changes[i].Approval = s.approvalState(r.Context(), approvalKindCons, changes[i].Conn, changes[i].highRisk(), changes[i].Approvals)
 		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"changes": changes})
@@ -229,7 +249,7 @@ func (s *Server) handleGetChange(w http.ResponseWriter, r *http.Request) {
 	}
 	c = expireIfStale(c)
 	if c.Status == stProposed {
-		c.Approval = s.approvalState(r.Context(), approvalKindCons, c.Conn, c.Kind == kindStackDelete, c.Approvals)
+		c.Approval = s.approvalState(r.Context(), approvalKindCons, c.Conn, c.highRisk(), c.Approvals)
 	}
 	writeJSON(w, http.StatusOK, c)
 }
@@ -244,6 +264,7 @@ type proposeRequest struct {
 	Params     map[string]string `json:"params"`
 	InstanceID string            `json:"instance_id"`
 	Action     string            `json:"action"`
+	Blueprint  string            `json:"blueprint"`
 	// Account is an added account's id; empty means the primary connection.
 	Account string `json:"account"`
 }
@@ -340,8 +361,13 @@ func (s *Server) proposeChange(ctx context.Context, p Principal, ip string, req 
 		}
 		c.InstanceID, c.Action, c.Title = req.InstanceID, req.Action, fmt.Sprintf("%s instance %s", strings.ToUpper(req.Action[:1])+req.Action[1:], req.InstanceID)
 		prepare = s.prepareInstance
+	case kindBlueprintApply:
+		var herr *httpErr
+		if prepare, herr = s.proposeBlueprint(ctx, &c, req.Blueprint); herr != nil {
+			return CloudChange{}, herr
+		}
 	default:
-		return CloudChange{}, refusal(http.StatusBadRequest, "kind must be stack-deploy, stack-delete or instance-action")
+		return CloudChange{}, refusal(http.StatusBadRequest, "kind must be stack-deploy, stack-delete, instance-action or blueprint-apply")
 	}
 
 	// Bind the change to the account it was prepared against.
@@ -702,7 +728,7 @@ func (s *Server) approveChange(ctx context.Context, id string, p Principal, ip, 
 	// The approval rules (note 032). The environment engine acting under an administrator's rule (policy) has
 	// its own rules (note 017) and is not counted here.
 	if !policy {
-		votes, need, done, vstatus, vmsg := s.vote(ctx, approvalKindCons, c.Conn, c.Kind == kindStackDelete, c.Approvals, p.Name, note)
+		votes, need, done, vstatus, vmsg := s.vote(ctx, approvalKindCons, c.Conn, c.highRisk(), c.Approvals, p.Name, note)
 		if vmsg != "" {
 			return refuse(vstatus, vmsg)
 		}
@@ -714,7 +740,7 @@ func (s *Server) approveChange(ctx context.Context, id string, p Principal, ip, 
 			}
 			s.cloud.mu.Unlock()
 			_ = s.audit(ctx, p, ip, "cloud.approve", c.target(), fmt.Sprintf("%s — approval %d of %d recorded; waiting for another administrator", c.Title, len(votes), need.Needed), true)
-			c.Approval = s.approvalState(ctx, approvalKindCons, c.Conn, c.Kind == kindStackDelete, c.Approvals)
+			c.Approval = s.approvalState(ctx, approvalKindCons, c.Conn, c.highRisk(), c.Approvals)
 			return c, nil
 		}
 	}
@@ -829,6 +855,8 @@ func (s *Server) executeChange(ctx context.Context, c CloudChange, st awsSetting
 		result, err = s.executeDelete(ctx, c, st)
 	case kindInstanceAction:
 		result, err = s.executeInstance(ctx, c, st)
+	case kindBlueprintApply:
+		result, err = s.executeBlueprint(ctx, c, st)
 	}
 	now := time.Now().UTC()
 	c.FinishedAt, c.Result = &now, result

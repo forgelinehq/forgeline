@@ -7,6 +7,12 @@ section in the pull request that makes the change; a release moves it under its 
 ## [Unreleased]
 
 ### Added
+- **Preview and build blueprints** (design note 035, slice 3). Preview changes runs OpenTofu 1.13.9 (downloaded once and
+  checked against its published checksum) to plan the saved blueprint, reading only; each block on the canvas is marked add,
+  change, replace or remove. Send for approval files a cloud change; a different administrator approves under the approval
+  rules (a removal is high risk), and exactly the previewed plan is applied with the providers it was planned with. Stale
+  previews are refused. The plan and the state are sealed by the vault, the state is kept after failed applies too, and
+  OpenTofu never sees the server's own environment. `scripts/dev/fake-tofu` lets you try it without a cloud.
 - **The design canvas** (design note 035, slice 2). Build › Design opens a blueprint as blocks you drag into place, add from
   a toolbar and change in a panel beside them, including the links between them; only links the server would accept are
   offered. Each change is checked as you type, with problems named by block, and Save keeps it unless someone saved first.

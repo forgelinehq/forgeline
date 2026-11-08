@@ -19,6 +19,12 @@ its own state file. In the console create the administrator, a second administra
 (leave the profile empty, any region), and walk a proposal through approval. Delete the state
 file to start over.
 
+## `fake-tofu`: a stand-in for OpenTofu
+
+For trying blueprints (note 035) with `fake-aws`: Preview changes, Send for approval and the apply all work, and nothing
+is built anywhere. Its "state" is the list of resource addresses, so a second preview after an apply changes nothing.
+Start the server with `FORGELINE_TOFU="$PWD/scripts/dev/fake-tofu"`; without it Forgeline downloads the real OpenTofu.
+
 ## `fakeoidc`: a stand-in single sign-on provider
 
 ```sh
