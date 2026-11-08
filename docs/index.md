@@ -21,10 +21,11 @@ Pre-alpha. It is built to be tried on a laptop. Read [what is not checked yet]({
 | --- | --- |
 | Run pipelines | Steps are containers. Independent steps run in parallel, unchanged steps come from a cache. |
 | Use Claude Code as a step | An `agent:` step runs the `claude` CLI in a container, read-only by default, with your own login or key. |
-| Ask the assistant | A panel in the console explains failed runs and drafts pipelines. It can only read. |
+| Ask the assistant | A panel in the console explains failed runs, reads your cloud and prepares pipelines and runs for you to confirm. It shows each step it takes, and never sees secret values. |
+| Build an AI team | Agents with instructions, skills and a short list of tools, each **Advises** or **Proposes**. They work as the person who asks and can never do more than that person could. |
 | Connect GitHub | Create a GitHub App from the console in one approval, or use a token. Pushes start runs; results come back as commit statuses. |
 | Connect AWS | Sign in with AWS IAM Identity Center from the console, then view stacks and instances and propose changes. |
-| Change the cloud safely | Every change is a CloudFormation change set that a **second** administrator approves. |
+| Change the cloud safely | Every change is a proposal, a CloudFormation change set or the exact AWS calls the assistant drafted, that a **different** administrator approves. You choose which AWS services (S3, ECS, ECR…) the AI may use at all. |
 | Keep secrets | Encrypted at rest, write-only, masked in logs, and only given to steps that ask. |
 
 ## Start here

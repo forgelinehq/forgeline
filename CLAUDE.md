@@ -76,7 +76,8 @@ what to do next**. The project is pre-alpha and maintained by one person.
 - Go 1.27.3 may not be on `PATH`. If `go` is missing, install the release from go.dev into your
   home directory, verify its checksum, and put its `bin` on `PATH`.
 - Never `pkill -f 'forgeline server'` from a shell command containing that text; it kills the
-  shell. Use `pkill -x forgeline`.
+  shell. Stop a dev server by its PID (`scripts/dev/demo.sh` keeps it in `<data-dir>/server.pid`):
+  `pkill -x forgeline` stops every Forgeline on the machine, including a live one.
 - Browser checks with Playwright: save screenshots under the workspace root, and force a layout
   (`document.body.offsetHeight` in an evaluate) before a screenshot, or the headless page may show
   a stale frame. Keep `127.0.0.1` and `localhost` for two servers, because cookies ignore ports.
