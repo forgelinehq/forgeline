@@ -740,9 +740,14 @@ func (s *Server) handleAudit(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	f, err := parseAuditFilter(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	// Filters are applied after reading, so read more than the page when filtering.
 	fetch := limit
-	filtering := q.Get("actor") != "" || q.Get("action") != "" || q.Get("denied") != ""
+	filtering := q.Get("actor") != "" || q.Get("action") != "" || q.Get("denied") != "" || q.Get("from") != "" || q.Get("to") != ""
 	if filtering {
 		fetch = 5000
 	}
@@ -756,16 +761,9 @@ func (s *Server) handleAudit(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, "reading the audit log", err)
 		return
 	}
-	actor, action := strings.ToLower(q.Get("actor")), q.Get("action")
 	out := make([]AuditEvent, 0, limit)
 	for _, e := range events {
-		if actor != "" && strings.ToLower(e.Actor) != actor {
-			continue
-		}
-		if action != "" && !strings.HasPrefix(e.Action, action) {
-			continue
-		}
-		if q.Get("denied") == "1" && e.Allowed {
+		if !f.match(e) {
 			continue
 		}
 		out = append(out, e)

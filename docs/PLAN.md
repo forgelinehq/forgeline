@@ -313,7 +313,8 @@ Design: [docs/design/006-console.md](design/006-console.md). Pictures: [docs/con
 > of the confirmed screen frames (five spaces with tabs, the new Home) and frame 2 (Connections, with Off /
 > Look only / Change with approval per AWS service). Single sign-on with OpenID Connect is built
 > (note 031; tested against a stand-in, not yet a real provider). Approval rules are built (note 032:
-> two approvals, named approvers, by account, kind and risk). Next: audit export, then frames 5, 6 and 4. Decided: no
+> two approvals, named approvers, by account, kind and risk). Audit export and retention are built (note 033).
+> Next: frames 5 (Team), 6 (Watch map) and 4 (Design canvas). Decided: no
 > automatic apply anywhere, OpenTofu for blueprints, our own graph layout, Codex and Copilot later. Next, in
 > order: single sign-on (OIDC, group-to-role mapping), approval rules, audit export and retention; then
 > foundations (tokens, component kit, one SVG graph component, Playwright screenshot suite), blueprints and

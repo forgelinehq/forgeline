@@ -283,6 +283,7 @@ update that asks for different hosts needs a fresh grant.
 | [84-sso-settings](84-sso-settings.png) | Settings › Sign-in (SSO): the redirect address to register, the issuer with Test, who may come in (note 031) |
 | [85-sso-sign-in](85-sso-sign-in.png) | The sign-in page with "Sign in with …" above the password form |
 | [86-approval-rules](86-approval-rules.png) | Settings › Approval rules: a rule asking for two approvals for AI-drafted changes to the Primary account (note 032) |
+| [87-audit-export](87-audit-export.png) | Settings › Audit log with person, action and date filters and the CSV and JSON Lines downloads (note 033) |
 | [72-integrations-hub](72-integrations-hub.png) | The integrations hub (note 025): cards grouped by category with a status, AWS profiles found on the server by name, and planned systems shown dashed. Stand-in AWS and Claude |
 | [73-integration-test](73-integration-test.png) | The popup of a connected system with the result of a read-only test: each check, what it found, how long it took, and "created nothing, changed nothing" |
 | [74-gcp-explorer](74-gcp-explorer.png) | The Google Cloud tab: connected scope, and the explorer grouped by kind with Vertex AI under an AI group, from a stand-in `gcloud` (made-up resources) |
