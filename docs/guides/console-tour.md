@@ -71,6 +71,10 @@ The safe settings are not options: files are private and encrypted, tables keep 
 
 ![A preview on the canvas]({{ '/console/92-design-preview.png' | relative_url }})
 
+The **Assistant** panel beside the canvas takes a change in your own words, such as "add a place to keep interview recordings". It answers with what it would change, listed as sentences ("Adds Recordings (bucket)"). **Use this** puts the change on the canvas, unsaved; nothing happens until you save, preview and send it for approval. It cannot read your account or do anything itself, it keeps the blueprint's account and region, and it will not touch a service an administrator turned off or set to look only for the AI.
+
+![The assistant beside the canvas]({{ '/console/94-design-assistant.png' | relative_url }})
+
 ![The design canvas]({{ '/console/91-design-canvas.png' | relative_url }})
 
 ## Agents

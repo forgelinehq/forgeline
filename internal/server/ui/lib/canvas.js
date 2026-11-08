@@ -199,3 +199,16 @@ export function planWords(plan) {
   if (plan.remove) parts.push(plan.remove + ' to remove');
   return parts.length ? parts.join(', ') : 'Nothing to change: AWS already matches the blueprint';
 }
+
+/** Places blocks that have no position yet (ones the assistant added), below what is in their column. */
+export function placeNew(bp) {
+  if (bp.blocks.every(b => !b.x && !b.y)) return autoLayout(bp);
+  const out = clone(bp);
+  const placed = { ...out, blocks: out.blocks.filter(b => b.x || b.y) };
+  for (const b of out.blocks) {
+    if (b.x || b.y) continue;
+    Object.assign(b, spotFor(placed, b.kind));
+    placed.blocks.push(b);
+  }
+  return out;
+}

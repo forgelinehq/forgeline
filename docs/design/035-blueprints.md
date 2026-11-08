@@ -1,6 +1,6 @@
 # 035: Blueprints and the design canvas
 
-Status: **Slices 1 (the model, its checks and the OpenTofu it generates), 2 (the canvas) and 3 (preview, approval and apply) are built.** Date: 2026-11-08.
+Status: **Slices 1 (the model, its checks and the OpenTofu it generates), 2 (the canvas) 3 (preview, approval and apply) and 4 (the assistant beside the canvas) are built.** Date: 2026-11-08.
 Frame 4 of the confirmed screen frames (note 029). Decided by the maintainer on 2026-11-08: **OpenTofu**.
 
 ## Question
@@ -73,7 +73,7 @@ problem named by its block with Save off, fix, save, reload; light and dark; no 
 
 | Decision | Choice |
 | --- | --- |
-| The binary | OpenTofu 1.13.9, downloaded on first use into `<data-dir>/tools/tofu-1.13.9/` and refused unless the zip's SHA-256 matches the release's published sum (pinned for Linux and macOS, amd64 and arm64). `FORGELINE_TOFU` names another binary (`scripts/dev/fake-tofu` for demos). Providers are cached in `<data-dir>/tools/tofu-plugins` |
+| The binary | OpenTofu 1.13.9, downloaded on first use into `<data-dir>/tools/tofu-1.13.9/` and refused unless the zip's SHA-256 matches the release's published sum (pinned for Linux and macOS, amd64 and arm64). `FORGELINE_TOFU` names another binary (`scripts/dev/fake-tofu` for demos). Providers are cached in `<data-dir>/tools/tofu-plugins` (the AWS provider takes about 700 MB) |
 | What OpenTofu sees | A fixed environment: `PATH`, `HOME`, the AWS config file variables, CA bundles and proxies, the target's `AWS_PROFILE` and `AWS_REGION`, and its own settings (`TF_IN_AUTOMATION`, an empty CLI config, the provider cache). Never the server's token or other variables. Each run gets a private directory, removed afterwards (it holds the state in the clear) |
 | Preview | `POST /v1/blueprints/{id}/plan` (developer) runs `tofu init` and `tofu plan -out` in the background against the saved blueprint, reading only. `tofu show -json` gives the resources to add, change, replace or remove, each tied to its block. The plan file is sealed with the vault; the API never returns it. The canvas marks each block (+ add, ~ change, replace, remove) and lists every resource |
 | Send for approval | `POST /v1/blueprints/{id}/propose` with a reason files a `blueprint-apply` cloud change. Refused unless the preview is finished, of the blueprint as saved now, under an hour old, made from the state as it is now, and changes something. The change carries a frozen copy of the plan; its preview rows are the plan's resources |
@@ -90,3 +90,20 @@ blueprint cannot be deleted or moved, removing a block is high risk, a failed ap
 preview starts from it, and a download with the wrong checksum is refused. 15 rules removed one at a time, each
 fails a test. Browser with `fake-aws` and `fake-tofu`: preview, stale after an edit, send, a second administrator
 approves, the apply succeeds, the canvas shows Built and the next preview changes nothing.
+
+## Slice 4: the assistant beside the canvas (built)
+
+| Decision | Choice |
+| --- | --- |
+| Where | A panel on Build › Design. A person describes a change; the answer is a few sentences and, when it edits, a suggested draft with its changes listed in words (`blueprint.Diff`). **Use this** puts it on the canvas unsaved; the person saves, previews and sends it for approval as usual |
+| What the model gets | Its own instructions only (the block kinds, their fields and the link rules), the draft as untrusted data, and the services it may not use. No lookups and no tools: it cannot read the account or act |
+| Checks on its answer | The draft is checked by the same rules as a save; if it is not valid the model is told why once and may send it again. The account and region are always the saved blueprint's. Blocks keep their places; new ones are placed in their column. A draft that adds, changes or removes a block on a service the AI service switches (note 030) turn off or set to look only is not offered, and the reason is shown |
+| Never | The assistant does not save, preview or propose. Each question is audited (`blueprint.assist`, with lengths, not text) |
+| API | `POST /v1/blueprints/{id}/assist` (developer): `message`, `draft` (what is on screen), `history`. Answers `reply`, `draft` (or none), `changes`, `checks`, `problem` |
+
+Tested with a scripted model: a draft with a queue comes back checked, with its changes in words, the target kept,
+places kept and nothing saved; the instructions carry the draft as data and no lookups; an invalid draft gets one
+retry and a second failure gives a reason and no draft; a plain question gets no draft and no retry; a look-only
+service blocks an added queue, a turned-off service blocks removing a table, and the model is told; with the
+assistant off it says so. 8 rules removed one at a time, each fails a test. Browser with a stand-in `claude`:
+ask, see the suggested changes, use it, the new block is placed and the checks pass.

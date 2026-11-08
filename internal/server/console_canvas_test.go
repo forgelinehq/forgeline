@@ -12,7 +12,7 @@ import (
 )
 
 const canvasCases = `
-import { DEFAULTS, autoLayout, addBlock, removeBlock, updateBlock, moveBlock, linkTargets, addLink, removeLink, toBody, explainError, linkPath, bounds, fit, newID, planByBlock, planState, planWords } from './canvas.mjs';
+import { DEFAULTS, autoLayout, addBlock, removeBlock, updateBlock, moveBlock, linkTargets, addLink, removeLink, toBody, explainError, linkPath, bounds, fit, newID, planByBlock, planState, planWords, placeNew } from './canvas.mjs';
 let failed = 0;
 const eq = (name, got, want) => { const g = JSON.stringify(got), w = JSON.stringify(want); if (g !== w) { failed++; console.error('FAIL ' + name + '\n  got  ' + g + '\n  want ' + w); } };
 const empty = { name: 'T', target: { cloud: 'aws', account: 'primary', region: 'ap-south-1' }, blocks: [], links: [] };
@@ -61,6 +61,9 @@ eq('nothing to do', planState({ ...plan, add: 0, change: 0, remove: 0 }, 3, fals
 eq('planning and failed', [planState({ status: 'planning' }, 3, false), planState({ status: 'failed' }, 3, false), planState(null, 3, false)], ['planning', 'failed', 'none']);
 eq('words', planWords(plan), '2 to add, 1 to change, 1 to remove');
 eq('no words', planWords({ add: 0, change: 0, remove: 0 }), 'Nothing to change: AWS already matches the blueprint');
+const withNew = { ...bp, blocks: [...bp.blocks, { id: 'q', kind: 'queue', name: 'Q' }, { id: 'd2', kind: 'frontdoor', name: 'D2' }] };
+eq('new blocks go below their column; placed ones stay', placeNew(withNew).blocks.map(b => [b.id, b.x, b.y]), [['door', 40, 40], ['app', 290, 40], ['table', 540, 40], ['logs', 540, 140], ['q', 540, 240], ['d2', 40, 140]]);
+eq('nothing placed: lay it all out', placeNew({ ...empty, blocks: [{ id: 'a', kind: 'service' }] }).blocks[0].x, 290);
 console.log(JSON.stringify({ built: toBody(bp, 3), defaults: DEFAULTS }));
 if (failed) process.exit(1);
 `

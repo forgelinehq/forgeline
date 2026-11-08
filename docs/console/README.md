@@ -285,6 +285,7 @@ update that asks for different hosts needs a fresh grant.
 | [86-approval-rules](86-approval-rules.png) | Settings › Approval rules: a rule asking for two approvals for AI-drafted changes to the Primary account (note 032) |
 | [87-audit-export](87-audit-export.png) | Settings › Audit log with person, action and date filters and the CSV and JSON Lines downloads (note 033) |
 | [88-team](88-team.png) | Team › Team: the agents as an org chart with who reports to whom, each agent's state and mode (note 029, frame 5) |
+| [94-design-assistant](94-design-assistant.png) | Build › Design: the assistant suggests a bucket for recordings, with its changes listed and Use this (note 035, slice 4) |
 | [93-blueprint-approval](93-blueprint-approval.png) | Infrastructure › Cloud changes: a blueprint's plan waiting for a different administrator, every resource it would add (note 035, slice 3) |
 | [92-design-preview](92-design-preview.png) | Build › Design after Preview changes: each block marked + add, and the preview's summary (note 035, slice 3) |
 | [91-design-canvas](91-design-canvas.png) | Build › Design: a blueprint on the canvas with the app picked, its fields and links on the right, and what it means below (note 035, slice 2) |

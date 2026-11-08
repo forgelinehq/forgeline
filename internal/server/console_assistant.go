@@ -424,7 +424,6 @@ func (s *Server) stepLogTail(ctx context.Context, runID, stepID string) string {
 // askAssistant sends the conversation to the configured backend. ctxText becomes untrusted
 // context attached to the system prompt.
 func (s *Server) askAssistant(ctx context.Context, role authn.Role, turns []chatTurn, ctxText string) (string, error) {
-	st := s.loadAssistant(ctx)
 	system := assistantSystem
 	if sc := scopeFrom(ctx); sc != nil {
 		system += "\n\n" + sc.persona
@@ -451,6 +450,12 @@ func (s *Server) askAssistant(ctx context.Context, role authn.Role, turns []chat
 		safe := strings.ReplaceAll(ctxText, "</untrusted_context>", "</untrusted_context_>")
 		system += "\n\n<untrusted_context>\n" + safe + "\n</untrusted_context>"
 	}
+	return s.askModel(ctx, system, turns)
+}
+
+// askModel sends one request to the configured backend with the given instructions.
+func (s *Server) askModel(ctx context.Context, system string, turns []chatTurn) (string, error) {
+	st := s.loadAssistant(ctx)
 	model := st.Model
 	if model == "" {
 		model = defaultAssistModel

@@ -7,7 +7,7 @@ import { navigate } from '../lib/router.js';
 import { KINDS, blockFacts, linkWords } from '../lib/blueprint.js';
 import {
   BLOCK_W, BLOCK_H, FARGATE, LOG_DAYS, autoLayout, addBlock, removeBlock, updateBlock, moveBlock, linkTargets,
-  addLink, removeLink, toBody, linkPath, bounds, fit, explainError, planByBlock, planState, planWords,
+  addLink, removeLink, toBody, linkPath, bounds, fit, explainError, planByBlock, planState, planWords, placeNew,
 } from '../lib/canvas.js';
 
 /** Build › Design without a blueprint: open the one changed last, or say how to make one. */
@@ -38,7 +38,11 @@ export async function designPage({ params }) {
   const dirty = () => JSON.stringify(bp) !== clean;
 
   const canvasBox = h('div', { class: 'overflow-auto', id: 'design-canvas' });
-  const inspector = h('aside', { class: 'card card-pad self-start', id: 'design-inspector', 'aria-label': 'Selected block' });
+  const inspector = h('aside', { class: 'card card-pad', id: 'design-inspector', 'aria-label': 'Selected block' });
+  const helper = h('section', { class: 'card card-pad', id: 'design-assistant', 'aria-label': 'Assistant' });
+  // The conversation with the assistant beside the canvas: what was asked, what it said, and a draft it suggests.
+  const talk = [];
+  let suggestion = null, asking = false;
   const side = h('div', { id: 'design-side' });
   const tools = h('div', {});
   const bar = h('div', {});
@@ -232,6 +236,48 @@ export async function designPage({ params }) {
     drawInspector();
   }
 
+  // ---------------------------------------------------------------- the assistant
+
+  function drawHelper() {
+    const input = h('textarea', { id: 'assist-input', class: 'input min-w-0 flex-1 text-sm', rows: '2', maxlength: '4000', placeholder: 'Change something…', 'aria-label': 'Ask the assistant to change the blueprint', disabled: asking });
+    const go = async () => {
+      const message = input.value.trim();
+      if (!message || asking) return;
+      asking = true; suggestion = null;
+      talk.push({ role: 'user', content: message });
+      drawHelper();
+      try {
+        const r = await post('/v1/blueprints/' + encodeURIComponent(saved.id) + '/assist', { message, draft: toBody(bp, revision), history: talk.slice(0, -1).slice(-8) });
+        talk.push({ role: 'assistant', content: r.reply || (r.draft ? 'Here is a draft.' : '') });
+        suggestion = r.draft ? r : null;
+        if (r.problem) talk.push({ role: 'note', content: 'Not offered: ' + explainError(bp, r.problem) });
+      } catch (e) { talk.push({ role: 'note', content: e.message }); }
+      asking = false;
+      drawHelper();
+      helper.querySelector('#assist-input')?.focus();
+    };
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); go(); } });
+    const bubble = (t) => h('div', { class: t.role === 'user' ? 'ml-6 rounded-xl rounded-br-sm bg-slate-100 px-3 py-2 dark:bg-slate-800' : t.role === 'note' ? 'text-xs text-amber-700 dark:text-amber-300' : 'mr-2' }, t.content);
+    mount(helper,
+      h('h2', { class: 'h-section mb-2 flex items-center gap-1.5' }, icon('sparkle', 'size-3.5'), 'Assistant'),
+      talk.length ? h('div', { class: 'mb-3 max-h-72 space-y-2 overflow-y-auto text-sm', id: 'assist-talk', 'aria-live': 'polite' }, talk.map(bubble), asking ? h('p', { class: 'muted flex items-center gap-2 text-xs' }, spinner(), 'Thinking…') : null)
+        : h('p', { class: 'hint mb-3' }, 'Describe a change in your own words, for example “add a queue the app reads”. The assistant edits a copy; you decide whether to use it, and nothing is built until it is approved.'),
+      suggestion ? h('div', { class: 'mb-3 rounded-lg border border-brand-200 bg-brand-50 p-3 text-sm dark:border-brand-500/30 dark:bg-brand-500/10', id: 'assist-suggestion' },
+        h('b', { class: 'block' }, 'Suggested changes'),
+        suggestion.changes.length ? h('ul', { class: 'mt-1 list-disc space-y-0.5 pl-5' }, suggestion.changes.map(c => h('li', {}, c))) : h('p', { class: 'muted' }, 'Nothing changes.'),
+        h('div', { class: 'mt-2 flex gap-2' },
+          h('button', { class: 'btn-primary btn-sm', type: 'button', id: 'assist-use', disabled: !suggestion.changes.length, onclick: () => {
+            const d = suggestion.draft;
+            suggestion = null;
+            selected = '';
+            change(placeNew({ ...bp, blocks: d.blocks, links: d.links }));
+            drawInspector(); drawHelper();
+            toast('Used the suggestion. Save to keep it.', 'ok');
+          } }, 'Use this'),
+          h('button', { class: 'btn-ghost btn-sm', type: 'button', onclick: () => { suggestion = null; drawHelper(); } }, 'Dismiss'))) : null,
+      h('div', { class: 'flex items-end gap-2' }, input, h('button', { class: 'btn-primary btn-sm', type: 'button', id: 'assist-send', disabled: asking, 'aria-label': 'Send', onclick: go }, icon('send', 'size-4'))));
+  }
+
   // ---------------------------------------------------------------- the panel
 
   function input(label, value, onChange, attrs = {}) {
@@ -339,8 +385,9 @@ export async function designPage({ params }) {
     pageHeader(saved.name, 'Changed by ' + saved.updated_by + ' ' + relTime(saved.updated_at) + '. Drag blocks to arrange them; pick one to change it.'),
     bar,
     h('div', { class: 'grid gap-4 xl:grid-cols-[minmax(0,1fr)_18rem]' },
-      h('div', { class: 'min-w-0 space-y-4' }, h('section', { class: 'card overflow-hidden' }, tools, h('div', { class: 'p-2' }, canvasBox)), side), inspector),
+      h('div', { class: 'min-w-0 space-y-4' }, h('section', { class: 'card overflow-hidden' }, tools, h('div', { class: 'p-2' }, canvasBox)), side),
+      h('div', { class: 'space-y-4 self-start' }, helper, inspector)),
     h('p', { class: 'hint mt-3' }, 'Orange lines carry traffic from the internet; grey lines are an app using data; dashed lines are logs; dashed blocks already exist and are kept as they are. After a preview, each block says whether it would be added, changed, replaced or removed.'));
-  drawBar(); drawTools(); drawSide(); draw(); drawInspector(); poll();
+  drawBar(); drawTools(); drawSide(); draw(); drawInspector(); drawHelper(); poll();
   return el;
 }
