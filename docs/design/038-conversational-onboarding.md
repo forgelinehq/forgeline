@@ -1,6 +1,6 @@
 # 038: Onboarding by conversation, with a small model that runs on a CPU
 
-Status: **Step 1 built (2026-11-08): the first-run steps, in the console and `forgeline onboard`.** The maintainer chose to build steps 1 and 2; step 2 (the local-model backend) is next.
+Status: **Step 1 built (2026-11-08): the first-run steps, in the console and `forgeline onboard`.** The maintainer chose to build steps 1 and 2; step 2 was revised the same day (a very light model in the browser, see below) and is **not started**.
 
 ## Question
 

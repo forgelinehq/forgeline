@@ -324,9 +324,10 @@ Design: [docs/design/006-console.md](design/006-console.md). Pictures: [docs/con
 > 2. **Any resource, any cloud** (note 040), in this order: guardrails on every plan; a template format and an AgentCore
 >    agent template; Lambda, Step Functions and ECS cluster templates; repositories linked to blocks with suggested
 >    pipelines; EKS with namespaces, data pipeline and code pipeline templates; policy packs (Conftest, Checkov or Trivy)
->    in containers; a generic resource block from provider schemas behind an administrator's allow list; Azure, Google
->    Cloud and RunPod connections; a library for templates, skills, tools, agents and guardrail packs.
-> 3. **A very light helper model** (note 038, step 2, revised by the maintainer: no llama.cpp or Ollama, well under
+>    in containers; a generic resource block from provider schemas behind an administrator's allow list; a library for
+>    templates, skills, tools, agents and guardrail packs. **AWS only until all of that is done**; then Google Cloud, then
+>    Azure, then RunPod and others.
+> 3. **Not started (to do):** **A very light helper model** (note 038, step 2, revised by the maintainer: no llama.cpp or Ollama, well under
 >    500 MB): a 25 MB embedding model in the browser to match answers and find pages, then FunctionGemma 270M (fine-tuned
 >    on Forgeline's own steps) only if a 60-case evaluation on a laptop and the Pi's browser shows it is reliable.
 > 4. **Removing what a blueprint built**: a destroy plan through the same preview and approval; tables and buckets kept
