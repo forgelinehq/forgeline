@@ -351,7 +351,6 @@ function build(close, role) {
       wideBtn, modeBtn,
       hdrBtn({ 'aria-label': 'Close the assistant', onclick: close }, 'x')));
   const panel = h('aside', { class: DOCK_CLASS, role: 'dialog', 'aria-label': 'Assistant', id: 'assistant-panel' }, handle, header, list, form);
-  panel.ask = (q) => ask(q);
   panel.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
 
   /** Applies the saved mode and size, kept inside the window. Docked: a width the page makes room for. Floating: a window. */
@@ -414,13 +413,16 @@ function build(close, role) {
   panel.dispose = () => { removeEventListener('resize', onResize); removeEventListener('hashchange', refreshCtx); sizeWatch?.disconnect(); root.style.removeProperty('--assistant-w'); };
 
   // Say so up front if it is not set up, instead of failing on the first question.
-  get('/v1/assistant').then(cfg => {
+  // A question handed in from outside (Home's ask bar) waits for this check, and the welcome is drawn
+  // only while nothing has been asked, so it never replaces a conversation that has started.
+  const checked = get('/v1/assistant').then(cfg => {
     ready = cfg.ready;
     if (!cfg.ready) {
       form.classList.add('hidden');
       mount(list, notice('info', 'The assistant is not set up yet. ', atLeast(role, 'admin') ? h('a', { href: '#/integrations/claude/settings', class: 'underline', onclick: close }, 'Turn it on under Integrations.') : 'Ask an administrator to turn it on.'));
-    } else empty();
+    } else if (!history.length && !busy) empty();
   }).catch(e => mount(list, errorBox(e.message)));
+  panel.ask = (q) => checked.then(() => { if (ready) ask(q); });
   return panel;
 }
 
