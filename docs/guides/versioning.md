@@ -48,5 +48,7 @@ Each skill, agent and workflow keeps every version it has ever had:
 - A run records which agent version and fingerprint answered, in the audit log and the reply.
 - An agent version cannot gain a tool or a higher tier without a new saved version, which is audited.
 
-Marketplace packages (planned) will use the same rules plus a pinned hash, so an update can never
-change what is already installed without someone choosing it.
+Marketplace packages use the same rules plus a pinned hash: an install is bound to the hash the administrator was
+shown, installing only creates ordinary versioned agents and skills, and an update can never change what is already
+installed (or raise an agent's tier) without someone choosing it. Signed packages are described in
+[note 019](../design/019-signed-packages.md).

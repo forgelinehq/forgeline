@@ -69,7 +69,7 @@ Research done in October 2026 pointed to four gaps:
 | --- | --- |
 | `cmd/forgeline` | The command-line entry point |
 | `internal/` | Private packages |
-| `docs/ARCHITECTURE.md` | Intended architecture and open decisions |
+| `docs/ARCHITECTURE.md` | How Forgeline is built today |
 | `docs/ROADMAP.md` | Milestones and their exit criteria |
 
 ## Build

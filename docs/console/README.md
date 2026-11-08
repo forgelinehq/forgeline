@@ -285,6 +285,7 @@ update that asks for different hosts needs a fresh grant.
 | [86-approval-rules](86-approval-rules.png) | Settings › Approval rules: a rule asking for two approvals for AI-drafted changes to the Primary account (note 032) |
 | [87-audit-export](87-audit-export.png) | Settings › Audit log with person, action and date filters and the CSV and JSON Lines downloads (note 033) |
 | [88-team](88-team.png) | Team › Team: the agents as an org chart with who reports to whom, each agent's state and mode (note 029, frame 5) |
+| [100-home](100-home.png) to [115-aws-services](115-aws-services.png) | The current console, one picture per space and settings page (2026-11-08), used by the console tour |
 | [97-mission-done](97-mission-done.png) | A finished mission: all five stages, the report, findings with what was proposed and found afterwards (note 037) |
 | [96-mission-waiting](96-mission-waiting.png) | A mission waiting for approval, with the claim it could not back up left out (note 037) |
 | [95-ai-use](95-ai-use.png) | Settings › AI use and budgets: each agent's use this month, the cost where reported, and a budget used up (note 036) |
