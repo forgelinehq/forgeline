@@ -7,6 +7,12 @@ section in the pull request that makes the change; a release moves it under its 
 ## [Unreleased]
 
 ### Added
+- **Blueprints** (design note 035). Build › Blueprints keeps designs of what should exist in an AWS account: a front door,
+  apps on ECS Fargate, DynamoDB tables, S3 buckets, SQS queues, log groups, and existing resources that are used but never
+  changed, joined by links that open exactly the port and grant exactly the access they say. Each blueprint is checked in
+  plain words and generates OpenTofu code (`main.tf.json`, AWS provider `~> 6.72`) with safe settings that are not options:
+  private encrypted buckets, tables and buckets protected from deletion, only the front door reachable from the internet.
+  Typed text is escaped so OpenTofu never evaluates it. Drafts only: nothing is built yet. New `/v1/blueprints` API.
 - **Watch › Map** (design note 034, frame 6). The AWS map gets its own page, first in Watch, with a switch between accounts.
   Resources a CloudFormation stack made sit inside that stack's dashed box (from `list-stack-resources`, matched by exact
   type and id; parts the stack kept after a rollback are marked as no longer managed). A line joins a Lambda function to the

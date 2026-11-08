@@ -89,6 +89,13 @@ The maintainer confirmed six screen frames (Home, Connections, the assistant, th
 | Map | Resources inside the CloudFormation stack that made them, then VPCs, then the rest by kind. Lines only where Lambda states that a function reads a queue or a table's stream. Details: note 034 |
 | Not yet | Open logs, Redesign it in Build, cost per resource, moving dots for live traffic (not measured) |
 
+## Slice 7: frame 4, Design canvas, part 1 (built 2026-11-08)
+
+| Decision | Choice |
+| --- | --- |
+| Blueprints | Build › Blueprints (`#/blueprints`): drafts with blocks, links in words, plain-words checks and the OpenTofu code. The model, its rules and the code are in note 035 |
+| Not yet | The canvas to edit blocks (Build › Design), Preview changes (`tofu plan`), Send for approval, and the assistant drafting |
+
 ## Decisions taken since (2026-11-07)
 
 The maintainer chose an enterprise focus; the open questions below are settled in [note 030](030-service-switches.md): no automatic apply anywhere, OpenTofu, our own graph layout without elkjs, coding engines later. Service switches (phase 2) are built.
