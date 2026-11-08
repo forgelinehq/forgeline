@@ -7,6 +7,11 @@ section in the pull request that makes the change; a release moves it under its 
 ## [Unreleased]
 
 ### Added
+- **A new documentation site** in the style of docs.openclaw.ai: Starlight (Astro, MIT) on GitHub Pages, with a home page
+  of cards, a grouped sidebar (Start here, Guides, Reference, Project, Design notes), search on every page, dark and light
+  themes in the console's colours and fonts, and an edit link on each page. Pages are still written in `docs/`; the design
+  notes, the roadmap and the architecture are now real pages instead of raw files. The Pages workflow pins its actions by
+  commit SHA.
 - **Missions board and live view** (design note 037, part 2). Team › Missions: start a mission, see missions by where
   they stand, and follow one live, stage by stage, with its findings, proposals, evidence and report.
 - **Missions, part 1** (design note 037). `POST /v1/missions` gives one agent a goal and one AWS account. It discovers (read

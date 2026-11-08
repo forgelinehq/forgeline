@@ -1,0 +1,37 @@
+/* Forgeline's look: the console's ember accent and its fonts (served from this site; OFL, see public/fonts). */
+@font-face { font-family: 'Bricolage Grotesque'; src: url('/forgeline/fonts/bricolage-grotesque.woff2') format('woff2'); font-weight: 200 800; font-display: swap; }
+@font-face { font-family: 'IBM Plex Sans'; src: url('/forgeline/fonts/ibm-plex-sans.woff2') format('woff2'); font-weight: 100 700; font-display: swap; }
+@font-face { font-family: 'IBM Plex Mono'; src: url('/forgeline/fonts/ibm-plex-mono-400.woff2') format('woff2'); font-weight: 400; font-display: swap; }
+
+:root {
+  --sl-font: 'IBM Plex Sans', system-ui, sans-serif;
+  --sl-font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+  --sl-color-accent-low: #3a1606;
+  --sl-color-accent: #ea580c;
+  --sl-color-accent-high: #fdba74;
+  --sl-color-white: #f6f1ec;
+  --sl-color-gray-1: #ebe3db;
+  --sl-color-gray-2: #cfc3b8;
+  --sl-color-gray-3: #a8988c;
+  --sl-color-gray-4: #6b5f57;
+  --sl-color-gray-5: #3a2f28;
+  --sl-color-gray-6: #1c1713;
+  --sl-color-black: #120e0b;
+}
+:root[data-theme='light'] {
+  --sl-color-accent-low: #ffedd5;
+  --sl-color-accent: #c2410c;
+  --sl-color-accent-high: #7c2d12;
+  --sl-color-white: #1c1713;
+  --sl-color-gray-1: #2f2620;
+  --sl-color-gray-2: #4a3f37;
+  --sl-color-gray-3: #6b5f57;
+  --sl-color-gray-4: #a8988c;
+  --sl-color-gray-5: #e5ddd5;
+  --sl-color-gray-6: #f5f0ea;
+  --sl-color-gray-7: #faf7f3;
+  --sl-color-black: #fffdfb;
+}
+h1, h2, h3, .site-title, .hero h1 { font-family: 'Bricolage Grotesque', var(--sl-font); letter-spacing: -0.01em; }
+.site-title { font-weight: 800; }
+.sl-markdown-content img { border: 1px solid var(--sl-color-gray-5); border-radius: 0.75rem; }

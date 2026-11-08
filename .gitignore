@@ -15,3 +15,10 @@ forgeline-data/
 .forgeline-server/
 .playwright-mcp/
 .tools/
+
+# The docs site (site/): dependencies, the build, and what scripts/sync.mjs generates from docs/.
+site/node_modules/
+site/dist/
+site/.astro/
+site/src/content/docs/
+site/public/console/

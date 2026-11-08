@@ -1,0 +1,78 @@
+---
+title: Forgeline
+description: Delivery where AI agents run safely. Pipelines, cloud changes and an AI team on your own server, with a person approving every change.
+template: splash
+hero:
+  tagline: Pipelines, cloud changes and an AI team on your own server. Agents read, propose and check their work; a person approves every change.
+  image:
+    file: ../../assets/hero-canvas.png
+    alt: The design canvas, with a blueprint drawn as blocks
+  actions:
+    - text: Get started
+      link: /forgeline/get-started/
+      icon: right-arrow
+    - text: Console tour
+      link: /forgeline/guides/console-tour/
+      variant: minimal
+    - text: GitHub
+      link: https://github.com/forgelinehq/forgeline
+      icon: external
+      variant: minimal
+---
+
+import { Card, CardGrid, LinkCard, Aside } from '@astrojs/starlight/components';
+
+<Aside type="caution" title="Pre-alpha">
+Built to be tried on a laptop or a small server. Read [what is and is not checked yet](/forgeline/status/) before
+pointing it at anything that matters.
+</Aside>
+
+## What it does
+
+<CardGrid>
+  <Card title="Run pipelines" icon="rocket">
+    Typed YAML, every step a container. Independent steps run in parallel; unchanged steps come from a cache.
+  </Card>
+  <Card title="Design what should exist" icon="puzzle">
+    Draw a blueprint on a canvas. Forgeline writes the OpenTofu, previews the plan, and builds exactly that plan once a
+    different administrator approves.
+  </Card>
+  <Card title="An AI team" icon="star">
+    Agents with instructions, skills and a short list of tools, on an org chart, with monthly budgets that stop them
+    when used up.
+  </Card>
+  <Card title="Missions" icon="seti:pipeline">
+    Give an agent a goal. It reads, proposes fixes, waits for your OK, checks its work and reports. Every finding names
+    the lookup that showed it.
+  </Card>
+  <Card title="Watch your cloud" icon="magnifier">
+    A map of your AWS account: resources inside the stack that made them, lines only where AWS states the link, and
+    what needs a look.
+  </Card>
+  <Card title="Enterprise controls" icon="approve-check">
+    Single sign-on, approval rules (two approvals, named approvers), per-service switches for the AI, and an audit log
+    you can export.
+  </Card>
+</CardGrid>
+
+## Start here
+
+<CardGrid>
+  <LinkCard title="Get started" description="Build it, start the server, run your first pipeline. About ten minutes." href="/forgeline/get-started/" />
+  <LinkCard title="Console tour" description="Every page of the console, with pictures." href="/forgeline/guides/console-tour/" />
+  <LinkCard title="Assistant and agents" description="The assistant, agents, the team, missions and budgets." href="/forgeline/guides/assistant-and-agents/" />
+  <LinkCard title="Connect AWS" description="Sign in, choose what the AI may see and change, and build blueprints." href="/forgeline/guides/connect-aws/" />
+  <LinkCard title="People and security" description="Roles, single sign-on, approval rules and the audit log." href="/forgeline/guides/people-and-security/" />
+  <LinkCard title="API reference" description="Every endpoint, with the role it needs." href="/forgeline/api/reference/" />
+</CardGrid>
+
+## How it stays safe
+
+- **Nothing changes your cloud without a person.** Every change is a proposal a different administrator approves, and
+  exactly what was previewed is what runs.
+- **The AI can never do more than the person who asked.** Agents work with the asker's role, and you choose per AWS
+  service whether the AI may see it, only look, or propose changes.
+- **Claims must be backed.** A mission's findings must name a lookup the agent really ran; the rest are left out.
+- **Everything is audited**, including refusals, and the log can be exported.
+
+Why it works the way it does is written down in the [design notes](/forgeline/design/001-execution-engine/).
