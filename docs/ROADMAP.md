@@ -27,6 +27,14 @@ Status: **built (2026-11-08).** Databases (RDS MySQL or Postgres, with the passw
 Redis, secrets whose values Forgeline never sees, one service calling another, autoscaling, and several paths behind
 one front door. See [note 039](design/039-more-blueprint-blocks.md).
 
+## Next: any resource, any cloud (note 040)
+
+Status: **designed.** Templates for whole solutions (an AgentCore agent, Lambda, Step Functions, ECS clusters, EKS with
+namespaces, data and code pipelines), repositories linked to what runs them, guardrails on every plan (built-in rules,
+then Conftest, Checkov or Trivy packs), a generic block for any resource type an administrator allows, Azure, Google
+Cloud and RunPod connections, and a library for templates, skills, tools, agents and guardrail packs. Guardrails come
+first. See [note 040](design/040-any-resource-any-cloud.md).
+
 ## Next: onboarding by conversation (note 038)
 
 Status: **research done, needs a decision.** New-generation agents (OpenClaw's `openclaw onboard`, Hermes Agent's

@@ -321,20 +321,25 @@ Design: [docs/design/006-console.md](design/006-console.md). Pictures: [docs/con
 >
 > 1. ~~More blueprint blocks~~ **built** (note 039): databases (RDS MySQL or Postgres, password kept by AWS), Redis, secrets (value
 >    never seen by Forgeline), service-to-service calls, autoscaling, and several paths behind one front door.
-> 2. **A very light helper model** (note 038, step 2, revised by the maintainer: no llama.cpp or Ollama, well under
+> 2. **Any resource, any cloud** (note 040), in this order: guardrails on every plan; a template format and an AgentCore
+>    agent template; Lambda, Step Functions and ECS cluster templates; repositories linked to blocks with suggested
+>    pipelines; EKS with namespaces, data pipeline and code pipeline templates; policy packs (Conftest, Checkov or Trivy)
+>    in containers; a generic resource block from provider schemas behind an administrator's allow list; Azure, Google
+>    Cloud and RunPod connections; a library for templates, skills, tools, agents and guardrail packs.
+> 3. **A very light helper model** (note 038, step 2, revised by the maintainer: no llama.cpp or Ollama, well under
 >    500 MB): a 25 MB embedding model in the browser to match answers and find pages, then FunctionGemma 270M (fine-tuned
 >    on Forgeline's own steps) only if a 60-case evaluation on a laptop and the Pi's browser shows it is reliable.
-> 3. **Removing what a blueprint built**: a destroy plan through the same preview and approval; tables and buckets kept
+> 4. **Removing what a blueprint built**: a destroy plan through the same preview and approval; tables and buckets kept
 >    unless the person chooses otherwise.
-> 4. **Audit forwarding to a SIEM and tamper evidence** (p2-11): stream audit events out (syslog, HTTPS webhook) and chain
+> 5. **Audit forwarding to a SIEM and tamper evidence** (p2-11): stream audit events out (syslog, HTTPS webhook) and chain
 >    their hashes.
-> 5. **A lead agent that hands out work** (p4-05): reporting lines become delegation, still within approvals and budgets.
-> 6. **Missions, next steps** (note 014): IaC adoption proposals, several agents per mission, pre-approved low-risk classes.
-> 7. **Cost estimates** for blueprints and missions, from a real price source.
-> 8. **Source checkout for agent runs** (note 012 item 1), then the coding engines (Codex, Copilot) when the maintainer asks.
-> 9. **Small fixes:** "turned off" when a switched-off AWS service is asked for by name; AWS account numbers accepted as
+> 6. **A lead agent that hands out work** (p4-05): reporting lines become delegation, still within approvals and budgets.
+> 7. **Missions, next steps** (note 014): IaC adoption proposals, several agents per mission, pre-approved low-risk classes.
+> 8. **Cost estimates** for blueprints and missions, from a real price source.
+> 9. **Source checkout for agent runs** (note 012 item 1), then the coding engines (Codex, Copilot) when the maintainer asks.
+> 10. **Small fixes:** "turned off" when a switched-off AWS service is asked for by name; AWS account numbers accepted as
 >    account ids; the Connections screenshot made with demo data.
-> 10. **Verify against real services:** single sign-on with a real provider (Google, Entra ID or Okta); an app block built
+> 11. **Verify against real services:** single sign-on with a real provider (Google, Entra ID or Okta); an app block built
 >     on AWS (needs the scoped IAM permission in note 035).
 
 Do these top to bottom. Items marked **needs a decision** must wait for the maintainer; ask once,
