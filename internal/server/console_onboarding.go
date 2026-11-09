@@ -90,7 +90,7 @@ func onboardingSteps() []onboardingDef {
 		{"assistant", "Turn on the assistant", "Claude explains failures, drafts pipelines and blueprints, and powers your agents. By an API key, the claude program on the server, or a Claude Code token.", "#/integrations/claude/settings", "Choose a model",
 			func(ctx context.Context, s *Server) (bool, string) {
 				if b := s.loadAssistant(ctx).Backend; b != assistOff {
-					return true, map[string]string{assistAPI: "Claude, by an API key", assistCLI: "the claude program on the server", assistToken: "Claude, by a Claude Code token"}[b]
+					return true, map[string]string{assistAPI: "Claude, by an API key", assistCLI: "the claude program on the server", assistToken: "Claude, by a Claude Code token", assistCopilot: "the copilot program on the server"}[b]
 				}
 				return false, ""
 			}},

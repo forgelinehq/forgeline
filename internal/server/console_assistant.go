@@ -52,6 +52,8 @@ const (
 	// assistToken runs the claude program with the vault's Claude Code token, in a scratch home
 	// directory, so it does not depend on (or touch) the server user's own login.
 	assistToken = "claude-token"
+	// assistCopilot runs GitHub's copilot program on the server with the login of the server's user (copilot login).
+	assistCopilot = "copilot"
 )
 
 type assistantSettings struct {
@@ -92,7 +94,7 @@ func (s *Server) assistantView(ctx context.Context) AssistantJSON {
 	if v.Model == "" {
 		v.Model = defaultAssistModel
 	}
-	v.Ready = st.Backend == assistCLI || (st.Backend == assistAPI && hasKey) || (st.Backend == assistToken && hasToken)
+	v.Ready = st.Backend == assistCLI || st.Backend == assistCopilot || (st.Backend == assistAPI && hasKey) || (st.Backend == assistToken && hasToken)
 	if !st.UpdatedAt.IsZero() {
 		v.UpdatedBy, v.UpdatedAt = st.UpdatedBy, st.UpdatedAt.Format(time.RFC3339)
 	}
@@ -122,9 +124,9 @@ func (s *Server) handlePutAssistant(w http.ResponseWriter, r *http.Request) {
 	req.Model, req.APIBase, req.APIKey = strings.TrimSpace(req.Model), strings.TrimSpace(req.APIBase), strings.TrimSpace(req.APIKey)
 	req.ClaudeToken = strings.TrimSpace(req.ClaudeToken)
 	switch req.Backend {
-	case assistOff, assistAPI, assistCLI, assistToken:
+	case assistOff, assistAPI, assistCLI, assistToken, assistCopilot:
 	default:
-		writeError(w, http.StatusBadRequest, `backend must be "off", "api", "claude-token" or "cli"`)
+		writeError(w, http.StatusBadRequest, `backend must be "off", "api", "claude-token", "cli" or "copilot"`)
 		return
 	}
 	if len(req.Model) > 80 || strings.ContainsAny(req.Model, " \t\r\n") {
@@ -494,6 +496,8 @@ func (s *Server) callModel(ctx context.Context, system string, turns []chatTurn)
 		return s.askAPI(ctx, st, model, key, system, turns)
 	case assistCLI:
 		return askCLI(ctx, model, system, turns, "")
+	case assistCopilot:
+		return askCopilot(ctx, st.Model, system, turns)
 	case assistToken:
 		tok, ok := s.internalSecretValue(ctx, claudeTokenName)
 		if !ok {
