@@ -66,16 +66,6 @@ type LinksJSON struct {
 	LinksError    string           `json:"links_error,omitempty"`
 }
 
-type linksCache struct {
-	mu      sync.Mutex
-	entries map[string]linksEntry
-}
-
-type linksEntry struct {
-	at   time.Time
-	data LinksJSON
-}
-
 func (s *Server) handleAWSLinks(w http.ResponseWriter, r *http.Request) {
 	st, acct, ok := s.accountParam(w, r)
 	if !ok {
@@ -90,22 +80,14 @@ func (s *Server) linksFor(ctx context.Context, acct string, st awsSettings, refr
 		return LinksJSON{Stacks: []StackPartsJSON{}, Links: []LinkJSON{}}
 	}
 	key := acct + "|" + st.Profile + "|" + st.Region
-	s.awsLinks.mu.Lock()
-	if e, ok := s.awsLinks.entries[key]; ok && !refresh && time.Since(e.at) < inventoryTTL {
-		s.awsLinks.mu.Unlock()
-		return e.data
+	d, _, err := s.awsLinks.get(ctx, key, refresh, s.awsReadOpts(linksTimeout+inventoryTimeout), func(ctx context.Context) (LinksJSON, bool) {
+		// The stacks come from the inventory, so this costs no describe-stacks call of its own.
+		inv := s.inventoryFor(ctx, acct, st, false)
+		return s.fetchLinks(ctx, st, stackNames(inv)), true
+	})
+	if err != nil {
+		return LinksJSON{Enabled: true, Region: st.Region, LinksError: "stopped waiting: " + err.Error(), Stacks: []StackPartsJSON{}, Links: []LinkJSON{}}
 	}
-	s.awsLinks.mu.Unlock()
-
-	// The stacks come from the inventory, so this costs no describe-stacks call of its own.
-	inv := s.inventoryFor(ctx, acct, st, refresh)
-	d := s.fetchLinks(ctx, st, stackNames(inv))
-	s.awsLinks.mu.Lock()
-	if s.awsLinks.entries == nil || len(s.awsLinks.entries) >= maxAWSAccounts+1 {
-		s.awsLinks.entries = map[string]linksEntry{}
-	}
-	s.awsLinks.entries[key] = linksEntry{at: time.Now(), data: d}
-	s.awsLinks.mu.Unlock()
 	return d
 }
 

@@ -65,8 +65,8 @@ type AWSInventoryJSON struct {
 	Services  []AWSServiceJSON `json:"services"`
 }
 
-// invCache keeps the last read of each account for a minute, so switching between accounts does not
-// start a 20 second read every time.
+// invCache keeps the last read of each scope for a minute (Google Cloud and Azure inventories; AWS reads use
+// swrCache).
 type invCache struct {
 	mu      sync.Mutex
 	entries map[string]invEntry
@@ -151,21 +151,12 @@ func (s *Server) inventoryFor(ctx context.Context, acct string, st awsSettings, 
 		return AWSInventoryJSON{Services: []AWSServiceJSON{}}
 	}
 	key := acct + "|" + st.Profile + "|" + st.Region
-	s.awsInv.mu.Lock()
-	if e, ok := s.awsInv.entries[key]; ok && !refresh && time.Since(e.at) < inventoryTTL {
-		s.awsInv.mu.Unlock()
-		return e.data
-	}
-	s.awsInv.mu.Unlock()
-
-	d := s.fetchInventory(ctx, st)
-	if d.Error == "" {
-		s.awsInv.mu.Lock()
-		if s.awsInv.entries == nil || len(s.awsInv.entries) >= maxAWSAccounts+1 {
-			s.awsInv.entries = map[string]invEntry{} // a fresh map bounds memory; entries are cheap to refetch
-		}
-		s.awsInv.entries[key] = invEntry{at: time.Now(), data: d}
-		s.awsInv.mu.Unlock()
+	d, _, err := s.awsInv.get(ctx, key, refresh, s.awsReadOpts(inventoryTimeout), func(ctx context.Context) (AWSInventoryJSON, bool) {
+		d := s.fetchInventory(ctx, st)
+		return d, d.Error == ""
+	})
+	if err != nil {
+		return AWSInventoryJSON{Enabled: true, Region: st.Region, Error: "stopped waiting: " + err.Error(), Services: []AWSServiceJSON{}}
 	}
 	return d
 }

@@ -3,6 +3,7 @@
 // anything that changes the account is a proposal someone approves.
 import { h, mount, pageHeader, spinner, errorBox, emptyState } from '../lib/dom.js';
 import { get, atLeast } from '../lib/api.js';
+import { pageSignal } from '../lib/router.js';
 import { session } from '../app.js';
 import { explorer } from './aws_explorer.js';
 
@@ -16,7 +17,7 @@ export async function watchMapPage() {
   mount(el, pageHeader('Map', 'What runs in your cloud, grouped by the stack that made it and the network it is in.'), spinner());
   let accounts = [], v;
   try {
-    [accounts, v] = await Promise.all([get('/v1/aws/accounts').then(r => r.accounts).catch(() => []), get('/v1/infra/aws?account=primary')]);
+    [accounts, v] = await Promise.all([get('/v1/aws/accounts').then(r => r.accounts).catch(() => []), get('/v1/infra/aws?account=primary', { signal: pageSignal() })]);
   } catch (e) { mount(el, pageHeader('Map', ''), errorBox(e.message)); return el; }
   if (account !== 'primary' && !accounts.some(a => a.id === account)) account = 'primary';
   if (!v.enabled && account === 'primary') account = accounts.find(a => !a.primary)?.id || 'primary'; // only added accounts are connected

@@ -41,6 +41,7 @@ import { spacesFor, activeSpace, tabsFor, tabMatches } from './lib/nav.js';
 const root = document.getElementById('root');
 export const session = { role: 'viewer', name: '', user: null };
 let approvalsTimer = 0; // one poll of the approvals count, kept across sign-ins
+let approvalsOnNav = null; // the hashchange listener that refreshes it, so it is added once
 
 function setTheme(dark) {
   document.documentElement.classList.toggle('dark', dark);
@@ -126,7 +127,9 @@ function shell() {
   renderApprovals(); loadApprovals();
   clearInterval(approvalsTimer);
   approvalsTimer = setInterval(() => { if (!document.hidden) loadApprovals(); }, 60000);
-  addEventListener('hashchange', loadApprovals);
+  if (approvalsOnNav) removeEventListener('hashchange', approvalsOnNav); // once, however many times someone signs in
+  approvalsOnNav = loadApprovals;
+  addEventListener('hashchange', approvalsOnNav);
 
   const top = h('header', { class: 'sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-slate-200 bg-white/85 px-4 backdrop-blur lg:pl-72 dark:border-slate-800 dark:bg-slate-900/85' },
     h('button', { class: 'btn-ghost btn-sm lg:hidden', type: 'button', 'aria-label': 'Open menu', onclick: () => { sidebar.classList.toggle('hidden'); sidebar.classList.toggle('flex'); } }, icon('menu', 'size-5')),
@@ -195,6 +198,11 @@ let signedOutHandled = false;
 
 async function boot() {
   stop();
+  // Signed out (or about to find out): nothing of the last session keeps polling the server.
+  clearInterval(approvalsTimer);
+  approvalsTimer = 0;
+  if (approvalsOnNav) removeEventListener('hashchange', approvalsOnNav);
+  approvalsOnNav = null;
   mount(root, spinner());
   let state;
   try { state = await get('/v1/auth/state'); } catch (e) {

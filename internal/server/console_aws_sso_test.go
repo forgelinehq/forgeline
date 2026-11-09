@@ -278,9 +278,7 @@ func TestConsoleSignsInToAWSWithSSO(t *testing.T) {
 	val, _ := json.Marshal(old)
 	h.srv.putSecret(context.Background(), "test", ssoTokenName, string(val), "")
 	h.srv.dropSSOCreds()
-	h.srv.awsCache.mu.Lock()
-	h.srv.awsCache.key = ""
-	h.srv.awsCache.mu.Unlock()
+	h.srv.forgetAWSReads()
 	body := string(admin.expect(200, "GET", "/v1/infra/aws", nil))
 	if !strings.Contains(body, "sign-in expired") {
 		t.Errorf("an expired sign-in is not reported: %s", body)
@@ -369,9 +367,7 @@ func TestSSOVerificationLinkMustBeAWebAddress(t *testing.T) {
 }
 
 func (s *Server) dropAWSCacheForTest() {
-	s.awsCache.mu.Lock()
-	s.awsCache.key, s.awsCache.cost = "", nil
-	s.awsCache.mu.Unlock()
+	s.forgetAWSReads()
 }
 
 func TestMergeEnvUnsetsClearedNames(t *testing.T) {

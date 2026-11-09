@@ -6,6 +6,15 @@ section in the pull request that makes the change; a release moves it under its 
 
 ## [Unreleased]
 
+### Fixed
+- **Faster pages, no old screens.** A page that takes a moment now shows "Loading…" at once instead of leaving the
+  last page up. AWS reads (the account summary, resources, links, alarms) answer from the last read and refresh in the
+  background, one read per account at a time, so a large account's Watch › Map opens in about a tenth of a second
+  after its first read (it took 40 seconds or more each time). The map draws before the stack links arrive. Leaving
+  an AWS page cancels its requests, so they no longer hold the browser's connections. A failed read (an expired
+  sign-in) is never hidden behind an old answer.
+- **After a session ends**, the console stops polling the server (it asked every minute, forever).
+
 ### Added
 - **GitHub Copilot as the assistant.** Settings › Assistant can use the `copilot` program on the server (after
   `copilot login`), like the local `claude` program: no tools, no MCP servers, an empty scratch folder, the question

@@ -2,6 +2,7 @@
 // changed there, and a detail view per resource. Read-only; changes go through Proposals.
 import { h, icon, mount, pill, relTime, absTime, spinner, errorBox, notice, modal, emptyState, copyButton } from '../lib/dom.js';
 import { get } from '../lib/api.js';
+import { pageSignal } from '../lib/router.js';
 import { stateKind, health, attention, stackOwners, linksOf, stackStateWords, CFN_TYPES } from '../lib/awsmap.js';
 import { mapView, keyOf } from './aws_map.js';
 
@@ -34,19 +35,25 @@ export function explorer({ dev, account = 'primary', url = '', scope = 'region' 
   // The map is the default view for AWS; Kubernetes (which passes a url) keeps the list.
   let view = url ? 'list' : 'map', selRes = '';
   const expanded = new Set();
+  let loads = 0;
 
   async function load(refresh) {
+    const n = ++loads;
     mount(root, spinner());
     try {
-      [inv, proposals, alarmData, linkData] = await Promise.all([
-        get(url ? url + (refresh ? '?refresh=1' : '') : '/v1/infra/aws/resources?account=' + encodeURIComponent(account) + (refresh ? '&refresh=1' : '')),
+      const signal = pageSignal();
+      // Stacks and links are optional, and slower (they open each stack): the map draws without them, and draws
+      // its lines when they come. Without them it groups by VPC.
+      const links = url ? Promise.resolve(null) : get('/v1/infra/aws/links?account=' + encodeURIComponent(account) + (refresh ? '&refresh=1' : ''), { signal }).catch(() => null);
+      [inv, proposals, alarmData] = await Promise.all([
+        get(url ? url + (refresh ? '?refresh=1' : '') : '/v1/infra/aws/resources?account=' + encodeURIComponent(account) + (refresh ? '&refresh=1' : ''), { signal }),
         // Proposals are for the primary account, so only it can show "changed through Forgeline".
         account === 'primary' && !url ? get('/v1/ai/proposals').then(r => r.proposals).catch(() => []) : [],
         // Alarms are optional: a role that cannot read them still gets the map, and says so.
-        url ? null : get('/v1/infra/aws/alarms?account=' + encodeURIComponent(account)).catch(e => ({ enabled: true, error: e.message, alarms: [] })),
-        // Stacks and links are optional too: without them the map groups by VPC and draws no lines.
-        url ? null : get('/v1/infra/aws/links?account=' + encodeURIComponent(account) + (refresh ? '&refresh=1' : '')).catch(() => null),
+        url ? null : get('/v1/infra/aws/alarms?account=' + encodeURIComponent(account), { signal }).catch(e => ({ enabled: true, error: e.message, alarms: [] })),
       ]);
+      linkData = null;
+      links.then(l => { if (l && n === loads && root.isConnected) { linkData = l; draw(); } });
     } catch (e) { return mount(root, h('div', { class: 'p-5' }, errorBox(e.message))); }
     draw();
   }

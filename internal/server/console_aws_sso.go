@@ -582,9 +582,7 @@ func (s *Server) handleSSODisconnect(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	s.dropSSOCreds()
-	s.awsCache.mu.Lock()
-	s.awsCache.key, s.awsCache.cost = "", nil
-	s.awsCache.mu.Unlock()
+	s.forgetAWSReads()
 	s.auditReq(r, "integration.aws.sso.signout", "integration/aws", "the stored sign-in was deleted", true)
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }

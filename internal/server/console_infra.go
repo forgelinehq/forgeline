@@ -402,20 +402,14 @@ func (s *Server) handleAWS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	key := acct + "|" + st.Profile + "|" + st.Region
-	s.awsCache.mu.Lock()
-	if r.URL.Query().Get("refresh") != "1" && s.awsCache.key == key && time.Since(s.awsCache.at) < awsCacheTTL {
-		d := s.awsCache.data
-		s.awsCache.mu.Unlock()
-		writeJSON(w, http.StatusOK, d)
-		return
-	}
-	s.awsCache.mu.Unlock()
-
-	d := s.fetchAWS(ctx, st)
-	if d.Error == "" {
-		s.awsCache.mu.Lock()
-		s.awsCache.key, s.awsCache.at, s.awsCache.data = key, time.Now(), d
-		s.awsCache.mu.Unlock()
+	o := s.awsReadOpts(infraSection)
+	o.fresh = awsCacheTTL
+	d, _, err := s.awsSummary.get(ctx, key, r.URL.Query().Get("refresh") == "1", o, func(ctx context.Context) (AWSJSON, bool) {
+		d := s.fetchAWS(ctx, st)
+		return d, d.Error == ""
+	})
+	if err != nil {
+		return // the person left
 	}
 	writeJSON(w, http.StatusOK, d)
 }
@@ -684,9 +678,7 @@ func (s *Server) applyAWSSettings(w http.ResponseWriter, r *http.Request, st aws
 		s.internalError(w, "saving the settings", err)
 		return false
 	}
-	s.awsCache.mu.Lock()
-	s.awsCache.key, s.awsCache.cost = "", nil
-	s.awsCache.mu.Unlock()
+	s.forgetAWSReads()
 	detail := "disabled"
 	if st.Enabled {
 		detail = fmt.Sprintf("profile %q, region %s, account %s", st.Profile, st.Region, res.Identity.Account)
