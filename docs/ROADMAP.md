@@ -29,7 +29,7 @@ one front door. See [note 039](design/039-more-blueprint-blocks.md).
 
 ## Next: any resource, any cloud (note 040)
 
-Status: **designed.** Templates for whole solutions (an AgentCore agent, Lambda, Step Functions, ECS clusters, EKS with
+Status: **step 1 built (guardrails on every preview); step 2 next.** Templates for whole solutions (an AgentCore agent, Lambda, Step Functions, ECS clusters, EKS with
 namespaces, data and code pipelines), repositories linked to what runs them, guardrails on every plan (built-in rules,
 then Conftest, Checkov or Trivy packs), a generic block for any resource type an administrator allows, and a library for templates, skills, tools, agents and guardrail packs. Guardrails come
 first, and everything is AWS only until it is complete; then Google Cloud, then Azure, then RunPod and others. See [note 040](design/040-any-resource-any-cloud.md).

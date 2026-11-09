@@ -16,6 +16,7 @@ import (
 
 	"github.com/forgelinehq/forgeline/internal/blueprint"
 	"github.com/forgelinehq/forgeline/internal/docstore"
+	"github.com/forgelinehq/forgeline/internal/guardrail"
 )
 
 // Building a blueprint (design note 035, slice 3). Preview runs `tofu plan` and keeps the saved plan, sealed by
@@ -65,6 +66,9 @@ type BlueprintPlan struct {
 	Add         int              `json:"add"`
 	Change      int              `json:"change"`
 	Remove      int              `json:"remove"`
+	// Guardrails are the rules the plan breaks (note 040): a deny stops it being sent for approval.
+	Guardrails       []guardrail.Finding `json:"guardrails"`
+	GuardrailVersion string              `json:"guardrail_version,omitempty"`
 }
 
 // storedPlan is the plan with the fields the API never shows.
@@ -80,6 +84,9 @@ func (p storedPlan) view() BlueprintPlan {
 	v := p.BlueprintPlan
 	if v.Changes == nil {
 		v.Changes = []PlanChangeJSON{}
+	}
+	if v.Guardrails == nil {
+		v.Guardrails = []guardrail.Finding{}
 	}
 	return v
 }
@@ -181,6 +188,15 @@ func (s *Server) handlePlanBlueprint(w http.ResponseWriter, r *http.Request) {
 		}
 		now := time.Now().UTC()
 		plan.FinishedAt = &now
+		if guardrail.Denied(plan.Guardrails) {
+			var why []string
+			for _, f := range plan.Guardrails {
+				if f.Level == guardrail.Deny {
+					why = append(why, f.Address+": "+f.Rule)
+				}
+			}
+			s.audit(context.WithoutCancel(ctx), p, "", "blueprint.guardrail.deny", b.ID, strings.Join(why, "; "), false)
+		}
 		if err := s.docs.Put(context.WithoutCancel(ctx), kindBPPlan, b.ID, plan); err != nil {
 			s.log.Error("saving a blueprint preview", "id", b.ID, "err", err)
 		}
@@ -281,6 +297,10 @@ func (s *Server) runPlan(ctx context.Context, b StoredBlueprint, st awsSettings,
 	if err != nil {
 		return err
 	}
+	if plan.Guardrails, err = guardrail.Check(show, code); err != nil {
+		return err
+	}
+	plan.GuardrailVersion = guardrail.Version
 	file, err := os.ReadFile(filepath.Join(dir, "plan.bin"))
 	if err != nil || len(file) > maxPlanFile {
 		return errors.New("the plan file could not be kept")
@@ -385,6 +405,13 @@ func (s *Server) readyPlan(ctx context.Context, id string) (StoredBlueprint, sto
 		return b, p, refusal(http.StatusConflict, "the blueprint was built since the preview; preview again")
 	case p.Add+p.Change+p.Remove == 0:
 		return b, p, refusal(http.StatusConflict, "the preview changes nothing; there is nothing to approve")
+	case p.GuardrailVersion == "":
+		return b, p, refusal(http.StatusConflict, "the preview was made before guardrails were checked; preview again")
+	}
+	for _, f := range p.Guardrails {
+		if f.Level == guardrail.Deny {
+			return b, p, refusal(http.StatusConflict, "the preview breaks a guardrail ("+f.Address+"): "+f.Text)
+		}
 	}
 	return b, p, nil
 }
@@ -409,7 +436,9 @@ func (s *Server) proposeBlueprint(ctx context.Context, c *CloudChange, id string
 		action := map[string]string{"add": "Add", "change": "Modify", "replace": "Remove and add", "remove": "Remove"}[ch.Action]
 		c.Preview = append(c.Preview, ChangePreview{Action: action, Resource: ch.Address, Type: ch.Type, Detail: names[ch.Block]})
 	}
-	c.PreviewNote = "Planned by OpenTofu " + tofuVersion + " at " + p.FinishedAt.Format(time.RFC3339) + "; exactly this plan is applied."
+	c.Guardrails = p.Guardrails
+	c.PreviewNote = "Planned by OpenTofu " + tofuVersion + " at " + p.FinishedAt.Format(time.RFC3339) + "; exactly this plan is applied. " +
+		fmt.Sprintf("Guardrails %s: no rule denied it; %d warning(s) to read.", p.GuardrailVersion, len(p.Guardrails))
 	return func(ctx context.Context, c *CloudChange, _ awsSettings) error {
 		if c.Account != p.AWSAccount {
 			return fmt.Errorf("the preview was made in AWS account %s, but the connection is now %s", p.AWSAccount, c.Account)

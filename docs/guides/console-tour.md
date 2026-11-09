@@ -82,6 +82,12 @@ encrypted and protected from deletion, and AWS creates their passwords and keeps
 the password when it starts (as `DB_PASSWORD` for a database block called `db`), and Forgeline never sees it. A secret
 block is created empty; you set its value in AWS, and only the apps linked to it can read it.
 
+**Guardrails** check every preview before it can be sent for approval. A red line is a **deny**, for example a database
+open to the internet, an unencrypted disk, an IAM user, or a policy that allows every action: Send for approval stays off
+until the blueprint changes, and the attempt is audited. An amber line is a **warning**, for example a web port open to
+the internet on a front door or deleting a table: it does not stop anything, and the approver reads it next to the
+changes.
+
 ![A blueprint]({{ '/console/90-blueprint.png' | relative_url }})
 
 **Built** lists everything Forgeline created and keeps in your cloud accounts: each blueprint that was built, drawn as

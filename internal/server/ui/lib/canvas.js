@@ -206,6 +206,7 @@ export function planState(plan, revision, dirty, now = Date.now()) {
   if (plan.status === 'planning') return 'planning';
   if (plan.status === 'failed') return 'failed';
   if (dirty || plan.revision !== revision || !plan.finished_at || now - new Date(plan.finished_at).getTime() > 3600e3) return 'stale';
+  if ((plan.guardrails || []).some(g => g.level === 'deny')) return 'blocked';
   return plan.add + plan.change + plan.remove ? 'ready' : 'nothing';
 }
 

@@ -6,6 +6,7 @@ import { get, post, put } from '../lib/api.js';
 import { navigate } from '../lib/router.js';
 import { KINDS, EXISTING, DB_SIZES, CACHE_SIZES, blockFacts, linkWords } from '../lib/blueprint.js';
 import { flowPath } from '../lib/flow.js';
+import { guardrailList } from '../lib/guardrails.js';
 import {
   BLOCK_W, BLOCK_H, FARGATE, LOG_DAYS, autoLayout, addBlock, removeBlock, updateBlock, moveBlock, linkTargets,
   addLink, removeLink, toBody, linkPath, bounds, fit, explainError, planByBlock, planState, planWords, placeNew, flowOf,
@@ -130,7 +131,7 @@ export async function designPage({ params }) {
         title: dirty() ? 'Save first: the preview is of the saved blueprint' : 'Ask OpenTofu what building this would do in AWS (reads only)', onclick: preview },
         ps === 'planning' ? 'Previewing…' : 'Preview changes'),
       h('button', { class: (ps === 'ready' ? 'btn-primary' : 'btn-secondary') + ' btn-sm', type: 'button', id: 'design-send', disabled: ps !== 'ready',
-        title: ps === 'ready' ? 'A different administrator approves; then exactly this preview is applied' : 'Preview the changes first', onclick: send }, 'Send for approval'),
+        title: ps === 'ready' ? 'A different administrator approves; then exactly this preview is applied' : ps === 'blocked' ? 'The preview breaks a guardrail; change the blueprint first' : 'Preview the changes first', onclick: send }, 'Send for approval'),
       h('button', { class: 'btn-primary btn-sm', type: 'button', id: 'design-save', disabled: !can, onclick: save }, 'Save')));
   }
 
@@ -153,6 +154,7 @@ export async function designPage({ params }) {
       ps === 'stale' ? h('div', { class: 'mb-2' }, notice('warn', 'The blueprint changed since this preview, or it is over an hour old. Save and preview again before sending it.')) : null,
       h('p', { class: 'text-sm font-medium', id: 'design-plan-summary' }, planWords(plan)),
       h('p', { class: 'muted mb-2 text-xs' }, 'Planned by ' + plan.by + ' ' + relTime(plan.finished_at) + ' against AWS account ' + plan.aws_account + '.'),
+      guardrailList(plan.guardrails, plan.guardrail_version),
       plan.changes.length ? h('details', {}, h('summary', { class: 'cursor-pointer text-sm' }, 'Every resource'),
         h('ul', { class: 'mt-2 max-h-64 space-y-1 overflow-auto text-xs' }, plan.changes.map(c => h('li', { class: 'flex items-center gap-2' },
           h('span', { class: tone[c.action] }, c.action), h('code', { class: 'break-all' }, c.address))))) : null);
@@ -201,7 +203,7 @@ export async function designPage({ params }) {
   function blockNode(b) {
     const k = KINDS[b.kind] || { label: b.kind, tech: '' };
     const ps = planState(plan, revision, dirty());
-    const act = ps === 'ready' || ps === 'nothing' ? ACT[planByBlock(plan)[b.id]] : null;
+    const act = ps === 'ready' || ps === 'nothing' || ps === 'blocked' ? ACT[planByBlock(plan)[b.id]] : null;
     const on = b.id === selected, existing = b.kind === 'existing';
     const g = h('g', { transform: `translate(${b.x} ${b.y})`, tabindex: '0', role: 'button', 'aria-pressed': String(on), 'aria-label': b.name + ', ' + k.label, 'data-block': b.id, class: 'cursor-grab focus:outline-none' },
       h('rect', { width: String(BLOCK_W), height: String(BLOCK_H), rx: '12', 'stroke-width': on ? '2.5' : '1.25', 'stroke-dasharray': existing ? '5 4' : '',

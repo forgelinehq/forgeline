@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/forgelinehq/forgeline/internal/guardrail"
 	"os"
 	"path/filepath"
 	"sort"
@@ -21,12 +22,13 @@ type fakeTofu struct {
 	envs      [][]string
 	dirs      []string
 	failApply bool
+	showExtra []map[string]any // more resource changes for show to report (guardrail tests)
 }
 
 func (f *fakeTofu) run(_ context.Context, dir string, env []string, args ...string) ([]byte, string, error) {
 	f.mu.Lock()
 	f.calls, f.envs, f.dirs = append(f.calls, strings.Join(args, " ")), append(f.envs, env), append(f.dirs, dir)
-	fail := f.failApply
+	fail, extra := f.failApply, f.showExtra
 	f.mu.Unlock()
 	read := func(name string) []byte { b, _ := os.ReadFile(filepath.Join(dir, name)); return b }
 	write := func(name, body string) { os.WriteFile(filepath.Join(dir, name), []byte(body), 0o600) }
@@ -87,7 +89,14 @@ func (f *fakeTofu) run(_ context.Context, dir string, env []string, args ...stri
 				out = append(out, r)
 			}
 		}
-		b, _ := json.Marshal(map[string]any{"resource_changes": out})
+		all := []any{}
+		for _, r := range out {
+			all = append(all, r)
+		}
+		for _, e := range extra {
+			all = append(all, e)
+		}
+		b, _ := json.Marshal(map[string]any{"resource_changes": all})
 		return b, "", nil
 	case "apply":
 		if !strings.HasPrefix(string(read("plan.bin")), "PLAN-FILE:") {
@@ -338,5 +347,67 @@ func TestTofuDownloadIsChecked(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dir, "tofu")); !os.IsNotExist(err) {
 		t.Errorf("a refused download left a binary")
+	}
+}
+
+// A plan that breaks a guardrail is shown with the reason, cannot be sent for approval, and is audited; a plan
+// that only warns can be, and the approver sees the warnings (note 040).
+func TestBlueprintGuardrails(t *testing.T) {
+	m := newMCPHarness(t)
+	m.srv.run = (&awsStub{}).run
+	tf := &fakeTofu{showExtra: []map[string]any{{"address": "aws_iam_user.bot", "mode": "managed", "type": "aws_iam_user", "name": "bot",
+		"change": map[string]any{"actions": []string{"create"}, "after": map[string]any{"name": "bot"}}}}}
+	m.srv.tofuRun = tf.run
+	m.admin.expect(200, "PUT", "/v1/integrations/aws", map[string]any{"enabled": true, "profile": "dev", "region": "ap-south-1"})
+	var made BlueprintJSON
+	json.Unmarshal(m.dev.expect(201, "POST", "/v1/blueprints", bpBody("Shop")), &made)
+	plan := func() BlueprintPlan {
+		t.Helper()
+		m.dev.expect(202, "POST", "/v1/blueprints/"+made.ID+"/plan", nil)
+		var p BlueprintPlan
+		waitFor(t, "the preview", func() bool {
+			json.Unmarshal(m.dev.expect(200, "GET", "/v1/blueprints/"+made.ID+"/plan", nil), &p)
+			return p.Status != planPlanning
+		})
+		return p
+	}
+	p := plan()
+	if p.Status != planReady || !guardrail.Denied(p.Guardrails) || p.Guardrails[0].Rule != "no-iam-users" || p.GuardrailVersion == "" {
+		t.Fatalf("plan = %+v", p.Guardrails)
+	}
+	out := string(m.dev.expect(409, "POST", "/v1/blueprints/"+made.ID+"/propose", map[string]any{"reason": "first build of the shop"}))
+	if !strings.Contains(out, "breaks a guardrail") || !strings.Contains(out, "aws_iam_user.bot") {
+		t.Errorf("a denied plan was accepted: %s", out)
+	}
+	if a := string(m.admin.expect(200, "GET", "/v1/audit?action=blueprint", nil)); !strings.Contains(a, "blueprint.guardrail.deny") {
+		t.Errorf("the deny is not audited")
+	}
+
+	// Warnings only: the change carries them to the approver.
+	tf.mu.Lock()
+	tf.showExtra = []map[string]any{{"address": "aws_iam_role_policy.wide", "mode": "managed", "type": "aws_iam_role_policy", "name": "wide",
+		"change": map[string]any{"actions": []string{"create"}, "after": map[string]any{"policy": `{"Statement":[{"Effect":"Allow","Action":"s3:*","Resource":"arn:aws:s3:::b"}]}`}}}}
+	tf.mu.Unlock()
+	if p = plan(); guardrail.Denied(p.Guardrails) {
+		t.Fatalf("only warnings expected: %+v", p.Guardrails)
+	}
+	// A preview kept from before guardrails existed is not enough.
+	var sp storedPlan
+	m.srv.docs.Get(t.Context(), kindBPPlan, made.ID, &sp)
+	sp.GuardrailVersion = ""
+	m.srv.docs.Put(t.Context(), kindBPPlan, made.ID, sp)
+	if out := string(m.dev.expect(409, "POST", "/v1/blueprints/"+made.ID+"/propose", map[string]any{"reason": "first build of the shop"})); !strings.Contains(out, "before guardrails") {
+		t.Errorf("an unchecked preview was accepted: %s", out)
+	}
+	sp.GuardrailVersion = guardrail.Version
+	m.srv.docs.Put(t.Context(), kindBPPlan, made.ID, sp)
+	var c CloudChange
+	json.Unmarshal(m.dev.expect(202, "POST", "/v1/blueprints/"+made.ID+"/propose", map[string]any{"reason": "first build of the shop"}), &c)
+	found := false
+	for _, f := range c.Guardrails {
+		found = found || (f.Address == "aws_iam_role_policy.wide" && f.Level == guardrail.Warn)
+	}
+	if !found || !strings.Contains(c.PreviewNote, "Guardrails "+guardrail.Version) {
+		t.Errorf("the approver does not see the warnings: %+v %q", c.Guardrails, c.PreviewNote)
 	}
 }
