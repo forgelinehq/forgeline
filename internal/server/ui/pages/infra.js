@@ -3,7 +3,7 @@ import { approvalView } from '../lib/approval.js';
 import { guardrailList } from '../lib/guardrails.js';
 import { versionLabel } from '../lib/version.js';
 import { get, put, post, patch, del, atLeast } from '../lib/api.js';
-import { navigate } from '../lib/router.js';
+import { navigate, pageSignal } from '../lib/router.js';
 import { session } from '../app.js';
 import { ssoWizard } from './aws_sso.js';
 import { explorer } from './aws_explorer.js';
@@ -107,7 +107,7 @@ async function aws(body) {
     if (account !== 'primary' && !accounts.some(a => a.id === account)) account = 'primary'; // it was removed
     const cur = accounts.find(a => a.id === account);
     dev = devRole && (account === 'primary' || !!(cur && cur.writes)); // the primary always takes changes, even if the list failed
-    try { v = await get('/v1/infra/aws' + q(refresh ? '&refresh=1' : '')); } catch (e) { return mount(body, errorBox(e.message)); }
+    try { v = await get('/v1/infra/aws' + q(refresh ? '&refresh=1' : ''), { signal: pageSignal() }); } catch (e) { return mount(body, errorBox(e.message)); }
     if (!v.enabled && account === 'primary') return mount(body, accounts.length ? h('div', { class: 'space-y-4' }, accountBar(), connectCard(null)) : connectCard(null));
     mount(body,
       accounts.length > 1 || admin ? accountBar() : null,

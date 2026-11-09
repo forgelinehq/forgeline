@@ -14,8 +14,12 @@ const listeners = new Set();
 /** Called with no arguments when the server says the session ended. */
 export function onSignedOut(fn) { listeners.add(fn); return () => listeners.delete(fn); }
 
-export async function api(method, path, body) {
-  const init = { method, headers: {}, credentials: 'same-origin' };
+/**
+ * Calls the API. With a signal (usually pageSignal()), a request the person no longer waits for is aborted and its
+ * promise never settles, so the code of a page that was left never runs on with it (and never shows an error).
+ */
+export async function api(method, path, body, signal) {
+  const init = { method, headers: {}, credentials: 'same-origin', signal };
   if (method !== 'GET' && method !== 'HEAD') init.headers['X-Forgeline-Request'] = '1';
   if (body !== undefined) {
     init.headers['Content-Type'] = 'application/json';
@@ -25,10 +29,15 @@ export async function api(method, path, body) {
   try {
     resp = await fetch(path, init);
   } catch (e) {
+    if (signal && signal.aborted) return new Promise(() => {});
     throw new ApiError(0, 'Cannot reach the server. Check that it is running and try again.');
   }
   if (resp.status === 204) return null;
-  const text = await resp.text();
+  let text;
+  try { text = await resp.text(); } catch (e) {
+    if (signal && signal.aborted) return new Promise(() => {});
+    throw new ApiError(0, 'The connection to the server broke. Try again.');
+  }
   let data = null;
   try { data = text ? JSON.parse(text) : null; } catch { /* not JSON */ }
   if (!resp.ok) {
@@ -68,7 +77,7 @@ export async function streamPost(path, body, onEvent, signal) {
   }
 }
 
-export const get = (p) => api('GET', p);
+export const get = (p, opts) => api('GET', p, undefined, opts && opts.signal);
 export const post = (p, b) => api('POST', p, b === undefined ? {} : b);
 export const put = (p, b) => api('PUT', p, b);
 export const patch = (p, b) => api('PATCH', p, b);

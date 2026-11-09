@@ -47,11 +47,21 @@ type AlarmsJSON struct {
 }
 
 func (s *Server) handleAWSAlarms(w http.ResponseWriter, r *http.Request) {
-	st, _, ok := s.accountParam(w, r)
+	st, acct, ok := s.accountParam(w, r)
 	if !ok {
 		return
 	}
-	writeJSON(w, http.StatusOK, s.fetchAlarms(r.Context(), st))
+	// Alarms change more often than resources: kept for at most five minutes while a newer read runs.
+	o := s.awsReadOpts(alarmsTimeout)
+	o.maxAge = 5 * time.Minute
+	d, _, err := s.awsAlarms.get(r.Context(), acct+"|"+st.Profile+"|"+st.Region, r.URL.Query().Get("refresh") == "1", o, func(ctx context.Context) (AlarmsJSON, bool) {
+		d := s.fetchAlarms(ctx, st)
+		return d, d.Error == ""
+	})
+	if err != nil {
+		return // the person left
+	}
+	writeJSON(w, http.StatusOK, d)
 }
 
 func (s *Server) fetchAlarms(ctx context.Context, st awsSettings) AlarmsJSON {

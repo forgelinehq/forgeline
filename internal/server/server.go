@@ -106,8 +106,10 @@ type Server struct {
 	started    time.Time
 	run        cmdRunner // runs docker and aws; replaced in tests
 	awsCache   awsCache
-	awsInv     invCache
-	awsLinks   linksCache
+	awsSummary swrCache[AWSJSON]
+	awsInv     swrCache[AWSInventoryJSON]
+	awsLinks   swrCache[LinksJSON]
+	awsAlarms  swrCache[AlarmsJSON]
 	bp         bpBusy         // one blueprint preview or apply at a time
 	tofuBin    tofuState      // the OpenTofu binary, once found
 	tofuRun    tofuRunner     // tests replace OpenTofu
