@@ -137,7 +137,7 @@ export function explorer({ dev, account = 'primary', url = '', scope = 'region' 
     const found = selRes ? findRes(selRes) : null;
     if (selRes && !found) selRes = ''; // it was removed by a refresh
     mount(box, h('div', { class: 'grid gap-4 px-5 py-4 ' + (found ? 'lg:grid-cols-[minmax(0,1fr)_22rem]' : '') },
-      mapView(inv, { query, alarms: alarmList(), links: linkData, selected: selRes, expanded, onSelect: pick, onExpand: (k) => { expanded.add(k); drawMap(false); } }),
+      mapView(inv, { query, alarms: alarmList(), links: linkData, selected: selRes, expanded, onSelect: pick, onExpand: (k) => { if (expanded.has(k)) expanded.delete(k); else expanded.add(k); drawMap(false); } }),
       found ? h('aside', { class: 'lg:sticky lg:top-20 lg:self-start', 'aria-label': 'Resource details' },
         h('div', { class: 'rounded-xl border border-slate-200 p-4 dark:border-slate-800' },
           h('div', { class: 'mb-3 flex items-start justify-between gap-2' }, h('h3', { class: 'min-w-0 break-all font-medium' }, found.r.name),
