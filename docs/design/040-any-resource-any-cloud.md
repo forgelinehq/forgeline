@@ -1,6 +1,6 @@
 # 040: Any resource, any cloud: templates, a generic block, guardrails and a library
 
-Status: **Design (2026-11-08).** Extends notes 035 and 039. Builds in the order under "Plan".
+Status: **Step 1 built (2026-11-09): built-in guardrails on every blueprint preview (`internal/guardrail`, rule set `builtin-1`).** Extends notes 035 and 039. Builds in the order under "Plan".
 
 ## Question
 

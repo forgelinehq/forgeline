@@ -18,6 +18,7 @@ import (
 	awsdeploy "github.com/forgelinehq/forgeline/deploy/aws"
 	"github.com/forgelinehq/forgeline/internal/authn"
 	"github.com/forgelinehq/forgeline/internal/docstore"
+	"github.com/forgelinehq/forgeline/internal/guardrail"
 )
 
 const (
@@ -87,6 +88,8 @@ type CloudChange struct {
 	ChangeSetType string          `json:"change_set_type,omitempty"`
 	Preview       []ChangePreview `json:"preview"`
 	PreviewNote   string          `json:"preview_note,omitempty"`
+	// Guardrails are the warnings the plan's checks raised (note 040); a change with a deny is never proposed.
+	Guardrails []guardrail.Finding `json:"guardrails,omitempty"`
 
 	Profile string `json:"profile,omitempty"`
 	Region  string `json:"region"`

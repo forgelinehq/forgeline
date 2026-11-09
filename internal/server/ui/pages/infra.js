@@ -1,5 +1,6 @@
 import { h, icon, mount, pill, pageHeader, relTime, absTime, bytes, spinner, errorBox, notice, toast, modal, confirmDialog, field, emptyState, kpi } from '../lib/dom.js';
 import { approvalView } from '../lib/approval.js';
+import { guardrailList } from '../lib/guardrails.js';
 import { versionLabel } from '../lib/version.js';
 import { get, put, post, patch, del, atLeast } from '../lib/api.js';
 import { navigate } from '../lib/router.js';
@@ -353,6 +354,7 @@ async function changes(body) {
         h('div', {}, h('div', { class: 'h-section mb-1' }, 'What would change'), c.preview.length ? h('div', { class: 'overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800' }, h('table', { class: 'tbl' }, h('thead', {}, h('tr', {}, ['Action', 'Resource', 'Type', 'Detail'].map(x => h('th', {}, x)))),
           h('tbody', {}, c.preview.map(p => h('tr', {}, h('td', {}, h('span', { class: /Remove|Delete/.test(p.action) ? 'pill-bad' : /Modify|Stop|Reboot/.test(p.action) ? 'pill-wait' : 'pill-ok' }, p.action)), h('td', { class: 'font-medium' }, p.resource), h('td', { class: 'font-mono text-xs' }, p.type), h('td', { class: 'text-xs' }, [p.replacement && 'replacement: ' + p.replacement, p.detail].filter(Boolean).join(' · ')))))))
           : h('p', { class: 'muted text-sm' }, c.status === 'preparing' ? 'AWS is working out the preview…' : 'No preview is available.')),
+        c.kind === 'blueprint-apply' ? h('div', {}, h('div', { class: 'h-section mb-1' }, 'Guardrails'), guardrailList(c.guardrails), c.preview_note ? h('p', { class: 'muted text-xs' }, c.preview_note) : null) : null,
         c.result && (c.status === 'failed' ? errorBox(c.result) : notice('ok', c.result)),
         c.decided_by && h('p', { class: 'muted text-sm' }, `${c.status === 'rejected' ? 'Rejected' : c.status === 'canceled' ? 'Canceled' : 'Approved'} by ${c.decided_by} ${relTime(c.decided_at)}${c.decision_note ? ': ' + c.decision_note : ''}`),
         canDecide && av.line ? notice('info', av.line + '.') : null,

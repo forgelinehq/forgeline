@@ -7,6 +7,12 @@ section in the pull request that makes the change; a release moves it under its 
 ## [Unreleased]
 
 ### Added
+- **Guardrails on every preview** (design note 040, step 1). Each blueprint preview is checked before it can be sent
+  for approval. It is denied for: anything but web ports open to the internet; public or unencrypted databases; caches
+  without encryption; unencrypted disks; buckets that could be made public; IAM users or access keys;
+  AdministratorAccess-style policies; IAM policies allowing every action or every resource. It warns for: web ports on
+  the internet, deleting what holds data, `service:*` actions, and policies only known at apply. A deny switches off
+  Send for approval and is audited; the approver sees the warnings and which rule set passed.
 - **More blueprint blocks** (design note 039). Databases (RDS MySQL or Postgres: private, encrypted, protected from
   deletion, with backups; AWS creates the password and keeps it in Secrets Manager, and apps get it at start without
   Forgeline ever seeing it), Redis caches (ElastiCache, encrypted), and secrets created empty for a person to fill in AWS.

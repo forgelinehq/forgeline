@@ -55,6 +55,8 @@ const plan = { status: 'ready', revision: 3, finished_at: new Date(1000e3).toISO
 eq('the worst action per block; shared pieces have none', planByBlock(plan), { app: 'remove', data: 'change' });
 eq('ready', planState(plan, 3, false, 1001e3), 'ready');
 eq('unsaved edits make it stale', planState(plan, 3, true, 1001e3), 'stale');
+eq('a guardrail deny blocks it', planState({ ...plan, guardrails: [{ level: 'deny' }] }, 3, false, 1001e3), 'blocked');
+eq('a warning does not', planState({ ...plan, guardrails: [{ level: 'warn' }] }, 3, false, 1001e3), 'ready');
 eq('a newer revision makes it stale', planState(plan, 4, false, 1001e3), 'stale');
 eq('an hour makes it stale', planState(plan, 3, false, 1000e3 + 3601e3), 'stale');
 eq('nothing to do', planState({ ...plan, add: 0, change: 0, remove: 0 }, 3, false, 1001e3), 'nothing');
