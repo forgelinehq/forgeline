@@ -7,6 +7,11 @@ section in the pull request that makes the change; a release moves it under its 
 ## [Unreleased]
 
 ### Fixed
+- **The Map fits large accounts.** Stacks are compact cards in a grid, opened to show what they made; stacks with
+  similar names (datadog-forwarder-…) share one card with a row each; stacks that made nothing the map shows fold
+  into one line; each kind shows 12 tiles before "+N more" (the selected one is always shown); security groups come
+  last; "needs a look" folds up when it is long. On an account with about 500 resources in a region the page went
+  from 10,600 to 3,600 pixels tall. On large accounts only the selected resource's link lines are drawn.
 - **Faster pages, no old screens.** A page that takes a moment now shows "Loading…" at once instead of leaving the
   last page up. AWS reads (the account summary, resources, links, alarms) answer from the last read and refresh in the
   background, one read per account at a time, so a large account's Watch › Map opens in about a tenth of a second

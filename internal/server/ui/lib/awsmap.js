@@ -232,3 +232,42 @@ export function buildMap(inv, query = '', alarms = null, links = null) {
   const shownStacks = query ? stacks.filter(v => v.count > 0 || matches(v.resource || { name: v.name, id: v.id }, query)) : stacks;
   return { stacks: shownStacks, vpcs: shown, regional, attention: flagged, total };
 }
+
+/** The family a stack's name belongs to: its first two words (datadog-forwarder-irsvc-dryrun is datadog-forwarder). */
+export function familyKey(name) {
+  const words = String(name || '').split(/[-_]/).filter(Boolean);
+  return words.length >= 3 ? words.slice(0, 2).join('-') : '';
+}
+
+/**
+ * Sorts stacks for a large account (note 040's map, made to fit): stacks that made nothing on the map and need no
+ * look go to `quiet`; stacks whose names share a family with at least `min` others become one family; the rest stay
+ * single. Order is kept within each list. A stack in trouble is never quiet.
+ */
+export function arrangeStacks(stacks, alarms = null, min = 3) {
+  const quiet = [], rest = [];
+  for (const v of stacks) {
+    const troubled = v.error || (v.resource && attention('cfn', v.resource, alarms).length);
+    (v.count === 0 && !troubled ? quiet : rest).push(v);
+  }
+  const byKey = new Map();
+  for (const v of rest) {
+    const k = familyKey(v.name);
+    if (!k) continue;
+    if (!byKey.has(k)) byKey.set(k, []);
+    byKey.get(k).push(v);
+  }
+  const families = [], single = [], placed = new Set();
+  for (const v of rest) {
+    const k = familyKey(v.name), fam = k && byKey.get(k);
+    if (fam && fam.length >= min) {
+      if (!placed.has(k)) { placed.add(k); families.push({ key: k, stacks: fam, count: fam.reduce((n, x) => n + x.count, 0) }); }
+    } else single.push(v);
+  }
+  return { families, single, quiet };
+}
+
+/** A stack's contents in one line: "Lambda functions 1 · S3 buckets 1". */
+export function contentsLine(v) {
+  return v.groups.map(g => g.svc.label + ' ' + g.items.length).join(' · ');
+}

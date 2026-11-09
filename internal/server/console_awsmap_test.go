@@ -11,7 +11,7 @@ import (
 // Skipped where Node is not installed. Each case says what it protects: the map must state only
 // what the inventory states.
 const awsMapCases = `
-import { stateKind, attention, buildMap, matches, alarmsFor, health, stackOwners, linksOf, linePairs, stackStateWords } from './awsmap.mjs';
+import { stateKind, attention, buildMap, matches, alarmsFor, health, stackOwners, linksOf, linePairs, stackStateWords, familyKey, arrangeStacks, contentsLine } from './awsmap.mjs';
 
 let failed = 0;
 const eq = (name, got, want) => {
@@ -156,6 +156,24 @@ eq('lines only between listed resources', linePairs(sinv, links), [{ from: 'lamb
 eq('a rolled-back stack is explained', stackStateWords('ROLLBACK_COMPLETE').includes('only deleted and deployed again'), true);
 eq('a stuck stack is explained', stackStateWords('UPDATE_ROLLBACK_FAILED').includes('stuck'), true);
 eq('a healthy stack needs no words', stackStateWords('CREATE_COMPLETE'), '');
+
+// Large accounts: families of similar stacks, quiet stacks folded away, contents in one line.
+eq('family of a long name', familyKey('datadog-forwarder-irsvc-dryrun'), 'datadog-forwarder');
+eq('a short name has no family', familyKey('web-app'), '');
+eq('underscores count', familyKey('partner_api_prod'), 'partner-api');
+{
+  const svc = { id: 'lambda', label: 'Lambda functions' };
+  const st = (name, count, extra = {}) => ({ id: name, name, count, groups: count ? [{ svc, items: Array(count).fill({}) }] : [], resource: { id: name, name, state: 'CREATE_COMPLETE' }, ...extra });
+  const a = arrangeStacks([
+    st('datadog-forwarder-a', 3), st('empty-quiet-one', 0), st('datadog-forwarder-b', 3), st('web-app', 2),
+    st('datadog-forwarder-c', 1), st('broken-stack-x', 0, { error: 'AccessDenied' }), st('rolled-back-one', 0, { resource: { id: 'r', name: 'r', state: 'ROLLBACK_COMPLETE' } }),
+    st('two-of-a-kind', 1), st('two-of-b', 1),
+  ]);
+  eq('one family of three', a.families.map(f => [f.key, f.stacks.length, f.count]), [['datadog-forwarder', 3, 7]]);
+  eq('singles keep their order', a.single.map(v => v.name), ['web-app', 'broken-stack-x', 'rolled-back-one', 'two-of-a-kind', 'two-of-b']);
+  eq('only empty, healthy stacks are quiet', a.quiet.map(v => v.name), ['empty-quiet-one']);
+  eq('contents in one line', contentsLine(st('x-y-z', 2)), 'Lambda functions 2');
+}
 
 if (failed) process.exit(1);
 console.log('ok');

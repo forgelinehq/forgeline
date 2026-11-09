@@ -2,15 +2,17 @@
 // category, and a strip of what needs a look. Layout and rules are in lib/awsmap.js (notes 023 and 034).
 // Nothing here is guessed: a line is drawn only where AWS states the link, and no health that was not measured.
 import { h, icon, emptyState } from '../lib/dom.js';
-import { buildMap, stateKind, attention, linePairs } from '../lib/awsmap.js';
+import { buildMap, stateKind, attention, linePairs, arrangeStacks, contentsLine } from '../lib/awsmap.js';
 import { flowPath } from '../lib/flow.js';
 
 const STATE_DOT = { ok: 'bg-emerald-500', bad: 'bg-rose-500', wait: 'bg-amber-500', idle: 'bg-slate-400', none: 'bg-slate-300 dark:bg-slate-600' };
 const CAT_DOT = { Compute: 'bg-sky-500', Containers: 'bg-violet-500', Storage: 'bg-emerald-500', Databases: 'bg-amber-500', Network: 'bg-cyan-500', Messaging: 'bg-pink-500', AI: 'bg-fuchsia-500', Management: 'bg-slate-500' };
-const SHOWN = 40; // tiles per group before "more"
+const SHOWN = 12; // tiles per group before "more": enough to recognise a group, short enough for large accounts
 const ATTN_SHOWN = 8;
 
 export const keyOf = (svc, r) => svc.id + '|' + r.id;
+// Security groups are many and rarely what someone looks for, so they come after what runs in a network.
+const lastSG = (groups) => [...groups].sort((a, b) => (a.svc.id === 'sg') - (b.svc.id === 'sg'));
 
 /**
  * mapView(inv, {query, selected, expanded, onSelect, onExpand}) returns the map element.
@@ -41,12 +43,14 @@ export function mapView(inv, { query = '', alarms = null, links = null, selected
 
   function group(prefix, g) {
     const k = prefix + '/' + g.svc.id, open = expanded.has(k);
-    const items = open ? g.items : g.items.slice(0, SHOWN);
+    let items = open ? g.items : g.items.slice(0, SHOWN);
+    const sel = !open && selected ? g.items.find(r => keyOf(g.svc, r) === selected) : null;
+    if (sel && !items.includes(sel)) items = [...items, sel]; // the selected one is always in view
     return h('div', { 'data-group': g.svc.id },
       h('div', { class: 'mb-1.5 flex items-center gap-2 text-xs' },
         h('span', { class: 'font-medium text-slate-700 dark:text-slate-300' }, g.svc.label), h('span', { class: 'muted tabular-nums' }, String(g.items.length))),
       h('div', { class: 'flex flex-wrap gap-1.5' }, items.map(r => tile(g.svc, r)),
-        g.items.length > SHOWN && !open ? h('button', { type: 'button', class: 'btn-ghost btn-sm', onclick: () => onExpand(k) }, `+${g.items.length - SHOWN} more`) : null));
+        g.items.length > SHOWN ? h('button', { type: 'button', class: 'btn-ghost btn-sm', 'aria-expanded': String(open), onclick: () => onExpand(k) }, open ? 'Show fewer' : `+${g.items.length - items.length} more`) : null));
   }
 
   function vpcBlock(v) {
@@ -59,52 +63,102 @@ export function mapView(inv, { query = '', alarms = null, links = null, selected
         v.isDefault && h('span', { class: 'pill-idle' }, 'default'),
         v.synthetic && h('span', { class: 'muted text-xs' }, 'not in the VPC list'),
         h('span', { class: 'muted ml-auto text-xs tabular-nums' }, `${v.count} resource${v.count === 1 ? '' : 's'}`)),
-      v.groups.length ? h('div', { class: 'space-y-3' }, v.groups.map(g => group(v.id, g))) : h('p', { class: 'muted text-xs' }, 'Nothing in this VPC that Forgeline lists.'));
+      v.groups.length ? h('div', { class: 'space-y-3' }, lastSG(v.groups).map(g => group(v.id, g))) : h('p', { class: 'muted text-xs' }, 'Nothing in this VPC that Forgeline lists.'));
   }
 
-  // A stack's box: what CloudFormation says it made. Its own state is in the header, so a rolled-back stack shows.
-  function stackBlock(v) {
-    const r = v.resource, kind = stateKind(r?.state), key = r ? keyOf(v.svc, r) : '';
+  // Whether a stack shows its tiles: asked for, a search is on, or the selected resource is in it.
+  const holdsSelected = (v) => !!selected && v.groups.some(g => g.items.some(r => keyOf(g.svc, r) === selected));
+  const isOpen = (v) => expanded.has('s:' + v.id) || !!query || holdsSelected(v);
+  const afterParts = (v) => v.others > 0 || v.kept > 0 ? h('p', { class: 'muted mt-2 text-xs' }, [
+    v.others > 0 ? `It also made ${v.others} part${v.others === 1 ? '' : 's'} not shown on the map (roles, policies and the like; see the stack).` : '',
+    v.kept > 0 ? ` ${v.kept} ${v.kept === 1 ? 'was' : 'were'} kept when the stack rolled back or was deleted, so the stack no longer manages ${v.kept === 1 ? 'it' : 'them'}.` : '',
+  ].join('').trim()) : null;
+  const stateDot = (r) => { const kind = stateKind(r?.state); return h('span', { class: 'size-2 shrink-0 rounded-full ' + STATE_DOT[kind], title: r?.state || '', 'aria-hidden': 'true' }); };
+
+  // A compact stack card for the grid: its name, state and contents in one line; the tiles open on request.
+  function stackCard(v) {
+    const r = v.resource, key = r ? keyOf(v.svc, r) : '', open = isOpen(v);
     const why = r ? attention('cfn', r, alarms) : [];
-    return h('section', { class: 'rounded-2xl border-2 border-dashed p-4 ' + (key && key === selected ? 'border-brand-500' : why.some(w => w.level === 'bad') ? 'border-rose-300 dark:border-rose-500/50' : 'border-slate-300 dark:border-slate-700'),
+    return h('section', { class: 'min-w-0 rounded-xl border-2 border-dashed p-3 ' + (key && key === selected ? 'border-brand-500' : why.some(w => w.level === 'bad') ? 'border-rose-300 dark:border-rose-500/50' : 'border-slate-300 dark:border-slate-700'),
       'data-stack': v.id, 'aria-label': 'Stack ' + v.name },
-      h('div', { class: 'mb-3 flex flex-wrap items-center gap-2' },
-        icon('layers', 'size-4 text-slate-500'),
-        r ? h('button', { type: 'button', class: 'font-medium hover:underline', 'data-key': key, 'aria-pressed': String(key === selected), onclick: () => onSelect(key === selected ? '' : key) }, v.name) : h('span', { class: 'font-medium' }, v.name),
-        h('span', { class: 'muted text-xs' }, 'CloudFormation stack'),
-        r?.state && h('span', { class: 'flex items-center gap-1.5 text-xs ' + (kind === 'bad' ? 'text-rose-700 dark:text-rose-300' : 'muted') }, h('span', { class: 'size-2 rounded-full ' + STATE_DOT[kind], 'aria-hidden': 'true' }), r.state),
-        h('span', { class: 'muted ml-auto text-xs tabular-nums' }, `${v.count} resource${v.count === 1 ? '' : 's'} here`)),
-      v.error ? h('p', { class: 'text-xs text-amber-700 dark:text-amber-400' }, 'What it made could not be read: ' + v.error) : null,
-      v.groups.length ? h('div', { class: 'space-y-3' }, v.groups.map(g => group('s:' + v.id, g))) : !v.error ? h('p', { class: 'muted text-xs' }, 'Nothing it made is in the lists Forgeline reads.') : null,
-      v.others > 0 || v.kept > 0 ? h('p', { class: 'muted mt-3 text-xs' }, [
-        v.others > 0 ? `It also made ${v.others} part${v.others === 1 ? '' : 's'} not shown on the map (roles, policies and the like; see the stack).` : '',
-        v.kept > 0 ? ` ${v.kept} ${v.kept === 1 ? 'was' : 'were'} kept when the stack rolled back or was deleted, so the stack no longer manages ${v.kept === 1 ? 'it' : 'them'}.` : '',
-      ].join('').trim()) : null);
+      h('div', { class: 'flex min-w-0 items-center gap-2' },
+        icon('layers', 'size-4 shrink-0 text-slate-500'),
+        r ? h('button', { type: 'button', class: 'min-w-0 truncate font-medium hover:underline', title: v.name + (r.state ? ' · ' + r.state : ''), 'data-key': key, 'aria-pressed': String(key === selected), onclick: () => onSelect(key === selected ? '' : key) }, v.name) : h('span', { class: 'min-w-0 truncate font-medium', title: v.name }, v.name),
+        stateDot(r),
+        h('span', { class: 'muted ml-auto shrink-0 text-xs tabular-nums' }, String(v.count))),
+      v.error ? h('p', { class: 'mt-1 text-xs text-amber-700 dark:text-amber-400' }, 'What it made could not be read: ' + v.error) : null,
+      v.groups.length ? h('button', { type: 'button', class: 'muted mt-1 flex w-full min-w-0 items-center gap-1 text-left text-xs hover:text-slate-700 dark:hover:text-slate-200', 'aria-expanded': String(open), 'data-toggle': v.id, onclick: () => onExpand('s:' + v.id) },
+        icon('chevron', 'size-3 shrink-0 ' + (open ? 'rotate-90' : '')), h('span', { class: 'truncate' }, contentsLine(v))) : null,
+      open && v.groups.length ? h('div', { class: 'mt-2 space-y-3' }, v.groups.map(g => group('s:' + v.id, g)), afterParts(v)) : null);
+  }
+
+  // Stacks with similar names (datadog-forwarder-…) in one card: a row each, opened one at a time.
+  function familyCard(f) {
+    return h('section', { class: 'min-w-0 rounded-xl border-2 border-dashed border-slate-300 p-3 lg:col-span-2 2xl:col-span-1 dark:border-slate-700', 'data-family': f.key, 'aria-label': 'Stacks named ' + f.key + '-…' },
+      h('div', { class: 'mb-2 flex items-center gap-2' }, icon('layers', 'size-4 text-slate-500'),
+        h('span', { class: 'font-medium' }, f.key + '-…'), h('span', { class: 'muted text-xs' }, `${f.stacks.length} stacks`),
+        h('span', { class: 'muted ml-auto text-xs tabular-nums' }, String(f.count))),
+      h('ul', { class: 'divide-y divide-slate-200 dark:divide-slate-800' }, f.stacks.map(v => {
+        const open = isOpen(v), r = v.resource, key = r ? keyOf(v.svc, r) : '';
+        return h('li', { class: 'py-1.5', 'data-stack': v.id },
+          h('div', { class: 'flex min-w-0 items-center gap-2 text-sm' },
+            h('button', { type: 'button', class: 'shrink-0', 'aria-label': (open ? 'Hide' : 'Show') + ' what ' + v.name + ' made', 'aria-expanded': String(open), 'data-toggle': v.id, onclick: () => onExpand('s:' + v.id) }, icon('chevron', 'size-3 text-slate-500 ' + (open ? 'rotate-90' : ''))),
+            stateDot(r),
+            r ? h('button', { type: 'button', class: 'min-w-0 truncate hover:underline' + (key === selected ? ' font-semibold text-brand-700 dark:text-brand-300' : ''), title: v.name, 'data-key': key, onclick: () => onSelect(key === selected ? '' : key) }, v.name.slice(f.key.length + 1) || v.name) : h('span', { class: 'min-w-0 truncate' }, v.name),
+            h('span', { class: 'muted ml-auto hidden shrink-0 truncate text-xs sm:inline' }, contentsLine(v)),
+            h('span', { class: 'muted shrink-0 text-xs tabular-nums' }, String(v.count))),
+          v.error ? h('p', { class: 'ml-5 text-xs text-amber-700 dark:text-amber-400' }, 'What it made could not be read: ' + v.error) : null,
+          open && v.groups.length ? h('div', { class: 'ml-5 mt-2 space-y-3' }, v.groups.map(g => group('s:' + v.id, g)), afterParts(v)) : null);
+      })));
+  }
+
+  // Stacks that made nothing the map shows, in one line that opens.
+  function quietStacks(list) {
+    if (!list.length) return null;
+    return h('details', { class: 'rounded-xl border border-slate-200 p-3 text-sm dark:border-slate-800', id: 'map-quiet', open: !!query },
+      h('summary', { class: 'muted cursor-pointer text-xs' }, `${list.length} more stack${list.length === 1 ? '' : 's'} made only parts the map does not show (roles, policies and the like)`),
+      h('div', { class: 'mt-2 flex flex-wrap gap-1.5' }, list.map(v => {
+        const key = v.resource ? keyOf(v.svc, v.resource) : '';
+        return h('button', { type: 'button', class: 'flex max-w-full items-center gap-1.5 rounded-lg border border-slate-200 px-2 py-1 text-xs dark:border-slate-800', 'data-stack': v.id, title: v.name, onclick: () => key && onSelect(key === selected ? '' : key) },
+          stateDot(v.resource), h('span', { class: 'max-w-64 truncate' }, v.name));
+      })));
   }
 
   function attentionStrip() {
     if (!m.attention.length) return null;
     const rows = m.attention.slice(0, ATTN_SHOWN);
-    return h('section', { class: 'rounded-xl border border-amber-200 bg-amber-50 p-3 dark:border-amber-500/30 dark:bg-amber-950/30', 'aria-label': 'Needs a look', id: 'map-attention' },
-      h('div', { class: 'mb-2 flex items-center gap-2 text-sm font-medium text-amber-900 dark:text-amber-200' }, icon('alert', 'size-4'),
+    return h('details', { class: 'rounded-xl border border-amber-200 bg-amber-50 p-3 dark:border-amber-500/30 dark:bg-amber-950/30', 'aria-label': 'Needs a look', id: 'map-attention', open: m.attention.length <= 3 || !!query },
+      h('summary', { class: 'flex cursor-pointer items-center gap-2 text-sm font-medium text-amber-900 dark:text-amber-200' }, icon('alert', 'size-4'),
         `${m.attention.length} ${m.attention.length === 1 ? 'resource needs' : 'resources need'} a look`),
-      h('ul', { class: 'space-y-1' }, rows.map(({ svc, r, why }) => h('li', {},
-        h('button', { type: 'button', class: 'flex w-full flex-wrap items-baseline gap-x-2 rounded px-1 text-left text-sm hover:bg-amber-100 dark:hover:bg-amber-500/10', onclick: () => onSelect(keyOf(svc, r)) },
-          h('span', { class: 'font-medium' }, r.name), h('span', { class: 'muted text-xs' }, svc.label),
-          h('span', { class: 'text-xs text-amber-800 dark:text-amber-300' }, why.map(w => w.text).join(' · ')))))),
+      h('ul', { class: 'mt-2 space-y-0.5' }, rows.map(({ svc, r, why }) => h('li', {},
+        h('button', { type: 'button', class: 'flex w-full min-w-0 items-baseline gap-x-2 rounded px-1 text-left text-sm hover:bg-amber-100 dark:hover:bg-amber-500/10', title: r.name + ': ' + why.map(w => w.text).join(' · '), onclick: () => onSelect(keyOf(svc, r)) },
+          h('span', { class: 'max-w-72 shrink-0 truncate font-medium' }, r.name), h('span', { class: 'muted shrink-0 text-xs' }, svc.label),
+          h('span', { class: 'min-w-0 truncate text-xs text-amber-800 dark:text-amber-300' }, why.map(w => w.text).join(' · ')))))),
       m.attention.length > ATTN_SHOWN && h('p', { class: 'muted mt-1 text-xs' }, `and ${m.attention.length - ATTN_SHOWN} more, marked on the map`));
   }
 
   const legend = h('div', { class: 'muted flex flex-wrap items-center gap-x-4 gap-y-1 text-xs', 'aria-label': 'Legend' },
     [['ok', 'running or available'], ['wait', 'changing'], ['bad', 'failing'], ['idle', 'other state']].map(([k, label]) => h('span', { class: 'flex items-center gap-1.5' }, h('span', { class: 'size-2 rounded-full ' + STATE_DOT[k] }), label)),
     h('span', { class: 'flex items-center gap-1.5' }, icon('alert', 'size-3.5 text-amber-600 dark:text-amber-400'), 'needs a look'),
-    h('span', {}, 'Dashed box: what one CloudFormation stack made, or one VPC. Lines: a function that reads a queue or a table’s stream, as Lambda states it; moving dots mean the link is enabled and show which way data goes (traffic is not measured). Nothing else is linked.'));
+    h('span', {}, 'Dashed box: what one CloudFormation stack made (open it to see its resources; similar names share a box), or one VPC. Lines: a function that reads a queue or a table’s stream, as Lambda states it (on a large account, only for the resource you pick); moving dots mean the link is enabled and show which way data goes (traffic is not measured). Nothing else is linked.'));
 
-  const pairs = links ? linePairs(inv, links) : [];
+  function stackArea() {
+    if (!m.stacks.length) return null;
+    const ar = arrangeStacks(m.stacks, alarms);
+    return h('div', { class: 'space-y-3', id: 'map-stacks' },
+      ar.families.length || ar.single.length ? h('div', { class: 'grid items-start gap-3 lg:grid-cols-2 2xl:grid-cols-3' }, ar.families.map(familyCard), ar.single.map(stackCard)) : null,
+      quietStacks(ar.quiet));
+  }
+
+  // On a large account every line at once crosses boxes and names; there only the selected resource's lines are drawn.
+  const LARGE = 150;
+  const allPairs = links ? linePairs(inv, links) : [];
+  const large = m.total > LARGE;
+  const pairs = large ? allPairs.filter(p => selected && (p.from === selected || p.to === selected)) : allPairs;
   // Under the tiles (isolate + -z-10), so a line shows between boxes and never across a name.
   const svg = h('svg', { class: 'pointer-events-none absolute inset-0 -z-10 mt-0! overflow-visible text-slate-400 dark:text-slate-500', 'aria-hidden': 'true', width: '0', height: '0' });
   const wrap = h('div', { class: 'relative isolate space-y-4', id: 'aws-map' }, legend, attentionStrip(),
-    m.stacks.map(stackBlock),
+    stackArea(),
     m.vpcs.map(vpcBlock),
     m.regional.length && m.vpcs.length ? h('p', { class: 'muted text-xs' }, 'Not placed in a VPC: the inventory records no VPC for these.') : null,
     m.regional.map(c => h('section', { 'data-category': c.category, 'aria-label': c.category },
