@@ -7,6 +7,9 @@ section in the pull request that makes the change; a release moves it under its 
 ## [Unreleased]
 
 ### Added
+- **GitHub Copilot as the assistant.** Settings › Assistant can use the `copilot` program on the server (after
+  `copilot login`), like the local `claude` program: no tools, no MCP servers, an empty scratch folder, the question
+  on stdin, a clean environment. Tokens are counted in AI use; each question is one Copilot premium request.
 - **Guardrails on every preview** (design note 040, step 1). Each blueprint preview is checked before it can be sent
   for approval. It is denied for: anything but web ports open to the internet; public or unencrypted databases; caches
   without encryption; unencrypted disks; buckets that could be made public; IAM users or access keys;

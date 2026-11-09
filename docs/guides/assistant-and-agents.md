@@ -22,11 +22,15 @@ Click **Assistant** in the top bar. It sees the page you are on (a run, a pipeli
 
 Set it up under **Settings → Connections**: open **Claude** (under Add a connection until it is set up) and choose **Connect** (or **Open settings**). A **Test connection** button in the same popup sends one short question to check it.
 
-The settings offer three ways to sign in:
+The settings offer four ways to sign in:
 
 - **Anthropic API key**: stored in the vault. Billed to that key. Best for teams.
 - **Claude Code login token**: paste the output of `claude setup-token` once. It is stored as the secret `CLAUDE_CODE_OAUTH_TOKEN`, the same one agent steps use. The `claude` program runs in a scratch home directory with only that token, so the server user's own login is not touched.
 - **Local `claude` CLI**: uses the login of the person running the server. Meant for a single-person setup.
+- **Local `copilot` CLI** (GitHub Copilot): run `copilot login` as the server's user first. Forgeline runs
+  `copilot` with no tools, no MCP servers and no custom instructions, in an empty scratch folder, with the question on
+  stdin and nothing of the server's environment. Each question uses one Copilot premium request (a free plan has only
+  a few a month); leave the model empty to let Copilot choose, or name one. Meant for a single-person setup.
 
 ![Settings]({{ '/console/33-assistant-token.png' | relative_url }})
 
@@ -104,6 +108,6 @@ Forgeline builds the command line and runs the vendor's own `claude` CLI in the 
 ![Agent step]({{ '/console/20-agent-step.png' | relative_url }})
 
 {: .warning }
-Check Anthropic's terms before using a subscription token (`setup-token`) for automation. An API key is the safer production choice. Codex and Copilot providers are not built yet.
+Check Anthropic's terms before using a subscription token (`setup-token`) for automation. An API key is the safer production choice. Codex and Copilot agent steps are not built yet; Copilot can already answer as the assistant.
 
 Designs: [007 agent steps](https://github.com/forgelinehq/forgeline/blob/main/docs/design/007-agent-steps.md), [008 assistant](https://github.com/forgelinehq/forgeline/blob/main/docs/design/008-assistant.md).

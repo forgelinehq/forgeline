@@ -327,6 +327,8 @@ func claudeBackendName(b string) string {
 	switch b {
 	case assistCLI:
 		return "the claude program on the server"
+	case assistCopilot:
+		return "the copilot program on the server"
 	case assistAPI:
 		return "an Anthropic API key"
 	}
