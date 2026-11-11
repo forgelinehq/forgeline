@@ -21,6 +21,10 @@ section in the pull request that makes the change; a release moves it under its 
 - **After a session ends**, the console stops polling the server (it asked every minute, forever).
 
 ### Added
+- **Watch › Services.** One tile per AWS service, read one at a time (four in flight) so the page draws at once and
+  fills in as each answer comes, and a page per service (`#/services/<id>`) that lists only that service with search,
+  details and alarms. The server reads one service with its own calls and its own cache entry (`?service=`), or from
+  the whole inventory when that was read lately; `GET /v1/infra/aws/services` lists the services without an AWS call.
 - **`install.sh`.** One command installs Forgeline without root: from a clone it builds with Go (downloading the
   toolchain the repository asks for, checksum verified, when none is installed); on its own it downloads the latest
   release for the machine and checks it against the release's SHA256SUMS. It makes a token once, keeps it in

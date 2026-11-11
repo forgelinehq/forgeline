@@ -49,7 +49,8 @@ agent that uses up its budget stops before its next model call. A new server sho
 Missions give an agent a goal: it reads, proposes
 fixes for a different administrator to approve, checks its work and reports, and every finding must name the lookup
 that showed it. Watch › Map shows your AWS account with
-resources inside the stack that made them and lines where AWS says one uses another. Build › Design and
+resources inside the stack that made them and lines where AWS says one uses another; Watch › Services reads each
+service on its own, tile by tile, and gives every service its own page. Build › Design and
 Blueprints draw what should exist (a front door with paths, apps that call each other and scale with load, tables, files, queues, MySQL or Postgres databases, Redis, secrets) with safe settings chosen for you, say
 in plain words what it means, and show the OpenTofu code it generates. Preview changes shows what OpenTofu would do in AWS and checks it against guardrails (nothing but web ports open to
 the internet, data encrypted, no IAM users or wildcard permissions); a different

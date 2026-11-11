@@ -156,6 +156,14 @@ flagged, **Ask the assistant to fix it**. A switch at the top changes account.
 
 ![Watch › Map]({{ '/console/89-watch-map.png' | relative_url }})
 
+**Services** shows one tile per AWS service (EC2, Lambda, S3, RDS, queues, stacks and so on). The page draws at once
+and each tile is read on its own, a few at a time, so the first ones fill in while the rest are still being read; a
+service the role may not list says so on its tile. Opening a tile shows everything of that kind in the account on its
+own page, with search, details and alarms, read with that service's calls only. The Map's list view links to the same
+pages ("Open its page").
+
+![Watch › Services]({{ '/console/118-watch-services.png' | relative_url }})
+
 **Infrastructure** has tabs for the **Platform** (the Forgeline server, the Docker host and running steps), each cloud
 (**AWS account**, **Google Cloud**, **Azure**) and **Cloud changes** (stacks, blueprints and environments proposed, approved
 and applied). **Kubernetes** lists clusters and what runs in them; **Security** lists the findings of Forgeline's checks.

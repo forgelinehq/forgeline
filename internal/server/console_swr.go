@@ -80,6 +80,18 @@ func (c *swrCache[T]) get(ctx context.Context, key string, refresh bool, o swrOp
 	}
 }
 
+// peek returns the kept answer for key when there is one younger than maxAge, without starting a read.
+func (c *swrCache[T]) peek(key string, maxAge time.Duration) (T, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	e := c.entries[key]
+	if e == nil || !e.have || time.Since(e.at) >= maxAge {
+		var zero T
+		return zero, false
+	}
+	return e.data, true
+}
+
 // clear forgets every kept answer (the AWS sign-in or settings changed). Reads in flight finish for their waiters
 // but are not kept.
 func (c *swrCache[T]) clear() {

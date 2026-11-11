@@ -30,6 +30,7 @@ import { ssoPage } from './pages/sso.js';
 import { approvalRulesPage } from './pages/approval_rules.js';
 import { teamPage } from './pages/team.js';
 import { watchMapPage } from './pages/watch_map.js';
+import { servicesPage, servicePage } from './pages/services.js';
 import { aiUsePage } from './pages/ai_use.js';
 import { missionsPage, missionPage } from './pages/missions.js';
 import { builtPage } from './pages/built.js';
@@ -240,6 +241,8 @@ async function boot() {
     route('/proposals', guard('viewer', proposalsPage));
     route('/proposals/:id', guard('viewer', proposalsPage));
     route('/map', guard('viewer', watchMapPage));
+    route('/services', guard('viewer', servicesPage));
+    route('/services/:id', guard('viewer', servicePage));
     route('/ai-use', guard('developer', aiUsePage));
     route('/missions', guard('developer', missionsPage));
     route('/built', guard('developer', builtPage));
