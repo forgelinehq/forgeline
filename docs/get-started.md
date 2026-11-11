@@ -14,8 +14,22 @@ No cloud account, database or other setup is needed for this page. Checked from 
 
 ## 1. Build and start
 
+The quickest way is the installer: it builds (or downloads a release), makes a token, and on Linux keeps the server
+running as a systemd user service. It never needs root, and running it again updates Forgeline.
+
 ```sh
 git clone https://github.com/forgelinehq/forgeline && cd forgeline
+./install.sh --service          # Linux; on macOS leave --service out and start it as printed
+```
+
+Without a clone: `sh -c "$(curl -fsSL https://raw.githubusercontent.com/forgelinehq/forgeline/main/install.sh)" -- --service`
+downloads the latest release for your machine and checks it against the release's checksums. Either way it prints an
+**Open** link (go to step 2) and a `forgeline onboard` command. Everything lives under `~/.forgeline` (`--dir` changes
+that; `--listen` changes the address; `--help` lists the rest). Logs: `journalctl --user -u forgeline`.
+
+Or build and run it yourself, in the foreground:
+
+```sh
 make run-local
 ```
 

@@ -40,3 +40,5 @@ jobs:
       - run: make css-check
       # The docs site's sync (docs/ to Starlight) has no dependencies, so its tests run without npm.
       - run: node --test site/scripts/sync.test.mjs
+      # The installer must keep working from a clone: syntax, a build into a temporary directory, and the binary runs.
+      - run: sh -n install.sh && ./install.sh --source --dir "$RUNNER_TEMP/forgeline-install" --no-start && "$RUNNER_TEMP/forgeline-install/bin/forgeline" version
