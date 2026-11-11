@@ -10,6 +10,23 @@ progressive delivery (canary and blue-green) in one tool you can run yourself.
 
 Documentation: https://forgelinehq.github.io/forgeline/ (get started, guides with screenshots, API reference).
 
+## Install
+
+One command, no root. It puts the binary, a data directory and a token under `~/.forgeline`, and on
+Linux `--service` keeps the server running as a systemd user service. Run it again to update.
+
+```sh
+# from a clone (builds with Go; downloads the Go toolchain the repository asks for if you have none)
+git clone https://github.com/forgelinehq/forgeline && cd forgeline && ./install.sh --service
+
+# or without a clone (downloads the latest release for your machine and checks its checksum)
+sh -c "$(curl -fsSL https://raw.githubusercontent.com/forgelinehq/forgeline/main/install.sh)" -- --service
+```
+
+It prints the link to open (the first visit creates the administrator) and the `forgeline onboard` command that
+shows what is set up and what is left. `./install.sh --help` lists the options (`--dir`, `--listen`, `--version`).
+Docker must be running for pipeline steps to run.
+
 ## Try the console
 
 ```sh

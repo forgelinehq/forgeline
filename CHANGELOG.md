@@ -21,6 +21,11 @@ section in the pull request that makes the change; a release moves it under its 
 - **After a session ends**, the console stops polling the server (it asked every minute, forever).
 
 ### Added
+- **`install.sh`.** One command installs Forgeline without root: from a clone it builds with Go (downloading the
+  toolchain the repository asks for, checksum verified, when none is installed); on its own it downloads the latest
+  release for the machine and checks it against the release's SHA256SUMS. It makes a token once, keeps it in
+  `~/.forgeline/env`, and with `--service` installs and starts a systemd user service (it refuses to overwrite a unit it
+  did not write). It prints the link to open and the `forgeline onboard` command. CI runs it from the clone.
 - **GitHub Copilot as the assistant.** Settings › Assistant can use the `copilot` program on the server (after
   `copilot login`), like the local `claude` program: no tools, no MCP servers, an empty scratch folder, the question
   on stdin, a clean environment. Tokens are counted in AI use; each question is one Copilot premium request.
