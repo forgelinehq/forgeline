@@ -47,7 +47,7 @@ export async function workflowPage({ params }) {
       h('div', { class: 'space-y-4' },
         h('section', { class: 'card card-pad' },
           h('div', { class: 'mb-3 flex flex-wrap items-center justify-between gap-2' }, h('h2', { class: 'h-section' }, 'Version ' + v.n + (v.n === wf.current ? ' (current)' : '')),
-            h('div', { class: 'flex flex-wrap items-center gap-2 text-sm' }, h('span', { class: 'pill-idle' }, scheduleLabel(v.every_minutes)), h('span', { class: 'pill-idle', title: 'The most a run of this workflow may do. Never an administrator.' }, 'runs as ' + v.run_as), shortHash(v.hash))),
+            h('div', { class: 'flex flex-wrap items-center gap-2 text-sm' }, h('span', { class: 'pill-idle' }, scheduleLabel(v.every_minutes || 0)), h('span', { class: 'pill-idle', title: 'The most a run of this workflow may do. Never an administrator.' }, 'runs as ' + v.run_as), shortHash(v.hash))),
           h('ol', { class: 'space-y-3', id: 'workflow-stages' }, v.stages.map((st, i) => h('li', { class: 'rounded-lg border border-slate-200 p-3 dark:border-slate-800' },
             h('div', { class: 'mb-2 flex items-center gap-2 text-sm font-medium' }, h('span', { class: 'muted' }, (i + 1) + '.'), st.name, st.gate && h('span', { class: 'pill-wait', title: 'An administrator releases this stage' }, icon('lock', 'size-3'), 'waits for approval')),
             h('div', { class: 'grid gap-2 ' + (st.steps.length > 1 ? 'sm:grid-cols-2' : '') }, st.steps.map(sp => h('div', { class: 'rounded-md bg-slate-50 p-2.5 text-sm dark:bg-slate-900' },
@@ -137,7 +137,7 @@ export async function workflowRunPage({ params }) {
     mount(el, pageHeader(r.workflow_name, `Run of version ${r.version}, ${r.trigger === 'schedule' ? 'by its schedule' : 'started by ' + r.by}, ${relTime(r.started_at)}`,
       h('a', { class: 'btn-secondary btn-sm', href: '#/workflows/' + r.workflow }, 'The workflow'),
       live && h('button', { class: 'btn-secondary btn-sm', id: 'cancel-run', type: 'button', onclick: async () => {
-        if (!await confirmDialog({ title: 'Cancel this run?', body: 'Steps already finished keep their results. Nothing further starts.', confirmLabel: 'Cancel the run', danger: true })) return;
+        if (!await confirmDialog({ title: 'Cancel this run?', body: 'Steps already finished keep their results. Nothing further starts.', confirmLabel: 'Cancel the run', cancelLabel: 'Keep running', danger: true })) return;
         try { await post('/v1/ai/workflow-runs/' + r.id + '/cancel'); toast('Cancelled', 'ok'); load(); } catch (e) { toast(e.message, 'error'); }
       } }, 'Cancel run')),
       h('div', { class: 'mb-4 flex flex-wrap items-center gap-3 text-sm' }, statusPill(r.status), h('span', { class: 'muted' }, 'runs as ' + r.run_as), shortHash(r.hash),

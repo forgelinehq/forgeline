@@ -7,6 +7,12 @@ section in the pull request that makes the change; a release moves it under its 
 ## [Unreleased]
 
 ### Fixed
+- **Workflow runs and Guard scans in the right order.** Their ids were random and the store lists by id, so the
+  runs table, the Team page's "last mission" and the pruning of old runs and scans worked on a random order
+  (pruning could delete the newest run). New ids follow time, and lists and pruning sort by start time anyway.
+- **Workflow pages.** A workflow that only runs by hand said "Every undefined minutes". The dialog that cancels a
+  run or a mission offered "Cancel" next to "Cancel the run"; the dismiss button now says "Keep running" or "Keep
+  going". A dialog left open no longer sits over the next page: leaving the page closes it.
 - **The Map fits large accounts.** Stacks are compact cards in a grid, opened to show what they made; stacks with
   similar names (datadog-forwarder-…) share one card with a row each; stacks that made nothing the map shows fold
   into one line; each kind shows 12 tiles before "+N more" (the selected one is always shown); security groups come

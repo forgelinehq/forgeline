@@ -111,7 +111,7 @@ export async function missionPage({ params }) {
       pageHeader(m.goal, `${m.agent_name} (version ${m.agent_version}${m.may_propose ? ', may propose' : ', advises only'}) · account ${m.account} · started by ${m.by} ${relTime(m.started_at)}`,
         h('span', { class: STATUS[m.status] }, m.status),
         mayCancel && h('button', { class: 'btn-ghost btn-sm text-rose-600 dark:text-rose-400', type: 'button', id: 'mission-cancel', onclick: async () => {
-          if (!await confirmDialog({ title: 'Cancel this mission?', body: 'It stops where it is. Proposals it already filed stay for an administrator to decide.', confirmLabel: 'Cancel mission', danger: true })) return;
+          if (!await confirmDialog({ title: 'Cancel this mission?', body: 'It stops where it is. Proposals it already filed stay for an administrator to decide.', confirmLabel: 'Cancel mission', cancelLabel: 'Keep going', danger: true })) return;
           try { await post('/v1/missions/' + encodeURIComponent(m.id) + '/cancel', {}); toast('Cancelled', 'ok'); load(); } catch (e) { toast(e.message, 'error'); }
         } }, 'Cancel')),
       h('section', { class: 'card card-pad mb-4' }, graph,

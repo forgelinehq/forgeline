@@ -40,7 +40,7 @@ export async function runPage({ params }) {
   function stop() { clearInterval(timer); timer = null; }
 
   async function cancel() {
-    if (!await confirmDialog({ title: 'Cancel this run?', body: 'Steps that are running will be stopped.', confirmLabel: 'Cancel run', danger: true })) return;
+    if (!await confirmDialog({ title: 'Cancel this run?', body: 'Steps that are running will be stopped.', confirmLabel: 'Cancel run', cancelLabel: 'Keep running', danger: true })) return;
     try { await post('/v1/runs/' + encodeURIComponent(id) + '/cancel'); toast('Cancel requested', 'ok'); refresh(); } catch (e) { toast(e.message, 'error'); }
   }
 
