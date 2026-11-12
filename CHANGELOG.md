@@ -47,6 +47,9 @@ section in the pull request that makes the change; a release moves it under its 
 - **After a session ends**, the console stops polling the server (it asked every minute, forever).
 
 ### Added
+- **Workflows as a graph.** A workflow's page draws it like n8n: the trigger, each stage as a column of agents that run
+  together, and an approval node before a gated stage. A run's page shows each node's state live, with moving dots into
+  what is working.
 - **Code from GitHub for apps and agents** (design note 040, step 4). A block can name its repository, branch and folder.
   The blueprint makes a private ECR repository for it and a push role only GitHub Actions in that branch can use, and
   **Build from GitHub…** suggests the workflow (actions pinned to commit SHAs, arm64 for agents) and a Forgeline
