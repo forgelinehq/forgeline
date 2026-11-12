@@ -46,7 +46,7 @@ approval rules can ask for two approvals, or named approvers, for the changes th
 download the audit log as CSV or JSON Lines and choose how long it is kept. Team shows your agents as an
 org chart with what each is doing, when it wakes next and how much of its monthly budget it has used; an
 agent that uses up its budget stops before its next model call. A new server shows **Set up Forgeline** on Home (and `forgeline onboard` in a terminal) until it is set up.
-The Marketplace installs ready-made agents and whole teams (an incident triage team, a weekly platform review,
+The assistant can write skills, agents and workflows for you to confirm. The Marketplace installs ready-made agents and whole teams (an incident triage team, a weekly platform review,
 an AgentCore readiness advisor, repository to pipeline, an architecture review) as versions you can review.
 Missions give an agent a goal: it reads, proposes
 fixes for a different administrator to approve, checks its work and reports, and every finding must name the lookup
