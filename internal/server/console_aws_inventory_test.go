@@ -106,6 +106,7 @@ type awsStub struct {
 	calls  []string
 	deny   map[string]bool // "ecs list-services" -> AccessDenied
 	stacks bool            // describe-stacks answers with three stacks (links tests)
+	agents string          // the AgentCore "Total Agents per Account" quota service-quotas answers; "" = no such quota listed
 }
 
 func (a *awsStub) run(_ context.Context, name string, args ...string) ([]byte, string, error) {
@@ -125,6 +126,11 @@ func (a *awsStub) run(_ context.Context, name string, args ...string) ([]byte, s
 		return nil, "An error occurred (AccessDeniedException) when calling the " + rest[1] + " operation: not authorized", errors.New("exit 254")
 	}
 	switch {
+	case strings.HasPrefix(key, "service-quotas list-service-quotas --service-code bedrock-agentcore"):
+		if a.agents == "" {
+			return []byte(`{"Quotas":[]}`), "", nil
+		}
+		return []byte(`{"Quotas":[{"QuotaName":"Rate of new Runtime session creation","Value":25},{"QuotaName":"Total Agents per Account","Value":` + a.agents + `}]}`), "", nil
 	case strings.HasPrefix(key, "sts get-caller-identity"):
 		return []byte(`{"Account":"111122223333","Arn":"arn:aws:sts::111122223333:assumed-role/Admin/ada","UserId":"x"}`), "", nil
 	case strings.HasPrefix(key, "ecs list-clusters"):

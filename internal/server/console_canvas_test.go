@@ -74,6 +74,8 @@ eq('a warning does not', planState({ ...plan, guardrails: [{ level: 'warn' }] },
 eq('a newer revision makes it stale', planState(plan, 4, false, 1001e3), 'stale');
 eq('an hour makes it stale', planState(plan, 3, false, 1000e3 + 3601e3), 'stale');
 eq('nothing to do', planState({ ...plan, add: 0, change: 0, remove: 0 }, 3, false, 1001e3), 'nothing');
+eq('built since the preview', planState({ ...plan, state_serial: 1 }, 3, false, 1001e3, 2), 'applied');
+eq('the preview of the current state is not applied', planState({ ...plan, state_serial: 2 }, 3, false, 1001e3, 2), 'ready');
 eq('planning and failed', [planState({ status: 'planning' }, 3, false), planState({ status: 'failed' }, 3, false), planState(null, 3, false)], ['planning', 'failed', 'none']);
 eq('words', planWords(plan), '2 to add, 1 to change, 1 to remove');
 eq('no words', planWords({ add: 0, change: 0, remove: 0 }), 'Nothing to change: AWS already matches the blueprint');

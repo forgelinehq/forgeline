@@ -574,3 +574,40 @@ func TestBlueprintRemovalKeepsDataThenRemovesEverythingInTwoSteps(t *testing.T) 
 		t.Errorf("rebuild preview: %+v", p)
 	}
 }
+
+// An account whose AgentCore agent quota is too small previews as denied, not "ready" (found on real AWS: the quota
+// was 0 and the apply failed after making the role and the table).
+func TestBlueprintPreviewChecksTheAgentQuota(t *testing.T) {
+	for _, c := range []struct{ quota, want string }{{"0", "deny"}, {"1000", ""}, {"", "warn"}} {
+		m := newMCPHarness(t)
+		m.srv.run = (&awsStub{agents: c.quota}).run
+		m.srv.tofuRun = (&fakeTofu{}).run
+		m.admin.expect(200, "PUT", "/v1/integrations/aws", map[string]any{"enabled": true, "profile": "dev", "region": "ap-south-1"})
+		var made BlueprintJSON
+		json.Unmarshal(m.dev.expect(201, "POST", "/v1/blueprints", map[string]any{
+			"name": "Agent", "target": map[string]any{"cloud": "aws", "account": "primary", "region": "ap-south-1"},
+			"blocks": []map[string]any{{"id": "helper", "kind": "agent", "name": "Helper", "image": "111122223333.dkr.ecr.ap-south-1.amazonaws.com/helper:1"}},
+			"links":  []map[string]any{},
+		}), &made)
+		m.dev.expect(202, "POST", "/v1/blueprints/"+made.ID+"/plan", nil)
+		var p BlueprintPlan
+		waitFor(t, "the preview", func() bool {
+			json.Unmarshal(m.dev.expect(200, "GET", "/v1/blueprints/"+made.ID+"/plan", nil), &p)
+			return p.Status != planPlanning
+		})
+		got := ""
+		for _, f := range p.Guardrails {
+			if f.Rule == "service-quota" {
+				got = f.Level
+			}
+		}
+		if got != c.want {
+			t.Errorf("quota %q: got %q, want %q (%+v)", c.quota, got, c.want, p.Guardrails)
+		}
+		if c.want == "deny" {
+			if msg := string(m.dev.expect(409, "POST", "/v1/blueprints/"+made.ID+"/propose", map[string]any{"reason": "testing the quota check"})); !strings.Contains(msg, "AgentCore") {
+				t.Errorf("a denied preview must not be sent: %s", msg)
+			}
+		}
+	}
+}

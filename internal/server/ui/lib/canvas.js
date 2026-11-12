@@ -243,10 +243,12 @@ export function planByBlock(plan) {
  * Where a preview stands for the blueprint on screen: 'none', 'planning', 'failed', 'stale' (the blueprint
  * changed since, or it is over an hour old), 'nothing' (ready, changes nothing) or 'ready'.
  */
-export function planState(plan, revision, dirty, now = Date.now()) {
+export function planState(plan, revision, dirty, now = Date.now(), applies = 0) {
   if (!plan) return 'none';
   if (plan.status === 'planning') return 'planning';
   if (plan.status === 'failed') return 'failed';
+  // Built since this preview: it was applied (or another one was), so it describes the past, not what would change now.
+  if ((plan.state_serial || 0) < applies) return 'applied';
   if (dirty || plan.revision !== revision || !plan.finished_at || now - new Date(plan.finished_at).getTime() > 3600e3) return 'stale';
   if ((plan.guardrails || []).some(g => g.level === 'deny')) return 'blocked';
   return plan.add + plan.change + plan.remove ? 'ready' : 'nothing';

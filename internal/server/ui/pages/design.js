@@ -137,7 +137,7 @@ export async function designPage({ params }) {
 
   function drawBar() {
     const can = dirty() && !problem;
-    const ps = planState(plan, revision, dirty());
+    const ps = planState(plan, revision, dirty(), undefined, built?.applies || 0);
     mount(bar, h('div', { class: 'mb-4 flex flex-wrap items-center gap-2' },
       h('span', { class: 'inline-flex overflow-hidden rounded-lg border border-slate-300 text-sm dark:border-slate-700' },
         h('span', { class: 'bg-brand-600 px-3 py-1.5 text-white' }, 'AWS'), h('span', { class: 'px-3 py-1.5' }, bp.target.account + ' · ' + bp.target.region)),
@@ -167,11 +167,13 @@ export async function designPage({ params }) {
   }
 
   function previewCard() {
-    const ps = planState(plan, revision, dirty());
+    const ps = planState(plan, revision, dirty(), undefined, built?.applies || 0);
     if (ps === 'none') return null;
     const head = h('h2', { class: 'h-section mb-2' }, 'Preview');
     if (ps === 'planning') return h('section', { class: 'card card-pad', id: 'design-plan' }, head, h('p', { class: 'flex items-center gap-2 text-sm' }, spinner(), 'OpenTofu is working out what would change. It only reads.'));
     if (ps === 'failed') return h('section', { class: 'card card-pad', id: 'design-plan' }, head, errorBox(plan.error || 'The preview failed.'));
+    if (ps === 'applied') return h('section', { class: 'card card-pad', id: 'design-plan' }, head,
+      h('p', { class: 'text-sm', id: 'design-plan-summary' }, 'Built since the last preview (' + planWords(plan) + '). Preview again to see what would change now.'));
     const tone = { add: 'pill-ok', change: 'pill-wait', replace: 'pill-bad', remove: 'pill-bad' };
     return h('section', { class: 'card card-pad', id: 'design-plan' }, head,
       ps === 'stale' ? h('div', { class: 'mb-2' }, notice('warn', 'The blueprint changed since this preview, or it is over an hour old. Save and preview again before sending it.')) : null,
@@ -226,7 +228,7 @@ export async function designPage({ params }) {
     replace: ['replace', 'fill-rose-600 dark:fill-rose-400', 'stroke-rose-500'], remove: ['remove', 'fill-rose-600 dark:fill-rose-400', 'stroke-rose-500'] };
   function blockNode(b) {
     const k = KINDS[b.kind] || { label: b.kind, tech: '' };
-    const ps = planState(plan, revision, dirty());
+    const ps = planState(plan, revision, dirty(), undefined, built?.applies || 0);
     const act = ps === 'ready' || ps === 'nothing' || ps === 'blocked' ? ACT[planByBlock(plan)[b.id]] : null;
     const on = b.id === selected, existing = b.kind === 'existing';
     const g = h('g', { transform: `translate(${b.x} ${b.y})`, tabindex: '0', role: 'button', 'aria-pressed': String(on), 'aria-label': b.name + ', ' + k.label, 'data-block': b.id, class: 'cursor-grab focus:outline-none' },
