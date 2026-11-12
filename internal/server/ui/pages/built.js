@@ -5,7 +5,7 @@
 import { h, icon, mount, pageHeader, relTime, spinner, errorBox, notice, emptyState, copyButton } from '../lib/dom.js';
 import { get } from '../lib/api.js';
 import { KINDS, blockFacts, linkWords } from '../lib/blueprint.js';
-import { BLOCK_W, BLOCK_H, linkPath, bounds, fit, flowOf } from '../lib/canvas.js';
+import { BLOCK_W, BLOCK_H, linkPath, linkPorts, bounds, fit, flowOf } from '../lib/canvas.js';
 import { flowPath } from '../lib/flow.js';
 import { typeWords, byBlock, checkState, totals, resourceLabel } from '../lib/built.js';
 
@@ -74,11 +74,12 @@ export async function builtPage() {
     function drawDiagram() {
       const { w, h: ht } = bounds(bp);
       const byId = Object.fromEntries(bp.blocks.map(x => [x.id, x]));
+      const ports = linkPorts(bp);
       const svg = h('svg', { width: String(w), height: String(ht), viewBox: `0 0 ${w} ${ht}`, class: 'block h-auto max-w-full min-w-[36rem]', role: 'group', 'aria-label': bp.name + ' as built' });
       for (const l of bp.links) {
         const a = byId[l.from], c = byId[l.to];
         if (!a || !c) continue;
-        const d = linkPath(a, c), traffic = a.kind === 'frontdoor', way = flowOf(bp, l);
+        const d = linkPath(a, c, ports.get(l.from + '>' + l.to)), traffic = a.kind === 'frontdoor', way = flowOf(bp, l);
         svg.append(h('path', { d, fill: 'none', 'stroke-width': '1.75', 'stroke-dasharray': c.kind === 'logs' ? '5 4' : '', class: traffic ? 'stroke-brand-500' : 'stroke-slate-300 dark:stroke-slate-600' }, h('title', {}, linkWords(bp, l))));
         const dots = traffic ? 'stroke-brand-500' : 'stroke-slate-500 dark:stroke-slate-300';
         if (way === 'forward' || way === 'both') svg.append(flowPath(d, dots));
