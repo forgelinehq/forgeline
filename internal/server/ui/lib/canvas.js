@@ -151,8 +151,8 @@ export function toBody(bp, revision) {
 }
 
 /** The drawn path of a link: from the right edge of one block to the left edge of the other. */
-export function linkPath(a, b) {
-  const x1 = a.x + BLOCK_W, y1 = a.y + BLOCK_H / 2, x2 = b.x, y2 = b.y + BLOCK_H / 2;
+export function linkPath(a, b, port = {}) {
+  const x1 = a.x + BLOCK_W, y1 = a.y + BLOCK_H / 2 + (port.out || 0), x2 = b.x, y2 = b.y + BLOCK_H / 2 + (port.in || 0);
   // In the same column (one service calling another): from the bottom of one to the top of the other, clear of the
   // lines that come in from the left and leave to the right.
   if (Math.abs(a.x - b.x) < BLOCK_W / 2) {
@@ -161,11 +161,47 @@ export function linkPath(a, b) {
       : `M${ax} ${a.y} C${ax} ${a.y - 20}, ${bx} ${b.y + BLOCK_H + 20}, ${bx} ${b.y + BLOCK_H}`;
   }
   if (x2 >= x1) {
-    const mid = (x1 + x2) / 2;
+    const mid = (x1 + x2) / 2 + (port.bend || 0);
     return `M${x1} ${y1} C${mid} ${y1}, ${mid} ${y2}, ${x2} ${y2}`;
   }
   // The target is to the left: leave from the right, loop round and come in from the left.
   return `M${x1} ${y1} C${x1 + 60} ${y1}, ${x2 - 60} ${y2}, ${x2} ${y2}`;
+}
+
+/**
+ * Where each link leaves and enters its blocks, so several links on one edge do not meet in one point: the links
+ * leaving a block's right edge are spread down that edge in the order of where they go, the links entering a left
+ * edge in the order of where they come from, and each source's links bend at slightly different places. Returns a
+ * Map from "from>to" to { out, in, bend } offsets in pixels. Links within one column are drawn top to bottom and
+ * keep their middle.
+ */
+export function linkPorts(bp) {
+  const by = Object.fromEntries(bp.blocks.map(b => [b.id, b]));
+  const ports = new Map();
+  const outs = new Map(), ins = new Map();
+  for (const l of bp.links) {
+    const a = by[l.from], b = by[l.to];
+    if (!a || !b || Math.abs(a.x - b.x) < BLOCK_W / 2) continue;
+    if (!outs.has(a.id)) outs.set(a.id, []);
+    if (!ins.has(b.id)) ins.set(b.id, []);
+    outs.get(a.id).push({ l, other: b });
+    ins.get(b.id).push({ l, other: a });
+    ports.set(l.from + '>' + l.to, { out: 0, in: 0, bend: 0 });
+  }
+  const spread = (list, field) => {
+    list.sort((p, q) => p.other.y - q.other.y || p.other.x - q.other.x);
+    const n = list.length;
+    if (n < 2) return;
+    const step = Math.min(12, (BLOCK_H - 18) / (n - 1));
+    list.forEach((e, i) => {
+      const p = ports.get(e.l.from + '>' + e.l.to);
+      p[field] = Math.round((i - (n - 1) / 2) * step);
+      if (field === 'out') p.bend = Math.round((i - (n - 1) / 2) * 6);
+    });
+  };
+  for (const list of outs.values()) spread(list, 'out');
+  for (const list of ins.values()) spread(list, 'in');
+  return ports;
 }
 
 /** How big the drawing must be to hold every block, with a margin. */

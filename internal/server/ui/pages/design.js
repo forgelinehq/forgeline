@@ -9,7 +9,7 @@ import { flowPath } from '../lib/flow.js';
 import { guardrailList } from '../lib/guardrails.js';
 import {
   BLOCK_W, BLOCK_H, FARGATE, LOG_DAYS, autoLayout, addBlock, removeBlock, updateBlock, moveBlock, linkTargets,
-  addLink, removeLink, toBody, linkPath, bounds, fit, explainError, planByBlock, planState, planWords, placeNew, flowOf,
+  addLink, removeLink, toBody, linkPath, linkPorts, bounds, fit, explainError, planByBlock, planState, planWords, placeNew, flowOf,
 } from '../lib/canvas.js';
 
 /** Build › Design without a blueprint: open the one changed last, or say how to make one. */
@@ -194,17 +194,18 @@ export async function designPage({ params }) {
   function draw() {
     const { w, h: ht } = bounds(bp);
     const byId = Object.fromEntries(bp.blocks.map(b => [b.id, b]));
+    const ports = linkPorts(bp);
     const svg = h('svg', { width: String(w), height: String(ht), viewBox: `0 0 ${w} ${ht}`, class: 'block h-auto max-w-full min-w-[36rem] select-none', role: 'group', 'aria-label': 'Blueprint drawing' });
     for (const l of bp.links) {
       const a = byId[l.from], b = byId[l.to];
       if (!a || !b) continue;
       const traffic = a.kind === 'frontdoor', logs = b.kind === 'logs';
       const on = selected && (l.from === selected || l.to === selected);
-      svg.append(h('path', { d: linkPath(a, b), fill: 'none', 'stroke-width': on ? '2.5' : '1.75', 'stroke-dasharray': logs ? '5 4' : '',
+      svg.append(h('path', { d: linkPath(a, b, ports.get(l.from + '>' + l.to)), fill: 'none', 'stroke-width': on ? '2.5' : '1.75', 'stroke-dasharray': logs ? '5 4' : '',
         class: traffic ? 'stroke-brand-500' : on ? 'stroke-slate-600 dark:stroke-slate-300' : 'stroke-slate-400 dark:stroke-slate-500', 'data-link': l.from + '>' + l.to },
         h('title', {}, linkWords(bp, l))));
       // Moving dots show which way things flow along the link.
-      const way = flowOf(bp, l), d = linkPath(a, b), dots = traffic ? 'stroke-brand-500' : 'stroke-slate-500 dark:stroke-slate-300';
+      const way = flowOf(bp, l), d = linkPath(a, b, ports.get(l.from + '>' + l.to)), dots = traffic ? 'stroke-brand-500' : 'stroke-slate-500 dark:stroke-slate-300';
       if (way === 'forward' || way === 'both') svg.append(flowPath(d, dots));
       if (way === 'back' || way === 'both') svg.append(flowPath(d, dots, { back: true }));
     }

@@ -12,7 +12,7 @@ import (
 )
 
 const canvasCases = `
-import { DEFAULTS, autoLayout, addBlock, removeBlock, updateBlock, moveBlock, linkTargets, addLink, removeLink, toBody, explainError, linkPath, bounds, fit, newID, planByBlock, planState, planWords, placeNew, flowOf } from './canvas.mjs';
+import { DEFAULTS, autoLayout, addBlock, removeBlock, updateBlock, moveBlock, linkTargets, addLink, removeLink, toBody, explainError, linkPath, linkPorts, bounds, fit, newID, planByBlock, planState, planWords, placeNew, flowOf } from './canvas.mjs';
 let failed = 0;
 const eq = (name, got, want) => { const g = JSON.stringify(got), w = JSON.stringify(want); if (g !== w) { failed++; console.error('FAIL ' + name + '\n  got  ' + g + '\n  want ' + w); } };
 const empty = { name: 'T', target: { cloud: 'aws', account: 'primary', region: 'ap-south-1' }, blocks: [], links: [] };
@@ -48,6 +48,20 @@ eq('layout only when nothing has a place', autoLayout({ ...empty, blocks: [{ id:
 eq('a placed blueprint keeps its places', autoLayout(bp).blocks.map(b => b.x), bp.blocks.map(b => b.x));
 eq('messages use names', explainError(bp, 'links[1].access: say read; blocks[0]: front door'), 'the link from “App” to “Table”.access: say read; “Front door”: front door');
 eq('a path leaves right and enters left', linkPath({ x: 0, y: 0 }, { x: 300, y: 0 }).startsWith('M190 33'), true);
+{
+  // Two apps each using three things: no two links share an end point on a block's edge, and the order on an edge
+  // follows the other end, so lines leaving one block do not cross each other there.
+  const web = { blocks: [{ id: 'a', x: 300, y: 40 }, { id: 'b', x: 300, y: 140 }, { id: 'q', x: 600, y: 40 }, { id: 'd', x: 600, y: 140 }, { id: 'r', x: 600, y: 240 }],
+    links: [{ from: 'a', to: 'q' }, { from: 'a', to: 'd' }, { from: 'a', to: 'r' }, { from: 'b', to: 'q' }, { from: 'b', to: 'd' }, { from: 'b', to: 'r' }] };
+  const p = linkPorts(web), at = (k) => p.get(k);
+  eq('outs spread in order', [at('a>q').out, at('a>d').out, at('a>r').out], [-12, 0, 12]);
+  eq('ins spread in order', [at('a>d').in, at('b>d').in], [-6, 6]);
+  eq('bends differ', at('a>q').bend !== at('a>r').bend, true);
+  const starts = new Set(web.links.map(l => { const [a2, b2] = [web.blocks.find(x => x.id === l.from), web.blocks.find(x => x.id === l.to)]; return linkPath(a2, b2, p.get(l.from + '>' + l.to)).split(' C')[0] + '|' + l.from; }));
+  eq('every link leaves from its own point', starts.size, 6);
+  eq('a lone link keeps the middle', linkPorts({ blocks: [{ id: 'x', x: 0, y: 0 }, { id: 'y', x: 300, y: 0 }], links: [{ from: 'x', to: 'y' }] }).get('x>y'), { out: 0, in: 0, bend: 0 });
+  eq('one-column calls are left alone', linkPorts({ blocks: [{ id: 'x', x: 0, y: 0 }, { id: 'y', x: 0, y: 100 }], links: [{ from: 'x', to: 'y' }] }).has('x>y'), false);
+}
 eq('bounds grow with blocks', bounds(moveBlock(bp, door, 2000, 900)).w, 2230);
 eq('fit', fit('abcdef', 4), 'abc…');
 const plan = { status: 'ready', revision: 3, finished_at: new Date(1000e3).toISOString(), add: 2, change: 1, remove: 1, changes: [

@@ -7,6 +7,9 @@ section in the pull request that makes the change; a release moves it under its 
 ## [Unreleased]
 
 ### Fixed
+- **Readable links on the design canvas.** When several links left or entered one block they met in one point, so a
+  web stack's links formed a knot and you could not tell which app used what. Each link now has its own point on the
+  block's edge, in the order of where it goes, and bends at its own place. The Built page draws the same way.
 - **Workflow runs and Guard scans in the right order.** Their ids were random and the store lists by id, so the
   runs table, the Team page's "last mission" and the pruning of old runs and scans worked on a random order
   (pruning could delete the newest run). New ids follow time, and lists and pruning sort by start time anyway.
