@@ -38,6 +38,16 @@ The assistant is a panel that docks at the side (drag its edge, or use the wide 
 
 Questions are rate limited (20 a minute per person) and audited by page and length, not by text.
 
+The assistant can also **write skills, agents and workflows** for an administrator ("write an agent that explains failed
+runs", "make a weekly workflow with the cost watcher"). Nothing is created by asking: it prepares a card that says, in
+words the server works out (not the model's), what saving it would do: which tools the agent may use, whether it only
+reads or may also draft changes for approval, which skills it follows, when a workflow runs and which stages wait for an
+administrator. **Confirm** saves it as version 1, through the same checks as the forms on the Agents page, and the audit
+log says it was written by the assistant and confirmed by you. A developer can ask for one, but only an administrator gets
+the card, as in the console.
+
+![The assistant writes an agent]({{ '/console/134-assistant-writes-agent.png' | relative_url }})
+
 ## Your AI team
 
 **Team → Team** draws your agents as an org chart: you at the top, then the agents that report to you, then

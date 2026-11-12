@@ -27,6 +27,9 @@ const (
 
 	actSavePipeline = "save_pipeline"
 	actRunPipeline  = "run_pipeline"
+	actSaveSkill    = "save_skill"    // note 028, 2026-11-12: the assistant writes skills, agents and workflows
+	actSaveAgent    = "save_agent"    // as cards an administrator confirms, through the console's own checks
+	actSaveWorkflow = "save_workflow" //
 
 	actPending   = "pending"
 	actDone      = "done"
@@ -40,20 +43,21 @@ const (
 
 // AssistAction is one prepared action waiting for its owner.
 type AssistAction struct {
-	ID        string    `json:"id"`
-	Owner     string    `json:"owner"` // user id
-	OwnerName string    `json:"owner_name"`
-	Kind      string    `json:"kind"`
-	Title     string    `json:"title"`
-	Effects   []string  `json:"effects"`          // what confirming does, in plain words
-	Detail    string    `json:"detail,omitempty"` // the pipeline file, shown in full
-	Pipeline  string    `json:"pipeline"`         // pipeline id/name the action is about
-	Note      string    `json:"description,omitempty"`
-	Status    string    `json:"status"`
-	Result    string    `json:"result,omitempty"`
-	Link      string    `json:"link,omitempty"` // console path to what was made
-	Created   time.Time `json:"created"`
-	Expires   time.Time `json:"expires"`
+	ID        string          `json:"id"`
+	Owner     string          `json:"owner"` // user id
+	OwnerName string          `json:"owner_name"`
+	Kind      string          `json:"kind"`
+	Title     string          `json:"title"`
+	Effects   []string        `json:"effects"`          // what confirming does, in plain words
+	Detail    string          `json:"detail,omitempty"` // the pipeline file, shown in full
+	Pipeline  string          `json:"pipeline"`         // pipeline id/name the action is about
+	Spec      json.RawMessage `json:"spec,omitempty"`   // the skill, agent or workflow to save, exactly as checked
+	Note      string          `json:"description,omitempty"`
+	Status    string          `json:"status"`
+	Result    string          `json:"result,omitempty"`
+	Link      string          `json:"link,omitempty"` // console path to what was made
+	Created   time.Time       `json:"created"`
+	Expires   time.Time       `json:"expires"`
 }
 
 // actionMu serialises confirm/dismiss so one card cannot be confirmed twice.
@@ -65,11 +69,12 @@ func (s *Server) lookupPrepareAction(ctx context.Context, raw json.RawMessage) (
 		return "", errors.New("prepare_action is only available when a person is chatting with the assistant")
 	}
 	var a struct {
-		Action      string `json:"action"`
-		Title       string `json:"title"`
-		YAML        string `json:"yaml"`
-		Description string `json:"description"`
-		Pipeline    string `json:"pipeline"`
+		Action      string          `json:"action"`
+		Title       string          `json:"title"`
+		YAML        string          `json:"yaml"`
+		Description string          `json:"description"`
+		Pipeline    string          `json:"pipeline"`
+		Spec        json.RawMessage `json:"spec"`
 	}
 	if err := decodeArgs(raw, &a); err != nil {
 		return "", err
@@ -108,8 +113,24 @@ func (s *Server) lookupPrepareAction(ctx context.Context, raw json.RawMessage) (
 		if act.Title == "" {
 			act.Title = "Run " + sp.ID
 		}
+	case actSaveSkill, actSaveAgent, actSaveWorkflow:
+		// Creating these is for administrators in the console, so the card is too.
+		if !t.p.Role.AtLeast(authn.Admin) {
+			return "", errors.New("only an administrator can create skills, agents and workflows; tell the person what you would write instead")
+		}
+		if len(a.Spec) == 0 || len(a.Spec) > maxActionYAML {
+			return "", errors.New("give the skill, agent or workflow as spec (see the tool's description)")
+		}
+		name, detail, effects, msg := s.checkDefinition(ctx, a.Action, a.Spec)
+		if msg != "" {
+			return "", errors.New("this is not valid, fix it first: " + msg)
+		}
+		act.Spec, act.Pipeline, act.Detail, act.Effects = a.Spec, name, detail, effects
+		if act.Title == "" {
+			act.Title = map[string]string{actSaveSkill: "Create skill ", actSaveAgent: "Create agent ", actSaveWorkflow: "Create workflow "}[a.Action] + name
+		}
 	default:
-		return "", errors.New(`action must be "save_pipeline" or "run_pipeline"`)
+		return "", errors.New(`action must be "save_pipeline", "run_pipeline", "save_skill", "save_agent" or "save_workflow"`)
 	}
 	if n := s.pendingActionCount(ctx, t.p.UserID); n >= maxPendingAction {
 		return "", errors.New("too many actions are waiting for the person; ask them to confirm or dismiss some")
@@ -198,6 +219,8 @@ func (s *Server) handleConfirmAction(w http.ResponseWriter, r *http.Request) {
 		result, link, apiErr = s.doSavePipeline(r.Context(), p, a)
 	case actRunPipeline:
 		result, link, apiErr = s.doRunPipeline(r.Context(), p, a)
+	case actSaveSkill, actSaveAgent, actSaveWorkflow:
+		result, link, apiErr = s.doSaveDefinition(r.Context(), p, clientIP(r), a)
 	default:
 		apiErr = badRequest("unknown action")
 	}
@@ -265,4 +288,118 @@ func (s *Server) doRunPipeline(ctx context.Context, p Principal, a AssistAction)
 	s.audit(ctx, p, "", "run.start", "run/"+run.ID, fmt.Sprintf("%s v%d, by the assistant, confirmed by the person", sp.ID, sp.Version), true)
 	_ = steps
 	return "Started run " + run.ID + ".", "/runs/" + run.ID, nil
+}
+
+// checkDefinition checks a skill, agent or workflow the assistant wrote, with the console's own rules, and says in plain
+// words what saving it would do. It saves nothing. msg is set when it is not valid.
+func (s *Server) checkDefinition(ctx context.Context, kind string, spec json.RawMessage) (name, detail string, effects []string, msg string) {
+	strict := func(v any) string {
+		dec := json.NewDecoder(strings.NewReader(string(spec)))
+		dec.DisallowUnknownFields()
+		if err := dec.Decode(v); err != nil {
+			return "the spec does not match the expected fields: " + err.Error()
+		}
+		return ""
+	}
+	switch kind {
+	case actSaveSkill:
+		var req skillRequest
+		if m := strict(&req); m != "" {
+			return "", "", nil, m
+		}
+		if m := req.check(); m != "" {
+			return "", "", nil, m
+		}
+		return strings.TrimSpace(req.Name), req.Body, []string{fmt.Sprintf("Creates a new skill %q, version 1. No agent uses it until one is edited to follow it.", strings.TrimSpace(req.Name))}, ""
+	case actSaveAgent:
+		var req agentRequest
+		if m := strict(&req); m != "" {
+			return "", "", nil, m
+		}
+		v, m := s.resolveAgent(ctx, req)
+		if m != "" {
+			return "", "", nil, m
+		}
+		name = strings.TrimSpace(req.Name)
+		effects = []string{fmt.Sprintf("Creates a new agent %q, version 1, %s.", name, map[string]string{tierAdvisory: "that only reads and explains", tierReview: "that may also draft changes a person approves"}[v.Tier])}
+		if len(v.Tools) == 0 {
+			effects = append(effects, "It can use no tools: it answers only from what it is told.")
+		} else {
+			effects = append(effects, "It can use: "+strings.Join(v.Tools, ", ")+". Each runs as the person who asks, with their role.")
+		}
+		for _, pin := range v.Skills {
+			effects = append(effects, fmt.Sprintf("It follows the skill %s at version %d.", pin.ID, pin.N))
+		}
+		return name, v.Instructions, effects, ""
+	case actSaveWorkflow:
+		var req wfRequest
+		if m := strict(&req); m != "" {
+			return "", "", nil, m
+		}
+		v, m := s.resolveWorkflow(ctx, req)
+		if m != "" {
+			return "", "", nil, m
+		}
+		name = strings.TrimSpace(req.Name)
+		when := "only when someone starts it"
+		if v.EveryMinutes > 0 {
+			when = fmt.Sprintf("by itself every %d minutes, and when someone starts it", v.EveryMinutes)
+		}
+		effects = []string{fmt.Sprintf("Creates a new workflow %q, version 1, that runs %s, as a %s.", name, when, v.RunAs)}
+		var b strings.Builder
+		for i, st := range v.Stages {
+			gate := ""
+			if st.Gate {
+				gate = " (waits for an administrator to release it)"
+			}
+			fmt.Fprintf(&b, "%d. %s%s\n", i+1, st.Name, gate)
+			for _, sp := range st.Steps {
+				fmt.Fprintf(&b, "   - %s@%d: %s\n", sp.Agent, sp.AgentN, sp.Task)
+			}
+			effects = append(effects, fmt.Sprintf("Stage %d, %s, runs %d step(s) together%s.", i+1, st.Name, len(st.Steps), gate))
+		}
+		return name, strings.TrimSpace(b.String()), effects, ""
+	}
+	return "", "", nil, "unknown kind"
+}
+
+// doSaveDefinition saves a confirmed skill, agent or workflow, checking it again: things may have changed since the
+// card was prepared (an agent turned off, a name taken).
+func (s *Server) doSaveDefinition(ctx context.Context, p Principal, ip string, a AssistAction) (string, string, *apiError) {
+	if !p.Role.AtLeast(authn.Admin) {
+		return "", "", &apiError{http.StatusForbidden, ErrorJSON{Error: "only an administrator can create skills, agents and workflows"}}
+	}
+	if _, _, _, msg := s.checkDefinition(ctx, a.Kind, a.Spec); msg != "" {
+		return "", "", badRequest("this is no longer valid: " + msg)
+	}
+	const how = ", written by the assistant, confirmed by the person"
+	fail := &apiError{http.StatusInternalServerError, ErrorJSON{Error: "could not save it"}}
+	switch a.Kind {
+	case actSaveSkill:
+		var req skillRequest
+		json.Unmarshal(a.Spec, &req)
+		sk, err := s.saveNewSkill(ctx, p, ip, req, how)
+		if err != nil {
+			return "", "", fail
+		}
+		return fmt.Sprintf("Created skill %q.", sk.Name), "/skills/" + sk.ID, nil
+	case actSaveAgent:
+		var req agentRequest
+		json.Unmarshal(a.Spec, &req)
+		v, _ := s.resolveAgent(ctx, req)
+		ag, err := s.saveNewAgent(ctx, p, ip, req, v, how)
+		if err != nil {
+			return "", "", fail
+		}
+		return fmt.Sprintf("Created agent %q.", ag.Name), "/agents/" + ag.ID, nil
+	default:
+		var req wfRequest
+		json.Unmarshal(a.Spec, &req)
+		v, _ := s.resolveWorkflow(ctx, req)
+		wf, err := s.saveNewWorkflow(ctx, p, ip, req, v, how)
+		if err != nil {
+			return "", "", fail
+		}
+		return fmt.Sprintf("Created workflow %q.", wf.Name), "/workflows/" + wf.ID, nil
+	}
 }

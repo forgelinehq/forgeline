@@ -50,6 +50,9 @@ section in the pull request that makes the change; a release moves it under its 
 - **Workflows as a graph.** A workflow's page draws it like n8n: the trigger, each stage as a column of agents that run
   together, and an approval node before a gated stage. A run's page shows each node's state live, with moving dots into
   what is working.
+- **The assistant writes skills, agents and workflows.** Ask it for one and it prepares a card an administrator
+  confirms; the card says in the server's words which tools an agent gets, whether it may draft changes, which skills it
+  follows, and when a workflow runs. Confirming goes through the same checks as the Agents page and is audited.
 - **Code from GitHub for apps and agents** (design note 040, step 4). A block can name its repository, branch and folder.
   The blueprint makes a private ECR repository for it and a push role only GitHub Actions in that branch can use, and
   **Build from GitHub…** suggests the workflow (actions pinned to commit SHAs, arm64 for agents) and a Forgeline
