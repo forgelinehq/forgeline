@@ -32,6 +32,10 @@ section in the pull request that makes the change; a release moves it under its 
 - **After a session ends**, the console stops polling the server (it asked every minute, forever).
 
 ### Added
+- **Code from GitHub for apps and agents** (design note 040, step 4). A block can name its repository, branch and folder.
+  The blueprint makes a private ECR repository for it and a push role only GitHub Actions in that branch can use, and
+  **Build from GitHub…** suggests the workflow (actions pinned to commit SHAs, arm64 for agents) and a Forgeline
+  pipeline that starts it. Forgeline never pushes to the repository.
 - **Agents on Amazon Bedrock AgentCore** (design note 040, step 2). An **Agent** block on the design canvas runs your
   agent's ECR image on AgentCore Runtime. Its execution role has what AWS documents a runtime needs (its own image, its
   logs and traces, Bedrock models, its own workload token, never tokens for arbitrary user ids) and the tables, buckets,

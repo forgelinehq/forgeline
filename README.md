@@ -56,7 +56,8 @@ service on its own, tile by tile, and gives every service its own page. Build �
 Blueprints draw what should exist (a front door with paths, apps that call each other and scale with load, tables, files, queues, MySQL or Postgres databases, Redis, secrets, and AI agents on Amazon Bedrock AgentCore) with safe settings chosen for you, say
 in plain words what it means, and show the OpenTofu code it generates. Preview changes shows what OpenTofu would do in AWS and checks it against guardrails (nothing but web ports open to
 the internet, data encrypted, no IAM users or wildcard permissions); a different
-administrator approves, and exactly that plan is applied. **Remove…** takes it away again the same way, keeping tables,
+administrator approves, and exactly that plan is applied. An app or agent can name its GitHub repository: the blueprint makes a private image repository and a push role for
+that branch, and Forgeline suggests the workflow that builds the image. **Remove…** takes it away again the same way, keeping tables,
 buckets, databases and secrets unless you choose to remove everything. The assistant beside the canvas suggests changes in
 plain words; you choose whether to use them. The
 console serves its own fonts and loads nothing from other hosts. [Screenshots](docs/console/README.md) and [design note 006](docs/design/006-console.md)

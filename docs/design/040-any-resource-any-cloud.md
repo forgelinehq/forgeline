@@ -7,7 +7,13 @@ blueprint's region and account, its own image and its own workload identity, nev
 the tables, buckets, queues and secrets it is linked to. Guardrails `builtin-2` allow `Resource: "*"` only for statements
 whose every action IAM cannot scope (ECR token, X-Ray writes, CloudWatch metrics). Still to do in step 2: the template
 format itself, AgentCore memory and gateway, and a real build (the Pi's role cannot create IAM roles until the `role/fl-*`
-policy is added). Extends notes 035 and 039. Builds in the order under "Plan".
+policy is added).
+**Step 4, first part, built (2026-11-12): a source repository on app and agent blocks.** The blueprint then makes a
+private ECR repository (immutable tags, scanned, the 30 newest images kept) and a push role that only GitHub Actions in
+that repository and branch can take through GitHub's OIDC provider, able to push to that one repository. Forgeline
+suggests the workflow (actions pinned to commit SHAs; arm64 for agents) for a person to add by pull request, and a
+Forgeline pipeline that starts it; running a new image stays a previewed, approved blueprint change. Still to do:
+reading the repository to suggest which one fits a block, and moving a block to a newly pushed image in one step. Extends notes 035 and 039. Builds in the order under "Plan".
 
 ## Question
 

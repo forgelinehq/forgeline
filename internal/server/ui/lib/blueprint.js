@@ -29,7 +29,7 @@ export function blockFacts(b) {
     case 'service': {
       const vcpu = (b.cpu || 0) / 1024, gb = (b.memory || 0) / 1024;
       const n = b.max ? `${b.min}–${b.max}` : String(b.count || 0);
-      return `${n} × ${vcpu} vCPU, ${gb} GB · ${b.image}` + (b.port ? ` · port ${b.port}` : '');
+      return `${n} × ${vcpu} vCPU, ${gb} GB · ${b.image}` + (b.port ? ` · port ${b.port}` : '') + (b.source ? ' · code in ' + b.source.repo : '');
     }
     case 'table': return 'key ' + b.partition_key + (b.sort_key ? ', sorted by ' + b.sort_key : '') + ' · pay per request';
     case 'bucket': return 'private · encrypted' + (b.versioning ? ' · keeps old versions' : '');
@@ -38,7 +38,7 @@ export function blockFacts(b) {
     case 'database': return `${ENGINES[b.engine] || b.engine} · ${b.size} · ${b.storage_gb} GB` + (b.multi_az ? ' · two zones' : '') + ' · password kept by AWS';
     case 'cache': return `${b.size} · ${b.nodes || 1} node${(b.nodes || 1) > 1 ? 's' : ''} · encrypted`;
     case 'secret': return 'value set in AWS, never seen by Forgeline';
-    case 'agent': return b.image ? 'from ' + b.image.split('/').pop() + ' · calls Bedrock models' : 'needs its ECR image';
+    case 'agent': return (b.image ? 'from ' + b.image.split('/').pop() + ' · calls Bedrock models' : 'needs its ECR image') + (b.source ? ' · code in ' + b.source.repo : '');
     case 'existing': return (EXISTING[b.existing?.type] || 'resource') + ' ' + (b.existing?.name || '') + ' · used, never changed';
     default: return '';
   }

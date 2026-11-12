@@ -79,6 +79,14 @@ answering on port 8080). Link it to the tables, files, queues and secrets it may
 Bedrock models, and AWS's documented runtime permissions, nothing else. It is reached through AWS's API, never a public
 port.
 
+An app or an agent can name where its **Code** lives: a GitHub repository, a branch and a folder. The blueprint then
+makes a private image repository for it and a role that only that branch can use, from GitHub Actions, to push images.
+**Build from GitHub…** shows the workflow to add to the repository (its actions pinned to commit SHAs) and a Forgeline
+pipeline that starts it. Forgeline never pushes to your repository, and running a new image is a blueprint change you
+preview and send for approval. GitHub's OIDC provider must be set up in the AWS account once.
+
+![Build from GitHub]({{ '/console/121-design-github-build.png' | relative_url }})
+
 ![An agent on the canvas]({{ '/console/120-design-agent.png' | relative_url }})
 
 ![Removing what a blueprint built]({{ '/console/119-design-removal.png' | relative_url }})

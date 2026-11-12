@@ -109,6 +109,10 @@ type Block struct {
 
 	// existing
 	Existing *Existing `json:"existing,omitempty"`
+
+	// Source is where an app's or agent's code lives (note 040, step 4): the blueprint then makes a private image
+	// repository for it and a role only that repository's branch can use from GitHub Actions to push images.
+	Source *Source `json:"source,omitempty"`
 }
 
 // Existing names something already in the account.
@@ -119,6 +123,29 @@ type Existing struct {
 
 // Link connects two blocks. What it means follows from their kinds: a front door sends traffic to a service; a
 // service uses a table, bucket, queue or existing resource (Access), or writes its logs to a logs block.
+// Source is a GitHub repository, branch and folder that holds a block's code.
+type Source struct {
+	Repo   string `json:"repo"`             // owner/name
+	Branch string `json:"branch,omitempty"` // default main
+	Path   string `json:"path,omitempty"`   // the folder with the Dockerfile; default the top
+}
+
+// BranchOr is the branch, or main when none is set.
+func (s Source) BranchOr() string {
+	if s.Branch == "" {
+		return "main"
+	}
+	return s.Branch
+}
+
+// PathOr is the folder, or "." for the top of the repository.
+func (s Source) PathOr() string {
+	if s.Path == "" {
+		return "."
+	}
+	return s.Path
+}
+
 type Link struct {
 	From   string `json:"from"`
 	To     string `json:"to"`
@@ -133,6 +160,9 @@ var (
 	imageRE = regexp.MustCompile(`^[a-z0-9][A-Za-z0-9._/:@-]{0,254}$`)
 	certRE  = regexp.MustCompile(`^arn:aws[a-z-]*:acm:[a-z0-9-]+:\d{12}:certificate/[A-Za-z0-9-]+$`)
 	// An agent's image must be in ECR: AgentCore pulls only from there. Groups: account, region, repository.
+	repoRE     = regexp.MustCompile(`^[A-Za-z0-9-]{1,39}/[A-Za-z0-9._-]{1,100}$`)
+	branchRE   = regexp.MustCompile(`^[A-Za-z0-9._/-]{1,100}$`)
+	srcPathRE  = regexp.MustCompile(`^[A-Za-z0-9._/-]{0,200}$`)
 	ecrImageRE = regexp.MustCompile(`^(\d{12})\.dkr\.ecr\.([a-z0-9-]+)\.amazonaws\.com/([a-z0-9][a-z0-9._/-]{0,254})(:[A-Za-z0-9._-]{1,128}|@sha256:[a-f0-9]{64})$`)
 	regionRE   = regexp.MustCompile(`^[a-z]{2}(-[a-z]+)+-\d$`)
 	accountRE  = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,39}$`)
@@ -335,7 +365,7 @@ func (bl Block) validate(at string) error {
 	}
 	set := bl.setFields()
 	allowed := map[string][]string{
-		KindService:   {"image", "cpu", "memory", "count", "port", "env", "min", "max", "cpu_target"},
+		KindService:   {"image", "cpu", "memory", "count", "port", "env", "min", "max", "cpu_target", "source"},
 		KindFrontDoor: {"health_path", "certificate"},
 		KindTable:     {"partition_key", "partition_type", "sort_key", "sort_type"},
 		KindBucket:    {"versioning"},
@@ -344,7 +374,7 @@ func (bl Block) validate(at string) error {
 		KindDatabase:  {"engine", "size", "storage_gb", "multi_az", "backup_days"},
 		KindCache:     {"size", "nodes"},
 		KindSecret:    {"description"},
-		KindAgent:     {"image", "env", "description"},
+		KindAgent:     {"image", "env", "description", "source"},
 		KindExisting:  {"existing"},
 	}
 	ok, known := allowed[bl.Kind]
@@ -354,6 +384,16 @@ func (bl Block) validate(at string) error {
 	for _, f := range set {
 		if !slices.Contains(ok, f) {
 			return fmt.Errorf("%s.%s: a %s has no %s", at, f, bl.Kind, f)
+		}
+	}
+	if s := bl.Source; s != nil {
+		switch {
+		case !repoRE.MatchString(s.Repo):
+			return fmt.Errorf("%s.source.repo: a GitHub repository as owner/name", at)
+		case s.Branch != "" && (!branchRE.MatchString(s.Branch) || strings.Contains(s.Branch, "..") || strings.HasPrefix(s.Branch, "/") || strings.HasSuffix(s.Branch, "/")):
+			return fmt.Errorf("%s.source.branch: a branch name such as main", at)
+		case !srcPathRE.MatchString(s.Path) || strings.Contains(s.Path, "..") || strings.HasPrefix(s.Path, "/"):
+			return fmt.Errorf("%s.source.path: a folder inside the repository, such as services/api", at)
 		}
 	}
 	switch bl.Kind {
@@ -493,6 +533,7 @@ func (bl Block) setFields() []string {
 		}
 	}
 	add(bl.Image != "", "image")
+	add(bl.Source != nil, "source")
 	add(bl.CPU != 0, "cpu")
 	add(bl.Memory != 0, "memory")
 	add(bl.Count != 0, "count")
