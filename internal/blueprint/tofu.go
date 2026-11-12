@@ -716,9 +716,12 @@ func (g *gen) source(bl Block) {
 	rules, _ := json.Marshal(obj{"rules": []obj{{"rulePriority": 1, "description": "Keep the 30 newest images",
 		"selection": obj{"tagStatus": "any", "countType": "imageCountMoreThan", "countNumber": 30}, "action": obj{"type": "expire"}}}})
 	g.add("aws_ecr_lifecycle_policy", repo, obj{"repository": ref("aws_ecr_repository", repo, "name"), "policy": string(rules)})
-	g.addData("aws_iam_openid_connect_provider", "github", obj{"url": "https://token.actions.githubusercontent.com"})
+	// GitHub's OIDC provider is named by its address: building its ARN needs no IAM read permission (looking it up with a
+	// data source needs iam:ListOpenIDConnectProviders, which a builder role usually lacks). If it is missing, IAM
+	// refuses the role at apply and says so.
+	g.addData("aws_caller_identity", "current", obj{})
 	trust, _ := json.Marshal(obj{"Version": "2012-10-17", "Statement": []obj{{
-		"Effect": "Allow", "Principal": obj{"Federated": "${data.aws_iam_openid_connect_provider.github.arn}"}, "Action": "sts:AssumeRoleWithWebIdentity",
+		"Effect": "Allow", "Principal": obj{"Federated": "arn:aws:iam::${data.aws_caller_identity.current.account_id}:oidc-provider/token.actions.githubusercontent.com"}, "Action": "sts:AssumeRoleWithWebIdentity",
 		"Condition": obj{"StringEquals": obj{
 			"token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
 			"token.actions.githubusercontent.com:sub": "repo:" + bl.Source.Repo + ":ref:refs/heads/" + bl.Source.BranchOr(),

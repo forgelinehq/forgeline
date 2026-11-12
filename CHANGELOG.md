@@ -7,6 +7,11 @@ section in the pull request that makes the change; a release moves it under its 
 ## [Unreleased]
 
 ### Fixed
+- **A source repository no longer needs an extra IAM permission.** The push role named GitHub's OIDC provider through a
+  lookup that needs `iam:ListOpenIDConnectProviders`, so the preview failed on a builder role that has the documented
+  policy (found on the Pi). The provider's ARN is now built from the account id.
+- **When OpenTofu fails, its error is shown.** The message kept the last 3,000 characters of all output, which could be
+  only the plan listing; it now shows the error output first.
 - **A preview checks the AgentCore agent quota.** On real AWS an account whose "Total Agents per Account" is 0 previewed
   as ready and failed at apply; such a preview is now denied with the reason (a quota that cannot be read is a warning).
 - **A preview that was applied stops looking ready.** The canvas no longer shows its marks or offers to send it again

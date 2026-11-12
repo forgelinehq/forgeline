@@ -143,3 +143,15 @@ func TestChangesAndProposalsListNewestFirst(t *testing.T) {
 		t.Errorf("proposals order = %v", got)
 	}
 }
+
+// When tofu fails, its error output comes first and is never cut off by a long plan listing.
+func TestTofuFailureShowsTheErrorFirst(t *testing.T) {
+	plan := strings.Repeat("  + resource listing line\n", 400)
+	got := tofuFailure("Error: reading IAM OIDC Provider: AccessDenied", []byte(plan))
+	if !strings.HasPrefix(got, "Error: reading IAM OIDC Provider") || len(got) > 3200 {
+		t.Errorf("the error must lead and the text stay short: %.120q (%d)", got, len(got))
+	}
+	if got := tofuFailure("", []byte("only output\nError: in stdout")); !strings.Contains(got, "Error: in stdout") {
+		t.Errorf("without stderr the end of stdout is shown: %q", got)
+	}
+}

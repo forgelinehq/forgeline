@@ -61,7 +61,8 @@ func TestSourceMakesARepositoryAndABranchOnlyPushRole(t *testing.T) {
 		t.Errorf("repository = %v", repo)
 	}
 	trust := res["aws_iam_role"]["api_push"]["assume_role_policy"].(string)
-	if !strings.Contains(trust, `"repo:acme/shop:ref:refs/heads/release"`) || !strings.Contains(trust, "sts.amazonaws.com") || strings.Contains(trust, "*") {
+	if !strings.Contains(trust, `"repo:acme/shop:ref:refs/heads/release"`) || !strings.Contains(trust, "sts.amazonaws.com") || strings.Contains(trust, "*") ||
+		!strings.Contains(trust, ":oidc-provider/token.actions.githubusercontent.com") {
 		t.Errorf("trust must be this repository and branch only: %s", trust)
 	}
 	if !strings.Contains(res["aws_iam_role"]["support_push"]["assume_role_policy"].(string), "repo:acme/support-agent:ref:refs/heads/main") {
@@ -76,6 +77,14 @@ func TestSourceMakesARepositoryAndABranchOnlyPushRole(t *testing.T) {
 		"change": map[string]any{"actions": []string{"create"}, "after": map[string]any{"policy": known}, "after_unknown": map[string]any{}}}}})
 	if fs, _ := guardrail.Check(show, nil); guardrail.Denied(fs) {
 		t.Errorf("the push policy breaks a guardrail: %+v", fs)
+	}
+	// The provider is named, not looked up: a lookup needs iam:ListOpenIDConnectProviders, which builder roles lack.
+	var doc struct {
+		Data map[string]any `json:"data"`
+	}
+	json.Unmarshal(code, &doc)
+	if _, ok := doc.Data["aws_iam_openid_connect_provider"]; ok {
+		t.Error("the OIDC provider must not be read with a data source")
 	}
 	// Removing what the blueprint built may remove the images too: they are built again from the repository.
 	if repo["force_delete"] != true {

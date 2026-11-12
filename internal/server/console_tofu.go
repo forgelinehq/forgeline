@@ -200,3 +200,21 @@ func tail(s string, n int) string {
 	}
 	return "…" + s[len(s)-n:]
 }
+
+// tofuFailure is what a person reads when tofu fails: its error output first (where the reason is), cut from the end
+// if long, then the last lines of its normal output (what it had done). Keeping only the end of everything used to
+// show a page of plan output and cut the error off.
+func tofuFailure(errText string, out []byte) string {
+	e := strings.TrimSpace(errText)
+	if len(e) > 2400 {
+		e = e[:2400] + " …"
+	}
+	o := tail(strings.TrimSpace(string(out)), 600)
+	switch {
+	case e == "":
+		return tail(strings.TrimSpace(string(out)), 3000)
+	case o == "":
+		return e
+	}
+	return e + "\n\n" + o
+}
