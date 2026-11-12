@@ -29,11 +29,13 @@ function touchedBy(res, proposals) {
   return proposals.filter(p => p.status === 'applied' && keys.some(k => p.code.includes(k)));
 }
 
-export function explorer({ dev, account = 'primary', url = '', scope = 'region' }) {
+export function explorer({ dev, account = 'primary', url = '', scope = 'region', service = '' }) {
   const root = h('section', { class: 'card', id: 'aws-explorer' }, spinner());
   let inv = null, alarmData = null, linkData = null, proposals = [], selected = '', query = '', shown = PAGE;
-  // The map is the default view for AWS; Kubernetes (which passes a url) keeps the list.
-  let view = url ? 'list' : 'map', selRes = '';
+  // The map is the default view for AWS; Kubernetes (which passes a url) and a single service keep the list.
+  let view = url || service ? 'list' : 'map', selRes = '';
+  if (service) selected = service;
+  const one = (refresh) => '/v1/infra/aws/resources?account=' + encodeURIComponent(account) + (service ? '&service=' + encodeURIComponent(service) : '') + (refresh ? '&refresh=1' : '');
   const expanded = new Set();
   let loads = 0;
 
@@ -46,7 +48,7 @@ export function explorer({ dev, account = 'primary', url = '', scope = 'region' 
       // its lines when they come. Without them it groups by VPC.
       const links = url ? Promise.resolve(null) : get('/v1/infra/aws/links?account=' + encodeURIComponent(account) + (refresh ? '&refresh=1' : ''), { signal }).catch(() => null);
       [inv, proposals, alarmData] = await Promise.all([
-        get(url ? url + (refresh ? '?refresh=1' : '') : '/v1/infra/aws/resources?account=' + encodeURIComponent(account) + (refresh ? '&refresh=1' : ''), { signal }),
+        get(url ? url + (refresh ? '?refresh=1' : '') : one(refresh), { signal }),
         // Proposals are for the primary account, so only it can show "changed through Forgeline".
         account === 'primary' && !url ? get('/v1/ai/proposals').then(r => r.proposals).catch(() => []) : [],
         // Alarms are optional: a role that cannot read them still gets the map, and says so.
@@ -74,11 +76,11 @@ export function explorer({ dev, account = 'primary', url = '', scope = 'region' 
     const notes = () => empty.length || denied.length ? h('div', { class: 'space-y-1 border-t border-slate-200 pt-3 text-xs dark:border-slate-800' },
       empty.length ? h('p', { class: 'muted' }, 'Nothing in: ' + empty.map(s => s.label).join(', ')) : null,
       denied.length ? h('p', { class: 'text-amber-700 dark:text-amber-400' }, 'Could not list: ' + denied.map(s => `${s.label} (${s.error})`).join('; ')) : null) : null;
-    const switcher = url ? null : h('div', { class: 'inline-flex overflow-hidden rounded-lg border border-slate-300 text-xs dark:border-slate-700', role: 'group', 'aria-label': 'View' },
+    const switcher = url || service ? null : h('div', { class: 'inline-flex overflow-hidden rounded-lg border border-slate-300 text-xs dark:border-slate-700', role: 'group', 'aria-label': 'View' },
       [['map', 'Map'], ['list', 'List']].map(([k, label]) => h('button', { type: 'button', 'data-view': k, 'aria-pressed': String(view === k),
         class: 'px-2.5 py-1 ' + (view === k ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900' : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'),
         onclick: () => { view = k; draw(); } }, label)));
-    const tiles = mapOn ? null : h('div', { class: 'space-y-3 px-5 py-4' },
+    const tiles = mapOn || service ? null : h('div', { class: 'space-y-3 px-5 py-4' },
       ordered.length ? h('div', { class: 'grid gap-3 sm:grid-cols-2 lg:grid-cols-4' }, ordered.map(tile)) : emptyState('cloud', 'Nothing found in this region', 'Global services such as S3 are listed too. Check the region in Change connection.'),
       notes());
 
@@ -86,7 +88,7 @@ export function explorer({ dev, account = 'primary', url = '', scope = 'region' 
     mount(root,
       h('div', { class: 'flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-3 dark:border-slate-800' },
         h('div', {}, h('h2', { class: 'h-section' }, 'Resources'),
-          h('p', { class: 'muted mt-0.5 text-xs', title: absTime(inv.fetched_at) }, `${total} in ${withStuff.length} service${withStuff.length === 1 ? '' : 's'} · ${scope} ${inv.region} · read ${relTime(inv.fetched_at)}`)),
+          h('p', { class: 'muted mt-0.5 text-xs', title: absTime(inv.fetched_at) }, service ? `${total} · ${scope} ${inv.region} · read ${relTime(inv.fetched_at)}` : `${total} in ${withStuff.length} service${withStuff.length === 1 ? '' : 's'} · ${scope} ${inv.region} · read ${relTime(inv.fetched_at)}`)),
         h('div', { class: 'flex flex-wrap items-center gap-2' }, switcher, search,
           h('button', { class: 'btn-secondary btn-sm', type: 'button', id: 'explorer-refresh', onclick: () => load(true) }, icon('refresh', 'size-3.5'), 'Refresh'))),
       ...(alarmData && alarmData.enabled && !url ? [alarmLine()] : []),
@@ -110,7 +112,8 @@ export function explorer({ dev, account = 'primary', url = '', scope = 'region' 
     return h('button', { type: 'button', 'data-service': svc.id, 'aria-pressed': String(on),
       class: 'rounded-xl border p-3 text-left transition hover:border-brand-400 ' + (on ? 'border-brand-500 bg-brand-50 ring-2 ring-brand-500/30 dark:bg-brand-950/30' : 'border-slate-200 dark:border-slate-800'),
       onclick: () => { selected = on ? '' : svc.id; shown = PAGE; draw(); } },
-      h('div', { class: 'flex items-center justify-between gap-2' }, h('span', { class: 'flex min-w-0 items-center gap-2' }, h('span', { class: 'size-2 shrink-0 rounded-full ' + DOT[svc.category], title: svc.category }), h('span', { class: 'truncate text-sm font-medium' }, svc.label)), svc.global ? h('span', { class: 'muted text-[10px] uppercase' }, 'global') : null),
+      h('div', { class: 'flex items-center justify-between gap-2' }, h('span', { class: 'flex min-w-0 items-center gap-2' }, h('span', { class: 'size-2 shrink-0 rounded-full ' + DOT[svc.category], title: svc.category }), h('span', { class: 'truncate text-sm font-medium' }, svc.label)),
+        svc.global ? h('span', { class: 'muted text-[10px] uppercase' }, 'global') : null),
       h('div', { class: 'mt-1 text-2xl font-semibold tabular-nums' }, svc.count),
       h('div', { class: 'muted mt-0.5 truncate text-xs' }, stateSummary(svc) || '\u00a0'));
   }
@@ -155,13 +158,15 @@ export function explorer({ dev, account = 'primary', url = '', scope = 'region' 
     const capped = inv.services.some(s => s.truncated && (!selected || s.id === selected));
     mount(box, h('div', { class: 'border-t border-slate-200 dark:border-slate-800' },
       h('div', { class: 'flex items-center justify-between px-5 py-2.5 text-sm' }, h('span', { class: 'font-medium' }, `${label} · ${rows.length}`),
-        selected && h('button', { class: 'btn-ghost btn-sm', type: 'button', onclick: () => { selected = ''; draw(); } }, 'Show all')),
-      rows.length ? h('div', { class: 'overflow-x-auto' }, h('table', { class: 'tbl' }, h('thead', {}, h('tr', {}, ['Resource', 'Service', 'State', 'Created', 'Forgeline'].map(x => h('th', {}, x)))),
+        selected && !service && h('span', { class: 'flex items-center gap-1' },
+          url ? null : h('a', { class: 'btn-ghost btn-sm', href: '#/services/' + encodeURIComponent(selected), id: 'service-page-link' }, 'Open its page'),
+          h('button', { class: 'btn-ghost btn-sm', type: 'button', onclick: () => { selected = ''; draw(); } }, 'Show all'))),
+      rows.length ? h('div', { class: 'overflow-x-auto' }, h('table', { class: 'tbl' }, h('thead', {}, h('tr', {}, ['Resource', service ? null : 'Service', 'State', 'Created', 'Forgeline'].filter(Boolean).map(x => h('th', {}, x)))),
         h('tbody', {}, rows.slice(0, shown).map(({ s, r }) => {
           const by = touchedBy(r, proposals);
           return h('tr', { class: 'row-link', tabindex: '0', 'data-resource': r.id, onclick: () => detail(s, r), onkeydown: (e) => { if (e.key === 'Enter') detail(s, r); } },
             h('td', {}, h('div', { class: 'font-medium' }, r.name), r.id !== r.name && h('div', { class: 'muted max-w-xs truncate font-mono text-xs' }, r.id)),
-            h('td', { class: 'whitespace-nowrap text-sm' }, s.label), h('td', {}, stateBadge(r.state)),
+            service ? null : h('td', { class: 'whitespace-nowrap text-sm' }, s.label), h('td', {}, stateBadge(r.state)),
             h('td', { class: 'muted whitespace-nowrap text-sm', title: absTime(r.created) }, r.created ? relTime(r.created) : '–'),
             h('td', {}, by.length ? h('span', { class: 'pill-run', title: by.map(p => p.title).join('\n') }, icon('sparkle', 'size-3'), `changed · ${by.length}`) : h('span', { class: 'muted' }, '–')));
         })))) : h('p', { class: 'muted px-5 pb-5 text-sm' }, query ? 'Nothing matches that search.' : 'Nothing here.'),

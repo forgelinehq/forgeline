@@ -32,6 +32,7 @@ export const SPACES = [
   ] },
   { id: 'watch', label: 'Watch', icon: 'eye', path: '/map', tabs: [
     { path: '/map', label: 'Map', min: 'viewer' },
+    { path: '/services', label: 'Services', min: 'viewer' },
     { path: '/infrastructure', label: 'Infrastructure', min: 'viewer' },
     { path: '/kubernetes', label: 'Kubernetes', min: 'viewer' },
     { path: '/guard', label: 'Security', min: 'viewer' },

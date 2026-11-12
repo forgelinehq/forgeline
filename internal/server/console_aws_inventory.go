@@ -141,7 +141,106 @@ func (s *Server) handleAWSInventory(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	writeJSON(w, http.StatusOK, s.inventoryFor(r.Context(), acct, st, r.URL.Query().Get("refresh") == "1"))
+	refresh := r.URL.Query().Get("refresh") == "1"
+	if id := r.URL.Query().Get("service"); id != "" {
+		d, found := s.serviceFor(r.Context(), acct, st, id, refresh)
+		if !found {
+			writeError(w, http.StatusNotFound, "no such service: "+id)
+			return
+		}
+		writeJSON(w, http.StatusOK, d)
+		return
+	}
+	writeJSON(w, http.StatusOK, s.inventoryFor(r.Context(), acct, st, refresh))
+}
+
+// AWSServiceInfoJSON names one service the explorer can list, without reading it.
+type AWSServiceInfoJSON struct {
+	ID       string `json:"id"`
+	Label    string `json:"label"`
+	Category string `json:"category"`
+	Global   bool   `json:"global,omitempty"`
+}
+
+// awsServiceInfos lists every service the inventory knows, in the explorer's order. A collector that lists
+// several kinds (ECS clusters and services) is named by each kind.
+func awsServiceInfos() []AWSServiceInfoJSON {
+	var out []AWSServiceInfoJSON
+	for _, sp := range inventorySpecs() {
+		out = append(out, AWSServiceInfoJSON{ID: sp.id, Label: sp.label, Category: sp.category, Global: sp.global})
+		if sp.id == "ecs" {
+			out = append(out, AWSServiceInfoJSON{ID: "ecs-services", Label: "ECS services", Category: sp.category})
+		}
+	}
+	return out
+}
+
+// handleAWSServices answers at once with the services the explorer can show, so the Services page draws
+// before a single resource is read; each tile then asks for its own service.
+func (s *Server) handleAWSServices(w http.ResponseWriter, r *http.Request) {
+	st, acct, ok := s.accountParam(w, r)
+	if !ok {
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"enabled": st.Enabled, "region": st.Region, "account": acct, "services": awsServiceInfos()})
+}
+
+// specForService finds the collector that lists service id. ECS services come from the ECS collector.
+func specForService(id string) (invSpec, bool) {
+	if id == "ecs-services" {
+		id = "ecs"
+	}
+	for _, sp := range inventorySpecs() {
+		if sp.id == id {
+			return sp, true
+		}
+	}
+	return invSpec{}, false
+}
+
+// serviceFor reads one service of an account: from the whole inventory when that was read lately, otherwise
+// with that service's own calls and its own cache entry, so a page for one service never waits for the
+// others. found is false when no service has that id.
+func (s *Server) serviceFor(ctx context.Context, acct string, st awsSettings, id string, refresh bool) (AWSInventoryJSON, bool) {
+	sp, ok := specForService(id)
+	if !ok {
+		return AWSInventoryJSON{}, false
+	}
+	if !st.Enabled {
+		return AWSInventoryJSON{Services: []AWSServiceJSON{}}, true
+	}
+	key := acct + "|" + st.Profile + "|" + st.Region
+	pick := func(d AWSInventoryJSON) AWSInventoryJSON {
+		kept := []AWSServiceJSON{}
+		for _, svc := range d.Services {
+			if svc.ID == id {
+				kept = append(kept, svc)
+			}
+		}
+		d.Services = kept
+		return d
+	}
+	if !refresh {
+		if d, ok := s.awsInv.peek(key, 30*time.Minute); ok && d.Error == "" {
+			return pick(d), true
+		}
+	}
+	d, _, err := s.awsInv.get(ctx, key+"|spec:"+sp.id, refresh, s.awsReadOpts(inventoryTimeout), func(ctx context.Context) (AWSInventoryJSON, bool) {
+		d := AWSInventoryJSON{Enabled: true, Profile: st.Profile, Region: st.Region, FetchedAt: time.Now().UTC().Format(time.RFC3339)}
+		ctx, cancel := context.WithTimeout(ctx, inventoryTimeout)
+		defer cancel()
+		d.Services = s.collect(ctx, st, sp)
+		for _, svc := range d.Services {
+			if svc.Error != "" {
+				return d, false // a denied or failed read is shown, never kept
+			}
+		}
+		return d, true
+	})
+	if err != nil {
+		return AWSInventoryJSON{Enabled: true, Region: st.Region, Error: "stopped waiting: " + err.Error(), Services: []AWSServiceJSON{}}, true
+	}
+	return pick(d), true
 }
 
 // inventoryFor reads an account's resources, or returns the read from the last minute. The console
