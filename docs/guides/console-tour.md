@@ -152,7 +152,20 @@ it; a claim that names no lookup the agent ran is left out and counted.
 
 ![A finished mission]({{ '/console/97-mission-done.png' | relative_url }})
 
-**Marketplace** offers ready-made agents, skills and environment templates, installed as versions you can review.
+**Marketplace** offers ready-made agents, skills, teams and environment templates, installed as versions you can review.
+A team is several agents and a workflow that runs them together in one install:
+
+| Package | What it gives you |
+| --- | --- |
+| Incident triage team | A run analyst and a platform checker look at the same time; a lead writes one report with the next steps |
+| Weekly platform review | A security checker and a spend checker side by side; a lead writes the weekly review |
+| AgentCore readiness | An advisor that checks an agent against Amazon Bedrock AgentCore's documented rules, region and permissions |
+| Repository to pipeline | Reads an allowed GitHub repository and prepares a pipeline for you to confirm |
+| Architecture review | A light Well-Architected review of an AWS account, citing AWS's documentation |
+| Cost watch, Security review, Failed-run triage, Cluster health | Single agents for those jobs |
+
+Every agent only reads unless its package says it may prepare something for you to confirm; nothing is saved, run or
+changed without a person.
 
 ## Watch
 

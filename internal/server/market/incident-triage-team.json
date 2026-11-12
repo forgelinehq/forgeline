@@ -1,0 +1,112 @@
+{
+  "id": "incident-triage-team",
+  "version": 1,
+  "title": "Incident triage team",
+  "description": "Three agents that work a problem together: one reads the failed runs, one checks the platform and the cloud, and a lead writes one short report with the next steps.",
+  "publisher": "Forgeline",
+  "tags": [
+    "team",
+    "incident",
+    "runs"
+  ],
+  "skills": [
+    {
+      "key": "triage-runs",
+      "name": "Triage failed runs",
+      "description": "Steps for finding why runs fail.",
+      "body": "1. List recent failed runs with list_runs (status failed).\n2. For the newest three, read run_failure and say which step failed first and why.\n3. Read the end of that step's log with get_step_log only when run_failure is not enough.\n4. Group failures that share a cause.\n5. For each cause, name the run ids that showed it and the most likely fix. Say clearly when you are guessing."
+    },
+    {
+      "key": "check-platform",
+      "name": "Check the platform",
+      "description": "Steps for checking what runs underneath.",
+      "body": "1. Run morning_check and note anything that needs a person.\n2. Read the AWS resources with aws_resources and look for things that are failing or changing.\n3. If Kubernetes clusters are registered, list them with k8s_clusters and read the busiest with k8s_resources.\n4. Report only what you saw, with the lookup that showed it."
+    }
+  ],
+  "agents": [
+    {
+      "key": "run-analyst",
+      "name": "Run analyst",
+      "description": "Finds why pipeline runs failed.",
+      "instructions": "You read failed runs and explain why they failed. Use the triage skill. Name the run id behind every claim.",
+      "skills": [
+        "triage-runs"
+      ],
+      "tools": [
+        "list_runs",
+        "get_run",
+        "run_failure",
+        "get_step_log",
+        "list_pipelines",
+        "get_pipeline"
+      ],
+      "tier": "T0"
+    },
+    {
+      "key": "platform-checker",
+      "name": "Platform checker",
+      "description": "Checks the Docker host, the cloud and clusters.",
+      "instructions": "You check the platform under the pipelines. Use the platform skill. Say what you could not check.",
+      "skills": [
+        "check-platform"
+      ],
+      "tools": [
+        "morning_check",
+        "aws_accounts",
+        "aws_resources",
+        "k8s_clusters",
+        "k8s_resources",
+        "guard_findings"
+      ],
+      "tier": "T0"
+    },
+    {
+      "key": "triage-lead",
+      "name": "Triage lead",
+      "description": "Turns the team's findings into one short report.",
+      "instructions": "You lead an incident triage. You get what the run analyst and the platform checker found. Write one short report: what is broken, the most likely cause, and the next two steps in order. Keep every claim tied to what a teammate found; never add facts of your own.",
+      "skills": [],
+      "tools": [],
+      "tier": "T0"
+    }
+  ],
+  "workflows": [
+    {
+      "key": "triage",
+      "name": "Triage what is failing",
+      "description": "Runs and platform checked together, then one report.",
+      "stages": [
+        {
+          "name": "Look",
+          "steps": [
+            {
+              "id": "",
+              "agent": "run-analyst",
+              "agent_n": 0,
+              "task": "Find why the recent failed runs failed."
+            },
+            {
+              "id": "",
+              "agent": "platform-checker",
+              "agent_n": 0,
+              "task": "Check the platform and the cloud for anything failing or changing."
+            }
+          ]
+        },
+        {
+          "name": "Report",
+          "steps": [
+            {
+              "id": "",
+              "agent": "triage-lead",
+              "agent_n": 0,
+              "task": "Write the triage report from what the team found."
+            }
+          ]
+        }
+      ],
+      "run_as": "viewer"
+    }
+  ],
+  "sha256": "efe53e9f43fb7ac4b3ef23f6f5d2d995090bdd12883b4477b94e2baa3d9b81e3"
+}

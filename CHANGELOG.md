@@ -27,6 +27,11 @@ section in the pull request that makes the change; a release moves it under its 
 - **After a session ends**, the console stops polling the server (it asked every minute, forever).
 
 ### Added
+- **Five Marketplace packages, two of them teams.** The incident triage team (a run analyst and a platform checker in
+  parallel, then a lead's report) and the weekly platform review (security and spend side by side, then a review) each
+  install three agents and a workflow. Also: AgentCore readiness (checks an agent against Bedrock AgentCore's documented
+  rules), repository to pipeline (prepares a pipeline from an allowed repository for you to confirm), and an
+  architecture review against the Well-Architected pillars.
 - **Remove what a blueprint built** (design note 041). **Remove…** on the design canvas previews the removal, a
   different administrator approves it, and exactly that plan is applied, like a build. **Keep the data** leaves tables,
   buckets, databases and secrets, still protected; **Remove everything** takes two approvals when something is protected

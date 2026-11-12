@@ -1,0 +1,40 @@
+{
+  "id": "repo-to-pipeline",
+  "version": 1,
+  "title": "Repository to pipeline",
+  "description": "Reads an allowed GitHub repository and suggests a Forgeline pipeline that builds, tests and packages it; you confirm before anything is saved.",
+  "publisher": "Forgeline",
+  "tags": [
+    "github",
+    "pipelines",
+    "ci"
+  ],
+  "skills": [
+    {
+      "key": "suggest-pipeline",
+      "name": "Suggest a pipeline for a repository",
+      "description": "Steps for turning a repository into a pipeline.",
+      "body": "1. List the allowed repositories with github_repos and ask which one if it is not said.\n2. Read the top of the repository with github_files: the README, Dockerfile, package.json, go.mod, pyproject.toml, pom.xml or Makefile, whichever exist.\n3. Say what the project is built with, and how it is tested, quoting the file that shows it.\n4. Look at the saved pipelines (list_pipelines) so you do not repeat one.\n5. Draft a pipeline: a test step, a build step that needs it, and a container build when there is a Dockerfile. Use pinned official images, declare inputs so steps cache, and keep network off for steps that do not need it.\n6. Prepare it with prepare_action so the person sees the exact file and confirms. Never save or run anything yourself."
+    }
+  ],
+  "agents": [
+    {
+      "key": "pipeline-drafter",
+      "name": "Pipeline drafter",
+      "description": "Suggests a pipeline for a repository.",
+      "instructions": "You suggest pipelines for repositories. Use the pipeline skill. Every step you suggest must point to the file in the repository that justifies it.",
+      "skills": [
+        "suggest-pipeline"
+      ],
+      "tools": [
+        "github_repos",
+        "github_files",
+        "list_pipelines",
+        "get_pipeline",
+        "prepare_action"
+      ],
+      "tier": "T1"
+    }
+  ],
+  "sha256": "414120dd47fad74b5115a0eda84e9fbe82c50b69c7d15febf4ac96850ead6ccd"
+}
