@@ -320,22 +320,28 @@ func (s *Server) handleCreateSkill(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, m)
 		return
 	}
-	ctx := r.Context()
-	id, err := s.newDefID(ctx, kindAISkill, req.Name)
+	sk, err := s.saveNewSkill(r.Context(), principalFrom(r.Context()), clientIP(r), req, "")
 	if err != nil {
 		s.internalError(w, "saving the skill", err)
 		return
 	}
-	p := principalFrom(ctx)
+	writeJSON(w, http.StatusCreated, sk)
+}
+
+// saveNewSkill saves a checked request as a new skill and audits it. how says who wrote it, for the audit log.
+func (s *Server) saveNewSkill(ctx context.Context, p Principal, ip string, req skillRequest, how string) (AISkill, error) {
+	id, err := s.newDefID(ctx, kindAISkill, req.Name)
+	if err != nil {
+		return AISkill{}, err
+	}
 	sv := SkillVersion{N: 1, Body: req.Body, Note: req.Note, By: p.Name, At: time.Now().UTC()}
 	sv.Hash = sv.computeHash(id)
 	sk := AISkill{ID: id, Name: strings.TrimSpace(req.Name), Description: req.Description, Current: 1, Versions: []SkillVersion{sv}}
 	if err := s.docs.Put(ctx, kindAISkill, id, sk); err != nil {
-		s.internalError(w, "saving the skill", err)
-		return
+		return AISkill{}, err
 	}
-	s.auditReq(r, "ai.skill.create", "skill/"+id, fmt.Sprintf("%s v1 %s", sk.Name, sv.Hash[:12]), true)
-	writeJSON(w, http.StatusCreated, sk)
+	s.audit(ctx, p, ip, "ai.skill.create", "skill/"+id, fmt.Sprintf("%s v1 %s%s", sk.Name, sv.Hash[:12], how), true)
+	return sk, nil
 }
 
 func (s *Server) handleSkillVersion(w http.ResponseWriter, r *http.Request) {
@@ -559,21 +565,28 @@ func (s *Server) handleCreateAgent(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, msg)
 		return
 	}
-	id, err := s.newDefID(ctx, kindAIAgent, req.Name)
+	a, err := s.saveNewAgent(ctx, principalFrom(ctx), clientIP(r), req, v, "")
 	if err != nil {
 		s.internalError(w, "saving the agent", err)
 		return
 	}
-	p := principalFrom(ctx)
+	writeJSON(w, http.StatusCreated, a)
+}
+
+// saveNewAgent saves a resolved version as a new agent and audits it.
+func (s *Server) saveNewAgent(ctx context.Context, p Principal, ip string, req agentRequest, v AgentVersion, how string) (AIAgent, error) {
+	id, err := s.newDefID(ctx, kindAIAgent, req.Name)
+	if err != nil {
+		return AIAgent{}, err
+	}
 	v.N, v.By, v.At = 1, p.Name, time.Now().UTC()
 	v.Hash = v.computeHash(id)
 	a := AIAgent{ID: id, Name: strings.TrimSpace(req.Name), Description: req.Description, Current: 1, Versions: []AgentVersion{v}}
 	if err := s.docs.Put(ctx, kindAIAgent, id, a); err != nil {
-		s.internalError(w, "saving the agent", err)
-		return
+		return AIAgent{}, err
 	}
-	s.auditReq(r, "ai.agent.create", "agent/"+id, fmt.Sprintf("%s v1 %s tier %s", a.Name, v.Hash[:12], v.Tier), true)
-	writeJSON(w, http.StatusCreated, a)
+	s.audit(ctx, p, ip, "ai.agent.create", "agent/"+id, fmt.Sprintf("%s v1 %s tier %s%s", a.Name, v.Hash[:12], v.Tier, how), true)
+	return a, nil
 }
 
 func sameVersionContent(a, b AgentVersion) bool {

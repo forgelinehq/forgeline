@@ -1,6 +1,8 @@
 # 028: The assistant acts inside Forgeline, with a Confirm card
 
-Status: **Decided 2026-11-04; slice 1 (save a pipeline, start a run) is built.**
+Status: **Decided 2026-11-04; slice 1 (save a pipeline, start a run) is built. Slice 2 (2026-11-12): the assistant writes
+skills, agents and workflows as cards (`save_skill`, `save_agent`, `save_workflow`), for administrators only, like the
+console's forms; each is checked when prepared and again when confirmed, with the card's effects derived by the server.**
 Builds on notes 013 and 024 (assistant and its stream), 026 (access policy), 027 (memory) and 006 (cloud changes).
 
 ## Question

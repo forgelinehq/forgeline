@@ -287,21 +287,28 @@ func (s *Server) handleCreateWorkflow(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, msg)
 		return
 	}
-	id, err := s.newDefID(ctx, kindWorkflow, req.Name)
+	wf, err := s.saveNewWorkflow(ctx, principalFrom(ctx), clientIP(r), req, v, "")
 	if err != nil {
 		s.internalError(w, "saving the workflow", err)
 		return
 	}
-	p := principalFrom(ctx)
+	writeJSON(w, http.StatusCreated, wf)
+}
+
+// saveNewWorkflow saves a resolved version as a new workflow and audits it.
+func (s *Server) saveNewWorkflow(ctx context.Context, p Principal, ip string, req wfRequest, v WFVersion, how string) (Workflow, error) {
+	id, err := s.newDefID(ctx, kindWorkflow, req.Name)
+	if err != nil {
+		return Workflow{}, err
+	}
 	v.N, v.By, v.At = 1, p.Name, time.Now().UTC()
 	v.Hash = v.computeHash(id)
 	wf := Workflow{ID: id, Name: strings.TrimSpace(req.Name), Description: req.Description, Current: 1, Versions: []WFVersion{v}}
 	if err := s.docs.Put(ctx, kindWorkflow, id, wf); err != nil {
-		s.internalError(w, "saving the workflow", err)
-		return
+		return Workflow{}, err
 	}
-	s.auditReq(r, "ai.workflow.create", "workflow/"+id, fmt.Sprintf("%s v1 %s", wf.Name, v.Hash[:12]), true)
-	writeJSON(w, http.StatusCreated, wf)
+	s.audit(ctx, p, ip, "ai.workflow.create", "workflow/"+id, fmt.Sprintf("%s v1 %s%s", wf.Name, v.Hash[:12], how), true)
+	return wf, nil
 }
 
 func (s *Server) handleWorkflowVersion(w http.ResponseWriter, r *http.Request) {

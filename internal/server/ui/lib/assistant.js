@@ -8,6 +8,9 @@ import { newRun, applyEvent, progressLabel } from './runstate.js';
 import { dockWidth, wideDockWidth, floatRect, readPrefs } from './panelgeom.js';
 import { stepLabel, stepsSummary } from './steplabel.js';
 
+// What the card's detail holds, by kind of action (note 028).
+const DETAIL_LABEL = { save_skill: 'Show the steps', save_agent: 'Show the instructions', save_workflow: 'Show the stages' };
+
 const DRAFT_KEY = 'forgeline-draft';
 
 /** What the page is about, so the server can attach the right data to the question. */
@@ -197,7 +200,7 @@ function build(close, role) {
     box.append(
       h('div', { class: 'flex items-center gap-2 font-semibold' }, icon('bolt', 'size-4 shrink-0'), a.title || 'Waiting for you'),
       h('ul', { class: 'list-disc space-y-0.5 pl-5 text-xs' }, a.effects.map(e => h('li', {}, e))),
-      a.detail ? h('details', {}, h('summary', { class: 'cursor-pointer text-xs underline' }, 'Show the file'),
+      a.detail ? h('details', {}, h('summary', { class: 'cursor-pointer text-xs underline' }, DETAIL_LABEL[a.kind] || 'Show the file'),
         h('pre', { class: 'mt-1 max-h-48 w-full overflow-auto whitespace-pre-wrap break-words rounded-lg bg-white/70 p-2 font-mono text-[11px] dark:bg-slate-900/50' }, a.detail)) : null,
       h('div', { class: 'flex gap-2' },
         h('button', { type: 'button', class: 'btn-primary btn-sm', 'data-action': 'confirm', onclick: () => send('confirm') }, 'Confirm'),
