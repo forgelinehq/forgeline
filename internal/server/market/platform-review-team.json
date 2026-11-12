@@ -1,0 +1,107 @@
+{
+  "id": "platform-review-team",
+  "version": 1,
+  "title": "Weekly platform review",
+  "description": "A team that reviews security findings, cost and recent changes each week, then a lead writes the review; anything to change is left for a person.",
+  "publisher": "Forgeline",
+  "tags": [
+    "team",
+    "security",
+    "cost",
+    "review"
+  ],
+  "skills": [
+    {
+      "key": "review-security",
+      "name": "Review security findings",
+      "description": "Steps for a weekly security look.",
+      "body": "1. Read guard_findings, worst first.\n2. Group findings that one change would fix.\n3. For each group say the risk in one sentence and the smallest fix.\n4. List at most five, in the order to do them."
+    },
+    {
+      "key": "review-spend",
+      "name": "Review spend",
+      "description": "Steps for spotting waste.",
+      "body": "1. Read aws_resources for each connected account (aws_accounts lists them).\n2. Look for stopped instances with disks, unattached volumes, load balancers with nothing behind them, log groups kept forever, and databases larger than their use.\n3. Name each resource and why it costs money. Do not invent prices."
+    }
+  ],
+  "agents": [
+    {
+      "key": "security-checker",
+      "name": "Security checker",
+      "description": "Reviews the open Guard findings.",
+      "instructions": "You review security findings and order the fixes. Use the security review skill.",
+      "skills": [
+        "review-security"
+      ],
+      "tools": [
+        "guard_findings",
+        "aws_accounts",
+        "aws_resources"
+      ],
+      "tier": "T0"
+    },
+    {
+      "key": "spend-checker",
+      "name": "Spend checker",
+      "description": "Looks for resources that cost money for nothing.",
+      "instructions": "You look for waste. Use the spend skill. You only read.",
+      "skills": [
+        "review-spend"
+      ],
+      "tools": [
+        "aws_accounts",
+        "aws_resources",
+        "aws_summary"
+      ],
+      "tier": "T0"
+    },
+    {
+      "key": "review-lead",
+      "name": "Review lead",
+      "description": "Writes the weekly review.",
+      "instructions": "You write the weekly platform review from what the security checker and the spend checker found: three sections (security, spend, what to do first), each at most five lines. Use only what they found.",
+      "skills": [],
+      "tools": [],
+      "tier": "T0"
+    }
+  ],
+  "workflows": [
+    {
+      "key": "weekly-review",
+      "name": "Weekly platform review",
+      "description": "Security and spend checked side by side, then one review.",
+      "stages": [
+        {
+          "name": "Check",
+          "steps": [
+            {
+              "id": "",
+              "agent": "security-checker",
+              "agent_n": 0,
+              "task": "Review the open security findings."
+            },
+            {
+              "id": "",
+              "agent": "spend-checker",
+              "agent_n": 0,
+              "task": "Look for resources that cost money for nothing."
+            }
+          ]
+        },
+        {
+          "name": "Write",
+          "steps": [
+            {
+              "id": "",
+              "agent": "review-lead",
+              "agent_n": 0,
+              "task": "Write the weekly review."
+            }
+          ]
+        }
+      ],
+      "run_as": "viewer"
+    }
+  ],
+  "sha256": "88522734a47ec52f35477714c1945658809d6b36da4ca1acc5ffcaea82b31c66"
+}

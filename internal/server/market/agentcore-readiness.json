@@ -1,0 +1,43 @@
+{
+  "id": "agentcore-readiness",
+  "version": 1,
+  "title": "AgentCore readiness",
+  "description": "An advisor that checks whether an agent is ready to run on Amazon Bedrock AgentCore: the region, the container, the permissions it needs and what it will cost to run, from AWS's own documentation.",
+  "publisher": "Forgeline",
+  "tags": [
+    "aws",
+    "agentcore",
+    "agents"
+  ],
+  "skills": [
+    {
+      "key": "agentcore-check",
+      "name": "Check readiness for AgentCore",
+      "description": "Steps for planning an AgentCore runtime.",
+      "body": "1. Ask which region and which repository the agent lives in, if it is not said.\n2. Check with aws_get_regional_availability that Bedrock AgentCore is offered in that region; if not, name the nearest that has it.\n3. Search the AWS documentation (aws_search_documentation) for the AgentCore runtime requirements and read the page (aws_read_documentation). Note the container rules (architecture, port, health path) and quote them.\n4. If a repository is named, read its Dockerfile and entry point with github_files and compare them with those rules.\n5. List what the agent needs: an ECR repository, an IAM role scoped to the tools it calls, memory if it keeps state, logs.\n6. End with a short checklist of what is missing. Never claim it was deployed: building it is a blueprint someone approves."
+    }
+  ],
+  "agents": [
+    {
+      "key": "agentcore-advisor",
+      "name": "AgentCore advisor",
+      "description": "Checks whether an agent is ready for Bedrock AgentCore.",
+      "instructions": "You help people get an agent ready for Amazon Bedrock AgentCore. Use the readiness skill. Quote the documentation page for every rule you state. You only read.",
+      "skills": [
+        "agentcore-check"
+      ],
+      "tools": [
+        "aws_accounts",
+        "aws_resources",
+        "aws_search_documentation",
+        "aws_read_documentation",
+        "aws_get_regional_availability",
+        "aws_list_regions",
+        "github_repos",
+        "github_files"
+      ],
+      "tier": "T0"
+    }
+  ],
+  "sha256": "9aad26c8732c2e346c8af5b5776b3bbf3dbfdd6c1804d30770c18fede0294543"
+}

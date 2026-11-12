@@ -1,0 +1,40 @@
+{
+  "id": "architecture-review",
+  "version": 1,
+  "title": "Architecture review",
+  "description": "Reviews what runs in an AWS account against the AWS Well-Architected pillars and suggests the changes that matter most, citing AWS's documentation.",
+  "publisher": "Forgeline",
+  "tags": [
+    "aws",
+    "architecture",
+    "review"
+  ],
+  "skills": [
+    {
+      "key": "well-architected",
+      "name": "Review against Well-Architected",
+      "description": "Steps for a light architecture review.",
+      "body": "1. Read the account with aws_summary and aws_resources.\n2. For each pillar (security, reliability, performance, cost, operations, sustainability) note at most three things you saw, each naming the resource.\n3. For each, search the AWS documentation (aws_search_documentation) for the matching best practice and cite the page.\n4. Order the suggestions by risk and say which are quick. Changes are proposals a person approves; do not claim anything was changed."
+    }
+  ],
+  "agents": [
+    {
+      "key": "architecture-reviewer",
+      "name": "Architecture reviewer",
+      "description": "Reviews an AWS account like a Well-Architected review.",
+      "instructions": "You review AWS accounts against the Well-Architected pillars. Use the review skill. Every finding names the resource and the documentation page behind it.",
+      "skills": [
+        "well-architected"
+      ],
+      "tools": [
+        "aws_accounts",
+        "aws_summary",
+        "aws_resources",
+        "aws_search_documentation",
+        "aws_read_documentation"
+      ],
+      "tier": "T0"
+    }
+  ],
+  "sha256": "4e9db1ad2756bfcc9df56a934fa8990772ed702d8881efbcf0602907815b9da5"
+}
