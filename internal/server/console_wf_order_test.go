@@ -105,3 +105,41 @@ func pad8(n int) string {
 	s := strings.Repeat("0", 8) + strconv.Itoa(n)
 	return s[len(s)-8:]
 }
+
+// Cloud changes and AI proposals have random ids: lists must still be newest first, and a limit must keep the newest.
+func TestChangesAndProposalsListNewestFirst(t *testing.T) {
+	m := newMCPHarness(t)
+	ctx := context.Background()
+	now := time.Now().UTC()
+	for i, id := range []string{"zzzz-old", "mmmm-new", "aaaa-mid"} {
+		at := map[string]time.Time{"zzzz-old": now.Add(-3 * time.Hour), "mmmm-new": now.Add(-time.Minute), "aaaa-mid": now.Add(-time.Hour)}[id] // neither id order is the time order
+		_ = i
+		if err := m.srv.docs.Put(ctx, kindCloud, id, CloudChange{ID: id, Kind: kindStackDeploy, Status: stSucceeded, ProposedAt: at, Preview: []ChangePreview{}}); err != nil {
+			t.Fatal(err)
+		}
+		if err := m.srv.docs.Put(ctx, kindAIProposal, id, AIProposal{ID: id, Status: apApplied, ProposedAt: at}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var cl struct{ Changes []CloudChange }
+	json.Unmarshal(m.admin.expect(200, "GET", "/v1/cloud/changes", nil), &cl)
+	var got []string
+	for _, c := range cl.Changes {
+		got = append(got, c.ID)
+	}
+	if strings.Join(got, ",") != "mmmm-new,aaaa-mid,zzzz-old" {
+		t.Errorf("changes order = %v", got)
+	}
+	if two, _ := m.srv.loadChanges(ctx, 2); len(two) != 2 || two[0].ID != "mmmm-new" || two[1].ID != "aaaa-mid" {
+		t.Errorf("a limit must keep the newest: %+v", two)
+	}
+	var pl struct{ Proposals []AIProposal }
+	json.Unmarshal(m.admin.expect(200, "GET", "/v1/ai/proposals", nil), &pl)
+	got = nil
+	for _, p := range pl.Proposals {
+		got = append(got, p.ID)
+	}
+	if strings.Join(got, ",") != "mmmm-new,aaaa-mid,zzzz-old" {
+		t.Errorf("proposals order = %v", got)
+	}
+}

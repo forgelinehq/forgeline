@@ -23,7 +23,9 @@ async function pickAccount(el, title, subtitle) {
   let account = savedAccount();
   let accounts = [], v;
   try {
-    [accounts, v] = await Promise.all([get('/v1/aws/accounts').then(r => r.accounts).catch(() => []), get('/v1/infra/aws?account=primary', { signal: pageSignal() })]);
+    // The services list answers at once and says whether AWS is connected; the account summary would make the page
+    // wait for a full read of stacks and instances it does not show.
+    [accounts, v] = await Promise.all([get('/v1/aws/accounts').then(r => r.accounts).catch(() => []), get('/v1/infra/aws/services?account=primary', { signal: pageSignal() })]);
   } catch (e) { mount(el, pageHeader(title, ''), errorBox(e.message)); return null; }
   if (account !== 'primary' && !accounts.some(a => a.id === account)) account = 'primary';
   if (!v.enabled && account === 'primary') account = accounts.find(a => !a.primary)?.id || 'primary';

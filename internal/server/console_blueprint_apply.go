@@ -498,7 +498,10 @@ func (s *Server) proposeBlueprint(ctx context.Context, c *CloudChange, id string
 	case blueprint.RemoveKeepData:
 		c.Title = fmt.Sprintf("Remove what blueprint %s built, keeping its data (%d to remove)", b.Name, p.Remove)
 	case blueprint.RemoveUnprotect:
-		c.Title = fmt.Sprintf("Remove blueprint %s, step 1 of 2: turn off deletion protection (%d to change) and remove the rest (%d)", b.Name, p.Change, p.Remove)
+		c.Title = fmt.Sprintf("Remove blueprint %s, step 1 of 2: turn off deletion protection (%d to change)", b.Name, p.Change)
+		if p.Remove > 0 {
+			c.Title += fmt.Sprintf(" and remove the rest (%d)", p.Remove)
+		}
 	case blueprint.RemoveAll:
 		c.Title = fmt.Sprintf("Remove everything blueprint %s built, data included (%d to remove)", b.Name, p.Remove)
 	}

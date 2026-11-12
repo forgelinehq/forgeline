@@ -203,14 +203,20 @@ func (s *Server) handleCatalog(w http.ResponseWriter, r *http.Request) {
 
 // --- listing ---
 
+// loadChanges returns the newest changes first, at most limit of them (0: all). Change ids are random, so the store's
+// order says nothing about age: every change is read and sorted by when it was proposed before the limit applies.
 func (s *Server) loadChanges(ctx context.Context, limit int) ([]CloudChange, error) {
-	docs, err := s.docs.List(ctx, kindCloud, docstore.ListOptions{Desc: true, Limit: limit})
+	docs, err := s.docs.List(ctx, kindCloud, docstore.ListOptions{})
 	if err != nil {
 		return nil, err
 	}
 	out, err := docstore.Decode[CloudChange](docs)
 	if err != nil {
 		return nil, err
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].ProposedAt.After(out[j].ProposedAt) })
+	if limit > 0 && len(out) > limit {
+		out = out[:limit]
 	}
 	for i := range out {
 		out[i] = expireIfStale(out[i])
