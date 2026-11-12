@@ -7,6 +7,9 @@ section in the pull request that makes the change; a release moves it under its 
 ## [Unreleased]
 
 ### Fixed
+- **GitHub Actions can take the push role.** GitHub now sends token subjects with numeric ids
+  (`repo:owner@123/name@456:ref:refs/heads/main`), which the role refused on real AWS. The trust accepts both forms, with
+  only the ids as wildcards.
 - **A source repository no longer needs an extra IAM permission.** The push role named GitHub's OIDC provider through a
   lookup that needs `iam:ListOpenIDConnectProviders`, so the preview failed on a builder role that has the documented
   policy (found on the Pi). The provider's ARN is now built from the account id.

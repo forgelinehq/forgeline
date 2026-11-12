@@ -2,6 +2,7 @@ package blueprint
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -61,11 +62,40 @@ func TestSourceMakesARepositoryAndABranchOnlyPushRole(t *testing.T) {
 		t.Errorf("repository = %v", repo)
 	}
 	trust := res["aws_iam_role"]["api_push"]["assume_role_policy"].(string)
-	if !strings.Contains(trust, `"repo:acme/shop:ref:refs/heads/release"`) || !strings.Contains(trust, "sts.amazonaws.com") || strings.Contains(trust, "*") ||
-		!strings.Contains(trust, ":oidc-provider/token.actions.githubusercontent.com") {
-		t.Errorf("trust must be this repository and branch only: %s", trust)
+	var td struct {
+		Statement []struct {
+			Condition map[string]map[string]any
+		}
 	}
-	if !strings.Contains(res["aws_iam_role"]["support_push"]["assume_role_policy"].(string), "repo:acme/support-agent:ref:refs/heads/main") {
+	json.Unmarshal([]byte(trust), &td)
+	subs := fmt.Sprint(td.Statement[0].Condition["StringLike"]["token.actions.githubusercontent.com:sub"])
+	if subs != "[repo:acme/shop:ref:refs/heads/release repo:acme@*/shop@*:ref:refs/heads/release]" ||
+		td.Statement[0].Condition["StringEquals"]["token.actions.githubusercontent.com:aud"] != "sts.amazonaws.com" ||
+		!strings.Contains(trust, ":oidc-provider/token.actions.githubusercontent.com") {
+		t.Errorf("trust must be this repository and branch only, in both subject forms: %s", trust)
+	}
+	// What the patterns accept and refuse, with IAM's StringLike rules (* matches any run of characters).
+	match := func(pattern, s string) bool {
+		re := "^" + strings.ReplaceAll(regexp.QuoteMeta(pattern), `\*`, ".*") + "$"
+		return regexp.MustCompile(re).MatchString(s)
+	}
+	pats := githubSubjects("acme/shop", "release")
+	matchesAny := func(s string) bool { return match(pats[0], s) || match(pats[1], s) }
+	for s, want := range map[string]bool{
+		"repo:acme/shop:ref:refs/heads/release":                              true,
+		"repo:acme@1080213/shop@1455134797:ref:refs/heads/release":           true,
+		"repo:acme@1/shop@2:ref:refs/heads/main":                             false, // another branch
+		"repo:evil@1/shop@2:ref:refs/heads/release":                          false, // another owner
+		"repo:acme@1/shop2@2:ref:refs/heads/release":                         false, // another repository
+		"repo:acme-evil@1/shop@2:ref:refs/heads/release":                     false,
+		"repo:acme@1/shop@2:pull_request":                                    false,
+		"repo:acme@1/other@2:ref:refs/heads/x/shop@3:ref:refs/heads/release": true, // needs ":" in a branch name, which git refuses
+	} {
+		if matchesAny(s) != want {
+			t.Errorf("subject %q: matched %v, want %v", s, !want, want)
+		}
+	}
+	if !strings.Contains(res["aws_iam_role"]["support_push"]["assume_role_policy"].(string), "repo:acme@*/support-agent@*:ref:refs/heads/main") {
 		t.Error("a source without a branch means main")
 	}
 	pol := res["aws_iam_role_policy"]["api_push"]["policy"].(string)
