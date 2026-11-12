@@ -722,10 +722,10 @@ func (g *gen) source(bl Block) {
 	g.addData("aws_caller_identity", "current", obj{})
 	trust, _ := json.Marshal(obj{"Version": "2012-10-17", "Statement": []obj{{
 		"Effect": "Allow", "Principal": obj{"Federated": "arn:aws:iam::${data.aws_caller_identity.current.account_id}:oidc-provider/token.actions.githubusercontent.com"}, "Action": "sts:AssumeRoleWithWebIdentity",
-		"Condition": obj{"StringEquals": obj{
-			"token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
-			"token.actions.githubusercontent.com:sub": "repo:" + bl.Source.Repo + ":ref:refs/heads/" + bl.Source.BranchOr(),
-		}},
+		"Condition": obj{
+			"StringEquals": obj{"token.actions.githubusercontent.com:aud": "sts.amazonaws.com"},
+			"StringLike":   obj{"token.actions.githubusercontent.com:sub": githubSubjects(bl.Source.Repo, bl.Source.BranchOr())},
+		},
 	}}})
 	role := bl.ID + "_push"
 	g.add("aws_iam_role", role, obj{"name": g.b.PushRoleName(bl.ID), "assume_role_policy": string(trust), "max_session_duration": 3600, "tags": tags(bl)})
@@ -737,4 +737,17 @@ func (g *gen) source(bl Block) {
 	g.add("aws_iam_role_policy", role, obj{"name": "push-images", "role": ref("aws_iam_role", role, "id"), "policy": string(policy)})
 	g.out[bl.ID+"_image_repository"] = obj{"description": "Where images of " + esc(bl.Name) + " are pushed", "value": ref("aws_ecr_repository", repo, "repository_url")}
 	g.out[bl.ID+"_push_role"] = obj{"description": "The role GitHub Actions in " + bl.Source.Repo + " uses to push them", "value": ref("aws_iam_role", role, "arn")}
+}
+
+// githubSubjects are the token subjects GitHub Actions sends for a repository's branch. GitHub now puts the owner's
+// and repository's numeric ids in it (repo:owner@123/name@456:ref:refs/heads/main; found on real AWS, where the older
+// form alone was refused); older repositories still send repo:owner/name:ref:refs/heads/main. Only the ids are
+// wildcards: the owner, name and branch must match exactly, and a branch name cannot contain ":", so no other
+// repository or branch matches.
+func githubSubjects(repo, branch string) []string {
+	owner, name, _ := strings.Cut(repo, "/")
+	return []string{
+		"repo:" + repo + ":ref:refs/heads/" + branch,
+		"repo:" + owner + "@*/" + name + "@*:ref:refs/heads/" + branch,
+	}
 }
