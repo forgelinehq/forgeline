@@ -47,6 +47,9 @@ section in the pull request that makes the change; a release moves it under its 
 - **After a session ends**, the console stops polling the server (it asked every minute, forever).
 
 ### Added
+- **Workflows as a graph.** A workflow's page draws it like n8n: the trigger, each stage as a column of agents that run
+  together, and an approval node before a gated stage. A run's page shows each node's state live, with moving dots into
+  what is working.
 - **The assistant writes skills, agents and workflows.** Ask it for one and it prepares a card an administrator
   confirms; the card says in the server's words which tools an agent gets, whether it may draft changes, which skills it
   follows, and when a workflow runs. Confirming goes through the same checks as the Agents page and is audited.

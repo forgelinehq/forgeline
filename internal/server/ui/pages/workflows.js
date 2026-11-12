@@ -2,6 +2,9 @@ import { h, icon, mount, clear, pageHeader, pill, relTime, absTime, emptyState, 
 import { get, post, atLeast } from '../lib/api.js';
 import { navigate } from '../lib/router.js';
 import { session } from '../app.js';
+import { layoutWorkflow, edgePath, runStatuses, edgeLive, NODE_W, NODE_H } from '../lib/wfgraph.js';
+import { fit } from '../lib/canvas.js';
+import { flowPath } from '../lib/flow.js';
 
 // Workflows: stages of agents, run in order. Steps in a stage run together; a gated stage waits for
 // an administrator. Each save is a new version, like skills and agents.
@@ -9,6 +12,39 @@ import { session } from '../app.js';
 const SCHEDULES = [[0, 'Only when started by hand'], [15, 'Every 15 minutes'], [60, 'Every hour'], [360, 'Every 6 hours'], [1440, 'Every day'], [10080, 'Every week']];
 const scheduleLabel = (m) => (SCHEDULES.find(s => s[0] === m) || [m, `Every ${m} minutes`])[1];
 const shortHash = (x) => h('code', { class: 'text-xs', title: x }, x.slice(0, 12));
+// The workflow as a graph, left to right (what starts it, an approval before a gated stage, the steps of each stage that
+// run together). With statuses (a run) each node shows how far it got and the edge into what is working moves.
+const NODE_TONE = {
+  pending: 'stroke-slate-300 dark:stroke-slate-600', running: 'stroke-brand-500 motion-safe:animate-pulse', succeeded: 'stroke-emerald-500',
+  failed: 'stroke-rose-500', waiting: 'stroke-amber-500', skipped: 'stroke-slate-300 dark:stroke-slate-700', cancelled: 'stroke-slate-300 dark:stroke-slate-700',
+};
+const NODE_WORD = { pending: 'waiting to start', running: 'working', succeeded: 'done', failed: 'failed', waiting: 'waits for approval', skipped: 'skipped', cancelled: 'cancelled' };
+const KIND_ICON = { trigger: '▶', gate: '✋', step: '●' };
+function workflowGraph(layout, statuses = null) {
+  const byId = Object.fromEntries(layout.nodes.map(n => [n.id, n]));
+  const svg = h('svg', { width: String(layout.w), height: String(layout.h), viewBox: `0 0 ${layout.w} ${layout.h}`, class: 'block h-auto max-w-full min-w-[32rem] select-none', role: 'img',
+    'aria-label': 'The workflow as a graph: ' + layout.nodes.map(n => n.label + (statuses ? ' (' + NODE_WORD[statuses[n.id]] + ')' : '')).join(', then ') });
+  for (const e of layout.edges) {
+    const d = edgePath(byId[e.from], byId[e.to]);
+    const live = statuses && edgeLive(statuses, e);
+    svg.append(h('path', { d, fill: 'none', 'stroke-width': '1.5', class: live ? 'stroke-brand-500' : 'stroke-slate-300 dark:stroke-slate-600', 'data-edge': e.from + '>' + e.to }));
+    if (live) svg.append(flowPath(d, 'stroke-brand-500'));
+  }
+  for (const n of layout.nodes) {
+    const st = statuses ? statuses[n.id] : 'pending';
+    const tone = statuses ? NODE_TONE[st] || NODE_TONE.pending : n.kind === 'gate' ? 'stroke-amber-400' : n.kind === 'trigger' ? 'stroke-brand-400' : 'stroke-slate-300 dark:stroke-slate-600';
+    const g = h('g', { 'data-node': n.id, 'data-status': statuses ? st : '' },
+      h('rect', { x: String(n.x), y: String(n.y), width: String(NODE_W), height: String(NODE_H), rx: '12', 'stroke-width': statuses && st !== 'pending' ? '2' : '1.5',
+        'stroke-dasharray': st === 'skipped' || st === 'cancelled' ? '4 3' : '', class: 'fill-white dark:fill-slate-900 ' + tone }),
+      h('text', { x: String(n.x + 12), y: String(n.y + 24), class: 'fill-slate-900 text-[13px] font-semibold dark:fill-slate-100' }, KIND_ICON[n.kind] + ' ' + fit(n.label, 22)),
+      h('text', { x: String(n.x + 12), y: String(n.y + 42), class: 'fill-slate-500 text-[11px] dark:fill-slate-400' }, fit(n.kind === 'step' ? n.stageName + (n.sub ? ' · ' + n.sub : '') : n.sub, 30)),
+      statuses ? h('text', { x: String(n.x + NODE_W - 12), y: String(n.y + 56), 'text-anchor': 'end', class: 'fill-slate-500 text-[10px] dark:fill-slate-400' }, NODE_WORD[st] || st) : null,
+      h('title', {}, n.label + (n.sub ? ': ' + n.sub : '') + (statuses ? ' (' + (NODE_WORD[st] || st) + ')' : '')));
+    svg.append(g);
+  }
+  return h('div', { class: 'overflow-x-auto rounded-xl border border-slate-200 bg-slate-50 p-2 dark:border-slate-800 dark:bg-slate-950/40', id: 'workflow-graph' }, svg);
+}
+
 const statusPill = (s) => pill(s, s === 'waiting' ? 'Waiting for approval' : s === 'cancelled' ? 'Cancelled' : undefined);
 
 // ------------------------------------------------------------------ list (a tab on the Agents page)
@@ -48,6 +84,8 @@ export async function workflowPage({ params }) {
         h('section', { class: 'card card-pad' },
           h('div', { class: 'mb-3 flex flex-wrap items-center justify-between gap-2' }, h('h2', { class: 'h-section' }, 'Version ' + v.n + (v.n === wf.current ? ' (current)' : '')),
             h('div', { class: 'flex flex-wrap items-center gap-2 text-sm' }, h('span', { class: 'pill-idle' }, scheduleLabel(v.every_minutes || 0)), h('span', { class: 'pill-idle', title: 'The most a run of this workflow may do. Never an administrator.' }, 'runs as ' + v.run_as), shortHash(v.hash))),
+          workflowGraph(layoutWorkflow(v, agentName)),
+          h('h3', { class: 'h-section mb-2 mt-4' }, 'Stages in detail'),
           h('ol', { class: 'space-y-3', id: 'workflow-stages' }, v.stages.map((st, i) => h('li', { class: 'rounded-lg border border-slate-200 p-3 dark:border-slate-800' },
             h('div', { class: 'mb-2 flex items-center gap-2 text-sm font-medium' }, h('span', { class: 'muted' }, (i + 1) + '.'), st.name, st.gate && h('span', { class: 'pill-wait', title: 'An administrator releases this stage' }, icon('lock', 'size-3'), 'waits for approval')),
             h('div', { class: 'grid gap-2 ' + (st.steps.length > 1 ? 'sm:grid-cols-2' : '') }, st.steps.map(sp => h('div', { class: 'rounded-md bg-slate-50 p-2.5 text-sm dark:bg-slate-900' },
@@ -145,6 +183,7 @@ export async function workflowRunPage({ params }) {
       r.error && h('div', { class: 'mb-4' }, r.status === 'failed' ? errorBox(r.error) : notice('info', r.error)),
       r.environments?.length ? h('div', { class: 'mb-4' }, notice('info', 'Environments requested: ', r.environments.length, '. They wait for an administrator. ', h('a', { class: 'underline', href: '#/environments' }, 'See Environments'))) : null,
       r.proposals?.length ? h('div', { class: 'mb-4' }, notice('info', 'Filed for approval: ', r.proposals.map(id => h('a', { class: 'mr-2 underline', href: '#/proposals/' + id }, id)), ' Nothing changes until a different administrator approves.')) : null,
+      runGraph(r),
       h('ol', { class: 'space-y-3', id: 'run-stages' }, r.stages.map((st, i) => h('li', { class: 'card card-pad', 'data-stage-status': st.status },
         h('div', { class: 'mb-2 flex flex-wrap items-center justify-between gap-2' }, h('div', { class: 'flex items-center gap-2 font-medium' }, h('span', { class: 'muted' }, (i + 1) + '.'), st.name, st.gate && h('span', { class: 'pill-idle' }, icon('lock', 'size-3'), st.gate_by ? 'released by ' + st.gate_by : 'gated')), statusPill(st.status)),
         st.status === 'waiting' && h('div', { class: 'mb-3' }, notice('warn', 'This stage waits for an administrator. ', admin ? h('button', { class: 'btn-primary btn-sm ml-2', id: 'release-gate', type: 'button', onclick: async () => {
@@ -162,4 +201,13 @@ export async function workflowRunPage({ params }) {
   await load();
   el.cleanup = () => clearTimeout(timer);
   return el;
+}
+
+// A run's graph: the stages as the run recorded them (the version it ran), each node with its status.
+function runGraph(r) {
+  const v = { every_minutes: r.trigger === 'schedule' ? 1 : 0, stages: (r.stages || []).map(st => ({ name: st.name, gate: !!st.gate, steps: (st.steps || []).map(sp => ({ agent: sp.agent, task: '' })) })) };
+  const layout = layoutWorkflow(v, (id) => id);
+  for (const n of layout.nodes) if (n.kind === 'trigger') { n.label = r.trigger === 'schedule' ? 'By its schedule' : 'Started by ' + r.by; n.sub = relTime(r.started_at); }
+  for (const n of layout.nodes) if (n.kind === 'step') { const sp = r.stages[n.stage].steps[n.step]; n.label = sp.agent_label || sp.agent; n.sub = (sp.output || sp.error || '').split('\n').find(l => l.trim()) || (sp.lookups?.length ? sp.lookups.length + ' lookup' + (sp.lookups.length === 1 ? '' : 's') : ''); }
+  return h('div', { class: 'mb-4' }, workflowGraph(layout, runStatuses(layout, r)));
 }

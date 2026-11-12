@@ -94,6 +94,17 @@ is in the audit log. Cloud spend an agent causes is not counted here yet.
 
 ![AI use and budgets]({{ '/console/95-ai-use.png' | relative_url }})
 
+## Workflows as a graph
+
+A workflow's page draws it left to right, like n8n: what starts it (by hand or its schedule), each stage as a column of
+the agents that run together, and an **Approval** node before a stage that waits for an administrator. A run's page draws
+the same graph with each node's state: done, working, waiting for approval, failed or skipped, with moving dots on the
+edges into what is working now. The stages are still listed in full below the graph. Workflows are edited with the form
+(**New version**) for now; editing on the graph comes later.
+
+![A workflow as a graph]({{ '/console/134-workflow-graph.png' | relative_url }})
+![A run on the graph]({{ '/console/135-workflow-run-graph.png' | relative_url }})
+
 ## Agents you define
 
 Under **Team → Agents** you can define named agents with instructions, skills and a short list of tools. The instructions are written in Markdown, with a live preview and advisory checks; the model receives exactly the text you wrote. See the [Console tour]({{ '/guides/console-tour/' | relative_url }}#agents).
