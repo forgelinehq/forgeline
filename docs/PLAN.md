@@ -330,8 +330,8 @@ Design: [docs/design/006-console.md](design/006-console.md). Pictures: [docs/con
 > 3. **Not started (to do):** **A very light helper model** (note 038, step 2, revised by the maintainer: no llama.cpp or Ollama, well under
 >    500 MB): a 25 MB embedding model in the browser to match answers and find pages, then FunctionGemma 270M (fine-tuned
 >    on Forgeline's own steps) only if a 60-case evaluation on a laptop and the Pi's browser shows it is reliable.
-> 4. **Removing what a blueprint built**: a destroy plan through the same preview and approval; tables and buckets kept
->    unless the person chooses otherwise.
+> 4. ~~Removing what a blueprint built~~ **built** (note 041): a removal is a preview approved like a build; keep the data,
+>    or remove everything in two approved steps (protection off, then delete). Not yet run against real AWS.
 > 5. **Audit forwarding to a SIEM and tamper evidence** (p2-11): stream audit events out (syslog, HTTPS webhook) and chain
 >    their hashes.
 > 6. **A lead agent that hands out work** (p4-05): reporting lines become delegation, still within approvals and budgets.

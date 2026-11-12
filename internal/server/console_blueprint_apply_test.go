@@ -44,6 +44,42 @@ func (f *fakeTofu) run(_ context.Context, dir string, env []string, args ...stri
 		sort.Strings(out)
 		return out
 	}
+	// The bool settings of each resource in the code (deletion protection and the like), so a plan can see a change.
+	codeAttrs := func() map[string]map[string]any {
+		var doc struct {
+			Resource map[string]map[string]map[string]any
+		}
+		json.Unmarshal(read("main.tf.json"), &doc)
+		out := map[string]map[string]any{}
+		for typ, m := range doc.Resource {
+			for name, body := range m {
+				a := map[string]any{}
+				for k, v := range body {
+					if _, ok := v.(bool); ok {
+						a[k] = v
+					}
+				}
+				out[typ+"."+name] = a
+			}
+		}
+		return out
+	}
+	stateAttrs := func() map[string]map[string]any {
+		var st struct {
+			Resources []struct {
+				Type, Name string
+				Instances  []struct{ Attributes map[string]any }
+			}
+		}
+		json.Unmarshal(read("terraform.tfstate"), &st)
+		out := map[string]map[string]any{}
+		for _, r := range st.Resources {
+			if len(r.Instances) > 0 {
+				out[r.Type+"."+r.Name] = r.Instances[0].Attributes
+			}
+		}
+		return out
+	}
 	stateAddrs := func() map[string]bool {
 		var st struct{ Addresses []string }
 		json.Unmarshal(read("terraform.tfstate"), &st)
@@ -64,7 +100,7 @@ func (f *fakeTofu) run(_ context.Context, dir string, env []string, args ...stri
 	case "plan":
 		write("plan.bin", "PLAN-FILE:"+string(read("terraform.tfstate")))
 	case "show":
-		have := stateAddrs()
+		have, was, now := stateAddrs(), stateAttrs(), codeAttrs()
 		type rc struct {
 			Address, Mode, Type, Name string
 			Change                    struct{ Actions []string } `json:"change"`
@@ -78,6 +114,11 @@ func (f *fakeTofu) run(_ context.Context, dir string, env []string, args ...stri
 			r.Change.Actions = []string{"create"}
 			if have[a] {
 				r.Change.Actions = []string{"no-op"}
+				for k, v := range now[a] {
+					if was[a][k] != v {
+						r.Change.Actions = []string{"update"}
+					}
+				}
 			}
 			out = append(out, r)
 		}
@@ -106,7 +147,13 @@ func (f *fakeTofu) run(_ context.Context, dir string, env []string, args ...stri
 		if fail {
 			addrs = addrs[:1] // made one thing, then failed
 		}
-		b, _ := json.Marshal(map[string]any{"addresses": addrs})
+		attrs := codeAttrs()
+		res := []any{}
+		for _, a := range addrs {
+			typ, name, _ := strings.Cut(a, ".")
+			res = append(res, map[string]any{"mode": "managed", "type": typ, "name": name, "instances": []any{map[string]any{"attributes": attrs[a]}}})
+		}
+		b, _ := json.Marshal(map[string]any{"addresses": addrs, "resources": res})
 		write("terraform.tfstate", string(b))
 		if fail {
 			return nil, "Error: creating ECS Service: AccessDenied", errors.New("exit 1")
@@ -409,5 +456,111 @@ func TestBlueprintGuardrails(t *testing.T) {
 	}
 	if !found || !strings.Contains(c.PreviewNote, "Guardrails "+guardrail.Version) {
 		t.Errorf("the approver does not see the warnings: %+v %q", c.Guardrails, c.PreviewNote)
+	}
+}
+
+// Removing what a blueprint built (note 041) is a preview, an approval by someone else and exactly that plan
+// applied, like a build. Keeping data removes the rest and leaves the table; removing everything first turns
+// deletion protection off (step 1), then removes what is left (step 2).
+func TestBlueprintRemovalKeepsDataThenRemovesEverythingInTwoSteps(t *testing.T) {
+	m := newMCPHarness(t)
+	m.srv.run = (&awsStub{}).run
+	tf := &fakeTofu{}
+	m.srv.tofuRun = tf.run
+	m.srv.cloud.setInterval(10 * time.Millisecond)
+	m.admin.expect(200, "PUT", "/v1/integrations/aws", map[string]any{"enabled": true, "profile": "dev", "region": "ap-south-1"})
+	var made BlueprintJSON
+	json.Unmarshal(m.dev.expect(201, "POST", "/v1/blueprints", bpBody("Shop")), &made)
+	id := made.ID
+
+	plan := func(body any) BlueprintPlan {
+		t.Helper()
+		m.dev.expect(202, "POST", "/v1/blueprints/"+id+"/plan", body)
+		var p BlueprintPlan
+		waitFor(t, "the preview", func() bool {
+			json.Unmarshal(m.dev.expect(200, "GET", "/v1/blueprints/"+id+"/plan", nil), &p)
+			return p.Status != planPlanning
+		})
+		if p.Status != planReady {
+			t.Fatalf("preview failed: %+v", p)
+		}
+		return p
+	}
+	apply := func() CloudChange {
+		t.Helper()
+		var c CloudChange
+		json.Unmarshal(m.dev.expect(202, "POST", "/v1/blueprints/"+id+"/propose", map[string]any{"reason": "testing removal"}), &c)
+		waitFor(t, "the proposal", func() bool {
+			json.Unmarshal(m.admin.expect(200, "GET", "/v1/cloud/changes/"+c.ID, nil), &c)
+			return c.Status != stPreparing
+		})
+		m.admin.expect(202, "POST", "/v1/cloud/changes/"+c.ID+"/approve", map[string]any{})
+		waitFor(t, "the apply", func() bool {
+			json.Unmarshal(m.admin.expect(200, "GET", "/v1/cloud/changes/"+c.ID, nil), &c)
+			return c.Status == stSucceeded || c.Status == stFailed
+		})
+		if c.Status != stSucceeded {
+			t.Fatalf("apply %s: %s", c.Status, c.Result)
+		}
+		return c
+	}
+	built := func() map[string]any {
+		var b map[string]any
+		json.Unmarshal(m.dev.expect(200, "GET", "/v1/blueprints/"+id+"/built", nil), &b)
+		return b
+	}
+
+	// Nothing built yet: nothing to remove.
+	if msg := string(m.dev.expect(409, "POST", "/v1/blueprints/"+id+"/plan", map[string]any{"remove": "everything"})); !strings.Contains(msg, "nothing this blueprint built") {
+		t.Errorf("removing before building: %s", msg)
+	}
+	m.dev.expect(400, "POST", "/v1/blueprints/"+id+"/plan", map[string]any{"remove": "most"})
+	plan(nil)
+	apply()
+
+	// Keep the data: the table stays, everything else goes.
+	p := plan(map[string]any{"remove": "keep-data"})
+	if p.Removal != "keep-data" || p.Remove == 0 || p.Add != 0 {
+		t.Fatalf("keep-data preview: %+v", p)
+	}
+	for _, c := range p.Changes {
+		if c.Address == "aws_dynamodb_table.data" {
+			t.Errorf("keeping data must not touch the table: %+v", c)
+		}
+	}
+	c := apply()
+	if !strings.Contains(c.Title, "keeping its data") || !c.highRisk() {
+		t.Errorf("title %q, high risk %v", c.Title, c.highRisk())
+	}
+	if b := built(); b["built"] != true {
+		t.Errorf("the table is still there, so it is still built: %v", b)
+	}
+
+	// Everything: step 1 turns protection off, step 2 removes the table.
+	p = plan(map[string]any{"remove": "everything", "final_snapshot": false})
+	if p.Removal != "unprotect" || p.Change == 0 {
+		t.Fatalf("step 1 should change the table's protection: %+v", p)
+	}
+	c = apply()
+	if !strings.Contains(c.Title, "step 1 of 2") {
+		t.Errorf("step 1 title: %q", c.Title)
+	}
+	p = plan(map[string]any{"remove": "everything", "final_snapshot": false})
+	if p.Removal != "all" || p.Remove != 1 || p.Add != 0 {
+		t.Fatalf("step 2 should remove the table only: %+v", p)
+	}
+	c = apply()
+	if !strings.Contains(c.Title, "data included") {
+		t.Errorf("step 2 title: %q", c.Title)
+	}
+	if b := built(); b["built"] != false || b["removed"] != true {
+		t.Errorf("after removing everything: %v", b)
+	}
+	if msg := string(m.dev.expect(409, "POST", "/v1/blueprints/"+id+"/plan", map[string]any{"remove": "everything"})); !strings.Contains(msg, "nothing this blueprint built") {
+		t.Errorf("removing twice: %s", msg)
+	}
+	// It can be built again from the empty state.
+	if p := plan(nil); p.Add == 0 || p.Removal != "" {
+		t.Errorf("rebuild preview: %+v", p)
 	}
 }

@@ -27,6 +27,12 @@ Status: **built (2026-11-08).** Databases (RDS MySQL or Postgres, with the passw
 Redis, secrets whose values Forgeline never sees, one service calling another, autoscaling, and several paths behind
 one front door. See [note 039](design/039-more-blueprint-blocks.md).
 
+## Removing what a blueprint built (note 041)
+
+Status: **built (2026-11-12).** A removal is a preview approved like a build: keep the data, or remove everything in two
+approved steps. Checked with tests, `tofu validate` and a browser walk against stand-ins; not yet against real AWS. See
+[note 041](design/041-removing-what-a-blueprint-built.md).
+
 ## Next: any resource, any cloud (note 040)
 
 Status: **step 1 built (guardrails on every preview); step 2 next.** Templates for whole solutions (an AgentCore agent, Lambda, Step Functions, ECS clusters, EKS with

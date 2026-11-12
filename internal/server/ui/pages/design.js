@@ -69,10 +69,28 @@ export async function designPage({ params }) {
     drawBar();
   }
 
-  async function preview() {
-    try { plan = await post('/v1/blueprints/' + encodeURIComponent(saved.id) + '/plan', {}); } catch (e) { toast(e.message, 'error'); return; }
+  async function preview(body = {}) {
+    try { plan = await post('/v1/blueprints/' + encodeURIComponent(saved.id) + '/plan', body); } catch (e) { toast(e.message, 'error'); return; }
     drawBar(); drawSide(); draw();
     poll();
+  }
+
+  // Removing what it built is a preview too (note 041): it is approved by someone else and exactly that plan is applied.
+  async function removal() {
+    await modal('Remove what this blueprint built', (close) => {
+      let mode = 'keep-data';
+      const opt = (value, title, text) => h('label', { class: 'flex cursor-pointer items-start gap-3 rounded-lg border border-slate-200 p-3 dark:border-slate-700' },
+        h('input', { type: 'radio', name: 'remove-mode', value, checked: value === mode, class: 'mt-1', onchange: () => { mode = value; } }),
+        h('span', {}, h('span', { class: 'block text-sm font-medium' }, title), h('span', { class: 'muted block text-xs' }, text)));
+      const snap = h('input', { type: 'checkbox', id: 'remove-snapshot', checked: true });
+      return h('div', { class: 'space-y-3', id: 'remove-dialog' },
+        h('p', { class: 'text-sm' }, 'Nothing is removed yet. This makes a preview; a different administrator approves it, then exactly that preview is applied. The blueprint itself is kept, so you can build it again.'),
+        opt('keep-data', 'Keep the data', 'Removes apps, front doors, queues, caches and logs. Tables, buckets, databases and secrets stay, still protected (they keep costing what they cost).'),
+        opt('everything', 'Remove everything, data included', 'Takes two approvals when something is protected: first deletion protection is turned off and the rest removed, then the data is deleted. What tables, buckets and databases hold is lost.'),
+        h('label', { class: 'flex items-center gap-2 text-sm' }, snap, 'Keep a final snapshot of each database (it costs a little storage until you delete it in AWS)'),
+        h('div', { class: 'flex justify-end gap-2' }, h('button', { class: 'btn-secondary', type: 'button', onclick: () => close() }, 'Keep everything'),
+          h('button', { class: 'btn-danger', type: 'button', id: 'remove-go', onclick: () => { close(); preview({ remove: mode, final_snapshot: snap.checked }); } }, 'Preview the removal')));
+    });
   }
 
   function poll() {
@@ -88,7 +106,7 @@ export async function designPage({ params }) {
 
   async function send() {
     await modal('Send for approval', (close) => {
-      const reason = h('textarea', { id: 'send-reason', class: 'input', rows: '3', maxlength: '500', placeholder: 'Why this should be built' });
+      const reason = h('textarea', { id: 'send-reason', class: 'input', rows: '3', maxlength: '500', placeholder: plan.removal ? 'Why this should be removed' : 'Why this should be built' });
       const err = h('div', {});
       return h('div', { class: 'space-y-4' },
         h('p', { class: 'text-sm' }, planWords(plan) + ' in ' + bp.target.account + ' · ' + bp.target.region + '. A different administrator approves it; then exactly this preview is applied.'),
@@ -124,12 +142,15 @@ export async function designPage({ params }) {
       others.length > 1 && h('select', { class: 'input h-9 w-auto py-0 text-sm', 'aria-label': 'Open another blueprint', onchange: (e) => navigate('/design/' + e.target.value) },
         others.map(o => h('option', { value: o.id, selected: o.id === saved.id }, o.name))),
       dirty() ? h('span', { class: 'pill-wait', id: 'design-dirty' }, 'Not saved') : h('span', { class: 'muted text-xs' }, 'Saved'),
+      built?.removed ? h('span', { class: 'pill-idle', id: 'design-built', title: 'Everything it built was removed, last by ' + built.updated_by + ' ' + relTime(built.updated_at) }, 'Removed') : null,
       built?.built ? h('span', { class: 'pill-ok', id: 'design-built', title: 'Built ' + built.applies + ' time' + (built.applies === 1 ? '' : 's') + ', last by ' + built.updated_by + ' ' + relTime(built.updated_at) }, 'Built') : null,
       h('span', { class: 'flex-1' }),
       h('a', { class: 'btn-secondary btn-sm', href: '#/blueprints/' + saved.id }, icon('git', 'size-3.5'), 'Code'),
       h('button', { class: 'btn-secondary btn-sm', type: 'button', id: 'design-preview', disabled: dirty() || !!problem || ps === 'planning',
         title: dirty() ? 'Save first: the preview is of the saved blueprint' : 'Ask OpenTofu what building this would do in AWS (reads only)', onclick: preview },
         ps === 'planning' ? 'Previewing…' : 'Preview changes'),
+      built?.built ? h('button', { class: 'btn-secondary btn-sm', type: 'button', id: 'design-remove', disabled: dirty() || ps === 'planning',
+        title: 'Preview removing what this blueprint built in AWS', onclick: removal }, icon('trash', 'size-3.5'), 'Remove…') : null,
       h('button', { class: (ps === 'ready' ? 'btn-primary' : 'btn-secondary') + ' btn-sm', type: 'button', id: 'design-send', disabled: ps !== 'ready',
         title: ps === 'ready' ? 'A different administrator approves; then exactly this preview is applied' : ps === 'blocked' ? 'The preview breaks a guardrail; change the blueprint first' : 'Preview the changes first', onclick: send }, 'Send for approval'),
       h('button', { class: 'btn-primary btn-sm', type: 'button', id: 'design-save', disabled: !can, onclick: save }, 'Save')));

@@ -68,6 +68,14 @@ different administrator approves it, and exactly that preview is applied. Afterw
 
 ![A preview on the canvas]({{ '/console/92-design-preview.png' | relative_url }})
 
+**Remove…** appears once a blueprint is built. It makes a preview too, approved by someone else and applied exactly.
+**Keep the data** removes apps, front doors, queues, caches and logs and leaves tables, buckets, databases and secrets,
+still protected. **Remove everything** takes two approvals when something is protected: first deletion protection is
+turned off and the rest removed, then the data is deleted (a final snapshot of each database is kept unless you untick
+it). Afterwards the canvas shows **Removed**, and the blueprint can be built again. See [design note 041](https://github.com/forgelinehq/forgeline/blob/main/docs/design/041-removing-what-a-blueprint-built.md).
+
+![Removing what a blueprint built]({{ '/console/119-design-removal.png' | relative_url }})
+
 The **Assistant** panel beside the canvas takes a change in your own words ("add a place to keep interview recordings")
 and answers with what it would change, as sentences. **Use this** puts it on the canvas, unsaved. It cannot read your
 account or do anything itself, and it will not touch a service an administrator turned off or set to look only for the AI.
