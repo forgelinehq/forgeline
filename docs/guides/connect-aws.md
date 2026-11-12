@@ -50,3 +50,56 @@ blueprint makes. Tables, buckets, queues and log groups are covered by `PowerUse
 IAM roles, which `PowerUserAccess` does not allow; to build apps, add a policy that allows the IAM role actions listed
 in [design note 035](https://github.com/forgelinehq/forgeline/blob/main/docs/design/035-blueprints.md) on
 `arn:aws:iam::<account>:role/fl-*` only, so Forgeline cannot change any other role.
+
+The policy below is that permission, ready to attach to the role Forgeline builds with. It lets Forgeline manage only
+roles named `fl-*`, attach only the ECS task execution policy to them, and hand them only to ECS tasks and Bedrock
+AgentCore, so it cannot give any role more than a blueprint asks for:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ManageBlueprintRoles",
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreateRole", "iam:DeleteRole", "iam:GetRole", "iam:UpdateRole", "iam:UpdateAssumeRolePolicy",
+        "iam:TagRole", "iam:UntagRole", "iam:ListRoleTags",
+        "iam:PutRolePolicy", "iam:GetRolePolicy", "iam:DeleteRolePolicy", "iam:ListRolePolicies",
+        "iam:ListAttachedRolePolicies", "iam:ListInstanceProfilesForRole"
+      ],
+      "Resource": "arn:aws:iam::*:role/fl-*"
+    },
+    {
+      "Sid": "OnlyTheEcsExecutionPolicy",
+      "Effect": "Allow",
+      "Action": ["iam:AttachRolePolicy", "iam:DetachRolePolicy"],
+      "Resource": "arn:aws:iam::*:role/fl-*",
+      "Condition": { "ArnEquals": { "iam:PolicyARN": "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy" } }
+    },
+    {
+      "Sid": "PassOnlyToEcsAndAgentCore",
+      "Effect": "Allow",
+      "Action": "iam:PassRole",
+      "Resource": "arn:aws:iam::*:role/fl-*",
+      "Condition": { "StringEquals": { "iam:PassedToService": ["ecs-tasks.amazonaws.com", "bedrock-agentcore.amazonaws.com"] } }
+    }
+  ]
+}
+```
+
+For example, as an inline policy on the role (run it yourself, with an administrator's credentials):
+
+```sh
+aws iam put-role-policy --role-name <your-forgeline-role> --policy-name forgeline-blueprint-roles \
+  --policy-document file://forgeline-blueprint-roles.json
+```
+
+An app or agent with a **source repository** also needs GitHub's OIDC provider in the account, once, so GitHub Actions can
+push images without stored keys:
+
+```sh
+aws iam create-open-id-connect-provider --url https://token.actions.githubusercontent.com --client-id-list sts.amazonaws.com
+```
+
+Without it, previewing such a blueprint fails and says the provider was not found.
