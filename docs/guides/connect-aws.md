@@ -102,4 +102,4 @@ push images without stored keys:
 aws iam create-open-id-connect-provider --url https://token.actions.githubusercontent.com --client-id-list sts.amazonaws.com
 ```
 
-Without it, previewing such a blueprint fails and says the provider was not found.
+Without it, building such a blueprint fails when IAM refuses the push role, and the error says the provider does not exist.

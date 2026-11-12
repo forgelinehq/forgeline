@@ -328,7 +328,7 @@ func (s *Server) runPlan(ctx context.Context, b StoredBlueprint, st awsSettings,
 	}
 	for _, args := range steps {
 		if out, errText, err := run(ctx, dir, env, args...); err != nil {
-			return fmt.Errorf("tofu %s failed: %s", args[0], tail(errText+"\n"+string(out), 3000))
+			return fmt.Errorf("tofu %s failed: %s", args[0], tofuFailure(errText, out))
 		}
 	}
 	show, errText, err := run(ctx, dir, env, "show", "-json", "-no-color", "plan.bin")
@@ -617,7 +617,7 @@ func (s *Server) executeBlueprint(ctx context.Context, c CloudChange, st awsSett
 	}
 	// The providers must be the ones the plan was made with.
 	if out, errText, err := run(ctx, dir, env, "init", "-input=false", "-no-color", "-lockfile=readonly"); err != nil {
-		return "", fmt.Errorf("tofu init failed; nothing was applied: %s", tail(errText+"\n"+string(out), 3000))
+		return "", fmt.Errorf("tofu init failed; nothing was applied: %s", tofuFailure(errText, out))
 	}
 	out, errText, applyErr := run(ctx, dir, env, "apply", "-input=false", "-no-color", "-lock=false", "plan.bin")
 	// Keep the state whatever happened: a failed apply may still have made things.
@@ -628,7 +628,7 @@ func (s *Server) executeBlueprint(ctx context.Context, c CloudChange, st awsSett
 		}
 	}
 	if applyErr != nil {
-		return "", fmt.Errorf("tofu apply failed: %s", tail(errText+"\n"+string(out), 3000))
+		return "", fmt.Errorf("tofu apply failed: %s", tofuFailure(errText, out))
 	}
 	result := fmt.Sprintf("Applied: %d added, %d changed, %d removed.", p.Add, p.Change, p.Remove)
 	if outs, _, err := run(ctx, dir, env, "output", "-json", "-no-color"); err == nil {
