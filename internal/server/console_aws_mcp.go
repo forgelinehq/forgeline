@@ -456,7 +456,8 @@ type lookupSink struct {
 }
 
 func (s *Server) handleListProposals(w http.ResponseWriter, r *http.Request) {
-	docs, err := s.docs.List(r.Context(), kindAIProposal, docstore.ListOptions{Desc: true, Limit: 100})
+	// Ids are random, so the store's order says nothing about age: read all, newest first, then keep 100.
+	docs, err := s.docs.List(r.Context(), kindAIProposal, docstore.ListOptions{})
 	if err != nil {
 		s.internalError(w, "reading the proposals", err)
 		return
@@ -465,6 +466,10 @@ func (s *Server) handleListProposals(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		s.internalError(w, "reading the proposals", err)
 		return
+	}
+	sort.SliceStable(ps, func(i, j int) bool { return ps[i].ProposedAt.After(ps[j].ProposedAt) })
+	if len(ps) > 100 {
+		ps = ps[:100]
 	}
 	for i := range ps {
 		ps[i] = expiredProposal(ps[i])

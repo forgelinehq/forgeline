@@ -7,6 +7,9 @@ section in the pull request that makes the change; a release moves it under its 
 ## [Unreleased]
 
 ### Fixed
+- **Cloud changes and AI proposals newest first.** Their ids are random, so the lists came in random order and, past
+  100, showed a random 100. Found in a real check on the Pi (docs/testing/2026-11-12-real-aws.md).
+- **Watch › Services draws at once**: it no longer waits for the account summary.
 - **A blueprint can be deleted once what it built is removed.** It was refused for ever after its first build. It is
   still refused while anything it built exists, and its saved state is kept so an old approved plan cannot apply.
 - **Readable links on the design canvas.** When several links left or entered one block they met in one point, so a
