@@ -28,7 +28,7 @@ type Finding struct {
 }
 
 // Version names this set of rules; the approver sees which version passed.
-const Version = "builtin-1"
+const Version = "builtin-2"
 
 // Denied reports whether any finding is a deny.
 func Denied(fs []Finding) bool {
@@ -188,6 +188,26 @@ func checkIngress(add func(level, rule, addr, text string), addr, v4, v6 string,
 	add(Deny, "public-ingress", addr, "Opens "+what+" to the whole internet. Only web ports (80, 443) on a front door may be.")
 }
 
+// resourceless are actions IAM does not let a policy scope to a resource: "*" is the only Resource they take.
+// A statement whose actions are all of these may use "*" without giving anything broad.
+var resourceless = map[string]bool{
+	"ecr:GetAuthorizationToken": true,
+	"xray:PutTraceSegments":     true, "xray:PutTelemetryRecords": true, "xray:GetSamplingRules": true, "xray:GetSamplingTargets": true,
+	"cloudwatch:PutMetricData": true,
+}
+
+func onlyResourceless(actions []string) bool {
+	if len(actions) == 0 {
+		return false
+	}
+	for _, a := range actions {
+		if !resourceless[a] {
+			return false
+		}
+	}
+	return true
+}
+
 // checkPolicy reads an IAM policy document: no Allow on every action or every resource.
 func checkPolicy(add func(level, rule, addr, text string), addr string, v any) {
 	s, ok := v.(string)
@@ -221,7 +241,7 @@ func checkPolicy(add func(level, rule, addr, text string), addr string, v any) {
 			}
 		}
 		for _, res := range strs(st["Resource"]) {
-			if res == "*" {
+			if res == "*" && !onlyResourceless(strs(st["Action"])) {
 				add(Deny, "broad-permissions", addr, "The policy applies to every resource in the account. Name the resources it may use.")
 			}
 		}

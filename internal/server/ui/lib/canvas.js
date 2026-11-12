@@ -18,11 +18,12 @@ export const DEFAULTS = {
   database: { name: 'Database', engine: 'mysql', size: 'small', storage_gb: 20 },
   cache: { name: 'Cache', size: 'small' },
   secret: { name: 'Secret', description: '' },
+  agent: { name: 'Agent', image: '' }, // the person's own ECR image; the check says what is missing until it is set
   existing: { name: 'Existing table', existing: { type: 'table', name: 'my-table' } },
 };
-const ID_BASE = { frontdoor: 'door', service: 'app', table: 'table', bucket: 'files', queue: 'queue', logs: 'logs', database: 'db', cache: 'cache', secret: 'secret', existing: 'existing' };
+const ID_BASE = { frontdoor: 'door', service: 'app', table: 'table', bucket: 'files', queue: 'queue', logs: 'logs', database: 'db', cache: 'cache', secret: 'secret', agent: 'agent', existing: 'existing' };
 // Which column a kind sits in: front doors, then apps, then what apps use.
-const COLUMN = { frontdoor: 0, service: 1 };
+const COLUMN = { frontdoor: 0, service: 1, agent: 1 };
 
 // Fargate's memory sizes (MiB) per CPU size, as in internal/blueprint.
 export const FARGATE = {
@@ -116,6 +117,11 @@ export function linkTargets(bp, fromId) {
     const hasDefault = bp.links.some(l => l.from === fromId && !l.path);
     if (bp.links.filter(l => l.from === fromId && l.path).length >= 10) return [];
     return bp.blocks.filter(b => b.kind === 'service' && b.port && !fronted.has(b.id)).map(b => ({ id: b.id, name: b.name, access: false, path: hasDefault }));
+  }
+  if (from.kind === 'agent') {
+    // An agent runs outside the network: it uses data and reads secrets, nothing private.
+    const secretish = (b) => b.kind === 'secret' || (b.kind === 'existing' && b.existing?.type === 'secret');
+    return bp.blocks.filter(b => b.id !== fromId && !linked.has(b.id) && (usesData(b) || secretish(b))).map(b => ({ id: b.id, name: b.name, access: usesData(b), path: false }));
   }
   if (from.kind !== 'service') return [];
   const hasLogs = bp.links.some(l => l.from === fromId && kindOf[l.to] === 'logs');

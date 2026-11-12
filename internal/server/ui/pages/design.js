@@ -327,6 +327,18 @@ export async function designPage({ params }) {
     return h('div', {}, h('label', { class: 'label', for: id }, label), el);
   }
 
+  // NAME=value settings, one per line, for an app or an agent.
+  function settingsField(b, set) {
+    const id = 'f-settings';
+    const ta = h('textarea', { id, class: 'input font-mono text-xs', rows: '3', placeholder: 'MODE=production' }, Object.entries(b.env || {}).map(([k2, v]) => k2 + '=' + v).join('\n'));
+    ta.addEventListener('change', () => {
+      const env = {};
+      for (const line of ta.value.split('\n')) { const i = line.indexOf('='); if (i > 0) env[line.slice(0, i).trim()] = line.slice(i + 1); }
+      set({ env: Object.keys(env).length ? env : null });
+    });
+    return h('div', {}, h('label', { class: 'label', for: id }, 'Settings'), ta, h('p', { class: 'hint' }, 'One NAME=value per line. Not for secrets.'));
+  }
+
   function drawInspector() {
     const b = bp.blocks.find(x => x.id === selected);
     if (!b) {
@@ -358,16 +370,13 @@ export async function designPage({ params }) {
             input('CPU aim %', b.cpu_target ?? 60, v => set({ cpu_target: v }), { type: 'number', min: '20', max: '90' })),
             h('p', { class: 'hint' }, 'Adds tasks when average CPU is above the aim and removes them when it is below. Tasks is where it starts.'));
         }
-        {
-          const id = 'f-settings';
-          const ta = h('textarea', { id, class: 'input font-mono text-xs', rows: '3', placeholder: 'MODE=production' }, Object.entries(b.env || {}).map(([k2, v]) => k2 + '=' + v).join('\n'));
-          ta.addEventListener('change', () => {
-            const env = {};
-            for (const line of ta.value.split('\n')) { const i = line.indexOf('='); if (i > 0) env[line.slice(0, i).trim()] = line.slice(i + 1); }
-            set({ env: Object.keys(env).length ? env : null });
-          });
-          fields.push(h('div', {}, h('label', { class: 'label', for: id }, 'Settings'), ta, h('p', { class: 'hint' }, 'One NAME=value per line. Not for secrets.')));
-        }
+        fields.push(settingsField(b, set));
+        break;
+      case 'agent':
+        fields.push(input('Container image (ECR)', b.image, v => set({ image: v }), { placeholder: '111122223333.dkr.ecr.' + bp.target.region + '.amazonaws.com/my-agent:1.0' }),
+          input('What it does', b.description, v => set({ description: v || null }), { placeholder: 'answers support questions' }),
+          settingsField(b, set),
+          h('p', { class: 'hint' }, 'Runs on Amazon Bedrock AgentCore. Build the image for arm64, answering on port 8080 at /invocations and /ping. Link it to the tables, files, queues and secrets it may use; it gets exactly those and Bedrock models, nothing else.'));
         break;
       case 'frontdoor':
         fields.push(input('Health check path', b.health_path, v => set({ health_path: v }), { placeholder: '/' }),

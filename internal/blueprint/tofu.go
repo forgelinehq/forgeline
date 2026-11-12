@@ -116,6 +116,8 @@ func (g *gen) build() {
 			needNet, needCluster = true, true
 		case KindDatabase, KindCache:
 			needNet = true
+		case KindAgent:
+			g.addData("aws_caller_identity", "current", obj{})
 		}
 	}
 	// A private DNS namespace when one service calls another (Cloud Map).
@@ -167,6 +169,8 @@ func (g *gen) build() {
 	for _, id := range ids {
 		if bl := g.byID[id]; bl.Kind == KindService {
 			g.service(bl)
+		} else if bl.Kind == KindAgent {
+			g.agent(bl)
 		}
 	}
 }
@@ -580,4 +584,100 @@ func (g *gen) service(bl Block) {
 				"predefined_metric_specification": obj{"predefined_metric_type": "ECSServiceAverageCPUUtilization"}}})
 	}
 	g.add("aws_ecs_service", bl.ID, svc)
+}
+
+// agentName is the AgentCore runtime's name: letters, digits and underscores only, at most 48.
+func (g *gen) agentName(id string) string {
+	return "fl_" + g.short + "_" + strings.ReplaceAll(id, "-", "_")
+}
+
+// agent is an AgentCore runtime from an ECR image, with an execution role that has exactly what AWS documents a
+// runtime needs (pull its own image, write its logs and traces, call Bedrock models, get its own workload token)
+// and what the block is linked to. It is reachable only through AWS's API with IAM, never a public port.
+// https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-permissions.html
+func (g *gen) agent(bl Block) {
+	m := ecrImageRE.FindStringSubmatch(bl.Image)
+	region, acct, name := g.b.Target.Region, "${data.aws_caller_identity.current.account_id}", g.agentName(bl.ID)
+	repo := "arn:aws:ecr:" + m[2] + ":" + m[1] + ":repository/" + m[3]
+	logs := "arn:aws:logs:" + region + ":" + acct + ":log-group:/aws/bedrock-agentcore/runtimes/"
+	trust, _ := json.Marshal(obj{"Version": "2012-10-17", "Statement": []obj{{
+		"Effect": "Allow", "Principal": obj{"Service": "bedrock-agentcore.amazonaws.com"}, "Action": "sts:AssumeRole",
+		"Condition": obj{"StringEquals": obj{"aws:SourceAccount": acct}, "ArnLike": obj{"aws:SourceArn": "arn:aws:bedrock-agentcore:" + region + ":" + acct + ":*"}},
+	}}})
+	role := bl.ID + "_agent"
+	g.add("aws_iam_role", role, obj{"name": g.awsName(bl.ID+"-agent", 64), "assume_role_policy": string(trust), "tags": tags(bl)})
+	statements := []obj{
+		{"Sid": "PullOwnImage", "Effect": "Allow", "Action": []string{"ecr:BatchGetImage", "ecr:GetDownloadUrlForLayer"}, "Resource": []string{repo}},
+		{"Sid": "EcrToken", "Effect": "Allow", "Action": []string{"ecr:GetAuthorizationToken"}, "Resource": "*"},
+		{"Sid": "Logs", "Effect": "Allow", "Action": []string{"logs:CreateLogGroup", "logs:DescribeLogStreams"}, "Resource": []string{logs + "*"}},
+		{"Sid": "LogGroups", "Effect": "Allow", "Action": []string{"logs:DescribeLogGroups"}, "Resource": []string{"arn:aws:logs:" + region + ":" + acct + ":log-group:*"}},
+		{"Sid": "LogEvents", "Effect": "Allow", "Action": []string{"logs:CreateLogStream", "logs:PutLogEvents"}, "Resource": []string{logs + "*:log-stream:*"}},
+		{"Sid": "Traces", "Effect": "Allow", "Action": []string{"xray:GetSamplingRules", "xray:GetSamplingTargets", "xray:PutTelemetryRecords", "xray:PutTraceSegments"}, "Resource": "*"},
+		{"Sid": "Metrics", "Effect": "Allow", "Action": []string{"cloudwatch:PutMetricData"}, "Resource": "*", "Condition": obj{"StringEquals": obj{"cloudwatch:namespace": "bedrock-agentcore"}}},
+		// Not GetWorkloadAccessTokenForUserId: it issues tokens for any user id without checking an identity provider.
+		{"Sid": "OwnWorkloadToken", "Effect": "Allow", "Action": []string{"bedrock-agentcore:GetWorkloadAccessToken", "bedrock-agentcore:GetWorkloadAccessTokenForJWT"},
+			"Resource": []string{"arn:aws:bedrock-agentcore:" + region + ":" + acct + ":workload-identity-directory/default",
+				"arn:aws:bedrock-agentcore:" + region + ":" + acct + ":workload-identity-directory/default/workload-identity/" + name + "-*"}},
+		{"Sid": "Models", "Effect": "Allow", "Action": []string{"bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"},
+			"Resource": []string{"arn:aws:bedrock:*::foundation-model/*", "arn:aws:bedrock:" + region + ":" + acct + ":*"}},
+	}
+	env := map[string]string{}
+	for k, v := range bl.Env {
+		env[k] = esc(v)
+	}
+	var secretARNs []string
+	for _, l := range g.b.Links {
+		if l.From != bl.ID {
+			continue
+		}
+		to := g.byID[l.To]
+		key := envKey(to.ID)
+		switch {
+		case to.Kind == KindSecret:
+			// AgentCore has no secret injection: the agent reads the value itself, by this ARN, at run time.
+			secretARNs = append(secretARNs, ref("aws_secretsmanager_secret", to.ID, "arn"))
+			env[key+"_SECRET_ARN"] = ref("aws_secretsmanager_secret", to.ID, "arn")
+			continue
+		case to.Kind == KindExisting && to.Existing.Type == "secret":
+			secretARNs = append(secretARNs, "${data.aws_secretsmanager_secret."+to.ID+".arn}")
+			env[key+"_SECRET_ARN"] = "${data.aws_secretsmanager_secret." + to.ID + ".arn}"
+			continue
+		}
+		kind, arn, value := g.dataRef(to)
+		res := []string{arn}
+		switch kind {
+		case "table":
+			res = append(res, arn+"/index/*")
+		case "bucket":
+			res = append(res, arn+"/*")
+		}
+		statements = append(statements, obj{"Effect": "Allow", "Action": grants[kind][l.Access], "Resource": res})
+		env[envName(kind, to.ID)] = value
+	}
+	if len(secretARNs) > 0 {
+		statements = append(statements, obj{"Sid": "LinkedSecrets", "Effect": "Allow", "Action": []string{"secretsmanager:GetSecretValue"}, "Resource": secretARNs})
+	}
+	policy, _ := json.Marshal(obj{"Version": "2012-10-17", "Statement": statements})
+	g.add("aws_iam_role_policy", role, obj{"name": "agentcore-runtime", "role": ref("aws_iam_role", role, "id"), "policy": string(policy)})
+	body := obj{
+		"agent_runtime_name": name, "description": esc(orDefault(bl.Description, bl.Name)), "role_arn": ref("aws_iam_role", role, "arn"),
+		"agent_runtime_artifact": obj{"container_configuration": obj{"container_uri": bl.Image}},
+		"network_configuration":  obj{"network_mode": "PUBLIC"},
+		"protocol_configuration": obj{"server_protocol": "HTTP"},
+		"tags":                   tags(bl),
+		// The role must hold its permissions before AgentCore checks it.
+		"depends_on": []string{"aws_iam_role_policy." + role},
+	}
+	if len(env) > 0 {
+		body["environment_variables"] = env
+	}
+	g.add("aws_bedrockagentcore_agent_runtime", bl.ID, body)
+	g.out[bl.ID+"_agent_arn"] = obj{"description": "The AgentCore runtime of " + esc(bl.Name) + "; call it with InvokeAgentRuntime", "value": ref("aws_bedrockagentcore_agent_runtime", bl.ID, "agent_runtime_arn")}
+}
+
+func orDefault(s, d string) string {
+	if strings.TrimSpace(s) == "" {
+		return d
+	}
+	return s
 }

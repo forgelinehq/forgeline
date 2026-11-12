@@ -147,6 +147,14 @@ func TestConsoleCanvas(t *testing.T) {
 			}
 			continue
 		}
+		if kind == blueprint.KindAgent {
+			// An agent starts without an image: only the person knows their ECR image, and a made-up one would pass
+			// the checks and fail only when applied. Everything else about it is valid.
+			if err == nil || !strings.Contains(err.Error(), "ECR only") {
+				t.Errorf("agent default: %v", err)
+			}
+			continue
+		}
 		if err != nil {
 			t.Errorf("default %s is not valid: %v", kind, err)
 		}
