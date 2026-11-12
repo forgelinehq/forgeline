@@ -244,6 +244,33 @@ func (s *Server) handleDeleteBlueprint(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// handleBlueprintDelivery suggests how a block's image is built from its repository (note 040, step 4): a GitHub
+// Actions workflow for the person to add to the repository, and a Forgeline pipeline that starts it. Nothing is
+// written anywhere; the account comes from the blueprint's state or latest preview when there is one.
+func (s *Server) handleBlueprintDelivery(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	b, err := s.loadBlueprint(ctx, r.PathValue("id"))
+	if err != nil {
+		s.defError(w, "blueprint", err)
+		return
+	}
+	account := ""
+	if st, built, err := s.loadBPState(ctx, b.ID); err == nil && built {
+		account = st.AWSAccount
+	} else {
+		var p storedPlan
+		if s.docs.Get(ctx, kindBPPlan, b.ID, &p) == nil {
+			account = p.AWSAccount
+		}
+	}
+	d, err := b.SuggestDelivery(r.PathValue("block"), account)
+	if err != nil {
+		writeError(w, http.StatusNotFound, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, d)
+}
+
 // handleBlueprintCode returns the OpenTofu configuration the blueprint generates (main.tf.json).
 func (s *Server) handleBlueprintCode(w http.ResponseWriter, r *http.Request) {
 	b, err := s.loadBlueprint(r.Context(), r.PathValue("id"))

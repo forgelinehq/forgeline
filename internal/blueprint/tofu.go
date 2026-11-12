@@ -172,6 +172,9 @@ func (g *gen) build() {
 		} else if bl.Kind == KindAgent {
 			g.agent(bl)
 		}
+		if bl := g.byID[id]; bl.Source != nil {
+			g.source(bl)
+		}
 	}
 }
 
@@ -680,4 +683,55 @@ func orDefault(s, d string) string {
 		return d
 	}
 	return s
+}
+
+// ImageRepoName is the private ECR repository the blueprint makes for a block with a source.
+func (b Blueprint) ImageRepoName(blockID string) string {
+	g := gen{b: b}
+	sum := sha256.Sum256([]byte(b.ID))
+	g.short = hex.EncodeToString(sum[:])[:6]
+	return strings.ToLower(g.awsName(blockID, 200))
+}
+
+// PushRoleName is the role GitHub Actions in the block's repository and branch may use to push its images.
+func (b Blueprint) PushRoleName(blockID string) string {
+	g := gen{b: b}
+	sum := sha256.Sum256([]byte(b.ID))
+	g.short = hex.EncodeToString(sum[:])[:6]
+	return g.awsName(blockID+"-push", 64)
+}
+
+// source makes a private image repository for a block's code and a role that only GitHub Actions in that repository,
+// on that branch, can take (through GitHub's OIDC provider, which must already be set up in the account) to push
+// images to it and nothing else. Forgeline never pushes to the repository; running a new image is a blueprint
+// change that is previewed and approved.
+func (g *gen) source(bl Block) {
+	repo := bl.ID + "_src"
+	g.add("aws_ecr_repository", repo, obj{
+		"name": g.b.ImageRepoName(bl.ID), "image_tag_mutability": "IMMUTABLE",
+		"image_scanning_configuration": obj{"scan_on_push": true}, "encryption_configuration": obj{"encryption_type": "AES256"},
+		// Images are built from the repository again at any time, so removing the blueprint may remove them.
+		"force_delete": true, "tags": tags(bl),
+	})
+	rules, _ := json.Marshal(obj{"rules": []obj{{"rulePriority": 1, "description": "Keep the 30 newest images",
+		"selection": obj{"tagStatus": "any", "countType": "imageCountMoreThan", "countNumber": 30}, "action": obj{"type": "expire"}}}})
+	g.add("aws_ecr_lifecycle_policy", repo, obj{"repository": ref("aws_ecr_repository", repo, "name"), "policy": string(rules)})
+	g.addData("aws_iam_openid_connect_provider", "github", obj{"url": "https://token.actions.githubusercontent.com"})
+	trust, _ := json.Marshal(obj{"Version": "2012-10-17", "Statement": []obj{{
+		"Effect": "Allow", "Principal": obj{"Federated": "${data.aws_iam_openid_connect_provider.github.arn}"}, "Action": "sts:AssumeRoleWithWebIdentity",
+		"Condition": obj{"StringEquals": obj{
+			"token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
+			"token.actions.githubusercontent.com:sub": "repo:" + bl.Source.Repo + ":ref:refs/heads/" + bl.Source.BranchOr(),
+		}},
+	}}})
+	role := bl.ID + "_push"
+	g.add("aws_iam_role", role, obj{"name": g.b.PushRoleName(bl.ID), "assume_role_policy": string(trust), "max_session_duration": 3600, "tags": tags(bl)})
+	policy, _ := json.Marshal(obj{"Version": "2012-10-17", "Statement": []obj{
+		{"Sid": "EcrToken", "Effect": "Allow", "Action": []string{"ecr:GetAuthorizationToken"}, "Resource": "*"},
+		{"Sid": "PushOwnImages", "Effect": "Allow", "Action": []string{"ecr:BatchCheckLayerAvailability", "ecr:BatchGetImage", "ecr:CompleteLayerUpload",
+			"ecr:GetDownloadUrlForLayer", "ecr:InitiateLayerUpload", "ecr:PutImage", "ecr:UploadLayerPart"}, "Resource": []string{ref("aws_ecr_repository", repo, "arn")}},
+	}})
+	g.add("aws_iam_role_policy", role, obj{"name": "push-images", "role": ref("aws_iam_role", role, "id"), "policy": string(policy)})
+	g.out[bl.ID+"_image_repository"] = obj{"description": "Where images of " + esc(bl.Name) + " are pushed", "value": ref("aws_ecr_repository", repo, "repository_url")}
+	g.out[bl.ID+"_push_role"] = obj{"description": "The role GitHub Actions in " + bl.Source.Repo + " uses to push them", "value": ref("aws_iam_role", role, "arn")}
 }

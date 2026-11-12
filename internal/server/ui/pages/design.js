@@ -1,7 +1,7 @@
 // Build › Design (design note 035, slice 2): a blueprint on a canvas. Blocks are drawn in SVG (positions are
 // attributes, so the CSP needs no inline styles), dragged to move, and edited in the panel on the right. Every
 // change is checked by the server as you go; Save keeps it. Preview and approval are the next slice.
-import { h, icon, mount, pageHeader, relTime, spinner, errorBox, notice, toast, emptyState, modal, field } from '../lib/dom.js';
+import { h, icon, mount, pageHeader, relTime, spinner, errorBox, notice, toast, emptyState, modal, field, copyButton } from '../lib/dom.js';
 import { get, post, put } from '../lib/api.js';
 import { navigate } from '../lib/router.js';
 import { KINDS, EXISTING, DB_SIZES, CACHE_SIZES, blockFacts, linkWords } from '../lib/blueprint.js';
@@ -33,6 +33,8 @@ export async function designPage({ params }) {
   try { plan = await get('/v1/blueprints/' + encodeURIComponent(params.id) + '/plan'); } catch { /* no preview yet */ }
   try { built = await get('/v1/blueprints/' + encodeURIComponent(params.id) + '/built'); } catch { /* optional */ }
   try { others = (await get('/v1/blueprints')).blueprints; } catch { /* the switcher is optional */ }
+  let repos = [];
+  try { repos = ((await get('/v1/integrations/github')).rules || []).map(r => r.repo); } catch { /* typing the name still works */ }
 
   let revision = saved.revision;
   let bp = autoLayout({ name: saved.name, description: saved.description || '', target: saved.target, blocks: saved.blocks, links: saved.links });
@@ -340,6 +342,36 @@ export async function designPage({ params }) {
     return h('div', {}, h('label', { class: 'label', for: id }, 'Settings'), ta, h('p', { class: 'hint' }, 'One NAME=value per line. Not for secrets.'));
   }
 
+  // Where the block's code lives (note 040, step 4): the blueprint then makes a private image repository and a push role
+  // for that repository's branch, and Forgeline suggests the workflow that builds it.
+  function sourceField(b, set) {
+    const src = b.source || {};
+    const list = h('datalist', { id: 'f-repos' }, repos.map(r => h('option', { value: r })));
+    // Setting or clearing the repository adds or removes the fields under it, so the inspector is drawn again.
+    const update = (part) => { const next = { ...src, ...part }; set({ source: next.repo ? next : null }); if (!!next.repo !== !!src.repo) setTimeout(drawInspector); };
+    return h('div', { class: 'space-y-2 rounded-lg border border-slate-200 p-3 dark:border-slate-700', id: 'f-source' },
+      h('div', { class: 'h-section' }, 'Code'),
+      input('GitHub repository', src.repo, v => update({ repo: v }), { placeholder: 'owner/name', list: 'f-repos' }), list,
+      src.repo ? h('div', { class: 'grid grid-cols-2 gap-2' },
+        input('Branch', src.branch, v => update({ branch: v || undefined }), { placeholder: 'main' }),
+        input('Folder', src.path, v => update({ path: v || undefined }), { placeholder: '.' })) : null,
+      src.repo ? h('button', { class: 'btn-secondary btn-sm', type: 'button', id: 'f-delivery', title: 'Suggests the workflow that builds it, for the saved blueprint',
+        onclick: () => dirty() ? toast('Save first: the suggestion is for the saved blueprint', 'error') : delivery(b) }, icon('git', 'size-3.5'), 'Build from GitHub…')
+        : h('p', { class: 'hint' }, 'Optional. With a repository, the blueprint makes a private image repository for it and a role only that branch can use to push images.'));
+  }
+
+  async function delivery(b) {
+    let d;
+    try { d = await get('/v1/blueprints/' + encodeURIComponent(saved.id) + '/blocks/' + encodeURIComponent(b.id) + '/delivery'); } catch (e) { toast(e.message, 'error'); return; }
+    await modal('Build ' + b.name + ' from GitHub', () => h('div', { class: 'space-y-4', id: 'delivery' },
+      h('p', { class: 'text-sm' }, d.next),
+      h('div', {}, h('div', { class: 'mb-1 flex items-center justify-between' }, h('span', { class: 'h-section' }, d.workflow_path + ' in ' + d.repo), copyButton(d.workflow, 'Copy')),
+        h('pre', { class: 'max-h-72 overflow-auto rounded-lg bg-slate-50 p-3 text-xs dark:bg-slate-900', id: 'delivery-workflow' }, d.workflow)),
+      h('div', {}, h('div', { class: 'mb-1 flex items-center justify-between' }, h('span', { class: 'h-section' }, 'A Forgeline pipeline that starts it'), copyButton(d.pipeline, 'Copy')),
+        h('pre', { class: 'overflow-auto rounded-lg bg-slate-50 p-3 text-xs dark:bg-slate-900', id: 'delivery-pipeline' }, d.pipeline),
+        h('p', { class: 'hint mt-1' }, 'Save it under Ship › Pipelines. The repository and branch must be on the GitHub allow list.'))), { xl: true });
+  }
+
   function drawInspector() {
     const b = bp.blocks.find(x => x.id === selected);
     if (!b) {
@@ -371,12 +403,12 @@ export async function designPage({ params }) {
             input('CPU aim %', b.cpu_target ?? 60, v => set({ cpu_target: v }), { type: 'number', min: '20', max: '90' })),
             h('p', { class: 'hint' }, 'Adds tasks when average CPU is above the aim and removes them when it is below. Tasks is where it starts.'));
         }
-        fields.push(settingsField(b, set));
+        fields.push(settingsField(b, set), sourceField(b, set));
         break;
       case 'agent':
         fields.push(input('Container image (ECR)', b.image, v => set({ image: v }), { placeholder: '111122223333.dkr.ecr.' + bp.target.region + '.amazonaws.com/my-agent:1.0' }),
           input('What it does', b.description, v => set({ description: v || null }), { placeholder: 'answers support questions' }),
-          settingsField(b, set),
+          settingsField(b, set), sourceField(b, set),
           h('p', { class: 'hint' }, 'Runs on Amazon Bedrock AgentCore. Build the image for arm64, answering on port 8080 at /invocations and /ping. Link it to the tables, files, queues and secrets it may use; it gets exactly those and Bedrock models, nothing else.'));
         break;
       case 'frontdoor':

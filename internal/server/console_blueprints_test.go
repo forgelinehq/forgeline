@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/forgelinehq/forgeline/internal/authn"
+	"github.com/forgelinehq/forgeline/internal/blueprint"
 )
 
 func bpBody(name string) map[string]any {
@@ -91,4 +92,22 @@ func TestBlueprintsAreDraftsWithChecksAndCode(t *testing.T) {
 			t.Errorf("audit misses %s", want)
 		}
 	}
+}
+
+// A block with a source gets a suggested workflow and pipeline; nothing is written anywhere.
+func TestBlueprintDeliverySuggestion(t *testing.T) {
+	m := newMCPHarness(t)
+	body := bpBody("Shop")
+	blocks := body["blocks"].([]map[string]any)
+	blocks[1]["source"] = map[string]any{"repo": "acme/shop", "path": "app"}
+	var made BlueprintJSON
+	json.Unmarshal(m.dev.expect(201, "POST", "/v1/blueprints", body), &made)
+	var d blueprint.Delivery
+	json.Unmarshal(m.dev.expect(200, "GET", "/v1/blueprints/"+made.ID+"/blocks/app/delivery", nil), &d)
+	if d.Repo != "acme/shop" || d.Branch != "main" || !strings.Contains(d.Workflow, "context: app") || !strings.Contains(d.Next, "<account-id>") {
+		t.Errorf("delivery = %+v", d)
+	}
+	m.dev.expect(404, "GET", "/v1/blueprints/"+made.ID+"/blocks/data/delivery", nil) // a table has no source
+	m.dev.expect(404, "GET", "/v1/blueprints/"+made.ID+"/blocks/ghost/delivery", nil)
+	m.v.expect(403, "GET", "/v1/blueprints/"+made.ID+"/blocks/app/delivery", nil)
 }
