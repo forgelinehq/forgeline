@@ -7,6 +7,10 @@ section in the pull request that makes the change; a release moves it under its 
 ## [Unreleased]
 
 ### Fixed
+- **A preview checks the AgentCore agent quota.** On real AWS an account whose "Total Agents per Account" is 0 previewed
+  as ready and failed at apply; such a preview is now denied with the reason (a quota that cannot be read is a warning).
+- **A preview that was applied stops looking ready.** The canvas no longer shows its marks or offers to send it again
+  once the blueprint was built after it.
 - **Cloud changes and AI proposals newest first.** Their ids are random, so the lists came in random order and, past
   100, showed a random 100. Found in a real check on the Pi (docs/testing/2026-11-12-real-aws.md).
 - **Watch › Services draws at once**: it no longer waits for the account summary.

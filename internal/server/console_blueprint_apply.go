@@ -343,6 +343,7 @@ func (s *Server) runPlan(ctx context.Context, b StoredBlueprint, st awsSettings,
 		return err
 	}
 	plan.GuardrailVersion = guardrail.Version
+	plan.Guardrails = append(plan.Guardrails, s.quotaFindings(ctx, st, plan.Changes)...)
 	file, err := os.ReadFile(filepath.Join(dir, "plan.bin"))
 	if err != nil || len(file) > maxPlanFile {
 		return errors.New("the plan file could not be kept")
@@ -352,6 +353,47 @@ func (s *Server) runPlan(ctx context.Context, b StoredBlueprint, st awsSettings,
 	}
 	lock, _ := os.ReadFile(filepath.Join(dir, ".terraform.lock.hcl"))
 	plan.Code, plan.Lock = string(code), string(lock)
+	return nil
+}
+
+// quotaFindings checks the account's AWS service quotas for what the plan adds, where a quota is known to stop an
+// apply that the plan itself cannot see. Found on real AWS: an account whose "Total Agents per Account" for Bedrock
+// AgentCore is 0 previews fine and fails at apply. A quota that cannot be read is a warning, never a pass.
+func (s *Server) quotaFindings(ctx context.Context, st awsSettings, changes []PlanChangeJSON) []guardrail.Finding {
+	agents := []string{}
+	for _, c := range changes {
+		if c.Type == "aws_bedrockagentcore_agent_runtime" && (c.Action == "add" || c.Action == "replace") {
+			agents = append(agents, c.Address)
+		}
+	}
+	if len(agents) == 0 {
+		return nil
+	}
+	out, err := s.aws(ctx, st, "service-quotas", "list-service-quotas", "--service-code", "bedrock-agentcore")
+	limit, found := -1.0, false
+	if err == nil {
+		var q struct {
+			Quotas []struct {
+				QuotaName string
+				Value     float64
+			}
+		}
+		if json.Unmarshal(out, &q) == nil {
+			for _, x := range q.Quotas {
+				if x.QuotaName == "Total Agents per Account" {
+					limit, found = x.Value, true
+				}
+			}
+		}
+	}
+	if !found {
+		return []guardrail.Finding{{Rule: "service-quota", Level: guardrail.Warn, Address: agents[0],
+			Text: "Forgeline could not read this account's AgentCore quota (Total Agents per Account), so it cannot tell whether AWS will allow these agents."}}
+	}
+	if limit < float64(len(agents)) {
+		return []guardrail.Finding{{Rule: "service-quota", Level: guardrail.Deny, Address: agents[0],
+			Text: fmt.Sprintf("This AWS account may have at most %d Bedrock AgentCore agents (Total Agents per Account), so AWS would refuse to create %d. Ask AWS to raise the quota in Service Quotas, then preview again.", int(limit), len(agents))}}
+	}
 	return nil
 }
 

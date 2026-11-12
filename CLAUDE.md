@@ -28,12 +28,8 @@ what to do next**. The project is pre-alpha and maintained by one person.
 
 ## Layout
 
-- `cmd/forgeline`: command-line entry point. Keep `run` testable (it takes args and writers).
-- `internal/pipeline`: the pipeline model, validation, and schema generation.
+- `cmd/forgeline`: keep `run` testable (it takes args and writers).
 - `schema/`: generated JSON Schema. Never edit by hand.
-- `internal/scheduler`, `internal/executor`, `internal/cache`: running a pipeline. `internal/server`:
-  the API, the runner and the console (`console_*.go`); its `ui/` is the embedded front end.
-  `internal/docstore`, `vault`, `authn`, `secrets`, `redact`: console storage, crypto, masking.
 - `docs/design/`: numbered design notes. Spec, trust-model, and interface changes start here.
 
 ## Principles that shape the code
