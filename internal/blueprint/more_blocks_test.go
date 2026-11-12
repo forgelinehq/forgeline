@@ -62,7 +62,9 @@ func TestMoreBlocksValidate(t *testing.T) {
 			b.Blocks = append(b.Blocks, Block{ID: "admin", Kind: KindService, Name: "Admin", Image: "nginx:1.29", CPU: 256, Memory: 512, Count: 1, Port: 80})
 			b.Links = append(b.Links, Link{From: "door", To: "admin", Path: "/api/*"})
 		}},
-		{"existing database name", "existing.name", func(b *Blueprint) { b.Blocks[5] = Block{ID: "db", Kind: KindExisting, Name: "Old DB", Existing: &Existing{Type: "database", Name: "1bad"}} }},
+		{"existing database name", "existing.name", func(b *Blueprint) {
+			b.Blocks[5] = Block{ID: "db", Kind: KindExisting, Name: "Old DB", Existing: &Existing{Type: "database", Name: "1bad"}}
+		}},
 		{"a database cannot link out", "cannot link", func(b *Blueprint) { b.Links = append(b.Links, Link{From: "db", To: "redis"}) }},
 	}
 	for _, c := range cases {

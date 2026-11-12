@@ -27,6 +27,10 @@ section in the pull request that makes the change; a release moves it under its 
 - **After a session ends**, the console stops polling the server (it asked every minute, forever).
 
 ### Added
+- **Agents on Amazon Bedrock AgentCore** (design note 040, step 2). An **Agent** block on the design canvas runs your
+  agent's ECR image on AgentCore Runtime. Its execution role has what AWS documents a runtime needs (its own image, its
+  logs and traces, Bedrock models, its own workload token, never tokens for arbitrary user ids) and the tables, buckets,
+  queues and secrets it is linked to. The canvas assistant knows it.
 - **Five Marketplace packages, two of them teams.** The incident triage team (a run analyst and a platform checker in
   parallel, then a lead's report) and the weekly platform review (security and spend side by side, then a review) each
   install three agents and a workflow. Also: AgentCore readiness (checks an agent against Bedrock AgentCore's documented
@@ -230,6 +234,8 @@ section in the pull request that makes the change; a release moves it under its 
   what. No new API.
 
 ### Changed
+- **Guardrails `builtin-2`.** A policy may use `Resource: "*"` when every action in that statement is one IAM cannot
+  scope to a resource (the ECR token, X-Ray writes, CloudWatch metrics); anything else with `*` is still denied.
 - The assistant knows where the console's pages are (Design and blueprints, the Watch map, AI use and budgets, approval
   rules), so it can answer "how do I…" about them instead of saying it does not know them.
 - **Selected items unreadable in dark mode, and a narrow page on big screens.** The selected tile on the AWS map and

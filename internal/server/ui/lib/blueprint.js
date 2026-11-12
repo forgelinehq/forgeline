@@ -13,6 +13,7 @@ export const KINDS = {
   database: { label: 'Database', tech: 'RDS', icon: 'layers' },
   cache: { label: 'Cache', tech: 'Redis (ElastiCache)', icon: 'bolt' },
   secret: { label: 'Secret', tech: 'Secrets Manager', icon: 'key' },
+  agent: { label: 'Agent', tech: 'Bedrock AgentCore', icon: 'sparkle' },
   existing: { label: 'Already there', tech: 'kept as it is', icon: 'link' },
 };
 
@@ -37,6 +38,7 @@ export function blockFacts(b) {
     case 'database': return `${ENGINES[b.engine] || b.engine} · ${b.size} · ${b.storage_gb} GB` + (b.multi_az ? ' · two zones' : '') + ' · password kept by AWS';
     case 'cache': return `${b.size} · ${b.nodes || 1} node${(b.nodes || 1) > 1 ? 's' : ''} · encrypted`;
     case 'secret': return 'value set in AWS, never seen by Forgeline';
+    case 'agent': return b.image ? 'from ' + b.image.split('/').pop() + ' · calls Bedrock models' : 'needs its ECR image';
     case 'existing': return (EXISTING[b.existing?.type] || 'resource') + ' ' + (b.existing?.name || '') + ' · used, never changed';
     default: return '';
   }

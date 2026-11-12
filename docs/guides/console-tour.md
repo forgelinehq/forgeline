@@ -74,6 +74,13 @@ still protected. **Remove everything** takes two approvals when something is pro
 turned off and the rest removed, then the data is deleted (a final snapshot of each database is kept unless you untick
 it). Afterwards the canvas shows **Removed**, and the blueprint can be built again. See [design note 041](https://github.com/forgelinehq/forgeline/blob/main/docs/design/041-removing-what-a-blueprint-built.md).
 
+An **Agent** block runs your agent on Amazon Bedrock AgentCore from its container image in ECR (built for arm64,
+answering on port 8080). Link it to the tables, files, queues and secrets it may use: its role gets exactly those and
+Bedrock models, and AWS's documented runtime permissions, nothing else. It is reached through AWS's API, never a public
+port.
+
+![An agent on the canvas]({{ '/console/120-design-agent.png' | relative_url }})
+
 ![Removing what a blueprint built]({{ '/console/119-design-removal.png' | relative_url }})
 
 The **Assistant** panel beside the canvas takes a change in your own words ("add a place to keep interview recordings")

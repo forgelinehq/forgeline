@@ -22,10 +22,11 @@ const (
 	KindDatabase  = "database"  // an RDS database, MySQL or Postgres (note 039)
 	KindCache     = "cache"     // a Redis cache (ElastiCache)
 	KindSecret    = "secret"    // a Secrets Manager secret whose value a person sets in AWS
+	KindAgent     = "agent"     // an AI agent on Amazon Bedrock AgentCore Runtime, from a container image in ECR (note 040)
 )
 
 // Kinds lists the block kinds in the order the canvas offers them.
-var Kinds = []string{KindFrontDoor, KindService, KindTable, KindBucket, KindQueue, KindLogs, KindDatabase, KindCache, KindSecret, KindExisting}
+var Kinds = []string{KindFrontDoor, KindService, KindTable, KindBucket, KindQueue, KindLogs, KindDatabase, KindCache, KindSecret, KindAgent, KindExisting}
 
 // Access a service has to what it uses.
 const (
@@ -126,20 +127,22 @@ type Link struct {
 }
 
 var (
-	idRE      = regexp.MustCompile(`^[a-z][a-z0-9-]{0,29}$`)
-	keyRE     = regexp.MustCompile(`^[A-Za-z0-9_.-]{1,255}$`)
-	envRE     = regexp.MustCompile(`^[A-Z_][A-Z0-9_]{0,63}$`)
-	imageRE   = regexp.MustCompile(`^[a-z0-9][A-Za-z0-9._/:@-]{0,254}$`)
-	certRE    = regexp.MustCompile(`^arn:aws[a-z-]*:acm:[a-z0-9-]+:\d{12}:certificate/[A-Za-z0-9-]+$`)
-	regionRE  = regexp.MustCompile(`^[a-z]{2}(-[a-z]+)+-\d$`)
-	accountRE = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,39}$`)
-	tableRE   = regexp.MustCompile(`^[A-Za-z0-9_.-]{3,255}$`)
-	bucketRE  = regexp.MustCompile(`^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$`)
-	queueRE   = regexp.MustCompile(`^[A-Za-z0-9_-]{1,80}(\.fifo)?$`)
-	dbIDRE    = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9-]{0,62}$`)
-	cacheIDRE = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9-]{0,39}$`)
-	secretRE  = regexp.MustCompile(`^[A-Za-z0-9/_+=.@-]{1,512}$`)
-	pathRE    = regexp.MustCompile(`^/[A-Za-z0-9._~/*-]{0,100}$`)
+	idRE    = regexp.MustCompile(`^[a-z][a-z0-9-]{0,29}$`)
+	keyRE   = regexp.MustCompile(`^[A-Za-z0-9_.-]{1,255}$`)
+	envRE   = regexp.MustCompile(`^[A-Z_][A-Z0-9_]{0,63}$`)
+	imageRE = regexp.MustCompile(`^[a-z0-9][A-Za-z0-9._/:@-]{0,254}$`)
+	certRE  = regexp.MustCompile(`^arn:aws[a-z-]*:acm:[a-z0-9-]+:\d{12}:certificate/[A-Za-z0-9-]+$`)
+	// An agent's image must be in ECR: AgentCore pulls only from there. Groups: account, region, repository.
+	ecrImageRE = regexp.MustCompile(`^(\d{12})\.dkr\.ecr\.([a-z0-9-]+)\.amazonaws\.com/([a-z0-9][a-z0-9._/-]{0,254})(:[A-Za-z0-9._-]{1,128}|@sha256:[a-f0-9]{64})$`)
+	regionRE   = regexp.MustCompile(`^[a-z]{2}(-[a-z]+)+-\d$`)
+	accountRE  = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,39}$`)
+	tableRE    = regexp.MustCompile(`^[A-Za-z0-9_.-]{3,255}$`)
+	bucketRE   = regexp.MustCompile(`^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$`)
+	queueRE    = regexp.MustCompile(`^[A-Za-z0-9_-]{1,80}(\.fifo)?$`)
+	dbIDRE     = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9-]{0,62}$`)
+	cacheIDRE  = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9-]{0,39}$`)
+	secretRE   = regexp.MustCompile(`^[A-Za-z0-9/_+=.@-]{1,512}$`)
+	pathRE     = regexp.MustCompile(`^/[A-Za-z0-9._~/*-]{0,100}$`)
 )
 
 // Instance sizes behind the plain names (note 039).
@@ -227,6 +230,9 @@ func (b Blueprint) Validate() error {
 		if err := bl.validate(at); err != nil {
 			return err
 		}
+		if m := ecrImageRE.FindStringSubmatch(bl.Image); bl.Kind == KindAgent && m != nil && m[2] != b.Target.Region {
+			return fmt.Errorf("%s.image: the image is in %s but the blueprint builds in %s; AgentCore pulls from ECR in its own region", at, m[2], b.Target.Region)
+		}
 		byID[bl.ID] = bl
 	}
 	fronted := map[string]string{} // service -> front door
@@ -293,6 +299,14 @@ func (b Blueprint) Validate() error {
 			if l.Access != "" {
 				return fmt.Errorf("%s.access: a link to a database, cache or secret is the access; leave access out", at)
 			}
+		case from.Kind == KindAgent && usesData(to.Kind, to.Existing):
+			if l.Access != AccessRead && l.Access != AccessReadWrite {
+				return fmt.Errorf("%s.access: say read or readwrite, got %q", at, l.Access)
+			}
+		case from.Kind == KindAgent && (to.Kind == KindSecret || (to.Kind == KindExisting && to.Existing != nil && to.Existing.Type == "secret")):
+			if l.Access != "" {
+				return fmt.Errorf("%s.access: a link to a secret is the access; leave access out", at)
+			}
 		case from.Kind == KindService && to.Kind == KindService:
 			if l.Access != "" {
 				return fmt.Errorf("%s.access: one service calling another takes no access level", at)
@@ -304,7 +318,7 @@ func (b Blueprint) Validate() error {
 				return fmt.Errorf("%s: %s needs a port to be called", at, to.ID)
 			}
 		default:
-			return fmt.Errorf("%s: a %s cannot link to a %s (a front door sends traffic to a service; a service uses data, a database, a cache or a secret, calls another service, or writes logs)", at, from.Kind, to.Kind)
+			return fmt.Errorf("%s: a %s cannot link to a %s (a front door sends traffic to a service; a service uses data, a database, a cache or a secret, calls another service, or writes logs; an agent uses tables, buckets, queues and secrets)", at, from.Kind, to.Kind)
 		}
 	}
 	for i, bl := range b.Blocks {
@@ -330,6 +344,7 @@ func (bl Block) validate(at string) error {
 		KindDatabase:  {"engine", "size", "storage_gb", "multi_az", "backup_days"},
 		KindCache:     {"size", "nodes"},
 		KindSecret:    {"description"},
+		KindAgent:     {"image", "env", "description"},
 		KindExisting:  {"existing"},
 	}
 	ok, known := allowed[bl.Kind]
@@ -380,6 +395,24 @@ func (bl Block) validate(at string) error {
 			if len(v) > 1024 {
 				return fmt.Errorf("%s.env.%s: at most 1024 characters", at, k)
 			}
+		}
+	case KindAgent:
+		if !ecrImageRE.MatchString(bl.Image) {
+			return fmt.Errorf("%s.image: AgentCore runs images from ECR only, such as 111122223333.dkr.ecr.ap-south-1.amazonaws.com/my-agent:1.0 (built for arm64)", at)
+		}
+		if len(bl.Env) > MaxEnv {
+			return fmt.Errorf("%s.env: at most %d settings", at, MaxEnv)
+		}
+		for k, v := range bl.Env {
+			if !envRE.MatchString(k) {
+				return fmt.Errorf("%s.env: %q must be upper-case letters, digits and underscores", at, k)
+			}
+			if len(v) > 1024 {
+				return fmt.Errorf("%s.env.%s: at most 1024 characters", at, k)
+			}
+		}
+		if len(bl.Description) > 200 {
+			return fmt.Errorf("%s.description: at most 200 characters", at)
 		}
 	case KindFrontDoor:
 		if bl.HealthPath != "" && (!strings.HasPrefix(bl.HealthPath, "/") || len(bl.HealthPath) > 200 || strings.ContainsAny(bl.HealthPath, " \t\n\"\\$%")) {
@@ -555,6 +588,10 @@ func (b Blueprint) Checks() []Check {
 	}
 	for _, c := range byKind[KindCache] {
 		ok(c.Name + " (Redis) is private, encrypted in transit and at rest, and only linked services can connect.")
+	}
+	for _, a := range byKind[KindAgent] {
+		ok(a.Name + " runs on Amazon Bedrock AgentCore from its ECR image, may call Bedrock models, and can use only what it is linked to. Its role cannot issue tokens for arbitrary user ids.")
+		warn(a.Name + "'s image must be built for arm64 and answer on port 8080 (/invocations and /ping), as AgentCore requires.")
 	}
 	for _, sc := range byKind[KindSecret] {
 		warn(sc.Name + " starts empty: set its value in AWS Secrets Manager after it is built. Forgeline never reads or stores it.")
