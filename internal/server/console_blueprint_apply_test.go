@@ -518,6 +518,9 @@ func TestBlueprintRemovalKeepsDataThenRemovesEverythingInTwoSteps(t *testing.T) 
 	plan(nil)
 	apply()
 
+	if msg := string(m.dev.expect(409, "DELETE", "/v1/blueprints/"+id, nil)); !strings.Contains(msg, "Remove what it built first") {
+		t.Errorf("deleting while built: %s", msg)
+	}
 	// Keep the data: the table stays, everything else goes.
 	p := plan(map[string]any{"remove": "keep-data"})
 	if p.Removal != "keep-data" || p.Remove == 0 || p.Add != 0 {
@@ -559,6 +562,13 @@ func TestBlueprintRemovalKeepsDataThenRemovesEverythingInTwoSteps(t *testing.T) 
 	if msg := string(m.dev.expect(409, "POST", "/v1/blueprints/"+id+"/plan", map[string]any{"remove": "everything"})); !strings.Contains(msg, "nothing this blueprint built") {
 		t.Errorf("removing twice: %s", msg)
 	}
+	// Once nothing it built is left, the blueprint may be deleted; its state stays, so old plans still cannot apply.
+	defer func() {
+		m.dev.expect(204, "DELETE", "/v1/blueprints/"+id, nil)
+		if _, ok, _ := m.srv.loadBPState(t.Context(), id); !ok {
+			t.Error("the state must be kept after the blueprint is deleted")
+		}
+	}()
 	// It can be built again from the empty state.
 	if p := plan(nil); p.Add == 0 || p.Removal != "" {
 		t.Errorf("rebuild preview: %+v", p)

@@ -226,11 +226,13 @@ func (s *Server) handleDeleteBlueprint(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusForbidden, "only "+b.CreatedBy+" or an administrator can delete this blueprint")
 		return
 	}
-	if _, built, err := s.loadBPState(r.Context(), b.ID); err != nil {
+	// The state is kept even after the blueprint is deleted: its count of applies is what stops an old approved plan
+	// of this blueprint from ever applying.
+	if st, built, err := s.loadBPState(r.Context(), b.ID); err != nil {
 		s.internalError(w, "reading the blueprint's state", err)
 		return
-	} else if built {
-		writeError(w, http.StatusConflict, "this blueprint has been built; deleting the draft would leave what it built without a record. Removing what it built comes later")
+	} else if built && !st.Empty {
+		writeError(w, http.StatusConflict, "this blueprint has built things that still exist; deleting it would leave them without a record. Remove what it built first (Remove… on the design canvas)")
 		return
 	}
 	s.docs.Delete(r.Context(), kindBPPlan, b.ID) // its preview, if any

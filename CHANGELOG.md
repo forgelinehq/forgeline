@@ -7,6 +7,8 @@ section in the pull request that makes the change; a release moves it under its 
 ## [Unreleased]
 
 ### Fixed
+- **A blueprint can be deleted once what it built is removed.** It was refused for ever after its first build. It is
+  still refused while anything it built exists, and its saved state is kept so an old approved plan cannot apply.
 - **Readable links on the design canvas.** When several links left or entered one block they met in one point, so a
   web stack's links formed a knot and you could not tell which app used what. Each link now has its own point on the
   block's edge, in the order of where it goes, and bends at its own place. The Built page draws the same way.

@@ -36,6 +36,16 @@ How should it work, and what happens to what holds data?
 - `tofu validate` (OpenTofu 1.13.9, AWS provider 6.72) passes for all three stages' code.
 - A browser walk on a dev server with `fake-aws` and `fake-tofu`: build, keep data, step 1, step 2, **Removed**.
 
+- **Real AWS, on the Pi (2026-11-12)**, OpenTofu 1.13.9 and the AWS provider 6.7x, each step approved by a second
+  principal:
+  - the 2026-11-08 test blueprint (a queue and a log group): one step, 2 removed;
+  - a round trip: a queue, a protected table, a protected versioned bucket with a file in it, and a log group were built
+    (8 resources); step 1 turned the table's deletion protection off and let the bucket be deleted with its files (2
+    changed) and removed the queue and logs (2 removed); step 2 removed the table and the bucket (6 removed). AWS then
+    listed none of them.
+- Deleting a blueprint is allowed once nothing it built is left; its state is kept so an old approved plan can never
+  apply.
+
 ## Not checked
 
-- A removal against real AWS. The first real one should be a small blueprint (a queue and a table) on the Pi.
+- Removing a database (RDS) for real, with and without a final snapshot: it costs money to build one to test it.
