@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -69,6 +70,10 @@ type BlueprintPlan struct {
 	// Guardrails are the rules the plan breaks (note 040): a deny stops it being sent for approval.
 	Guardrails       []guardrail.Finding `json:"guardrails"`
 	GuardrailVersion string              `json:"guardrail_version,omitempty"`
+	// Removal is set when the preview removes what the blueprint built (note 041): keep-data, unprotect (step 1
+	// of removing everything) or all (step 2). FinalSnapshot keeps a last snapshot of each database.
+	Removal       string `json:"removal,omitempty"`
+	FinalSnapshot bool   `json:"final_snapshot,omitempty"`
 }
 
 // storedPlan is the plan with the fields the API never shows.
@@ -101,6 +106,7 @@ type blueprintState struct {
 	Lock       string    `json:"lock"`
 	UpdatedAt  time.Time `json:"updated_at"`
 	UpdatedBy  string    `json:"updated_by"`
+	Empty      bool      `json:"empty,omitempty"` // nothing it built is left (all removed)
 }
 
 // bpBusy keeps one plan or apply per blueprint at a time.
@@ -146,8 +152,28 @@ func consoleAccount(a string) string {
 
 // ---------------------------------------------------------------- preview
 
+// planRequest asks for a preview. Remove is empty for building, "keep-data" to remove everything but what holds
+// data, or "everything" (removed in two approved steps when something is protected).
+type planRequest struct {
+	Remove        string `json:"remove"`
+	FinalSnapshot *bool  `json:"final_snapshot"` // keep a final snapshot of each database; default yes
+}
+
 func (s *Server) handlePlanBlueprint(w http.ResponseWriter, r *http.Request) {
 	ctx, p := r.Context(), principalFrom(r.Context())
+	var req planRequest
+	if r.ContentLength != 0 {
+		if err := json.NewDecoder(io.LimitReader(r.Body, 4096)).Decode(&req); err != nil && !errors.Is(err, io.EOF) {
+			writeError(w, http.StatusBadRequest, "the request is not valid JSON")
+			return
+		}
+	}
+	switch req.Remove {
+	case "", "keep-data", "everything":
+	default:
+		writeError(w, http.StatusBadRequest, `remove must be "keep-data" or "everything"`)
+		return
+	}
 	b, err := s.loadBlueprint(ctx, r.PathValue("id"))
 	if err != nil {
 		s.defError(w, "blueprint", err)
@@ -163,17 +189,33 @@ func (s *Server) handlePlanBlueprint(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	st.Region = b.Target.Region
+	if req.Remove != "" {
+		state, built, err := s.loadBPState(ctx, b.ID)
+		if err != nil {
+			s.internalError(w, "reading the blueprint's state", err)
+			return
+		}
+		if !built || state.Empty {
+			writeError(w, http.StatusConflict, "nothing this blueprint built is left to remove")
+			return
+		}
+	}
 	if what, ok := s.bp.take(b.ID, "a preview"); !ok {
 		writeError(w, http.StatusConflict, "this blueprint is busy with "+what+"; try again when it ends")
 		return
 	}
-	plan := storedPlan{BlueprintPlan: BlueprintPlan{ID: b.ID, Revision: b.Revision, Account: b.Target.Account, Region: st.Region, By: p.Name, StartedAt: time.Now().UTC(), Status: planPlanning, Changes: []PlanChangeJSON{}}, Profile: st.Profile}
+	plan := storedPlan{BlueprintPlan: BlueprintPlan{ID: b.ID, Revision: b.Revision, Account: b.Target.Account, Region: st.Region, By: p.Name, StartedAt: time.Now().UTC(), Status: planPlanning, Changes: []PlanChangeJSON{},
+		Removal: req.Remove, FinalSnapshot: req.FinalSnapshot == nil || *req.FinalSnapshot}, Profile: st.Profile}
 	if err := s.docs.Put(ctx, kindBPPlan, b.ID, plan); err != nil {
 		s.bp.done(b.ID)
 		s.internalError(w, "saving the preview", err)
 		return
 	}
-	s.audit(ctx, p, clientIP(r), "blueprint.preview", b.ID, b.Name, true)
+	what := b.Name
+	if req.Remove != "" {
+		what += " (remove " + req.Remove + ")"
+	}
+	s.audit(ctx, p, clientIP(r), "blueprint.preview", b.ID, what, true)
 	answer := plan.view()
 	s.wg.Add(1)
 	go func(plan storedPlan) { // its own copy: the answer below must not see it change
@@ -242,10 +284,6 @@ func (s *Server) workdir(code, lock, state string) (string, error) {
 }
 
 func (s *Server) runPlan(ctx context.Context, b StoredBlueprint, st awsSettings, plan *storedPlan) error {
-	code, err := b.Tofu()
-	if err != nil {
-		return err
-	}
 	idOut, err := s.aws(ctx, st, "sts", "get-caller-identity")
 	if err != nil {
 		return err
@@ -266,6 +304,10 @@ func (s *Server) runPlan(ctx context.Context, b StoredBlueprint, st awsSettings,
 			return errors.New("the saved state could not be opened")
 		}
 		plan.StateSerial = state.Serial
+	}
+	code, err := s.planCode(b, plan, stateText)
+	if err != nil {
+		return err
 	}
 	run, err := s.tofu(ctx)
 	if err != nil {
@@ -311,6 +353,30 @@ func (s *Server) runPlan(ctx context.Context, b StoredBlueprint, st awsSettings,
 	lock, _ := os.ReadFile(filepath.Join(dir, ".terraform.lock.hcl"))
 	plan.Code, plan.Lock = string(code), string(lock)
 	return nil
+}
+
+// planCode is the code to plan: the blueprint for a build, or the removal code for the stage the state calls for.
+// Removing everything takes two steps when something is protected: plan.Removal says which one this is.
+func (s *Server) planCode(b StoredBlueprint, plan *storedPlan, state string) ([]byte, error) {
+	switch plan.Removal {
+	case "":
+		return b.Tofu()
+	case "keep-data":
+		plan.Removal = blueprint.RemoveKeepData
+	case "everything":
+		if state == "" {
+			return nil, errors.New("nothing this blueprint built is left to remove")
+		}
+		need, err := blueprint.NeedsUnprotect([]byte(state), plan.FinalSnapshot)
+		if err != nil {
+			return nil, err
+		}
+		plan.Removal = blueprint.RemoveAll
+		if need {
+			plan.Removal = blueprint.RemoveUnprotect
+		}
+	}
+	return b.RemovalTofu(plan.Removal, plan.FinalSnapshot)
 }
 
 // planChanges reads `tofu show -json` of a plan: the managed resources it would add, change, replace or remove.
@@ -428,6 +494,14 @@ func (s *Server) proposeBlueprint(ctx context.Context, c *CloudChange, id string
 	}
 	c.Blueprint = b.ID
 	c.Title = fmt.Sprintf("Build blueprint %s (%d to add, %d to change, %d to remove)", b.Name, p.Add, p.Change, p.Remove)
+	switch p.Removal {
+	case blueprint.RemoveKeepData:
+		c.Title = fmt.Sprintf("Remove what blueprint %s built, keeping its data (%d to remove)", b.Name, p.Remove)
+	case blueprint.RemoveUnprotect:
+		c.Title = fmt.Sprintf("Remove blueprint %s, step 1 of 2: turn off deletion protection (%d to change) and remove the rest (%d)", b.Name, p.Change, p.Remove)
+	case blueprint.RemoveAll:
+		c.Title = fmt.Sprintf("Remove everything blueprint %s built, data included (%d to remove)", b.Name, p.Remove)
+	}
 	names := map[string]string{}
 	for _, bl := range b.Blocks {
 		names[bl.ID] = bl.Name
@@ -543,8 +617,9 @@ func (s *Server) saveBPState(ctx context.Context, p storedPlan, dir, by string) 
 	if err != nil {
 		return err
 	}
+	n, err := blueprint.Resources(raw)
 	return s.docs.Put(context.WithoutCancel(ctx), kindBPState, p.ID, blueprintState{ID: p.ID, AWSAccount: p.AWSAccount, Region: p.Region,
-		Serial: p.StateSerial + 1, Sealed: sealed, Lock: p.Lock, UpdatedAt: time.Now().UTC(), UpdatedBy: by})
+		Serial: p.StateSerial + 1, Sealed: sealed, Lock: p.Lock, UpdatedAt: time.Now().UTC(), UpdatedBy: by, Empty: err == nil && n == 0})
 }
 
 // handleBlueprintBuilt says whether a blueprint has been built, and where.
@@ -556,6 +631,10 @@ func (s *Server) handleBlueprintBuilt(w http.ResponseWriter, r *http.Request) {
 	}
 	if !built {
 		writeJSON(w, http.StatusOK, map[string]any{"built": false})
+		return
+	}
+	if st.Empty {
+		writeJSON(w, http.StatusOK, map[string]any{"built": false, "removed": true, "applies": st.Serial, "updated_at": st.UpdatedAt, "updated_by": st.UpdatedBy})
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"built": true, "aws_account": st.AWSAccount, "region": st.Region, "applies": st.Serial, "updated_at": st.UpdatedAt, "updated_by": st.UpdatedBy})

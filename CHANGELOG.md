@@ -27,6 +27,11 @@ section in the pull request that makes the change; a release moves it under its 
 - **After a session ends**, the console stops polling the server (it asked every minute, forever).
 
 ### Added
+- **Remove what a blueprint built** (design note 041). **Remove…** on the design canvas previews the removal, a
+  different administrator approves it, and exactly that plan is applied, like a build. **Keep the data** leaves tables,
+  buckets, databases and secrets, still protected; **Remove everything** takes two approvals when something is protected
+  (deletion protection off and the rest removed, then the data), with a final database snapshot unless you untick it.
+  The canvas then shows **Removed**, and the blueprint can be built again.
 - **Watch › Services.** One tile per AWS service, read one at a time (four in flight) so the page draws at once and
   fills in as each answer comes, and a page per service (`#/services/<id>`) that lists only that service with search,
   details and alarms. The server reads one service with its own calls and its own cache entry (`?service=`), or from

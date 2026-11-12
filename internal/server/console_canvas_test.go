@@ -63,6 +63,8 @@ eq('nothing to do', planState({ ...plan, add: 0, change: 0, remove: 0 }, 3, fals
 eq('planning and failed', [planState({ status: 'planning' }, 3, false), planState({ status: 'failed' }, 3, false), planState(null, 3, false)], ['planning', 'failed', 'none']);
 eq('words', planWords(plan), '2 to add, 1 to change, 1 to remove');
 eq('no words', planWords({ add: 0, change: 0, remove: 0 }), 'Nothing to change: AWS already matches the blueprint');
+eq('removal words', planWords({ add: 0, change: 0, remove: 3, removal: 'keep-data' }), 'Remove what it built, keeping tables, buckets, databases and secrets: 3 to remove');
+eq('removal nothing', planWords({ add: 0, change: 0, remove: 0, removal: 'all' }), 'Remove everything, step 2 of 2 (data included): nothing to remove');
 const withNew = { ...bp, blocks: [...bp.blocks, { id: 'q', kind: 'queue', name: 'Q' }, { id: 'd2', kind: 'frontdoor', name: 'D2' }] };
 eq('new blocks go below their column; placed ones stay', placeNew(withNew).blocks.map(b => [b.id, b.x, b.y]), [['door', 96, 40], ['app', 346, 40], ['table', 596, 40], ['logs', 596, 140], ['q', 596, 240], ['d2', 96, 140]]);
 eq('nothing placed: lay it all out', placeNew({ ...empty, blocks: [{ id: 'a', kind: 'service' }] }).blocks[0].x, 346);

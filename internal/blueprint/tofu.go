@@ -24,7 +24,11 @@ func (b Blueprint) Tofu() ([]byte, error) {
 	if err := b.Validate(); err != nil {
 		return nil, err
 	}
-	g := gen{b: b, res: obj{}, data: obj{}, out: obj{}, byID: map[string]Block{}}
+	return b.tofu(removal{})
+}
+
+func (b Blueprint) tofu(rm removal) ([]byte, error) {
+	g := gen{b: b, rm: rm, res: obj{}, data: obj{}, out: obj{}, byID: map[string]Block{}}
 	sum := sha256.Sum256([]byte(b.ID))
 	g.short = hex.EncodeToString(sum[:])[:6]
 	for _, bl := range b.Blocks {
@@ -58,8 +62,9 @@ func (b Blueprint) Tofu() ([]byte, error) {
 
 type gen struct {
 	b     Blueprint
-	short string // six hex characters from the blueprint id, so names do not clash between blueprints
-	res   obj    // resource type -> name -> body
+	rm    removal // step 1 of removing everything: data blocks without their protection
+	short string  // six hex characters from the blueprint id, so names do not clash between blueprints
+	res   obj     // resource type -> name -> body
 	data  obj
 	out   obj
 	byID  map[string]Block
@@ -155,8 +160,8 @@ func (g *gen) build() {
 		case KindCache:
 			g.cache(bl)
 		case KindSecret:
-			g.add("aws_secretsmanager_secret", bl.ID, obj{"name": "forgeline/" + g.short + "/" + bl.ID, "description": esc(bl.Description), "recovery_window_in_days": 7,
-				"lifecycle": obj{"prevent_destroy": true}, "tags": tags(bl)})
+			g.add("aws_secretsmanager_secret", bl.ID, g.protect(obj{"name": "forgeline/" + g.short + "/" + bl.ID, "description": esc(bl.Description), "recovery_window_in_days": 7,
+				"lifecycle": obj{"prevent_destroy": true}, "tags": tags(bl)}))
 		}
 	}
 	for _, id := range ids {
@@ -173,6 +178,10 @@ func (g *gen) table(bl Block) {
 		"point_in_time_recovery": obj{"enabled": true}, "server_side_encryption": obj{"enabled": true},
 		"deletion_protection_enabled": true, "lifecycle": obj{"prevent_destroy": true}, "tags": tags(bl),
 	}
+	if g.rm.unprotect {
+		body["deletion_protection_enabled"] = false
+	}
+	body = g.protect(body)
 	if bl.SortKey != "" {
 		body["range_key"] = esc(bl.SortKey)
 		attrs = append(attrs, obj{"name": esc(bl.SortKey), "type": bl.SortType})
@@ -182,7 +191,11 @@ func (g *gen) table(bl Block) {
 }
 
 func (g *gen) bucket(bl Block) {
-	g.add("aws_s3_bucket", bl.ID, obj{"bucket_prefix": g.awsName(bl.ID, 36) + "-", "lifecycle": obj{"prevent_destroy": true}, "tags": tags(bl)})
+	body := obj{"bucket_prefix": g.awsName(bl.ID, 36) + "-", "lifecycle": obj{"prevent_destroy": true}, "tags": tags(bl)}
+	if g.rm.unprotect {
+		body["force_destroy"] = true // removing everything includes the files in it
+	}
+	g.add("aws_s3_bucket", bl.ID, g.protect(body))
 	b := ref("aws_s3_bucket", bl.ID, "id")
 	g.add("aws_s3_bucket_public_access_block", bl.ID, obj{"bucket": b, "block_public_acls": true, "block_public_policy": true, "ignore_public_acls": true, "restrict_public_buckets": true})
 	g.add("aws_s3_bucket_ownership_controls", bl.ID, obj{"bucket": b, "rule": obj{"object_ownership": "BucketOwnerEnforced"}})
@@ -235,7 +248,7 @@ func (g *gen) database(bl Block) {
 	if days == 0 {
 		days = 7
 	}
-	g.add("aws_db_instance", bl.ID, obj{
+	db := obj{
 		"identifier": g.awsName(bl.ID, 63), "engine": bl.Engine, "instance_class": DatabaseSizes[bl.Size],
 		"allocated_storage": bl.StorageGB, "storage_type": "gp3", "storage_encrypted": true,
 		"db_name": "app", "username": "app_admin", "manage_master_user_password": true,
@@ -243,7 +256,22 @@ func (g *gen) database(bl Block) {
 		"deletion_protection": true, "skip_final_snapshot": false, "final_snapshot_identifier": g.awsName(bl.ID+"-final", 255), "copy_tags_to_snapshot": true,
 		"db_subnet_group_name": ref("aws_db_subnet_group", bl.ID, "name"), "vpc_security_group_ids": []string{ref("aws_security_group", sg, "id")},
 		"lifecycle": obj{"prevent_destroy": true}, "tags": tags(bl),
-	})
+	}
+	if g.rm.unprotect {
+		db["deletion_protection"], db["skip_final_snapshot"] = false, !g.rm.finalSnapshot
+		if !g.rm.finalSnapshot {
+			delete(db, "final_snapshot_identifier")
+		}
+	}
+	g.add("aws_db_instance", bl.ID, g.protect(db))
+}
+
+// protect drops prevent_destroy in step 1 of removing everything, so step 2 may delete what is left.
+func (g *gen) protect(body obj) obj {
+	if g.rm.unprotect {
+		delete(body, "lifecycle")
+	}
+	return body
 }
 
 // cache is a Redis replication group, encrypted at rest and in transit, private.

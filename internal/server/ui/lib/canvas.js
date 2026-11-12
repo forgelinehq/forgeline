@@ -216,8 +216,17 @@ export function planWords(plan) {
   if (plan.add) parts.push(plan.add + ' to add');
   if (plan.change) parts.push(plan.change + ' to change');
   if (plan.remove) parts.push(plan.remove + ' to remove');
+  const what = REMOVAL[plan.removal];
+  if (what) return what + ': ' + (parts.length ? parts.join(', ') : 'nothing to remove');
   return parts.length ? parts.join(', ') : 'Nothing to change: AWS already matches the blueprint';
 }
+
+/** What each kind of removal preview is, in words (note 041). */
+export const REMOVAL = {
+  'keep-data': 'Remove what it built, keeping tables, buckets, databases and secrets',
+  unprotect: 'Remove everything, step 1 of 2 (turn off deletion protection, remove the rest)',
+  all: 'Remove everything, step 2 of 2 (data included)',
+};
 
 /** Places blocks that have no position yet (ones the assistant added), below what is in their column. */
 export function placeNew(bp) {

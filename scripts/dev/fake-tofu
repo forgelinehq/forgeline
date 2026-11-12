@@ -20,6 +20,15 @@ def code_addrs():
 def state_addrs():
     return set(json.loads(read("terraform.tfstate", '{"addresses": []}')).get("addresses", []))
 
+def code_attrs():
+    # The yes/no settings of each resource (deletion protection and the like), so a plan can see them change.
+    doc = json.loads(read("main.tf.json", "{}"))
+    return {f"{t}.{n}": {k: v for k, v in b.items() if isinstance(v, bool)} for t, m in doc.get("resource", {}).items() for n, b in m.items()}
+
+def state_attrs():
+    st = json.loads(read("terraform.tfstate", "{}"))
+    return {f"{r['type']}.{r['name']}": (r.get("instances") or [{}])[0].get("attributes", {}) for r in st.get("resources", [])}
+
 if cmd == "init":
     if "-lockfile=readonly" in args and not read(".terraform.lock.hcl"):
         sys.exit("Error: the lock file is missing")
@@ -31,15 +40,20 @@ elif cmd == "plan":
     print("Plan saved (fake)")
 elif cmd == "show":
     have, want, out = state_addrs(), set(code_addrs()), []
+    was, now = state_attrs(), code_attrs()
     for a in sorted(want | have):
         t, n = a.split(".", 1)
         act = ["no-op"] if a in have and a in want else (["create"] if a in want else ["delete"])
+        if act == ["no-op"] and any(was.get(a, {}).get(k) != v for k, v in now.get(a, {}).items()):
+            act = ["update"]
         out.append({"address": a, "mode": "managed", "type": t, "name": n, "change": {"actions": act}})
     print(json.dumps({"resource_changes": out}))
 elif cmd == "apply":
     if not read("plan.bin").startswith("FAKE-PLAN"):
         sys.exit("Error: not a saved plan")
-    open("terraform.tfstate", "w").write(json.dumps({"addresses": code_addrs()}))
+    attrs = code_attrs()
+    res = [{"mode": "managed", "type": a.split(".", 1)[0], "name": a.split(".", 1)[1], "instances": [{"attributes": attrs.get(a, {})}]} for a in code_addrs()]
+    open("terraform.tfstate", "w").write(json.dumps({"addresses": code_addrs(), "resources": res}))
     print("Apply complete! (fake)")
 elif cmd == "output":
     doc = json.loads(read("main.tf.json", "{}"))
