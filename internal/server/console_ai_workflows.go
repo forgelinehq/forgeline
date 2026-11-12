@@ -452,7 +452,7 @@ func (s *Server) startRun(ctx context.Context, wf Workflow, v WFVersion, trigger
 	if by.Role == authn.Viewer { // never more than the person who started it
 		role = "viewer"
 	}
-	run := WFRun{ID: randomID(), Workflow: wf.ID, WorkflowName: wf.Name, Version: v.N, Hash: v.Hash, Trigger: trigger, By: by.Name, RunAs: role,
+	run := WFRun{ID: timeID(), Workflow: wf.ID, WorkflowName: wf.Name, Version: v.N, Hash: v.Hash, Trigger: trigger, By: by.Name, RunAs: role,
 		Status: wfRunning, StartedAt: time.Now().UTC()}
 	for _, st := range v.Stages {
 		sr := WFStageRun{Name: st.Name, Gate: st.Gate, Status: wfPending}
@@ -477,11 +477,18 @@ func (s *Server) pruneRuns(ctx context.Context) {
 		return
 	}
 	runs, _ := docstore.Decode[WFRun](docs)
+	newestFirst(runs)
 	for _, r := range runs[maxWFRuns:] {
 		if r.final() {
 			_ = s.docs.Delete(ctx, kindWorkflowRun, r.ID)
 		}
 	}
+}
+
+// newestFirst orders runs by when they started, newest first. Runs made before ids were time-ordered have
+// random ids, so the store's order is not enough.
+func newestFirst(runs []WFRun) {
+	sort.SliceStable(runs, func(i, j int) bool { return runs[i].StartedAt.After(runs[j].StartedAt) })
 }
 
 func (s *Server) driveAsync(id string) {
@@ -726,6 +733,7 @@ func (s *Server) handleListWorkflowRuns(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	runs, _ := docstore.Decode[WFRun](docs)
+	newestFirst(runs)
 	only := r.URL.Query().Get("workflow")
 	out := []WFRun{}
 	for _, run := range runs {

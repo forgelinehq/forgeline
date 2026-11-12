@@ -462,7 +462,7 @@ func (s *Server) startScan(ctx context.Context, trigger string, by Principal, on
 		return GuardScan{}, errors.New("there is no AWS account or cluster to scan; connect one first")
 	}
 	s.guard.running = true
-	scan := GuardScan{ID: randomID(), Status: "running", Trigger: trigger, By: by.Name, StartedAt: time.Now().UTC(), Accounts: []GuardScanAccount{}}
+	scan := GuardScan{ID: timeID(), Status: "running", Trigger: trigger, By: by.Name, StartedAt: time.Now().UTC(), Accounts: []GuardScanAccount{}}
 	_ = s.docs.Put(ctx, kindGuardScan, scan.ID, scan)
 	s.guard.mu.Unlock()
 
@@ -512,9 +512,15 @@ func (s *Server) pruneScans(ctx context.Context) {
 		return
 	}
 	scans, _ := docstore.Decode[GuardScan](docs)
+	scansNewestFirst(scans)
 	for _, sc := range scans[maxGuardScans:] {
 		_ = s.docs.Delete(ctx, kindGuardScan, sc.ID)
 	}
+}
+
+// scansNewestFirst orders scans by start, newest first (older scans have random ids).
+func scansNewestFirst(scans []GuardScan) {
+	sort.SliceStable(scans, func(i, j int) bool { return scans[i].StartedAt.After(scans[j].StartedAt) })
 }
 
 // failInterruptedScans marks scans a restart cut short.
@@ -634,6 +640,7 @@ func (s *Server) handleGuardScans(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	scans, _ := docstore.Decode[GuardScan](docs)
+	scansNewestFirst(scans)
 	if scans == nil {
 		scans = []GuardScan{}
 	}

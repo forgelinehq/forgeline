@@ -66,6 +66,7 @@ func (s *Server) team(ctx context.Context, now time.Time) (TeamJSON, error) {
 	if err != nil {
 		return TeamJSON{}, err
 	}
+	newestFirst(runs)
 	out := TeamJSON{Members: []TeamMember{}, AssistantOff: s.loadAssistant(ctx).Backend == assistOff}
 	out.SchedulesStop = out.AssistantOff
 

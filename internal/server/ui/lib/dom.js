@@ -188,8 +188,10 @@ export function toast(message, kind = 'info') {
 export function modal(title, build, { wide = false, xl = false } = {}) {
   return new Promise(resolve => {
     const prev = document.activeElement;
-    const close = (value) => { overlay.remove(); document.removeEventListener('keydown', onKey); prev && prev.focus && prev.focus(); resolve(value); };
+    // Leaving the page closes it too: a dialog about the old page must not sit over the new one.
+    const close = (value) => { overlay.remove(); document.removeEventListener('keydown', onKey); removeEventListener('hashchange', onLeave); prev && prev.focus && prev.focus(); resolve(value); };
     const onKey = (e) => { if (e.key === 'Escape') close(undefined); };
+    const onLeave = () => close(undefined);
     const panel = h('div', { class: 'w-full ' + (xl ? 'max-w-5xl' : wide ? 'max-w-3xl' : 'max-w-lg') + ' max-h-[90vh] overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900', role: 'dialog', 'aria-modal': 'true', 'aria-label': title },
       h('div', { class: 'sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white/95 px-5 py-3.5 backdrop-blur dark:border-slate-800 dark:bg-slate-900/95' },
         h('h2', { class: 'font-display text-lg font-bold' }, title),
@@ -199,20 +201,21 @@ export function modal(title, build, { wide = false, xl = false } = {}) {
     const overlay = h('div', { class: 'fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/50 p-4 pt-[8vh] backdrop-blur-sm', onmousedown: (e) => { if (e.target === overlay) close(undefined); } }, panel);
     document.body.append(overlay);
     document.addEventListener('keydown', onKey);
+    addEventListener('hashchange', onLeave);
     const first = panel.querySelector('input,textarea,select,button.btn-primary');
     first && first.focus();
   });
 }
 
 /** Asks for confirmation. If typeToConfirm is set the person must type it. Resolves true or false. */
-export function confirmDialog({ title, body, confirmLabel = 'Confirm', danger = false, typeToConfirm = null }) {
+export function confirmDialog({ title, body, confirmLabel = 'Confirm', cancelLabel = 'Cancel', danger = false, typeToConfirm = null }) {
   return modal(title, (close) => {
     const input = typeToConfirm ? h('input', { class: 'input mt-3', autocomplete: 'off', 'aria-label': 'Type ' + typeToConfirm + ' to confirm' }) : null;
     const ok = h('button', { class: danger ? 'btn-danger' : 'btn-primary', type: 'button', disabled: !!typeToConfirm, onclick: () => close(true) }, confirmLabel);
     if (input) input.addEventListener('input', () => { ok.disabled = input.value !== typeToConfirm; });
     return h('div', {}, h('div', { class: 'text-sm text-slate-600 dark:text-slate-300' }, body),
       typeToConfirm && h('div', { class: 'mt-3 text-sm' }, 'Type ', h('code', { class: 'rounded bg-slate-100 px-1.5 py-0.5 font-mono text-xs dark:bg-slate-800' }, typeToConfirm), ' to confirm.'), input,
-      h('div', { class: 'mt-5 flex justify-end gap-2' }, h('button', { class: 'btn-secondary', type: 'button', onclick: () => close(false) }, 'Cancel'), ok));
+      h('div', { class: 'mt-5 flex justify-end gap-2' }, h('button', { class: 'btn-secondary', type: 'button', onclick: () => close(false) }, cancelLabel), ok));
   }).then(v => v === true);
 }
 

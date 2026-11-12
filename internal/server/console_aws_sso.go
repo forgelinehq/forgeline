@@ -617,3 +617,10 @@ func randomID() string {
 	rand.Read(b)
 	return hex.EncodeToString(b)
 }
+
+// timeID is an id that sorts in the order it was made (nanoseconds since the epoch in hex, then random
+// bytes), for records a list shows newest first and prunes oldest first. The store lists by id, so a random
+// id would give a random order and prune random records.
+func timeID() string {
+	return fmt.Sprintf("%016x", time.Now().UnixNano()) + randomID()[:12]
+}
