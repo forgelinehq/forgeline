@@ -56,7 +56,7 @@ func TestWorkflowPruneKeepsTheNewestRuns(t *testing.T) {
 	now := time.Now().UTC()
 	// Random-looking ids whose store order is the reverse of their time order.
 	for i := 0; i < maxWFRuns+5; i++ {
-		id := strings.Repeat("f", 24) + pad8(maxWFRuns + 5 - i) // the newest run has the lowest id
+		id := strings.Repeat("f", 24) + pad8(maxWFRuns+5-i) // the newest run has the lowest id
 		fin := now.Add(-time.Duration(maxWFRuns+5-i) * time.Minute)
 		r := WFRun{ID: id, Workflow: "wf", Status: wfSucceeded, StartedAt: fin.Add(-time.Minute), FinishedAt: &fin}
 		if err := m.srv.docs.Put(ctx, kindWorkflowRun, id, r); err != nil {
