@@ -20,10 +20,33 @@ type Tool struct {
 	Name        string          `json:"name"`
 	Description string          `json:"description"`
 	InputSchema json.RawMessage `json:"inputSchema"`
-	Annotations struct {
-		ReadOnly    bool `json:"readOnlyHint"`
-		Destructive bool `json:"destructiveHint"`
-	} `json:"annotations"`
+	Annotations Annotations     `json:"annotations"`
+}
+
+// Annotations are a tool's hints about what it does. Writes is set when the server states readOnlyHint false, which
+// is different from not saying anything.
+type Annotations struct {
+	ReadOnly    bool
+	Destructive bool
+	Writes      bool
+}
+
+func (a *Annotations) UnmarshalJSON(b []byte) error {
+	var raw struct {
+		ReadOnly    *bool `json:"readOnlyHint"`
+		Destructive *bool `json:"destructiveHint"`
+	}
+	if err := json.Unmarshal(b, &raw); err != nil {
+		return err
+	}
+	*a = Annotations{}
+	if raw.ReadOnly != nil {
+		a.ReadOnly, a.Writes = *raw.ReadOnly, !*raw.ReadOnly
+	}
+	if raw.Destructive != nil {
+		a.Destructive = *raw.Destructive
+	}
+	return nil
 }
 
 // Result is what a tool call returned: its text, whether the server flagged an error, and the

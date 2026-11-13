@@ -46,6 +46,8 @@ func (s *weatherMCP) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			{"name": "set_alert", "description": "Creates an alert. " + desc, "inputSchema": map[string]any{"type": "object", "properties": map[string]any{}}},
 		}
 		if destructive {
+			tools = append(tools, map[string]any{"name": "post_note", "description": "Posts a note", "annotations": map[string]any{"readOnlyHint": false},
+				"inputSchema": map[string]any{"type": "object", "properties": map[string]any{}}})
 			tools = append(tools, map[string]any{"name": "wipe", "description": "Wipes the history", "annotations": map[string]any{"readOnlyHint": true, "destructiveHint": true},
 				"inputSchema": map[string]any{"type": "object", "properties": map[string]any{}}})
 		}
@@ -185,6 +187,17 @@ func TestMCPServersWhoMayCall(t *testing.T) {
 			t.Errorf("a destructive tool counts as read-only: %+v", tl)
 		}
 	}
+	for _, tl := range got.Tools {
+		if tl.Name == "post_note" && (tl.ReadOnly || tl.Markable || !tl.Writes || !strings.Contains(tl.Problem, "says it changes things")) {
+			t.Errorf("a tool its server says writes = %+v", tl)
+		}
+		if tl.Name == "set_alert" && !tl.Markable {
+			t.Errorf("a tool its server says nothing about should be markable: %+v", tl)
+		}
+	}
+	if msg := string(m.admin.expect(400, "PUT", "/v1/mcp-servers/weather/tools", map[string]any{"enabled": []string{"post_note"}, "read_only": []string{"post_note"}})); !strings.Contains(msg, "says it changes things") {
+		t.Errorf("a tool its server says writes was marked read-only: %s", msg)
+	}
 	if msg := string(m.admin.expect(400, "PUT", "/v1/mcp-servers/weather/tools", map[string]any{"enabled": []string{"wipe"}, "read_only": []string{"wipe"}})); !strings.Contains(msg, "destructive") {
 		t.Errorf("a destructive tool was turned on: %s", msg)
 	}
@@ -221,15 +234,15 @@ func TestMCPServersWhoMayCall(t *testing.T) {
 	var st0 MCPServer
 	m.harness.srv.docs.Get(t.Context(), kindMCPServer, "weather", &st0)
 	for i, tl := range st0.Tools {
-		if tl.Name == "wipe" {
+		if tl.Name == "wipe" || tl.Name == "post_note" {
 			st0.Tools[i].MarkedReadOnly, st0.Tools[i].Enabled = "ada", true
 			st0.Tools[i].Pinned = st0.Tools[i].defHash()
 		}
 	}
 	m.harness.srv.docs.Put(t.Context(), kindMCPServer, "weather", st0)
 	for _, n := range m.harness.srv.extMCPToolNames(t.Context()) {
-		if n == "mcp_weather_wipe" {
-			t.Error("a destructive tool with a mark is offered")
+		if n == "mcp_weather_wipe" || n == "mcp_weather_post_note" {
+			t.Errorf("%s, which its server says writes, is offered with a mark", n)
 		}
 	}
 

@@ -46,7 +46,8 @@ an administrator's explicit, visible choice:
 
 - **Tools without `readOnlyHint`.** Many servers (DeepWiki, for one) do not annotate their tools. An administrator who
   has checked a tool can mark it read-only when turning it on: the mark names them, is audited, is pinned with the
-  definition and is dropped when it changes. `destructiveHint` still keeps a tool off; no mark overrides it.
+  definition and is dropped when it changes. Only a tool its server says nothing about can be marked: `readOnlyHint:
+  false` (the server says it writes) and `destructiveHint` keep a tool off, and no mark overrides them.
 - **Images that need their own user.** Some images keep their interpreter under `/root`, which nobody (65534) cannot
   reach. "Run as the image's own user" drops only `--user`; the read-only root, dropped capabilities,
   `no-new-privileges`, limits and network rules stay.

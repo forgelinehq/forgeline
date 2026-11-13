@@ -114,8 +114,8 @@ only named hosts), secrets from the vault as environment variables.
 
 Press **Read its tools** to see what it offers. Every tool starts off. A tool its server marks read-only can be turned
 on. Many servers do not mark their tools at all: if you have checked that such a tool only reads, turning it on asks you
-to confirm, and the tool shows **marked by** you here and in the audit log. A tool its server marks destructive can never
-be turned on, because it would bypass approvals. When you turn a tool on, its definition is pinned: if the server later
+to confirm, and the tool shows **marked by** you here and in the audit log. A tool its server says changes things
+(`readOnlyHint: false`) or is destructive can never be turned on, because it would bypass approvals. When you turn a tool on, its definition is pinned: if the server later
 offers a different description or arguments, the tool turns itself off (and loses your mark) until you read it again.
 Changing a server's address or image turns all its tools off.
 

@@ -50,6 +50,7 @@ type MCPServerTool struct {
 	Schema      json.RawMessage `json:"input_schema"`
 	ReadOnly    bool            `json:"read_only"`             // the server's readOnlyHint, and no destructiveHint
 	Destructive bool            `json:"destructive,omitempty"` // the server's destructiveHint
+	Writes      bool            `json:"writes,omitempty"`      // the server states readOnlyHint false: it changes things
 	// MarkedReadOnly names the administrator who checked a tool its server does not mark read-only and said it only
 	// reads. It is kept only while the tool is on and its definition unchanged.
 	MarkedReadOnly string `json:"marked_read_only_by,omitempty"`
@@ -64,14 +65,17 @@ func (t MCPServerTool) defHash() string {
 	if t.Destructive {
 		d += "\x00destructive" // only when set, so pins made before this field existed still match
 	}
+	if t.Writes {
+		d += "\x00writes"
+	}
 	h := sha256.Sum256([]byte(d))
 	return hex.EncodeToString(h[:])
 }
 
 // readsOnly says whether a tool may be turned on as far as changing things goes: its server says it only reads, or an
-// administrator said so for a tool its server does not call destructive.
+// administrator said so for a tool its server says nothing about (neither that it writes nor that it is destructive).
 func (t MCPServerTool) readsOnly() bool {
-	return t.ReadOnly || t.MarkedReadOnly != "" && !t.Destructive
+	return t.ReadOnly || t.MarkedReadOnly != "" && !t.Destructive && !t.Writes
 }
 
 // MCPServer is one server an administrator added.
@@ -416,7 +420,7 @@ func (s *Server) handleDiscoverMCPServer(w http.ResponseWriter, r *http.Request)
 	changed := 0
 	for _, t := range tools {
 		nt := MCPServerTool{Name: t.Name, Description: truncate(t.Description, 1000), Schema: t.InputSchema,
-			ReadOnly: t.Annotations.ReadOnly && !t.Annotations.Destructive, Destructive: t.Annotations.Destructive}
+			ReadOnly: t.Annotations.ReadOnly && !t.Annotations.Destructive, Destructive: t.Annotations.Destructive, Writes: t.Annotations.Writes}
 		o, had := old[t.Name]
 		if had && o.Enabled && o.Pinned == nt.defHash() {
 			nt.MarkedReadOnly = o.MarkedReadOnly // the same definition an administrator marked
@@ -454,6 +458,9 @@ func mcpToolProblem(t MCPServerTool) string {
 	if t.Destructive {
 		return "its server marks it destructive; a tool that changes things would bypass approvals, so it cannot be turned on"
 	}
+	if t.Writes {
+		return "its server says it changes things; that would bypass approvals, so it cannot be turned on"
+	}
 	if !t.readsOnly() {
 		return "it is not marked read-only by its server; a tool that changes things would bypass approvals. If you have " +
 			"checked that it only reads, mark it read-only yourself to turn it on"
@@ -466,7 +473,7 @@ func mcpToolProblem(t MCPServerTool) string {
 
 // mcpToolMarkable says whether marking a tool read-only would let it be turned on.
 func mcpToolMarkable(t MCPServerTool) bool {
-	if t.readsOnly() || t.Destructive {
+	if t.readsOnly() || t.Destructive || t.Writes {
 		return false
 	}
 	t.MarkedReadOnly = "x"
