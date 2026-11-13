@@ -15,6 +15,7 @@ import (
 	"os/exec"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -36,6 +37,9 @@ type Spec struct {
 	Network bool              // false is --network none; true is the whole network (not with Hosts)
 	Hosts   []string          // if set, only these hosts (name, *.suffix, optional :port) through Forgeline's proxy; no other route out
 	Env     map[string]string // granted secrets, passed for one call and never put on a command line
+	// ImageUser runs the container as the user its image names (often root) instead of nobody (65534). An
+	// administrator opts in per server for images that cannot start otherwise; every other limit still applies.
+	ImageUser bool
 }
 
 // Limits bound one call.
@@ -85,9 +89,12 @@ func Argv(s Spec, l Limits, name string) []string { return argv(s, l, name, "", 
 func argv(s Spec, l Limits, name, net string, proxyEnv []string) []string {
 	a := []string{"run", "--rm", "-i", "--name", name,
 		"--read-only", "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
-		"--user", "65534:65534", "--init",
+		"--init",
 		"--pids-limit", fmt.Sprint(l.Pids), "--memory", l.Memory, "--cpus", l.CPUs,
 		"--tmpfs", "/tmp:rw,noexec,nosuid,size=16m", "--pull", "never"}
+	if !s.ImageUser {
+		a = append(a, "--user", "65534:65534")
+	}
 	switch {
 	case net != "":
 		a = append(a, "--network", net)
@@ -118,6 +125,9 @@ type Runner struct {
 	ExtraEnv []string
 	// Report, when set, is told what the egress proxy did after each call that had a host list.
 	Report func(s Spec, r EgressReport)
+	// ProxyPorts, when set, is the range of ports the per-call egress proxy listens on (both ends included), so a host
+	// firewall can let containers reach just those ports. Zero means any free port.
+	ProxyPorts [2]int
 
 	sweepOnce  sync.Once
 	sweepKick  chan struct{}
@@ -261,7 +271,7 @@ func (r *Runner) startEgress(ctx context.Context, s Spec) (*egress, error) {
 	if err != nil || gw == "" {
 		return fail("could not find the private network's gateway address")
 	}
-	ln, err := net.Listen("tcp", net.JoinHostPort(gw, "0"))
+	ln, err := r.listenProxy(gw)
 	if err != nil {
 		return fail("Forgeline cannot listen on the plugin network's gateway (%s), so a host list cannot be enforced here (is the server itself running in a container?): %v", gw, err)
 	}
@@ -507,4 +517,36 @@ func (r *Runner) Ensure(ctx context.Context, image string) error {
 		return fmt.Errorf("could not pull the image: %s", strings.TrimSpace(string(out)))
 	}
 	return nil
+}
+
+// listenProxy listens on the gateway address, on a port in ProxyPorts when that is set.
+func (r *Runner) listenProxy(gw string) (net.Listener, error) {
+	lo, hi := r.ProxyPorts[0], r.ProxyPorts[1]
+	if lo == 0 {
+		return net.Listen("tcp", net.JoinHostPort(gw, "0"))
+	}
+	var last error
+	for p := lo; p <= hi; p++ {
+		ln, err := net.Listen("tcp", net.JoinHostPort(gw, strconv.Itoa(p)))
+		if err == nil {
+			return ln, nil
+		}
+		last = err
+	}
+	return nil, fmt.Errorf("no free port in %d-%d: %v", lo, hi, last)
+}
+
+// ParsePortRange reads "47100-47199" (or one port). Ports below 1024 are refused.
+func ParsePortRange(v string) ([2]int, error) {
+	lo, hi, found := strings.Cut(strings.TrimSpace(v), "-")
+	a, err1 := strconv.Atoi(strings.TrimSpace(lo))
+	b := a
+	var err2 error
+	if found {
+		b, err2 = strconv.Atoi(strings.TrimSpace(hi))
+	}
+	if err1 != nil || err2 != nil || a < 1024 || b > 65535 || b < a {
+		return [2]int{}, fmt.Errorf("%q is not a port range such as 47100-47199 (ports 1024 to 65535)", v)
+	}
+	return [2]int{a, b}, nil
 }

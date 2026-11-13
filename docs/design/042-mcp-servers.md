@@ -39,6 +39,22 @@ server, remote or local, without giving agents a way around Forgeline's rules?
 6. **Arguments are checked against the tool's own input schema** before a call, with the same small JSON Schema subset
    plugins use; a tool whose schema uses more than that subset cannot be turned on.
 
+## After the real check (2026-11-13)
+
+The [check on the Pi](../testing/2026-11-13-mcp-servers.md) found three things that kept real servers out; each is now
+an administrator's explicit, visible choice:
+
+- **Tools without `readOnlyHint`.** Many servers (DeepWiki, for one) do not annotate their tools. An administrator who
+  has checked a tool can mark it read-only when turning it on: the mark names them, is audited, is pinned with the
+  definition and is dropped when it changes. `destructiveHint` still keeps a tool off; no mark overrides it.
+- **Images that need their own user.** Some images keep their interpreter under `/root`, which nobody (65534) cannot
+  reach. "Run as the image's own user" drops only `--user`; the read-only root, dropped capabilities,
+  `no-new-privileges`, limits and network rules stay.
+- **Host firewalls.** ufw drops traffic from containers to the host, where the egress proxy listens.
+  `FORGELINE_EGRESS_PORTS` fixes the proxy's port range so one narrow rule (Docker networks to those ports) is enough.
+
+Lists of simple values are now accepted as arguments, each item checked.
+
 ## Not in this slice
 
 - Tools that change things (through an approval card), OAuth sign-in for remote servers, MCP resources and prompts,

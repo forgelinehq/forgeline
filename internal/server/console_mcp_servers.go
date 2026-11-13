@@ -48,15 +48,30 @@ type MCPServerTool struct {
 	Name        string          `json:"name"`
 	Description string          `json:"description"`
 	Schema      json.RawMessage `json:"input_schema"`
-	ReadOnly    bool            `json:"read_only"`        // the server's readOnlyHint
-	Enabled     bool            `json:"enabled"`          // an administrator turned it on, and its definition has not changed since
-	Pinned      string          `json:"pinned,omitempty"` // hash of the definition when it was turned on
-	Problem     string          `json:"problem,omitempty"`
+	ReadOnly    bool            `json:"read_only"`             // the server's readOnlyHint, and no destructiveHint
+	Destructive bool            `json:"destructive,omitempty"` // the server's destructiveHint
+	// MarkedReadOnly names the administrator who checked a tool its server does not mark read-only and said it only
+	// reads. It is kept only while the tool is on and its definition unchanged.
+	MarkedReadOnly string `json:"marked_read_only_by,omitempty"`
+	Markable       bool   `json:"markable,omitempty"` // it could be turned on if an administrator marks it read-only
+	Enabled        bool   `json:"enabled"`            // an administrator turned it on, and its definition has not changed since
+	Pinned         string `json:"pinned,omitempty"`   // hash of the definition when it was turned on
+	Problem        string `json:"problem,omitempty"`
 }
 
 func (t MCPServerTool) defHash() string {
-	h := sha256.Sum256([]byte(t.Name + "\x00" + t.Description + "\x00" + string(t.Schema) + fmt.Sprint("\x00", t.ReadOnly)))
+	d := t.Name + "\x00" + t.Description + "\x00" + string(t.Schema) + fmt.Sprint("\x00", t.ReadOnly)
+	if t.Destructive {
+		d += "\x00destructive" // only when set, so pins made before this field existed still match
+	}
+	h := sha256.Sum256([]byte(d))
 	return hex.EncodeToString(h[:])
+}
+
+// readsOnly says whether a tool may be turned on as far as changing things goes: its server says it only reads, or an
+// administrator said so for a tool its server does not call destructive.
+func (t MCPServerTool) readsOnly() bool {
+	return t.ReadOnly || t.MarkedReadOnly != "" && !t.Destructive
 }
 
 // MCPServer is one server an administrator added.
@@ -72,7 +87,8 @@ type MCPServer struct {
 	Image        string            `json:"image,omitempty"`
 	Network      bool              `json:"network,omitempty"`
 	Hosts        []string          `json:"hosts,omitempty"`
-	Secrets      map[string]string `json:"secrets,omitempty"` // env name -> vault secret name (local)
+	Secrets      map[string]string `json:"secrets,omitempty"`           // env name -> vault secret name (local)
+	ImageUser    bool              `json:"run_as_image_user,omitempty"` // local: run as the image's user, not nobody
 	ForAssistant bool              `json:"for_assistant,omitempty"`
 	Protocol     string            `json:"protocol,omitempty"` // the MCP revision it spoke at the last discovery
 	Tools        []MCPServerTool   `json:"tools"`
@@ -95,6 +111,7 @@ type mcpServerRequest struct {
 	Network      bool              `json:"network"`
 	Hosts        []string          `json:"hosts"`
 	Secrets      map[string]string `json:"secrets"`
+	ImageUser    bool              `json:"run_as_image_user"`
 	ForAssistant bool              `json:"for_assistant"`
 }
 
@@ -116,7 +133,7 @@ func (s *Server) checkMCPServer(ctx context.Context, r mcpServerRequest) string 
 		if u.Scheme != "https" && !(u.Scheme == "http" && isLoopbackHost(u.Hostname())) {
 			return "url: remote MCP servers must use https (plain http only for this machine)"
 		}
-		if r.Image != "" || r.Network || len(r.Hosts) > 0 || len(r.Secrets) > 0 {
+		if r.Image != "" || r.Network || len(r.Hosts) > 0 || len(r.Secrets) > 0 || r.ImageUser {
 			return "a remote server has no image, network or secrets of its own; its token goes in auth_secret"
 		}
 		if r.AuthSecret != "" {
@@ -241,7 +258,7 @@ var mcpDial = func(ctx context.Context, s *Server, srv MCPServer) (mcpSession, e
 			}
 			env[e] = v
 		}
-		return localSession{s: s, spec: plugin.Spec{ID: "mcp-" + srv.ID, Image: srv.Image, Network: srv.Network, Hosts: srv.Hosts, Env: env}}, nil
+		return localSession{s: s, spec: plugin.Spec{ID: "mcp-" + srv.ID, Image: srv.Image, Network: srv.Network, Hosts: srv.Hosts, Env: env, ImageUser: srv.ImageUser}}, nil
 	}
 }
 
@@ -300,6 +317,7 @@ func (s *Server) handleCreateMCPServer(w http.ResponseWriter, r *http.Request) {
 func applyMCPRequest(srv *MCPServer, req mcpServerRequest) {
 	srv.Name, srv.Kind, srv.URL, srv.AuthHeader, srv.AuthScheme, srv.AuthSecret = strings.TrimSpace(req.Name), req.Kind, req.URL, req.AuthHeader, req.AuthScheme, req.AuthSecret
 	srv.AllowPrivate, srv.Image, srv.Network, srv.Hosts, srv.Secrets, srv.ForAssistant = req.AllowPrivate, req.Image, req.Network, req.Hosts, req.Secrets, req.ForAssistant
+	srv.ImageUser = req.ImageUser
 	if srv.AuthSecret == "" {
 		srv.AuthHeader, srv.AuthScheme = "", ""
 	}
@@ -308,6 +326,9 @@ func applyMCPRequest(srv *MCPServer, req mcpServerRequest) {
 func mcpWhere(srv MCPServer) string {
 	if srv.Kind == mcpRemote {
 		return srv.URL
+	}
+	if srv.ImageUser {
+		return srv.Image + " (as the image's user)"
 	}
 	return srv.Image
 }
@@ -328,7 +349,7 @@ func (s *Server) handleUpdateMCPServer(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, m)
 		return
 	}
-	moved := req.Kind != srv.Kind || mcpWhere(srv) != map[string]string{mcpRemote: req.URL, mcpLocal: req.Image}[req.Kind]
+	moved := req.Kind != srv.Kind || srv.URL != req.URL || srv.Image != req.Image
 	applyMCPRequest(&srv, req)
 	if moved {
 		// Another server answers now: nothing it offers was looked at, so every tool is off until discovered again.
@@ -394,12 +415,18 @@ func (s *Server) handleDiscoverMCPServer(w http.ResponseWriter, r *http.Request)
 	var merged []MCPServerTool
 	changed := 0
 	for _, t := range tools {
-		nt := MCPServerTool{Name: t.Name, Description: truncate(t.Description, 1000), Schema: t.InputSchema, ReadOnly: t.Annotations.ReadOnly && !t.Annotations.Destructive}
-		nt.Problem = mcpToolProblem(nt)
-		if o, ok := old[t.Name]; ok && o.Enabled {
+		nt := MCPServerTool{Name: t.Name, Description: truncate(t.Description, 1000), Schema: t.InputSchema,
+			ReadOnly: t.Annotations.ReadOnly && !t.Annotations.Destructive, Destructive: t.Annotations.Destructive}
+		o, had := old[t.Name]
+		if had && o.Enabled && o.Pinned == nt.defHash() {
+			nt.MarkedReadOnly = o.MarkedReadOnly // the same definition an administrator marked
+		}
+		nt.Problem, nt.Markable = mcpToolProblem(nt), mcpToolMarkable(nt)
+		if had && o.Enabled {
 			if o.Pinned == nt.defHash() && nt.Problem == "" {
 				nt.Enabled, nt.Pinned = true, o.Pinned
 			} else {
+				nt.MarkedReadOnly = ""
 				changed++
 				nt.Problem = "its definition changed since it was turned on; read it again and turn it on if it is still right"
 			}
@@ -424,8 +451,12 @@ func mcpToolProblem(t MCPServerTool) string {
 	if !mcpToolNameRE.MatchString(t.Name) {
 		return "its name has characters Forgeline does not pass on"
 	}
-	if !t.ReadOnly {
-		return "it is not marked read-only; a tool that changes things would bypass approvals, so it cannot be turned on yet"
+	if t.Destructive {
+		return "its server marks it destructive; a tool that changes things would bypass approvals, so it cannot be turned on"
+	}
+	if !t.readsOnly() {
+		return "it is not marked read-only by its server; a tool that changes things would bypass approvals. If you have " +
+			"checked that it only reads, mark it read-only yourself to turn it on"
 	}
 	if _, err := parseArgSchema(t.Schema); err != nil {
 		return "its arguments use more of JSON Schema than Forgeline checks: " + err.Error()
@@ -433,10 +464,20 @@ func mcpToolProblem(t MCPServerTool) string {
 	return ""
 }
 
+// mcpToolMarkable says whether marking a tool read-only would let it be turned on.
+func mcpToolMarkable(t MCPServerTool) bool {
+	if t.readsOnly() || t.Destructive {
+		return false
+	}
+	t.MarkedReadOnly = "x"
+	return mcpToolProblem(t) == ""
+}
+
 // handleMCPServerTools turns tools on (pinning their definitions) and off.
 func (s *Server) handleMCPServerTools(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Enabled []string `json:"enabled"`
+		Enabled  []string `json:"enabled"`
+		ReadOnly []string `json:"read_only"` // tools, among Enabled, the administrator checked and marks read-only
 	}
 	if !readJSON(w, r, &req) {
 		return
@@ -447,36 +488,56 @@ func (s *Server) handleMCPServerTools(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "no such MCP server")
 		return
 	}
-	want := map[string]bool{}
+	who := principalFrom(ctx).Name
+	want, mark := map[string]bool{}, map[string]bool{}
 	for _, n := range req.Enabled {
 		want[n] = true
 	}
-	found := 0
-	for i, t := range srv.Tools {
-		if !want[t.Name] {
-			srv.Tools[i].Enabled, srv.Tools[i].Pinned = false, ""
-			if strings.HasPrefix(t.Problem, "its definition changed") {
-				srv.Tools[i].Problem = ""
-			}
-			continue
-		}
-		found++
-		if p := mcpToolProblem(MCPServerTool{Name: t.Name, Schema: t.Schema, ReadOnly: t.ReadOnly}); p != "" {
-			writeError(w, http.StatusBadRequest, fmt.Sprintf("%s: %s", t.Name, p))
+	for _, n := range req.ReadOnly {
+		if !want[n] {
+			writeError(w, http.StatusBadRequest, fmt.Sprintf("read_only: %s is not among the tools being turned on", n))
 			return
 		}
-		srv.Tools[i].Enabled, srv.Tools[i].Pinned, srv.Tools[i].Problem = true, t.defHash(), ""
+		mark[n] = true
+	}
+	found := 0
+	var marked []string
+	for i, t := range srv.Tools {
+		nt := t
+		nt.Enabled, nt.Pinned, nt.MarkedReadOnly = false, "", ""
+		if want[t.Name] {
+			found++
+			if mark[t.Name] && !t.ReadOnly {
+				// Kept from before when it is still on and unchanged, so the log says who checked it.
+				nt.MarkedReadOnly = who
+				if t.Enabled && t.MarkedReadOnly != "" {
+					nt.MarkedReadOnly = t.MarkedReadOnly
+				}
+				marked = append(marked, t.Name)
+			}
+			if p := mcpToolProblem(nt); p != "" {
+				writeError(w, http.StatusBadRequest, fmt.Sprintf("%s: %s", t.Name, p))
+				return
+			}
+			nt.Enabled, nt.Pinned = true, nt.defHash()
+		}
+		nt.Problem, nt.Markable = mcpToolProblem(nt), mcpToolMarkable(nt)
+		srv.Tools[i] = nt
 	}
 	if found != len(want) {
 		writeError(w, http.StatusBadRequest, "some of those tools are not offered by this server; discover its tools again")
 		return
 	}
-	srv.UpdatedBy, srv.UpdatedAt = principalFrom(ctx).Name, time.Now().UTC()
+	srv.UpdatedBy, srv.UpdatedAt = who, time.Now().UTC()
 	if err := s.docs.Put(ctx, kindMCPServer, srv.ID, srv); err != nil {
 		s.internalError(w, "saving the MCP server", err)
 		return
 	}
-	s.auditReq(r, "mcp.server.tools", "mcpserver/"+srv.ID, "on: "+strings.Join(req.Enabled, ", "), true)
+	detail := "on: " + strings.Join(req.Enabled, ", ")
+	if len(marked) > 0 {
+		detail += "; marked read-only by an administrator: " + strings.Join(marked, ", ")
+	}
+	s.auditReq(r, "mcp.server.tools", "mcpserver/"+srv.ID, detail, true)
 	writeJSON(w, http.StatusOK, srv)
 }
 
@@ -506,6 +567,9 @@ func (s *Server) extMCPTools(ctx context.Context) []extMCPTool {
 			}
 			sc, err := parseArgSchema(t.Schema)
 			if err != nil {
+				continue
+			}
+			if !t.readsOnly() {
 				continue
 			}
 			out = append(out, extMCPTool{name: mcpToolName(srv.ID, t.Name), tool: t.Name, server: srv, schema: sc,

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -250,5 +251,56 @@ func TestCallsToOnePluginRunOneAtATime(t *testing.T) {
 		if err := <-errs; err != nil {
 			t.Fatal(err)
 		}
+	}
+}
+
+func TestImageUserDropsOnlyTheUser(t *testing.T) {
+	r, log := runner(t, "")
+	if _, err := r.Call(context.Background(), Spec{ID: "echo", Image: digest, ImageUser: true}, "echo", nil); err != nil {
+		t.Fatal(err)
+	}
+	argv, _, _ := argvOf(t, log)
+	if has(argv, "--user", "65534:65534") || strings.Contains(strings.Join(argv, " "), "--user") {
+		t.Errorf("an image-user container still has a --user: %v", argv)
+	}
+	for _, want := range [][]string{{"--read-only"}, {"--cap-drop", "ALL"}, {"--security-opt", "no-new-privileges"}, {"--network", "none"}, {"--pids-limit", "64"}} {
+		if !has(argv, want...) {
+			t.Errorf("argv lacks %v: %v", want, argv)
+		}
+	}
+}
+
+func TestParsePortRange(t *testing.T) {
+	for in, want := range map[string][2]int{"47100-47199": {47100, 47199}, " 50000 ": {50000, 50000}, "47100 - 47101": {47100, 47101}} {
+		if got, err := ParsePortRange(in); err != nil || got != want {
+			t.Errorf("%q = %v, %v", in, got, err)
+		}
+	}
+	for _, in := range []string{"", "80-90", "47199-47100", "47100-70000", "x-y", "47100-"} {
+		if _, err := ParsePortRange(in); err == nil {
+			t.Errorf("%q accepted", in)
+		}
+	}
+}
+
+func TestListenProxyStaysInItsRange(t *testing.T) {
+	busy, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer busy.Close()
+	p := busy.Addr().(*net.TCPAddr).Port
+	r := &Runner{ProxyPorts: [2]int{p, p + 1}}
+	ln, err := r.listenProxy("127.0.0.1")
+	if err != nil {
+		t.Skipf("the next port is taken too: %v", err)
+	}
+	defer ln.Close()
+	if got := ln.Addr().(*net.TCPAddr).Port; got != p+1 {
+		t.Errorf("listened on %d, want %d (the first is busy)", got, p+1)
+	}
+	r.ProxyPorts = [2]int{p, p}
+	if _, err := r.listenProxy("127.0.0.1"); err == nil || !strings.Contains(err.Error(), "no free port") {
+		t.Errorf("a full range: %v", err)
 	}
 }
