@@ -49,10 +49,10 @@ A run's `status` is one of `queued`, `running`, `succeeded`, `failed`, `canceled
 | --- | --- | --- |
 | `GET /v1/pipelines` | viewer | Saved pipelines with latest status. |
 | `POST /v1/pipelines/validate` | viewer | Body: `yaml`. Returns problems with line numbers and the step graph. Saves nothing. |
-| `POST /v1/pipelines` | developer | Save a new pipeline. Body: `yaml`, `description`. The name comes from the YAML. |
+| `POST /v1/pipelines` | developer | Save a new pipeline. Body: `yaml`, `description`, optional `source` (`{"repo": "owner/name", "branch": "main"}`, a branch on the GitHub allow list; not a pattern). The name comes from the YAML. |
 | `GET /v1/pipelines/{id}` | viewer | The pipeline and its versions. |
-| `PUT /v1/pipelines/{id}` | developer | New version. Body: `yaml`, `description`, `base_version`. `409` if someone saved after `base_version`. |
-| `POST /v1/pipelines/{id}/run` | developer | Run the latest version. May use secrets. |
+| `PUT /v1/pipelines/{id}` | developer | New version. Body: `yaml`, `description`, `base_version`, and `source`: an object sets it, `null` clears it, leaving it out keeps it. `409` if someone saved after `base_version`. |
+| `POST /v1/pipelines/{id}/run` | developer | Run the latest version. May use secrets. With a `source`, the branch must still be on the allow list (`409` if not); the run downloads the branch's newest commit first (`502` if GitHub cannot give it; no run is created) and records it as `source`. Such runs build images but never push. |
 | `POST /v1/pipelines/{id}/versions/{version}/restore` | developer | Make an old version the newest. |
 | `DELETE /v1/pipelines/{id}` | admin | Delete the pipeline and its versions. |
 | `GET /v1/overview` | viewer | The pipeline and run figures on the Home page (its Needs you list also reads proposals, cloud changes, Guard findings and integrations). |

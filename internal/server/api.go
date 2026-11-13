@@ -329,7 +329,7 @@ func (s *Server) handleSubmit(w http.ResponseWriter, r *http.Request) {
 			return ExtractTarGz(f, ws, s.cfg.MaxSourceBytes)
 		}
 	}
-	run, steps, apiErr := s.enqueue(r.Context(), yamlText, store.TriggerAPI, unpack)
+	run, steps, apiErr := s.enqueue(r.Context(), yamlText, store.TriggerAPI, unpack, nil)
 	if apiErr != nil {
 		apiErr.write(w)
 		return
@@ -369,7 +369,7 @@ func validationProblems(err error) *apiError {
 // enqueue validates a pipeline, prepares its workspace and queues a run. unpack, if set,
 // fills the workspace (an uploaded archive); it runs before any run exists, so a bad archive
 // creates nothing.
-func (s *Server) enqueue(ctx context.Context, yamlText string, trigger store.Trigger, unpack func(ws string) error) (store.Run, []store.Step, *apiError) {
+func (s *Server) enqueue(ctx context.Context, yamlText string, trigger store.Trigger, unpack func(ws string) error, src *SourceRef) (store.Run, []store.Step, *apiError) {
 	internal := func(what string, err error) (store.Run, []store.Step, *apiError) {
 		s.log.Error(what, "err", err)
 		return store.Run{}, nil, &apiError{http.StatusInternalServerError, ErrorJSON{Error: "internal error: " + what}}
@@ -398,6 +398,9 @@ func (s *Server) enqueue(ctx context.Context, yamlText string, trigger store.Tri
 		if errors.Is(err, ErrBadArchive) {
 			return store.Run{}, nil, badRequest(err.Error())
 		}
+		if errors.Is(err, errSourceDownload) {
+			return store.Run{}, nil, &apiError{http.StatusBadGateway, ErrorJSON{Error: err.Error()}}
+		}
 		if err != nil {
 			return internal("unpacking source", err)
 		}
@@ -407,7 +410,11 @@ func (s *Server) enqueue(ctx context.Context, yamlText string, trigger store.Tri
 	for i, st := range p.Steps {
 		stepIDs[i] = st.ID
 	}
-	run, err := s.cfg.Store.CreateRun(ctx, store.Run{PipelineName: p.Name, PipelineYAML: yamlText, Trigger: trigger}, stepIDs)
+	want := store.Run{PipelineName: p.Name, PipelineYAML: yamlText, Trigger: trigger}
+	if src != nil {
+		want.SourceRepo, want.SourceRef, want.SourceSHA = src.Repo, src.Ref, src.SHA
+	}
+	run, err := s.cfg.Store.CreateRun(ctx, want, stepIDs)
 	if err != nil {
 		return internal("creating run", err)
 	}

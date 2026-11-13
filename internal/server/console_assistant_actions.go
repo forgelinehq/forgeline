@@ -13,7 +13,6 @@ import (
 	"github.com/forgelinehq/forgeline/internal/authn"
 	"github.com/forgelinehq/forgeline/internal/docstore"
 	"github.com/forgelinehq/forgeline/internal/pipeline"
-	"github.com/forgelinehq/forgeline/internal/store"
 )
 
 // The assistant acting inside Forgeline (design note 028). The assistant never changes anything itself: its
@@ -280,12 +279,12 @@ func (s *Server) doRunPipeline(ctx context.Context, p Principal, a AssistAction)
 	if err := s.docs.Get(ctx, kindPipeline, a.Pipeline, &sp); err != nil {
 		return "", "", &apiError{http.StatusNotFound, ErrorJSON{Error: "that pipeline no longer exists"}}
 	}
-	run, steps, apiErr := s.enqueue(ctx, sp.YAML, store.TriggerUI, nil)
+	run, steps, apiErr := s.runSaved(ctx, sp)
 	if apiErr != nil {
 		return "", "", apiErr
 	}
 	s.recordRunMeta(ctx, run.ID, runMeta{Actor: p.Name, PipelineID: sp.ID, Version: sp.Version})
-	s.audit(ctx, p, "", "run.start", "run/"+run.ID, fmt.Sprintf("%s v%d, by the assistant, confirmed by the person", sp.ID, sp.Version), true)
+	s.audit(ctx, p, "", "run.start", "run/"+run.ID, fmt.Sprintf("%s v%d, by the assistant, confirmed by the person", sp.ID, sp.Version)+sourceNote(run), true)
 	_ = steps
 	return "Started run " + run.ID + ".", "/runs/" + run.ID, nil
 }
