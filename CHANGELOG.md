@@ -52,6 +52,9 @@ section in the pull request that makes the change; a release moves it under its 
 - **After a session ends**, the console stops polling the server (it asked every minute, forever).
 
 ### Added
+- **Console runs can use a repository.** A saved pipeline can name a repository and branch from the GitHub allow list;
+  each run from the console (or the assistant) downloads the branch's newest commit first and records it. The allow
+  list is checked again at every run. Such runs build images but never push (note 043, slice 2).
 - **Pull requests build images without pushing.** A build step with `push` failed in a pull request (found on the
   Pi); pull requests, console and API runs now build it without pushing and succeed, saying why in the log and the audit
   log. A push to a branch without a matching rule still fails.

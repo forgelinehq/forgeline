@@ -47,9 +47,17 @@ does not need Actions, without letting a pipeline file push whatever it likes wi
 7. **Local first.** `forgeline run` on a laptop runs the same `build` step through the laptop's Docker and never
    pushes.
 
+## Slice 2: source for console runs (built 2026-11-13)
+
+A saved pipeline can name a `source`: one repository and branch (not a pattern) that the GitHub allow list allows. Each
+run started from the console or by the assistant asks GitHub for the branch's newest commit, downloads it the way a
+GitHub-started run does, and records repository, ref and commit on the run. The allow list is read again when the run
+starts. The pipeline still comes from the console, so the run keeps the console's trust: secrets as before, builds
+without pushing. Letting a console run push, and pipeline schedules, are left for later.
+
 ## Not in this slice
 
-- Source checkout for console and scheduled runs (slice 2), and builds the assistant or an agent start.
+- Scheduled pipeline runs, pushes from console runs, and builds an agent starts.
 - Registries other than ECR; multi-platform builds in one step; build caches kept between runs; signing and SBOMs
   (milestone M4).
 - Rootless BuildKit in its own container (for servers without a Docker daemon, or Kubernetes): it needs seccomp and

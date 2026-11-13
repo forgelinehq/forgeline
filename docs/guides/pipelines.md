@@ -46,6 +46,18 @@ steps:
 | `permissions.network` | `none` cuts the step off from every network; `egress` allows outbound access. |
 | `permissions.secrets` | Names of secrets this step may read. A step gets nothing it does not list. |
 
+## Run against a repository
+
+A pipeline saved in the console can name a **source**: a repository and branch on the GitHub allow list (Settings ›
+Connections › GitHub). Set it in the editor under **Source repository** and **Branch**. Every run then downloads that
+branch's newest commit into its workspace before the first step, as a run GitHub starts does, and the run page shows
+which commit it ran. The allow list is read again at each run: a branch taken off it stops being downloaded.
+
+![A pipeline with a source repository]({{ '/console/138-pipeline-source.png' | relative_url }})
+
+Such a run is still a console run: the pipeline comes from the console, it may use secrets, and a `build` step builds
+without pushing (only runs GitHub starts for a push may push).
+
 ## Build an image
 
 A `build` step builds a container image from the run's files with BuildKit, through the server's Docker (or your

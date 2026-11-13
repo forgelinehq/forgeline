@@ -50,8 +50,18 @@ type fakeGitHub struct {
 	mu       sync.Mutex
 	tarballs map[string][]byte // "owner/repo@sha" -> tar.gz
 	statuses []statusPost
-	gate     chan struct{}   // if set, tarball requests wait for it to close
-	accepted map[string]bool // extra bearer tokens that count as valid (a GitHub App's installation tokens)
+	gate     chan struct{}     // if set, tarball requests wait for it to close
+	accepted map[string]bool   // extra bearer tokens that count as valid (a GitHub App's installation tokens)
+	heads    map[string]string // "owner/repo@branch" -> newest commit, for GET /repos/{repo}/commits/{branch}
+}
+
+func (g *fakeGitHub) setHead(repo, branch, sha string) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.heads == nil {
+		g.heads = map[string]string{}
+	}
+	g.heads[repo+"@"+branch] = sha
 }
 
 func (g *fakeGitHub) allow(token string) {
@@ -82,6 +92,17 @@ func (g *fakeGitHub) serve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/") // repos owner repo kind sha
+	if len(parts) >= 5 && parts[0] == "repos" && parts[3] == "commits" && r.Method == http.MethodGet {
+		g.mu.Lock()
+		sha, ok := g.heads[parts[1]+"/"+parts[2]+"@"+strings.Join(parts[4:], "/")]
+		g.mu.Unlock()
+		if !ok || r.Header.Get("Accept") != "application/vnd.github.sha" {
+			http.Error(w, `{"message":"No commit found"}`, http.StatusUnprocessableEntity)
+			return
+		}
+		w.Write([]byte(sha))
+		return
+	}
 	if len(parts) == 3 && parts[0] == "repos" && r.Method == http.MethodGet {
 		repo := parts[1] + "/" + parts[2]
 		g.mu.Lock()

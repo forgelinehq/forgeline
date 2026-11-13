@@ -1,7 +1,9 @@
 package server
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -11,7 +13,6 @@ import (
 
 	"github.com/forgelinehq/forgeline/internal/docstore"
 	"github.com/forgelinehq/forgeline/internal/pipeline"
-	"github.com/forgelinehq/forgeline/internal/store"
 )
 
 const (
@@ -31,6 +32,8 @@ type SavedPipeline struct {
 	UpdatedAt   time.Time         `json:"updated_at"`
 	UpdatedBy   string            `json:"updated_by"`
 	History     []PipelineVersion `json:"history,omitempty"`
+	// Source, when set, is the repository and branch each run downloads first (design note 043, slice 2).
+	Source *PipelineSource `json:"source,omitempty"`
 }
 
 // PipelineVersion is an earlier version of a saved pipeline, newest first in SavedPipeline.History.
@@ -207,6 +210,26 @@ type savePipelineRequest struct {
 	// BaseVersion is the version the editor started from. A save fails if the pipeline has
 	// moved on, so two people editing do not silently overwrite each other.
 	BaseVersion int `json:"base_version"`
+	// Source is the repository and branch runs check out: an object sets it, null clears it, and leaving it out keeps
+	// what the pipeline has.
+	Source json.RawMessage `json:"source"`
+}
+
+// source reads the request's source: keep says it was left out.
+func (r savePipelineRequest) source() (src *PipelineSource, keep bool, err error) {
+	if len(r.Source) == 0 {
+		return nil, true, nil
+	}
+	if string(r.Source) == "null" {
+		return nil, false, nil
+	}
+	dec := json.NewDecoder(bytes.NewReader(r.Source))
+	dec.DisallowUnknownFields()
+	var s PipelineSource
+	if err := dec.Decode(&s); err != nil {
+		return nil, false, errors.New(`source: give {"repo": "owner/name", "branch": "main"}, or null for none`)
+	}
+	return &s, false, nil
 }
 
 // checkSavable validates text and returns the pipeline's name.
@@ -237,10 +260,19 @@ func (s *Server) handleCreatePipeline(w http.ResponseWriter, r *http.Request) {
 		apiErr.write(w)
 		return
 	}
+	src, _, err := req.source()
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if m := s.checkPipelineSource(src); m != "" {
+		writeError(w, http.StatusBadRequest, m)
+		return
+	}
 	p := principalFrom(r.Context())
 	now := time.Now().UTC()
 	sp := SavedPipeline{ID: name, Name: name, Description: req.Description, YAML: req.YAML, Version: 1,
-		CreatedAt: now, CreatedBy: p.Name, UpdatedAt: now, UpdatedBy: p.Name}
+		CreatedAt: now, CreatedBy: p.Name, UpdatedAt: now, UpdatedBy: p.Name, Source: src}
 	if err := s.docs.Create(r.Context(), kindPipeline, sp.ID, sp); errors.Is(err, docstore.ErrExists) {
 		writeError(w, http.StatusConflict, fmt.Sprintf("a pipeline named %q already exists", name))
 		return
@@ -248,7 +280,7 @@ func (s *Server) handleCreatePipeline(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, "saving the pipeline", err)
 		return
 	}
-	s.auditReq(r, "pipeline.create", "pipeline/"+sp.ID, "version 1", true)
+	s.auditReq(r, "pipeline.create", "pipeline/"+sp.ID, "version 1"+sourceWords(sp.Source), true)
 	writeJSON(w, http.StatusCreated, sp)
 }
 
@@ -265,6 +297,11 @@ func (s *Server) handleUpdatePipeline(w http.ResponseWriter, r *http.Request) {
 	}
 	if name != id {
 		writeError(w, http.StatusBadRequest, fmt.Sprintf("the name in the YAML is %q but this pipeline is %q; to rename, create a new pipeline", name, id))
+		return
+	}
+	src, keep, err := req.source()
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	s.pipeMu.Lock()
@@ -284,7 +321,16 @@ func (s *Server) handleUpdatePipeline(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	if req.YAML == sp.YAML && req.Description == sp.Description {
+	if keep {
+		src = sp.Source
+	} else if !sameSource(src, sp.Source) {
+		// A new source is checked against the allow list; one the pipeline already has is checked when it runs.
+		if m := s.checkPipelineSource(src); m != "" {
+			writeError(w, http.StatusBadRequest, m)
+			return
+		}
+	}
+	if req.YAML == sp.YAML && req.Description == sp.Description && sameSource(src, sp.Source) {
 		writeJSON(w, http.StatusOK, sp)
 		return
 	}
@@ -295,11 +341,12 @@ func (s *Server) handleUpdatePipeline(w http.ResponseWriter, r *http.Request) {
 		sp.History = sp.History[:maxVersionsKept]
 	}
 	sp.YAML, sp.Description, sp.Version, sp.UpdatedAt, sp.UpdatedBy = req.YAML, req.Description, sp.Version+1, now, p.Name
+	sp.Source = src
 	if err := s.docs.Put(r.Context(), kindPipeline, id, sp); err != nil {
 		s.internalError(w, "saving the pipeline", err)
 		return
 	}
-	s.auditReq(r, "pipeline.update", "pipeline/"+id, fmt.Sprintf("version %d", sp.Version), true)
+	s.auditReq(r, "pipeline.update", "pipeline/"+id, fmt.Sprintf("version %d", sp.Version)+sourceWords(sp.Source), true)
 	writeJSON(w, http.StatusOK, sp)
 }
 
@@ -369,14 +416,28 @@ func (s *Server) handleRunPipeline(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, "reading the pipeline", err)
 		return
 	}
-	run, steps, apiErr := s.enqueue(r.Context(), sp.YAML, store.TriggerUI, nil)
+	run, steps, apiErr := s.runSaved(r.Context(), sp)
 	if apiErr != nil {
 		apiErr.write(w)
 		return
 	}
 	p := principalFrom(r.Context())
 	s.recordRunMeta(r.Context(), run.ID, runMeta{Actor: p.Name, PipelineID: sp.ID, Version: sp.Version})
-	s.auditReq(r, "run.start", "run/"+run.ID, fmt.Sprintf("%s v%d from the console", sp.ID, sp.Version), true)
+	s.auditReq(r, "run.start", "run/"+run.ID, fmt.Sprintf("%s v%d from the console", sp.ID, sp.Version)+sourceNote(run), true)
 	w.Header().Set("Location", "/v1/runs/"+run.ID)
 	writeJSON(w, http.StatusAccepted, s.decorate(r.Context(), runDetail(run, steps)))
+}
+
+func sameSource(a, b *PipelineSource) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return *a == *b
+}
+
+func sourceWords(src *PipelineSource) string {
+	if src == nil {
+		return ", no source"
+	}
+	return fmt.Sprintf(", source %s branch %s", src.Repo, src.Branch)
 }

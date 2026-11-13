@@ -143,6 +143,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if len(parts) == 3 and parts[0] == "repos":
             if parts[1] + "/" + parts[2] == "acme/shop": self._send(200, {"full_name": "acme/shop"})
             else: self._send(404, {"message": "Not Found"})
+        elif len(parts) >= 5 and parts[3] == "commits" and parts[1] + "/" + parts[2] == "acme/shop" and "/".join(parts[4:]) in ("main", "release/1"):
+            # A branch's newest commit, as a pipeline with a source asks for it (note 043): the same commit every time.
+            self._send(200, b"c0ffee" * 6 + b"c0ff", "application/vnd.github.sha")
         elif len(parts) == 5 and parts[3] == "tarball":
             self._send(200, tarball(parts[4]), "application/gzip")
         else:

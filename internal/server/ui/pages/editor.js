@@ -60,10 +60,32 @@ export async function pipelineEditorPage({ params }) {
   const descIn = h('input', { id: 'desc', class: 'input', value: desc, maxlength: '300', placeholder: 'What this pipeline is for', readOnly: !canEdit });
   descIn.addEventListener('input', () => { desc = descIn.value; paint(); });
 
+  // Source (design note 043): a repository and branch from the GitHub allow list that each run downloads first.
+  let ghRules = [];
+  try { ghRules = (await get('/v1/integrations/github')).rules || []; } catch { /* GitHub not connected: no source to offer */ }
+  const srcOf = (s) => s ? s.repo + '\n' + s.branch : '';
+  let src = srcOf(saved && saved.source);
+  const srcRepo = h('select', { id: 'src-repo', class: 'input', disabled: !canEdit },
+    h('option', { value: '' }, 'None: runs start with an empty workspace'),
+    [...new Set(ghRules.map(r => r.repo).concat(saved && saved.source ? [saved.source.repo] : []))].map(r => h('option', { value: r, selected: saved && saved.source && saved.source.repo === r }, r)));
+  const srcBranch = h('input', { id: 'src-branch', class: 'input font-mono', placeholder: 'main', value: saved && saved.source ? saved.source.branch : '', readOnly: !canEdit });
+  const syncSrc = () => {
+    if (!srcRepo.value) { srcBranch.value = ''; srcBranch.disabled = true; }
+    else {
+      srcBranch.disabled = false;
+      if (!srcBranch.value) { const rule = ghRules.find(r => r.repo === srcRepo.value); const plain = rule && rule.branches.find(b => !/[*?[]/.test(b)); srcBranch.value = plain || ''; }
+    }
+    src = srcRepo.value ? srcRepo.value + '\n' + srcBranch.value.trim() : ''; paint();
+  };
+  srcRepo.addEventListener('change', () => { srcBranch.value = ''; syncSrc(); });
+  srcBranch.addEventListener('input', syncSrc);
+  srcBranch.disabled = !srcRepo.value;
+  const sourceBody = () => { if (!src) return null; const [repo, branch] = src.split('\n'); return { repo, branch }; };
+
   const side = h('div', { class: 'space-y-4' });
   const actions = h('div', { class: 'flex flex-wrap items-center gap-2' });
 
-  function dirty() { return isNew || text !== saved.yaml || desc !== (saved.description || ''); }
+  function dirty() { return isNew || text !== saved.yaml || desc !== (saved.description || '') || src !== srcOf(saved.source); }
 
   function changed() { text = area.value; lines(); paint(); clearTimeout(timer); timer = setTimeout(validate, 350); }
 
@@ -78,8 +100,8 @@ export async function pipelineEditorPage({ params }) {
     busy = true; paint();
     try {
       let p;
-      if (isNew) p = await post('/v1/pipelines', { yaml: text, description: desc });
-      else p = await put('/v1/pipelines/' + encodeURIComponent(id), { yaml: text, description: desc, base_version: baseVersion });
+      if (isNew) p = await post('/v1/pipelines', { yaml: text, description: desc, source: sourceBody() });
+      else p = await put('/v1/pipelines/' + encodeURIComponent(id), { yaml: text, description: desc, base_version: baseVersion, source: sourceBody() });
       toast(isNew ? 'Pipeline created' : 'Saved as version ' + p.version, 'ok');
       if (thenRun) { const r = await post('/v1/pipelines/' + encodeURIComponent(p.id) + '/run'); navigate('/runs/' + r.id); return; }
       if (isNew) { navigate('/pipelines/' + encodeURIComponent(p.id)); return; }
@@ -98,7 +120,11 @@ export async function pipelineEditorPage({ params }) {
         h('button', { class: 'btn-secondary', type: 'button', onclick: () => close('cancel') }, 'Keep editing'),
         h('button', { class: 'btn-secondary', type: 'button', onclick: () => close('load') }, 'Load their version'),
         h('button', { class: 'btn-danger', type: 'button', onclick: () => close('overwrite') }, 'Overwrite'))));
-    if (choice === 'load') { saved = current; baseVersion = current.version; text = current.yaml; desc = current.description || ''; area.value = text; descIn.value = desc; lines(); validate(); }
+    if (choice === 'load') {
+      saved = current; baseVersion = current.version; text = current.yaml; desc = current.description || ''; area.value = text; descIn.value = desc;
+      src = srcOf(current.source); srcRepo.value = current.source ? current.source.repo : ''; srcBranch.value = current.source ? current.source.branch : ''; srcBranch.disabled = !srcRepo.value;
+      lines(); validate();
+    }
     if (choice === 'overwrite') { baseVersion = current.version; saved = current; busy = false; await save(false); }
   }
 
@@ -257,6 +283,9 @@ export async function pipelineEditorPage({ params }) {
     pageHeader(isNew ? 'New pipeline' : id, isNew ? 'Describe the steps; the name inside the YAML becomes the pipeline name.' : `Version ${saved.version} · changed ${relTime(saved.updated_at)} by ${saved.updated_by}`, actions),
     !canEdit && h('div', { class: 'mb-4' }, notice('info', 'You can read this pipeline but not change it. Ask a developer or administrator for access.')),
     h('div', { class: 'mb-4' }, field('Description', descIn)),
+    (ghRules.length || (saved && saved.source)) ? h('div', { class: 'mb-4 grid gap-4 sm:grid-cols-2' },
+      field('Source repository', srcRepo, 'Each run downloads the branch\u2019s newest commit first. Only repositories and branches on the GitHub allow list.'),
+      field('Branch', srcBranch, 'One branch name, such as main. Console runs build images but never push them.')) : null,
     h('div', { class: 'grid gap-4 xl:grid-cols-2' },
       h('div', { class: 'card overflow-hidden' }, h('div', { class: 'flex' }, gutter, h('div', { class: 'min-w-0 flex-1' }, area))),
       h('div', {}, side)));
