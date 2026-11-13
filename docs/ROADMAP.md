@@ -25,7 +25,8 @@ in [PLAN.md](PLAN.md).
 
 Status: **slice 1 built (2026-11-13).** Remote MCP servers over HTTPS and local ones as containers; tools discovered,
 off until turned on, read-only only, definitions pinned; granted to agents one by one and to the assistant per server.
-Checked on the Pi with real servers ([2026-11-13](testing/2026-11-13-mcp-servers.md)): remote works; local containers with a host list need the host firewall to let Docker networks reach Forgeline. Tools that change
+Checked on the Pi with real servers ([2026-11-13](testing/2026-11-13-mcp-servers.md)): remote servers, local containers (also as the image's own user), tools marked read-only by an administrator and list
+arguments all work there; a host firewall needs one rule for `FORGELINE_EGRESS_PORTS`. Tools that change
 things (through approval), OAuth sign-in, resources and prompts come later. See [note 042](design/042-mcp-servers.md).
 
 ## Next: more blueprint blocks (note 039)
