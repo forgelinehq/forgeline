@@ -54,7 +54,7 @@ func TestArgSchemaCheck(t *testing.T) {
 		{"not an integer", map[string]any{"repo": "x", "page": 1.5}, "must be a integer"},
 		{"not in enum", map[string]any{"repo": "x", "state": "merged"}, "allowed values"},
 		{"list is text", map[string]any{"repo": "x", "fields": "id"}, "must be a list"},
-		{"item not in enum", map[string]any{"repo": "x", "fields": []any{"id", "secret"}}, `"fields" item 1 is not one of`},
+		{"item not in enum", map[string]any{"repo": "x", "fields": []any{"id", "secret"}}, `"fields" item 1 is not one of the allowed values ("id", "name", "url")`},
 		{"item wrong type", map[string]any{"repo": "x", "ids": []any{1.0, "2"}}, `"ids" item 1 must be a integer`},
 		{"object item", map[string]any{"repo": "x", "ids": []any{map[string]any{"a": 1.0}}}, "must be a integer"},
 		{"over maxItems", map[string]any{"repo": "x", "fields": []any{"id", "id", "id", "id"}}, "too many items"},

@@ -52,6 +52,8 @@ section in the pull request that makes the change; a release moves it under its 
 - **After a session ends**, the console stops polling the server (it asked every minute, forever).
 
 ### Added
+- **A refused argument names the allowed values**, so the model can correct its call (found on the Pi: the model asked
+  GitHub's `list_commits` for a field it does not offer).
 - **A tool its server says changes things cannot be marked read-only.** `readOnlyHint: false` (GitHub's write tools,
   for one) was read the same as no hint, so an administrator could have marked such a tool read-only. Only tools whose
   server says nothing can be marked now.
