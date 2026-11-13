@@ -40,17 +40,24 @@ container; the call ran out of time after 30 s and the egress proxy saw no reque
   dead proxy set it hung, so it does use the proxy. After #120 the error says that no request reached the proxy and that
   a firewall may be blocking it. The Pi's firewall was not changed.
 
-## Open
+## Fixed and checked again (#122, #123)
 
-- **Plugins and local MCP servers with a host list cannot work on the Pi** until the firewall lets the Docker networks
-  reach the host (the maintainer's decision). A fixed proxy port range would make a narrow rule possible.
-- **Images that need root**, like `mcp/time` and `mcp/fetch`, do not run. Running as the image's own user would weaken
-  the sandbox; it needs a decision.
-- **Public servers without `readOnlyHint`**, like DeepWiki, cannot be used. An administrator marking a tool read-only
-  themselves (audited, with the risk shown) is a possible next step.
-- **Array arguments** are not checked yet, which keeps 8 GitHub tools off.
+With the maintainer's approval the Pi's firewall got one rule, `ufw allow from 172.16.0.0/12 to any port 47100:47199
+proto tcp` (Docker networks only), and Forgeline got `FORGELINE_EGRESS_PORTS=47100-47199`. Then, with real servers and
+the real model:
+
+| Fix | Result |
+| --- | --- |
+| Egress through the firewall | GitHub's server reached `api.github.com` through the proxy (`allowed [api.github.com×1]`); the dummy token got `401 Bad credentials` in 1.4 s instead of a 30 s timeout. |
+| Run as the image's own user | `mcp/time` started and answered (`2026-11-14T01:29:16+05:30` for Asia/Kolkata). |
+| An administrator marks a tool read-only | DeepWiki's `read_wiki_structure`, marked and audited (`marked read-only by an administrator`), returned React's wiki outline. |
+| List arguments | 26 of GitHub's 46 tools can now be turned on (19 before). The model asked `list_commits` for a field it does not offer; the refusal named the allowed values (#123), and its second call went through. |
+| Stated writes | GitHub states `readOnlyHint: false` on its write tools. #122 offered them for marking; #123 refuses that (`its server says it changes things`), checked on the Pi. Tools turned on before the upgrade stayed on. |
+
+Still open: `list_issues`, `issue_write` and `push_files` use JSON Schema beyond what Forgeline checks (objects inside
+arguments).
 
 ## Cleaned up
 
-Five MCP servers removed; the two test agents disabled (agents cannot be deleted); the dummy secret deleted; the
+Five MCP servers removed (and three more after the re-check); the three test agents disabled (agents cannot be deleted); the dummy secret deleted; the
 pulled images (`mcp/time`, `mcp/fetch`, `github-mcp-server`, `busybox`) removed; no leftover containers or networks.
