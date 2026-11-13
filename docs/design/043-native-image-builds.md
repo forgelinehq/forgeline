@@ -1,6 +1,7 @@
 # 043: Native image builds
 
-Status: **decided 2026-11-12 (maintainer); slice 1 (a `build` step, pushes to allowed ECR repositories) built 2026-11-13.**
+Status: **decided 2026-11-12 (maintainer); slice 1 (a `build` step, pushes to allowed ECR repositories) built 2026-11-13** and checked
+against real ECR on the Pi ([2026-11-13](../testing/2026-11-13-native-builds.md)).
 Builds on note 005 (threat model), note 011 (workflow steps run by the server) and note 035 (blueprints make ECR
 repositories with a GitHub push role).
 

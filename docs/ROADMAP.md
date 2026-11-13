@@ -24,7 +24,8 @@ in [PLAN.md](PLAN.md).
 ## Native image builds (note 043)
 
 Status: **slice 1 built (2026-11-13).** A `build` step builds with BuildKit and pushes to ECR only for runs GitHub
-started for a push to a branch a push rule allows, with a short-lived token. Next: source checkout for console and
+started for a push to a branch a push rule allows, with a short-lived token; pull requests build without pushing.
+Checked with real ECR on the Pi ([2026-11-13](testing/2026-11-13-native-builds.md)). Next: source checkout for console and
 scheduled runs (slice 2), then choosing native builds for a blueprint's app block (slice 3). See
 [note 043](design/043-native-image-builds.md).
 
