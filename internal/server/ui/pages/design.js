@@ -4,6 +4,7 @@
 import { h, icon, mount, pageHeader, relTime, spinner, errorBox, notice, toast, emptyState, modal, field, copyButton } from '../lib/dom.js';
 import { get, post, put } from '../lib/api.js';
 import { navigate } from '../lib/router.js';
+import { session } from '../app.js';
 import { KINDS, EXISTING, DB_SIZES, CACHE_SIZES, blockFacts, linkWords } from '../lib/blueprint.js';
 import { flowPath } from '../lib/flow.js';
 import { guardrailList } from '../lib/guardrails.js';
@@ -363,15 +364,46 @@ export async function designPage({ params }) {
   }
 
   async function delivery(b) {
+    const url = '/v1/blueprints/' + encodeURIComponent(saved.id) + '/blocks/' + encodeURIComponent(b.id) + '/delivery';
     let d;
-    try { d = await get('/v1/blueprints/' + encodeURIComponent(saved.id) + '/blocks/' + encodeURIComponent(b.id) + '/delivery'); } catch (e) { toast(e.message, 'error'); return; }
-    await modal('Build ' + b.name + ' from GitHub', () => h('div', { class: 'space-y-4', id: 'delivery' },
-      h('p', { class: 'text-sm' }, d.next),
-      h('div', {}, h('div', { class: 'mb-1 flex items-center justify-between' }, h('span', { class: 'h-section' }, d.workflow_path + ' in ' + d.repo), copyButton(d.workflow, 'Copy')),
-        h('pre', { class: 'max-h-72 overflow-auto rounded-lg bg-slate-50 p-3 text-xs dark:bg-slate-900', id: 'delivery-workflow' }, d.workflow)),
-      h('div', {}, h('div', { class: 'mb-1 flex items-center justify-between' }, h('span', { class: 'h-section' }, 'A Forgeline pipeline that starts it'), copyButton(d.pipeline, 'Copy')),
-        h('pre', { class: 'overflow-auto rounded-lg bg-slate-50 p-3 text-xs dark:bg-slate-900', id: 'delivery-pipeline' }, d.pipeline),
-        h('p', { class: 'hint mt-1' }, 'Save it under Ship › Pipelines. The repository and branch must be on the GitHub allow list.'))), { xl: true });
+    try { d = await get(url); } catch (e) { toast(e.message, 'error'); return; }
+    await modal('Build ' + b.name + ' from GitHub', () => {
+      let way = 'actions';
+      const body = h('div', { class: 'space-y-4' });
+      const fileBox = (title, text, id, hint) => h('div', {}, h('div', { class: 'mb-1 flex items-center justify-between' }, h('span', { class: 'h-section' }, title), copyButton(text, 'Copy')),
+        h('pre', { class: 'max-h-72 overflow-auto rounded-lg bg-slate-50 p-3 text-xs dark:bg-slate-900', id }, text), hint ? h('p', { class: 'hint mt-1' }, hint) : null);
+      const allow = async () => {
+        const n = d.native;
+        try {
+          await put('/v1/build-push-rules/' + encodeURIComponent(n.rule_id), { repo: n.rule_repo, branches: n.rule_branches, target: n.rule_target, account: d.rule_account });
+          toast('Push allowed', 'ok'); d = await get(url); draw();
+        } catch (e) { toast(e.message, 'error'); }
+      };
+      const draw = () => {
+        const n = d.native;
+        const tabs = h('div', { class: 'inline-flex overflow-hidden rounded-lg border border-slate-300 text-sm dark:border-slate-700', role: 'group' },
+          [['actions', 'GitHub Actions'], ['native', 'Built by Forgeline']].map(([k, l]) => h('button', { type: 'button', 'aria-pressed': String(way === k), id: 'delivery-' + k,
+            class: 'px-3 py-1.5 ' + (way === k ? 'bg-brand-600 text-white' : 'text-slate-600 dark:text-slate-300'), onclick: () => { way = k; draw(); } }, l)));
+        if (way === 'actions') {
+          mount(body, tabs, h('p', { class: 'text-sm' }, d.next),
+            fileBox(d.workflow_path + ' in ' + d.repo, d.workflow, 'delivery-workflow'),
+            fileBox('A Forgeline pipeline that starts it', d.pipeline, 'delivery-pipeline', 'Save it under Ship \u203a Pipelines. The repository and branch must be on the GitHub allow list.'));
+          return;
+        }
+        const rule = n.rule_target
+          ? h('div', { class: 'rounded-lg border border-slate-200 p-3 text-sm dark:border-slate-800', id: 'delivery-rule' },
+            h('div', { class: 'flex flex-wrap items-center justify-between gap-2' },
+              h('span', {}, 'Push rule ', h('code', { class: 'font-mono' }, n.rule_id), ': ', n.rule_repo, ' (', n.rule_branches.join(', '), ') \u2192 ', h('span', { class: 'break-all font-mono text-xs' }, n.rule_target)),
+              d.rule_exists ? h('span', { class: 'pill-ok' }, 'push allowed')
+                : session.role === 'admin' ? h('button', { class: 'btn-primary btn-sm', type: 'button', id: 'delivery-allow', onclick: allow }, 'Allow this push')
+                : h('span', { class: 'pill-wait' }, 'an administrator allows it')))
+          : notice('info', 'Preview the blueprint first: the push rule needs the AWS account.');
+        mount(body, tabs, h('p', { class: 'text-sm' }, n.next), rule,
+          fileBox(n.pipeline_path + ' in ' + d.repo, n.pipeline, 'delivery-native'));
+      };
+      draw();
+      return h('div', { id: 'delivery' }, body);
+    }, { xl: true });
   }
 
   function drawInspector() {

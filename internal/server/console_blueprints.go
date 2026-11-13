@@ -268,7 +268,20 @@ func (s *Server) handleBlueprintDelivery(w http.ResponseWriter, r *http.Request)
 		writeError(w, http.StatusNotFound, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, d)
+	// Whether the push rule the native way needs is in place already, and which account would push.
+	out := struct {
+		blueprint.Delivery
+		RuleAccount string `json:"rule_account"`
+		RuleExists  bool   `json:"rule_exists"`
+	}{Delivery: d, RuleAccount: b.Target.Account}
+	if out.RuleAccount == "" {
+		out.RuleAccount = primaryAccount
+	}
+	var rule BuildPushRule
+	if d.Native.RuleTarget != "" && s.docs.Get(ctx, kindBuildPushRule, d.Native.RuleID, &rule) == nil {
+		out.RuleExists = strings.EqualFold(rule.Repo, d.Native.RuleRepo) && rule.Target == d.Native.RuleTarget
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 // handleBlueprintCode returns the OpenTofu configuration the blueprint generates (main.tf.json).

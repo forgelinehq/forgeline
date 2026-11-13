@@ -107,6 +107,28 @@ func TestBlueprintDeliverySuggestion(t *testing.T) {
 	if d.Repo != "acme/shop" || d.Branch != "main" || !strings.Contains(d.Workflow, "context: app") || !strings.Contains(d.Next, "<account-id>") {
 		t.Errorf("delivery = %+v", d)
 	}
+	var raw map[string]any
+	json.Unmarshal(m.dev.expect(200, "GET", "/v1/blueprints/"+made.ID+"/blocks/app/delivery", nil), &raw)
+	if raw["rule_exists"] != false || raw["rule_account"] != "primary" || d.Native.RuleTarget != "" || !strings.Contains(d.Native.Pipeline, "build:") {
+		t.Errorf("native before the account is known = %+v %v", d.Native, raw)
+	}
+	// Once a preview knows the account, the rule can be made, and the suggestion says when it exists.
+	var p storedPlan
+	p.AWSAccount = "111122223333"
+	if err := m.harness.srv.docs.Put(t.Context(), kindBPPlan, made.ID, p); err != nil {
+		t.Fatal(err)
+	}
+	d = blueprint.Delivery{}
+	json.Unmarshal(m.dev.expect(200, "GET", "/v1/blueprints/"+made.ID+"/blocks/app/delivery", nil), &d)
+	if d.Native.RuleTarget == "" || !strings.Contains(d.Native.Pipeline, "push: "+d.Native.RuleTarget) {
+		t.Fatalf("native with the account = %+v", d.Native)
+	}
+	m.turnOn()
+	m.admin.expect(200, "PUT", "/v1/build-push-rules/"+d.Native.RuleID, map[string]any{"repo": d.Native.RuleRepo, "branches": d.Native.RuleBranches, "target": d.Native.RuleTarget, "account": "primary"})
+	json.Unmarshal(m.dev.expect(200, "GET", "/v1/blueprints/"+made.ID+"/blocks/app/delivery", nil), &raw)
+	if raw["rule_exists"] != true {
+		t.Errorf("the rule is not seen: %v", raw["rule_exists"])
+	}
 	m.dev.expect(404, "GET", "/v1/blueprints/"+made.ID+"/blocks/data/delivery", nil) // a table has no source
 	m.dev.expect(404, "GET", "/v1/blueprints/"+made.ID+"/blocks/ghost/delivery", nil)
 	m.v.expect(403, "GET", "/v1/blueprints/"+made.ID+"/blocks/app/delivery", nil)

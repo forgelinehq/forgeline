@@ -167,6 +167,32 @@ func TestDeliverySuggestion(t *testing.T) {
 	if _, err := b.SuggestDelivery("tickets", ""); err == nil {
 		t.Error("a block without a source has no delivery")
 	}
+
+	// Built by Forgeline: a forgeline.yaml whose build step pushes to exactly the push rule's target.
+	n, _ := b.SuggestDelivery("api", "111122223333")
+	p, err := pipeline.Load(strings.NewReader(n.Native.Pipeline))
+	if err != nil {
+		t.Fatalf("the native pipeline does not load: %v\n%s", err, n.Native.Pipeline)
+	}
+	bs := p.Steps[0].Build
+	if bs == nil || bs.Context != "services/api" || bs.Platform != "linux/amd64" || bs.Push != n.Native.RuleTarget || bs.Push != n.ImageRepo ||
+		!strings.HasPrefix(bs.Push, "111122223333.dkr.ecr.") || len(bs.Tags) != 0 {
+		t.Errorf("build step = %+v, rule target %q", bs, n.Native.RuleTarget)
+	}
+	if n.Native.RuleRepo != "acme/shop" || len(n.Native.RuleBranches) != 1 || n.Native.RuleBranches[0] != "release" || !regexp.MustCompile(`^[a-z][a-z0-9-]{0,39}$`).MatchString(n.Native.RuleID) {
+		t.Errorf("rule = %+v", n.Native)
+	}
+	if !strings.Contains(n.Native.Next, "QEMU") || strings.Contains(n.Native.Pipeline, "github") {
+		t.Errorf("native next/pipeline:\n%s\n%s", n.Native.Next, n.Native.Pipeline)
+	}
+	ag, _ := b.SuggestDelivery("support", "111122223333")
+	if !strings.Contains(ag.Native.Pipeline, "platform: linux/arm64") || strings.Contains(ag.Native.Next, "QEMU") {
+		t.Errorf("agent native:\n%s\n%s", ag.Native.Pipeline, ag.Native.Next)
+	}
+	// Without the account no rule can be made yet.
+	if u, _ := b.SuggestDelivery("api", ""); u.Native.RuleTarget != "" || !strings.Contains(u.Native.Next, "<account-id>") {
+		t.Errorf("unknown account: %+v", u.Native)
+	}
 }
 
 func TestSourceTofuValidates(t *testing.T) {

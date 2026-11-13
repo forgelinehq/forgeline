@@ -52,6 +52,9 @@ section in the pull request that makes the change; a release moves it under its 
 - **After a session ends**, the console stops polling the server (it asked every minute, forever).
 
 ### Added
+- **Blueprints can have Forgeline build an app's image.** Build from GitHub… offers Built by Forgeline next to GitHub
+  Actions: a `forgeline.yaml` with a build step that pushes to the block's image repository, and the push rule it needs,
+  which an administrator allows with one click (note 043, slice 3).
 - **Console runs can use a repository.** A saved pipeline can name a repository and branch from the GitHub allow list;
   each run from the console (or the assistant) downloads the branch's newest commit first and records it. The allow
   list is checked again at every run. Such runs build images but never push (note 043, slice 2).
