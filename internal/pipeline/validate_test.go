@@ -3,6 +3,7 @@ package pipeline
 import (
 	"errors"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -261,5 +262,66 @@ func TestValidateWorkflowStep(t *testing.T) {
 	p.Steps[0].Image = ""
 	if p.Validate() == nil {
 		t.Error("a script step without an image was accepted")
+	}
+}
+
+func buildStep(mut func(*Step)) *Pipeline {
+	p := validPipeline()
+	p.Steps = []Step{{ID: "image", Build: &Build{Context: "app", Dockerfile: "Dockerfile", Platform: "linux/amd64",
+		Args: map[string]string{"VERSION": "1.2"}, Push: "123456789012.dkr.ecr.ap-south-1.amazonaws.com/web", Tags: []string{"latest", "v1.2"}}}}
+	if mut != nil {
+		mut(&p.Steps[0])
+	}
+	return &p
+}
+
+func TestValidateBuildStep(t *testing.T) {
+	for name, mut := range map[string]func(*Step){
+		"full":            nil,
+		"bare":            func(s *Step) { s.Build = &Build{} },
+		"dot context":     func(s *Step) { s.Build.Context = "." },
+		"nested":          func(s *Step) { s.Build.Context = "services/web"; s.Build.Dockerfile = "docker/Dockerfile.prod" },
+		"no network":      func(s *Step) { s.Build.Network = NetworkNone },
+		"nested ecr name": func(s *Step) { s.Build.Push = "123456789012.dkr.ecr.us-east-1.amazonaws.com/team/web-app" },
+		"with a timeout":  func(s *Step) { s.Timeout = "20m" },
+		"build, no push":  func(s *Step) { s.Build.Push, s.Build.Tags = "", nil },
+	} {
+		if err := buildStep(mut).Validate(); err != nil {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+	for name, mut := range map[string]func(*Step){
+		"context escapes":     func(s *Step) { s.Build.Context = "../other" },
+		"absolute context":    func(s *Step) { s.Build.Context = "/etc" },
+		"unclean context":     func(s *Step) { s.Build.Context = "app/../app" },
+		"dockerfile escapes":  func(s *Step) { s.Build.Dockerfile = "../../Dockerfile" },
+		"absolute dockerfile": func(s *Step) { s.Build.Dockerfile = "/root/Dockerfile" },
+		"bad platform":        func(s *Step) { s.Build.Platform = "windows/amd64" },
+		"bad network":         func(s *Step) { s.Build.Network = "host" },
+		"bad arg name":        func(s *Step) { s.Build.Args = map[string]string{"A-B": "x"} },
+		"long arg":            func(s *Step) { s.Build.Args = map[string]string{"A": strings.Repeat("x", 1001)} },
+		"push with a tag":     func(s *Step) { s.Build.Push += ":latest" },
+		"push to docker hub":  func(s *Step) { s.Build.Push = "docker.io/acme/web" },
+		"push to a lookalike": func(s *Step) { s.Build.Push = "123456789012.dkr.ecr.ap-south-1.amazonaws.com.evil.example/web" },
+		"push upper case":     func(s *Step) { s.Build.Push = "123456789012.dkr.ecr.ap-south-1.amazonaws.com/Web" },
+		"bad tag":             func(s *Step) { s.Build.Tags = []string{"-x"} },
+		"too many tags":       func(s *Step) { s.Build.Tags = []string{"a", "b", "c", "d", "e", "f"} },
+		"tags without push":   func(s *Step) { s.Build.Push = "" },
+		"with an image":       func(s *Step) { s.Image = "alpine" },
+		"with a script":       func(s *Step) { s.Run = "echo hi" },
+		"with a workflow":     func(s *Step) { s.Workflow = &Workflow{Repo: "a/b", Workflow: "ci.yml", Ref: "main"} },
+		"with secrets":        func(s *Step) { s.Permissions.Secrets = []string{"TOKEN"} },
+		"with env":            func(s *Step) { s.Env = map[string]string{"A": "b"} },
+		"with a step network": func(s *Step) { s.Permissions.Network = NetworkEgress },
+		"too many args": func(s *Step) {
+			s.Build.Args = map[string]string{}
+			for i := 0; i < 26; i++ {
+				s.Build.Args["A"+strconv.Itoa(i)] = "v"
+			}
+		},
+	} {
+		if err := buildStep(mut).Validate(); err == nil {
+			t.Errorf("%s: accepted", name)
+		}
 	}
 }

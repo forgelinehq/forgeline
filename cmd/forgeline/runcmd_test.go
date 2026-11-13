@@ -10,6 +10,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/forgelinehq/forgeline/internal/build"
 	"github.com/forgelinehq/forgeline/internal/executor"
 )
 
@@ -193,5 +194,34 @@ func TestPrefixLogsKeepsLinesWhole(t *testing.T) {
 		if line != "[a] partial line" && line != "[b] partial line" && line != "[a] no newline" && line != "[b] no newline" {
 			t.Fatalf("bad line %q", line)
 		}
+	}
+}
+
+func TestRunBuildsLocallyAndNeverPushes(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "pipeline.yaml"), []byte(`version: v1alpha1
+name: img
+steps:
+  - id: image
+    build:
+      context: app
+      push: 123456789012.dkr.ecr.ap-south-1.amazonaws.com/web
+`), 0o644)
+	var got build.Request
+	old := runBuild
+	runBuild = func(_ context.Context, r build.Request, _ io.Writer) (build.Result, error) {
+		got = r
+		return build.Result{}, nil
+	}
+	defer func() { runBuild = old }()
+	var out, errb bytes.Buffer
+	if code := runPipeline([]string{"--no-cache", filepath.Join(dir, "pipeline.yaml")}, &out, &errb, &executor.Fake{}); code != 0 {
+		t.Fatalf("exit %d: %s %s", code, out.String(), errb.String())
+	}
+	if got.Build.Context != "app" || len(got.Refs) != 0 || got.Auth != "" || got.Workspace != dir {
+		t.Errorf("request = %+v", got)
+	}
+	if !strings.Contains(out.String(), "never pushes") {
+		t.Errorf("output does not say the push was skipped: %s", out.String())
 	}
 }

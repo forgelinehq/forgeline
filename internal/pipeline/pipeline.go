@@ -32,6 +32,7 @@ type Step struct {
 	Command  []string          `json:"command,omitempty" doc:"Command and arguments, run without a shell. Set this or run, not both." minItems:"1"`
 	Agent    *Agent            `json:"agent,omitempty" doc:"Run a coding agent with a prompt instead of a script. The image must contain the agent's command line. Set this or run or command."`
 	Workflow *Workflow         `json:"workflow,omitempty" doc:"Start a GitHub Actions workflow and wait for it, instead of running a container. Only the Forgeline server can do this (it holds the GitHub credentials); the step has no image, script, environment or permissions. Set this or run or command or agent."`
+	Build    *Build            `json:"build,omitempty" doc:"Build a container image from the workspace with BuildKit, and optionally push it, instead of running a container (design note 043). The step has no image, script, environment or permissions. Set this or run or command or agent or workflow."`
 	Needs    []string          `json:"needs,omitempty" doc:"IDs of steps that must succeed before this one starts." itemPattern:"^[a-z][a-z0-9-]{0,62}$"`
 	Env      map[string]string `json:"env,omitempty" doc:"Environment variables for the step. Names must be valid identifiers."`
 	WorkDir  string            `json:"workdir,omitempty" doc:"Absolute working directory inside the container." pattern:"^/"`
@@ -55,6 +56,20 @@ const (
 	NetworkNone   = "none"
 	NetworkEgress = "egress"
 )
+
+// Build builds a container image from a directory of the workspace (design note 043). The Forgeline server, or
+// forgeline run on a laptop, runs BuildKit through the host's Docker; the Dockerfile's RUN lines get no secrets, no
+// host mounts and no entitlements. Pushing is allowed only by a push rule on the server, for runs GitHub started for a
+// push to an allowed branch; a laptop never pushes.
+type Build struct {
+	Context    string            `json:"context,omitempty" doc:"Directory to build, relative to the workspace. Empty means the workspace itself."`
+	Dockerfile string            `json:"dockerfile,omitempty" doc:"Dockerfile path relative to the context. Empty means Dockerfile."`
+	Platform   string            `json:"platform,omitempty" doc:"Target platform such as linux/amd64 or linux/arm64. Empty means the builder's own." pattern:"^linux/(amd64|arm64|arm/v7)$"`
+	Args       map[string]string `json:"args,omitempty" doc:"Build arguments (--build-arg), at most 25, each value at most 1000 bytes. Never put secrets here: they end up in the image's history."`
+	Network    string            `json:"network,omitempty" doc:"Network for the Dockerfile's RUN lines: egress (the default) or none." enum:"none,egress"`
+	Push       string            `json:"push,omitempty" doc:"Repository to push to, such as 123456789012.dkr.ecr.ap-south-1.amazonaws.com/web. The server pushes only when a push rule allows this repository for the run's source repository and branch."`
+	Tags       []string          `json:"tags,omitempty" doc:"Tags to push. Empty means the first 12 characters of the commit. At most 5." maxItems:"5" itemPattern:"^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$"`
+}
 
 // Workflow describes a GitHub Actions workflow started by a step (design note 011, slice 2). The
 // Forgeline server starts it with its own GitHub credentials, which never enter a container, and

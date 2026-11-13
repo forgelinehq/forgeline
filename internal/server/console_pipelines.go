@@ -135,7 +135,8 @@ func (s *Server) validateYAML(ctx context.Context, text string) ValidateJSON {
 		if len(secs) > 0 && net == "egress" {
 			out.Warnings = append(out.Warnings, fmt.Sprintf("step %q holds secrets and has network access; set permissions.network: none unless it needs to call out", st.ID))
 		}
-		if strings.HasSuffix(strings.SplitN(st.Image, "@", 2)[0], ":latest") || !strings.ContainsAny(st.Image, ":@") {
+		// Workflow and build steps run no image of their own.
+		if st.Image != "" && (strings.HasSuffix(strings.SplitN(st.Image, "@", 2)[0], ":latest") || !strings.ContainsAny(st.Image, ":@")) {
 			out.Warnings = append(out.Warnings, fmt.Sprintf("step %q uses a mutable image tag (%s); pin a version or digest for repeatable runs", st.ID, st.Image))
 		}
 	}

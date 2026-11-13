@@ -14,6 +14,7 @@ export const SETTINGS = [
     { path: '/integrations', label: 'Connections', note: 'GitHub, AWS, Docker, Kubernetes, Claude, and what the AI may do with each', min: 'developer', also: ['/integrations/'] },
     { path: '/secrets', label: 'Secrets', note: 'Keys and tokens, stored encrypted and never shown again', min: 'developer' },
     { path: '/mcp-servers', label: 'MCP servers', note: 'Remote and local MCP servers whose tools agents and the assistant may use', min: 'admin' },
+    { path: '/image-builds', label: 'Image builds', note: 'Which repositories and branches may push built images, and where', min: 'admin' },
   ] },
   { title: 'AI', items: [
     { path: '/integrations/claude/settings', label: 'Models', note: 'Which model answers the assistant and agents', min: 'developer' },

@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/forgelinehq/forgeline/internal/build"
 	"github.com/forgelinehq/forgeline/internal/cache"
 	"github.com/forgelinehq/forgeline/internal/executor"
 	"github.com/forgelinehq/forgeline/internal/pipeline"
@@ -68,6 +69,7 @@ func runPipeline(args []string, stdout, stderr io.Writer, ex executor.Executor) 
 		Workspace:   workspace,
 		Secrets:     stepSecrets,
 		Logs:        logs.writer,
+		Build:       localBuild(workspace),
 	})
 	logs.flush()
 
@@ -80,6 +82,21 @@ func runPipeline(args []string, stdout, stderr io.Writer, ex executor.Executor) 
 		return 1
 	}
 	return 0
+}
+
+// runBuild is replaced in tests.
+var runBuild = build.Run
+
+// localBuild builds through this machine's Docker and never pushes: pushing needs a server's push rule and
+// short-lived credentials (design note 043).
+func localBuild(workspace string) func(context.Context, *pipeline.Step, io.Writer) error {
+	return func(ctx context.Context, st *pipeline.Step, logs io.Writer) error {
+		if st.Build.Push != "" {
+			fmt.Fprintf(logs, "building only: forgeline run never pushes (a Forgeline server pushes to %s through a push rule)\n", st.Build.Push)
+		}
+		_, err := runBuild(ctx, build.Request{Docker: os.Getenv("FORGELINE_DOCKER"), Workspace: workspace, Build: *st.Build}, logs)
+		return err
+	}
 }
 
 func statusLine(s scheduler.StepResult) string {

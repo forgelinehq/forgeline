@@ -79,6 +79,9 @@ type Options struct {
 	Workflow func(ctx context.Context, s *pipeline.Step, logs io.Writer) error
 	// WorkflowDenied, if not empty, refuses every workflow step and says why, like SecretsDenied.
 	WorkflowDenied string
+	// Build runs a build step (design note 043): it builds an image from the workspace and, where the caller allows
+	// it, pushes it. Nil means this runner cannot build, and such steps fail with a message saying so.
+	Build func(ctx context.Context, s *pipeline.Step, logs io.Writer) error
 	// OnStepStart, if set, is called just before a step is handed to the executor.
 	OnStepStart func(stepID string)
 	// OnStepDone, if set, is called once for every step with its final result, including
@@ -155,6 +158,12 @@ func runStep(ctx context.Context, s *pipeline.Step, ex executor.Executor, opts O
 	if s.Workflow != nil {
 		return runWorkflowStep(ctx, s, opts)
 	}
+	if s.Build != nil {
+		if opts.Build == nil {
+			return StepResult{ID: s.ID, Status: StatusFailed, Err: errors.New("build steps need a runner with Docker, and this one cannot build")}
+		}
+		return runServerStep(ctx, s, opts, opts.Build)
+	}
 	run, err := toStepRun(s, opts.Workspace)
 	if err != nil {
 		return StepResult{ID: s.ID, Status: StatusFailed, Err: err}
@@ -204,6 +213,13 @@ func runWorkflowStep(ctx context.Context, s *pipeline.Step, opts Options) StepRe
 	case opts.Workflow == nil:
 		return fail(errors.New("workflow steps run only on a Forgeline server that is connected to GitHub, not here"))
 	}
+	return runServerStep(ctx, s, opts, opts.Workflow)
+}
+
+// runServerStep runs a step whose work is a function of the runner (a workflow or a build), not a container the
+// pipeline chose, with the step's timeout, its log and the masking of secret values.
+func runServerStep(ctx context.Context, s *pipeline.Step, opts Options, work func(context.Context, *pipeline.Step, io.Writer) error) StepResult {
+	fail := func(err error) StepResult { return StepResult{ID: s.ID, Status: StatusFailed, Err: err} }
 	if s.Timeout != "" {
 		d, err := time.ParseDuration(s.Timeout)
 		if err != nil {
@@ -226,7 +242,7 @@ func runWorkflowStep(ctx context.Context, s *pipeline.Step, opts Options) StepRe
 		opts.OnStepStart(s.ID)
 	}
 	start := time.Now()
-	err := opts.Workflow(ctx, s, logs)
+	err := work(ctx, s, logs)
 	out := StepResult{ID: s.ID, Duration: time.Since(start)}
 	switch {
 	case err == nil:

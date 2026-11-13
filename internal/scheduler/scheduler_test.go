@@ -435,3 +435,25 @@ func TestWorkflowStepOutputIsMaskedLikeAnyOther(t *testing.T) {
 		t.Errorf("output = %q", out.String())
 	}
 }
+
+func TestBuildStepGoesToTheBuilderNeverTheExecutor(t *testing.T) {
+	bs := pipeline.Step{ID: "image", Build: &pipeline.Build{Context: "app"}, Timeout: "50ms"}
+	f := &executor.Fake{}
+	r := Run(context.Background(), plan(t, bs, st("after", "image")), f, Options{})
+	if s := statuses(r); s["image"] != StatusFailed || s["after"] != StatusSkipped || len(f.Calls()) != 0 || !strings.Contains(r.Steps[0].Err.Error(), "cannot build") {
+		t.Fatalf("without a builder: %v, %v", s, r.Steps[0].Err)
+	}
+	var got *pipeline.Step
+	r = Run(context.Background(), plan(t, bs), f, Options{Build: func(_ context.Context, s *pipeline.Step, w io.Writer) error {
+		got = s
+		io.WriteString(w, "built")
+		return nil
+	}})
+	if got == nil || got.Build.Context != "app" || statuses(r)["image"] != StatusSucceeded || len(f.Calls()) != 0 {
+		t.Fatalf("with a builder: got=%v report=%+v calls=%v", got, r.Steps, f.Calls())
+	}
+	wait := func(ctx context.Context, _ *pipeline.Step, _ io.Writer) error { <-ctx.Done(); return ctx.Err() }
+	if res := Run(context.Background(), plan(t, bs), f, Options{Build: wait}).Steps[0]; res.Status != StatusFailed || !strings.Contains(res.Err.Error(), "timed out") {
+		t.Errorf("timeout: %+v", res)
+	}
+}
