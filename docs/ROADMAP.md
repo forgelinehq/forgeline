@@ -21,6 +21,13 @@ in [PLAN.md](PLAN.md).
 | M6 | AI agents | Governed agent steps with scoped credentials and cost tracking; failure triage; fix suggestions as pull requests, never auto-applied | In progress: Claude Code agent steps built (note 007); Codex, Copilot, triage and cost tracking open |
 | M7 | Migration and breadth | Importers for Jenkinsfile and GitHub Actions workflows; Bitbucket and GitLab triggers; additional cloud targets | Not started |
 
+## MCP servers you add (note 042)
+
+Status: **slice 1 built (2026-11-13).** Remote MCP servers over HTTPS and local ones as containers; tools discovered,
+off until turned on, read-only only, definitions pinned; granted to agents one by one and to the assistant per server.
+Verified against stand-in servers; a real public server and a real container are still to check. Tools that change
+things (through approval), OAuth sign-in, resources and prompts come later. See [note 042](design/042-mcp-servers.md).
+
 ## Next: more blueprint blocks (note 039)
 
 Status: **built (2026-11-08).** Databases (RDS MySQL or Postgres, with the password created and kept by AWS),

@@ -126,6 +126,10 @@ func (r EgressReport) String() string {
 	return fmt.Sprintf("allowed [%s], denied [%s], failed [%s], %d without the credential, %d bytes", list(r.Allowed), list(r.Denied), list(r.Failed), r.Unauthorized, r.Bytes)
 }
 
+// ForbiddenIP says whether an address is one an outbound connection must not reach: loopback, private, link-local
+// (cloud metadata), multicast and reserved ranges. Remote MCP servers are checked with it too (note 042).
+func ForbiddenIP(ip net.IP) bool { return forbiddenIP(ip) }
+
 // forbiddenIP is every address a plugin must never be tunnelled to, whatever name resolved to it:
 // loopback, private ranges, link-local (including the cloud metadata address), unspecified,
 // multicast, carrier-grade NAT and other reserved blocks.

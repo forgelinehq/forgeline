@@ -145,6 +145,13 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /v1/blueprints/{id}/assist", s.requireRole(authn.Developer, s.handleBlueprintAssist))
 	mux.Handle("GET /v1/plugins", s.requireRole(authn.Developer, s.handleGetPlugins))
 	mux.Handle("PUT /v1/plugins/settings", s.requireRole(authn.Admin, s.handlePluginSettings))
+	// MCP servers an administrator adds, remote or local (note 042).
+	mux.Handle("GET /v1/mcp-servers", s.requireRole(authn.Admin, s.handleListMCPServers))
+	mux.Handle("POST /v1/mcp-servers", s.requireRole(authn.Admin, s.handleCreateMCPServer))
+	mux.Handle("PUT /v1/mcp-servers/{id}", s.requireRole(authn.Admin, s.handleUpdateMCPServer))
+	mux.Handle("DELETE /v1/mcp-servers/{id}", s.requireRole(authn.Admin, s.handleDeleteMCPServer))
+	mux.Handle("POST /v1/mcp-servers/{id}/discover", s.requireRole(authn.Admin, s.handleDiscoverMCPServer))
+	mux.Handle("PUT /v1/mcp-servers/{id}/tools", s.requireRole(authn.Admin, s.handleMCPServerTools))
 	mux.Handle("GET /v1/market/packages", s.requireRole(authn.Developer, s.handleMarketList))
 	mux.Handle("POST /v1/market/install", s.requireRole(authn.Admin, s.handleMarketInstall))
 	mux.Handle("POST /v1/market/refresh", s.requireRole(authn.Admin, s.handleMarketRefresh))

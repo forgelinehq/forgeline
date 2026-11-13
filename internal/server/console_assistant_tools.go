@@ -110,6 +110,12 @@ func (s *Server) lookupHelp(ctx context.Context, role authn.Role) string {
 				fmt.Fprintf(&b, "- %s %s\n", t.name, t.help)
 			}
 		}
+		// MCP servers (note 042): an agent sees the ones in its tool list; the assistant those marked for it.
+		for _, t := range s.extMCPTools(ctx) {
+			if sc := scopeFrom(ctx); (sc != nil && sc.allows(t.name)) || (sc == nil && t.server.ForAssistant) {
+				fmt.Fprintf(&b, "- %s %s\n", t.name, t.help)
+			}
+		}
 	}
 	return b.String()
 }
@@ -140,6 +146,22 @@ func parseLookup(reply string) (lookupCall, bool) {
 // runLookup runs one lookup as the given person. The result is text to be shown to the model as
 // untrusted data.
 func (s *Server) runLookup(ctx context.Context, p Principal, c lookupCall) (string, error) {
+	if strings.HasPrefix(c.Tool, mcpToolPrefix) {
+		if !p.Role.AtLeast(authn.Developer) {
+			return "", fmt.Errorf("%s is not available to your role", c.Tool)
+		}
+		sc := scopeFrom(ctx)
+		if sc != nil && !sc.allows(c.Tool) {
+			return "", fmt.Errorf("%s is not one of this agent's tools", c.Tool)
+		}
+		if sc == nil && !s.extMCPForAssistant(ctx, c.Tool) {
+			return "", fmt.Errorf("%s is not offered to the assistant", c.Tool)
+		}
+		if len(c.Args) == 0 {
+			c.Args = json.RawMessage(`{}`)
+		}
+		return s.runExtMCPLookup(ctx, c)
+	}
 	if strings.HasPrefix(c.Tool, pluginToolPrefix) {
 		if !p.Role.AtLeast(authn.Developer) {
 			return "", fmt.Errorf("%s is not available to your role", c.Tool)

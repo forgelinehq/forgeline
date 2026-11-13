@@ -20,7 +20,7 @@ const eq = (name, got, want) => {
 const links = (role) => visibleGroups(role).flatMap(g => g.items.filter(i => !i.planned).map(i => i.path));
 
 // Who sees what.
-eq('an administrator sees every page', links('admin'), ['/setup', '/people', '/sso', '/integrations', '/secrets', '/integrations/claude/settings', '/memory', '/ai-use', '/audit', '/approval-rules', '/account']);
+eq('an administrator sees every page', links('admin'), ['/setup', '/people', '/sso', '/integrations', '/secrets', '/mcp-servers', '/integrations/claude/settings', '/memory', '/ai-use', '/audit', '/approval-rules', '/account']);
 eq('a developer does not see People or the audit log', links('developer'), ['/setup', '/integrations', '/secrets', '/integrations/claude/settings', '/memory', '/ai-use', '/approval-rules', '/account']);
 eq('a viewer sees only their own tokens', links('viewer'), ['/account']);
 eq('an unknown role sees nothing', links('nobody'), []);

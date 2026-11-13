@@ -196,25 +196,32 @@ func (c *Client) Tools(ctx context.Context) ([]Tool, error) {
 
 // Call runs one tool.
 func (c *Client) Call(ctx context.Context, name string, args map[string]any) (Result, error) {
-	var out struct {
-		Content []struct {
-			Type string `json:"type"`
-			Text string `json:"text"`
-		} `json:"content"`
-		IsError           bool            `json:"isError"`
-		StructuredContent json.RawMessage `json:"structuredContent"`
-	}
+	var out callResult
 	if err := c.call(ctx, "tools/call", map[string]any{"name": name, "arguments": args}, &out); err != nil {
 		return Result{}, err
 	}
+	return out.result(), nil
+}
+
+// callResult is a tools/call result, as any transport receives it.
+type callResult struct {
+	Content []struct {
+		Type string `json:"type"`
+		Text string `json:"text"`
+	} `json:"content"`
+	IsError           bool            `json:"isError"`
+	StructuredContent json.RawMessage `json:"structuredContent"`
+}
+
+func (o callResult) result() Result {
 	var r Result
-	for _, p := range out.Content {
+	for _, p := range o.Content {
 		if p.Type == "text" {
 			r.Text += p.Text
 		}
 	}
-	r.IsError, r.Structured = out.IsError, out.StructuredContent
-	return r, nil
+	r.IsError, r.Structured = o.IsError, o.StructuredContent
+	return r
 }
 
 // Close stops the process.
