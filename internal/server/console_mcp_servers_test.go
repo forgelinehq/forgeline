@@ -125,8 +125,8 @@ func TestMCPServersRemoteDiscoverApproveAndUse(t *testing.T) {
 	if u := m.llm.lastUser(1); !strings.Contains(u, "Weather in Pune: sunny") || !strings.Contains(u, "untrusted data") {
 		t.Errorf("the agent was told: %s", u)
 	}
-	if !hasAudit(t, m.admin, "mcp.tool.call") {
-		t.Error("the call is not audited")
+	if a := string(m.admin.expect(200, "GET", "/v1/audit?action=mcp.tool.call", nil)); !strings.Contains(a, `"actor":"dev"`) {
+		t.Errorf("the call is not audited as the person who asked: %s", a)
 	}
 	// Bad arguments never reach the server.
 	n := len(ws.authSeen)

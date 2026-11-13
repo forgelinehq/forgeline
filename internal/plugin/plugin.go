@@ -181,9 +181,10 @@ func (r *Runner) session(ctx context.Context, s Spec, fn func(context.Context, *
 	rand.Read(b)
 	name := "forgeline-plugin-" + hex.EncodeToString(b)
 	netName, proxyEnv, hidden := "", []string(nil), []string(nil)
+	var eg *egress
 	if len(s.Hosts) > 0 {
-		eg, err := r.startEgress(ctx, s)
-		if err != nil {
+		var err error
+		if eg, err = r.startEgress(ctx, s); err != nil {
 			return err
 		}
 		defer eg.stop()
@@ -197,7 +198,23 @@ func (r *Runner) session(ctx context.Context, s Spec, fn func(context.Context, *
 		return fmt.Errorf("the plugin did not start: %w", err)
 	}
 	defer func() { c.Close(); r.kill(name) }()
-	return fn(ctx, c, l)
+	err = fn(ctx, c, l)
+	if err != nil && eg != nil && eg.proxy != nil && ctx.Err() != nil {
+		err = withEgressHint(err, eg.proxy.report())
+	}
+	return err
+}
+
+// withEgressHint explains a call that ran out of time without a single request reaching Forgeline's egress proxy.
+// The usual cause is a host firewall (ufw's default, for one) that drops traffic from containers to this machine,
+// where the proxy listens; the plugin then waits on a connection that never opens.
+func withEgressHint(err error, rep EgressReport) error {
+	if len(rep.Allowed)+len(rep.Denied)+len(rep.Failed) > 0 || rep.Unauthorized > 0 {
+		return err
+	}
+	return fmt.Errorf("%w (no request reached Forgeline's egress proxy; if the tool needed the network, a firewall on "+
+		"this machine may be blocking containers from reaching it: with ufw, allow traffic from the Docker networks "+
+		"to this host)", err)
 }
 
 // egress is the private network and proxy set up for one call.

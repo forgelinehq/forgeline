@@ -7,6 +7,11 @@ section in the pull request that makes the change; a release moves it under its 
 ## [Unreleased]
 
 ### Fixed
+- **MCP tool calls are audited as the person who asked.** Calls from an agent chat were logged as `system`; they now
+  name the person (found on the Pi with a real MCP server).
+- **A plugin that cannot reach Forgeline's egress proxy says why.** On a machine whose firewall drops traffic from
+  containers to the host (ufw's default), a plugin or local MCP server with a host list waited until its time ran out
+  with only "took too long"; when no request reached the proxy, the error now says a firewall may be blocking it.
 - **GitHub Actions can take the push role.** GitHub now sends token subjects with numeric ids
   (`repo:owner@123/name@456:ref:refs/heads/main`), which the role refused on real AWS. The trust accepts both forms, with
   only the ids as wildcards.

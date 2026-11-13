@@ -523,8 +523,9 @@ func (s *Server) extMCPToolNames(ctx context.Context) []string {
 	return out
 }
 
-// runMCPLookup calls one tool for the asker. The caller has checked the role and the agent's scope.
-func (s *Server) runExtMCPLookup(ctx context.Context, c lookupCall) (string, error) {
+// runExtMCPLookup calls one tool for the asker, p, who is named in the audit log. The caller has checked the role and
+// the agent's scope.
+func (s *Server) runExtMCPLookup(ctx context.Context, p Principal, c lookupCall) (string, error) {
 	for _, t := range s.extMCPTools(ctx) {
 		if t.name != c.Tool {
 			continue
@@ -546,10 +547,6 @@ func (s *Server) runExtMCPLookup(ctx context.Context, c lookupCall) (string, err
 		out := ""
 		if err == nil {
 			out, err = sess.Call(cctx, t.tool, args)
-		}
-		p := Principal{Name: "system"}
-		if tt := memTurnFrom(ctx); tt != nil {
-			p = tt.p
 		}
 		detail := fmt.Sprintf("%s.%s, %d bytes of arguments, %d bytes back, %s", t.server.ID, t.tool, len(c.Args), len(out), time.Since(start).Round(time.Millisecond))
 		if err != nil {
