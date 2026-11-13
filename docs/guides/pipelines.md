@@ -68,7 +68,8 @@ The Dockerfile's `RUN` lines get no secrets, no files from the server and no ext
 Pushing is trusted only for a run GitHub started for a push** (not a pull request, not a console run) to a branch that
 an administrator's push rule under **Settings › Image builds** allows, to exactly the rule's repository. For each push
 Forgeline asks the rule's AWS account for a short-lived ECR token, which never enters a build container or a log, and
-builds without reusing cached layers. Every build and push is in the audit log, with the image's digest. Pushing does
+builds without reusing cached layers. A pull request or a console run builds the same step without pushing, so pull
+requests check that the image builds; a push to a branch without a matching rule fails. Every build and push is in the audit log, with the image's digest. Pushing does
 not deploy: a deploy still goes through an approval. `forgeline run` builds and never pushes. See
 [design note 043](https://github.com/forgelinehq/forgeline/blob/main/docs/design/043-native-image-builds.md).
 

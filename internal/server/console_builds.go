@@ -161,15 +161,24 @@ func (s *Server) handleDeletePushRule(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// pushRuleFor returns the rule that lets run push to target, or why none does. Only a run GitHub started for a push
-// (refs/heads/<branch>) can push; a pull request's code, or a console run without a source, never can.
-func (s *Server) pushRuleFor(ctx context.Context, run store.Run, target string) (BuildPushRule, string) {
+// pushTrusted says whether run is one that may push at all, or why not. Only a run GitHub started for a push
+// (refs/heads/<branch>) can; a pull request's code, or a console or API run, never can. Such runs still build.
+func pushTrusted(run store.Run) (branch, why string) {
 	if run.Trigger != store.TriggerGitHub {
-		return BuildPushRule{}, "only runs GitHub starts for a push may push images (this run was started from " + string(run.Trigger) + ")"
+		return "", "only runs GitHub starts for a push may push images (this run was started from " + string(run.Trigger) + ")"
 	}
 	branch, ok := strings.CutPrefix(run.SourceRef, "refs/heads/")
 	if !ok || branch == "" {
-		return BuildPushRule{}, "only a push to a branch may push images; this run is for " + run.SourceRef
+		return "", "only a push to a branch may push images; this run is for " + run.SourceRef
+	}
+	return branch, ""
+}
+
+// pushRuleFor returns the rule that lets run push to target, or why none does.
+func (s *Server) pushRuleFor(ctx context.Context, run store.Run, target string) (BuildPushRule, string) {
+	branch, why := pushTrusted(run)
+	if why != "" {
+		return BuildPushRule{}, why
 	}
 	rules, err := s.listPushRules(ctx)
 	if err != nil {
@@ -204,6 +213,13 @@ func (s *Server) buildStep(run store.Run) func(context.Context, *pipeline.Step, 
 		}
 		req := build.Request{Docker: os.Getenv("FORGELINE_DOCKER"), Workspace: s.workspace(run.ID), Build: b}
 		target := ""
+		if _, untrusted := pushTrusted(run); b.Push != "" && untrusted != "" {
+			// A pull request or a console run checks that the image builds; it never pushes, and that is not an error.
+			fmt.Fprintf(logs, "building without pushing: %s\n", untrusted)
+			s.audit(ctx, who, "", "build.push", "image/"+b.Push, "not pushed (built only): "+untrusted, false)
+			b.Push, b.Tags = "", nil
+			req.Build = b
+		}
 		if b.Push != "" {
 			rule, why := s.pushRuleFor(ctx, run, b.Push)
 			if why != "" {

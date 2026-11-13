@@ -27,7 +27,12 @@ does not need Actions, without letting a pipeline file push whatever it likes wi
    - an administrator's **push rule** names the source repository, the branch (patterns as on the GitHub allow list)
      and the exact target repository (`<account>.dkr.ecr.<region>.amazonaws.com/<name>`), and which Forgeline AWS
      account pushes there;
-   - the step's `push` equals the rule's target. Anything else fails before the build starts, with the reason.
+   - the step's `push` equals the rule's target.
+
+   A pull request, or a console or API run, builds the same step **without pushing** and succeeds, with the reason in
+   its log and the audit log (so pull requests check that the image builds, as `main` publishes it). A push to a branch
+   whose rule does not match fails before the build starts, with the reason: on a branch meant to publish, that is a
+   mistake to see.
    Runs started from the console have no source checkout yet, so they can build only what is in their workspace and
    cannot push (slice 2 adds a checkout and decides who may push from the console).
 4. **Short-lived push credentials that never enter a container.** For each push the server asks the rule's AWS account

@@ -90,21 +90,39 @@ func TestBuildStepPushesOnlyForATrustedPush(t *testing.T) {
 	}
 	withPush := pipeline.Build{Context: "app", Push: testTarget}
 
-	// Refused before anything is built or any credential is asked for.
+	// Runs that may not push build the same step without pushing, and never ask for a credential.
+	m.admin.expect(200, "PUT", "/v1/build-push-rules/odd", pushRuleBody(map[string]any{"branches": []string{"r*/p*/*/h*"}})) // would match a pull request's ref
+	for name, run := range map[string]store.Run{
+		"console run":           {ID: "r1", Trigger: store.TriggerUI},
+		"api run":               {ID: "r1", Trigger: store.TriggerAPI},
+		"api run claiming main": {ID: "r1", Trigger: store.TriggerAPI, SourceRepo: "acme/web", SourceRef: "refs/heads/main", SourceSHA: testSHA},
+		"ui run claiming main":  {ID: "r1", Trigger: store.TriggerUI, SourceRepo: "acme/web", SourceRef: "refs/heads/main", SourceSHA: testSHA},
+		"pull request":          gh("refs/pull/7/head"),
+		"tag ref":               gh("refs/tags/v1"),
+	} {
+		tokenFor = nil
+		err, logs := push(run, withPush)
+		if err != nil || len(calls) != 1 || len(calls[0].Refs) != 0 || calls[0].Auth != "" || calls[0].Build.Push != "" || len(tokenFor) != 0 {
+			t.Errorf("%s: err=%v calls=%+v tokens=%v", name, err, calls, tokenFor)
+		}
+		if !strings.Contains(logs, "building without pushing") {
+			t.Errorf("%s: the log does not say why nothing was pushed: %s", name, logs)
+		}
+	}
+	m.admin.expect(204, "DELETE", "/v1/build-push-rules/odd", nil)
+	if !strings.Contains(string(m.admin.expect(200, "GET", "/v1/audit?action=build.push", nil)), "not pushed (built only)") {
+		t.Error("a build that did not push is not audited")
+	}
+
+	// A push to a branch that may push, but with no matching rule, fails before anything is built.
 	for name, c := range map[string]struct {
 		run store.Run
 		b   pipeline.Build
 	}{
-		"console run":           {store.Run{ID: "r1", Trigger: store.TriggerUI}, withPush},
-		"api run":               {store.Run{ID: "r1", Trigger: store.TriggerAPI}, withPush},
-		"api run claiming main": {store.Run{ID: "r1", Trigger: store.TriggerAPI, SourceRepo: "acme/web", SourceRef: "refs/heads/main", SourceSHA: testSHA}, withPush},
-		"ui run claiming main":  {store.Run{ID: "r1", Trigger: store.TriggerUI, SourceRepo: "acme/web", SourceRef: "refs/heads/main", SourceSHA: testSHA}, withPush},
-		"pull request":          {gh("refs/pull/7/head"), withPush},
-		"branch not in rule":    {gh("refs/heads/feature/x"), withPush},
-		"tag ref":               {gh("refs/tags/v1"), withPush},
-		"other repository":      {store.Run{ID: "r1", Trigger: store.TriggerGitHub, SourceRepo: "acme/other", SourceRef: "refs/heads/main", SourceSHA: testSHA}, withPush},
-		"target one char off":   {gh("refs/heads/main"), pipeline.Build{Context: "app", Push: testTarget + "s"}},
-		"other registry":        {gh("refs/heads/main"), pipeline.Build{Context: "app", Push: "210987654321.dkr.ecr.ap-south-1.amazonaws.com/web"}},
+		"branch not in rule":  {gh("refs/heads/feature/x"), withPush},
+		"other repository":    {store.Run{ID: "r1", Trigger: store.TriggerGitHub, SourceRepo: "acme/other", SourceRef: "refs/heads/main", SourceSHA: testSHA}, withPush},
+		"target one char off": {gh("refs/heads/main"), pipeline.Build{Context: "app", Push: testTarget + "s"}},
+		"other registry":      {gh("refs/heads/main"), pipeline.Build{Context: "app", Push: "210987654321.dkr.ecr.ap-south-1.amazonaws.com/web"}},
 	} {
 		tokenFor = nil
 		err, _ := push(c.run, c.b)
@@ -112,17 +130,11 @@ func TestBuildStepPushesOnlyForATrustedPush(t *testing.T) {
 			t.Errorf("%s: err=%v builds=%d tokens=%v", name, err, len(calls), tokenFor)
 		}
 	}
-	// A rule whose odd pattern would match a pull request's ref still never lets a pull request push.
-	m.admin.expect(200, "PUT", "/v1/build-push-rules/odd", pushRuleBody(map[string]any{"branches": []string{"r*/p*/*/h*"}}))
-	if err, _ := push(gh("refs/pull/7/head"), withPush); err == nil || len(calls) != 0 {
-		t.Errorf("a pull request pushed through an odd pattern: %v", err)
-	}
-	m.admin.expect(204, "DELETE", "/v1/build-push-rules/odd", nil)
 	if !strings.Contains(string(m.admin.expect(200, "GET", "/v1/audit?action=build.push", nil)), "refused") {
 		t.Error("refused pushes are not audited")
 	}
 
-	// A pull request still builds, without pushing and without any credential.
+	// A pull request without push builds as before.
 	tokenFor = nil
 	if err, _ := push(gh("refs/pull/7/head"), pipeline.Build{Context: "app"}); err != nil || len(calls) != 1 || len(calls[0].Refs) != 0 || calls[0].Auth != "" || len(tokenFor) != 0 {
 		t.Fatalf("build-only: err=%v calls=%+v tokens=%v", err, calls, tokenFor)
@@ -178,5 +190,20 @@ func TestBuildStepPushesOnlyForATrustedPush(t *testing.T) {
 	}
 	if !strings.Contains(string(m.admin.expect(200, "GET", "/v1/audit?action=build.run", nil)), "exit 1") {
 		t.Error("a failed build is not audited")
+	}
+}
+
+// pushRuleFor refuses an untrusted run on its own too, even with a rule whose odd pattern would match its ref.
+func TestPushRuleForNeedsATrustedRunItself(t *testing.T) {
+	m := newMCPHarness(t)
+	m.turnOn()
+	m.admin.expect(200, "PUT", "/v1/build-push-rules/odd", pushRuleBody(map[string]any{"branches": []string{"r*/p*/*/h*"}}))
+	for _, run := range []store.Run{
+		{Trigger: store.TriggerGitHub, SourceRepo: "acme/web", SourceRef: "refs/pull/7/head"},
+		{Trigger: store.TriggerAPI, SourceRepo: "acme/web", SourceRef: "refs/heads/main"},
+	} {
+		if _, why := m.harness.srv.pushRuleFor(t.Context(), run, testTarget); why == "" {
+			t.Errorf("%+v found a rule", run)
+		}
 	}
 }
