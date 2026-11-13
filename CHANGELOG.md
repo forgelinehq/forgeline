@@ -47,6 +47,13 @@ section in the pull request that makes the change; a release moves it under its 
 - **After a session ends**, the console stops polling the server (it asked every minute, forever).
 
 ### Added
+- **MCP servers you add.** Under Settings › Connections › MCP servers an administrator adds a remote MCP server (an
+  HTTPS address, with a token from the vault) or a local one (a container image pinned by digest, run like a plugin with
+  no network unless granted). Forgeline reads its tools; each starts off, and only tools marked read-only can be turned
+  on. A turned-on tool's definition is pinned: if the server later changes it, the tool is off until someone looks again.
+  Agents get a tool only when it is added to their tools; the assistant only when the server is offered to it. Calls are
+  audited, arguments are checked against the tool's schema, answers are untrusted data, and remote addresses that are
+  private or cloud-internal are refused unless allowed. Speaks MCP 2026-07-28 and falls back for older servers (note 042).
 - **Workflows as a graph.** A workflow's page draws it like n8n: the trigger, each stage as a column of agents that run
   together, and an approval node before a gated stage. A run's page shows each node's state live, with moving dots into
   what is working.

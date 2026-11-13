@@ -493,7 +493,7 @@ func (s *Server) resolveAgent(ctx context.Context, req agentRequest) (AgentVersi
 	case !validTier(req.Tier):
 		return AgentVersion{}, "the tier must be T0 (advisory) or T1 (may file proposals)"
 	}
-	if err := validTools(req.Tools, req.Tier, s.pluginToolNames(ctx)...); err != nil {
+	if err := validTools(req.Tools, req.Tier, append(s.pluginToolNames(ctx), s.extMCPToolNames(ctx)...)...); err != nil {
 		return AgentVersion{}, err.Error()
 	}
 	pins := []SkillPin{}
@@ -875,6 +875,9 @@ func (s *Server) handleListAITools(w http.ResponseWriter, r *http.Request) {
 	}
 	for _, t := range s.pluginTools(r.Context()) {
 		out = append(out, tool{Name: t.name, Help: t.help, Min: string(authn.Developer), Needs: "plugins"})
+	}
+	for _, t := range s.extMCPTools(r.Context()) {
+		out = append(out, tool{Name: t.name, Help: t.help, Min: string(authn.Developer), Needs: "mcp-server"})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"tools": out})
 }

@@ -29,6 +29,7 @@ import { settingsPage } from './pages/settings.js';
 import { ssoPage } from './pages/sso.js';
 import { approvalRulesPage } from './pages/approval_rules.js';
 import { teamPage } from './pages/team.js';
+import { mcpServersPage } from './pages/mcp_servers.js';
 import { watchMapPage } from './pages/watch_map.js';
 import { servicesPage, servicePage } from './pages/services.js';
 import { aiUsePage } from './pages/ai_use.js';
@@ -251,6 +252,7 @@ async function boot() {
     route('/infrastructure', guard('viewer', infraPage));
     route('/settings', guard('developer', settingsPage));
     route('/integrations', guard('developer', inSettings(integrationsHubPage)));
+    route('/mcp-servers', guard('admin', inSettings(mcpServersPage)));
     route('/integrations/github/settings', guard('developer', inSettings(githubSettingsPage)));
     route('/integrations/claude/settings', guard('developer', inSettings(claudeSettingsPage)));
     route('/integrations/:id', guard('developer', inSettings(integrationsHubPage))); // opens that integration's popup over the hub

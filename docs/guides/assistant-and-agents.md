@@ -105,6 +105,27 @@ edges into what is working now. The stages are still listed in full below the gr
 ![A workflow as a graph]({{ '/console/134-workflow-graph.png' | relative_url }})
 ![A run on the graph]({{ '/console/135-workflow-run-graph.png' | relative_url }})
 
+## MCP servers you add
+
+Under **Settings › Connections › MCP servers** an administrator adds an MCP server: a **remote** one by its HTTPS
+address (with a token or header value taken from Secrets, never shown again), or a **local** one as a container image
+pinned by digest, which runs like a plugin: a fresh container per call, no network unless you grant it (all of it, or
+only named hosts), secrets from the vault as environment variables.
+
+Press **Read its tools** to see what it offers. Every tool starts off. Only tools the server marks read-only can be turned
+on; a tool that may change things says why it stays off, because it would bypass approvals. When you turn a tool on,
+its definition is pinned: if the server later offers a different description or arguments, the tool turns itself off
+until you read it again. Changing a server's address or image turns all its tools off.
+
+A turned-on tool is named `mcp_<server>_<tool>`. Agents get it only when you add it to their tools; the assistant gets
+it only when the server is marked **Offer its turned-on tools to the assistant**, and only for developers and above.
+Arguments are checked against the tool's own schema before the call, every call is in the audit log, and what the tool
+returns is shown to the model as untrusted data. A remote server on a private or cloud-internal address is refused
+unless you tick **It is on a private network**; redirects are never followed. See
+[design note 042](https://github.com/forgelinehq/forgeline/blob/main/docs/design/042-mcp-servers.md).
+
+![MCP servers]({{ '/console/136-mcp-servers.png' | relative_url }})
+
 ## Agents you define
 
 Under **Team → Agents** you can define named agents with instructions, skills and a short list of tools. The instructions are written in Markdown, with a live preview and advisory checks; the model receives exactly the text you wrote. See the [Console tour]({{ '/guides/console-tour/' | relative_url }}#agents).
