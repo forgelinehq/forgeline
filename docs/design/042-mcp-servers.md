@@ -1,6 +1,6 @@
 # 042: MCP servers you add: remote and local
 
-Status: **decided 2026-11-12; slice 1 (remote servers, local container servers, discovered tools, grants) built 2026-11-13.** Verified with stand-in servers in tests and in the browser; not yet against a real public MCP server or a real container (see Checks).
+Status: **decided 2026-11-12; slice 1 (remote servers, local container servers, discovered tools, grants) built 2026-11-13.** Checked on the Pi against real remote servers and real containers; findings and open points in [the 2026-11-13 checks](../testing/2026-11-13-mcp-servers.md).
 Extends note 018 (plugins: MCP servers shipped as container images in Marketplace packages) and note 020 (Forgeline as
 an MCP server).
 
