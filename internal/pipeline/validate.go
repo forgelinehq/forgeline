@@ -3,6 +3,7 @@ package pipeline
 import (
 	"fmt"
 	"path"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -75,17 +76,17 @@ func (p *Pipeline) Validate() error {
 	for i, s := range p.Steps {
 		path := fmt.Sprintf("steps[%d]", i)
 
-		if s.Workflow == nil && (strings.TrimSpace(s.Image) == "" || strings.ContainsAny(s.Image, " \t\n")) {
+		if s.Workflow == nil && s.Build == nil && (strings.TrimSpace(s.Image) == "" || strings.ContainsAny(s.Image, " \t\n")) {
 			add(path+".image", "is required and must not contain whitespace, got %q", s.Image)
 		}
 
 		hasRun := strings.TrimSpace(s.Run) != ""
 		hasCommand := len(s.Command) > 0
 		switch {
-		case countTrue(hasRun, hasCommand, s.Agent != nil, s.Workflow != nil) > 1:
-			add(path, "set exactly one of run, command, agent or workflow, not several")
-		case !hasRun && !hasCommand && s.Agent == nil && s.Workflow == nil:
-			add(path, "set exactly one of run, command, agent or workflow")
+		case countTrue(hasRun, hasCommand, s.Agent != nil, s.Workflow != nil, s.Build != nil) > 1:
+			add(path, "set exactly one of run, command, agent, workflow or build, not several")
+		case !hasRun && !hasCommand && s.Agent == nil && s.Workflow == nil && s.Build == nil:
+			add(path, "set exactly one of run, command, agent, workflow or build")
 		case hasCommand && strings.TrimSpace(s.Command[0]) == "":
 			add(path+".command[0]", "the program name must not be empty")
 		}
@@ -95,6 +96,9 @@ func (p *Pipeline) Validate() error {
 		}
 		if s.Workflow != nil {
 			validateWorkflow(s, path, add)
+		}
+		if s.Build != nil {
+			validateBuild(s, path, add)
 		}
 
 		seenNeeds := make(map[string]bool, len(s.Needs))
@@ -241,6 +245,67 @@ func validateWorkflow(s Step, path string, add func(path, format string, args ..
 	}
 	if s.Image != "" || len(s.Env) > 0 || s.WorkDir != "" || len(s.Inputs) > 0 || s.Permissions.Network != "" || len(s.Permissions.Secrets) > 0 {
 		add(path, "a workflow step runs on GitHub: it takes no image, env, workdir, inputs or permissions")
+	}
+}
+
+var (
+	buildPlatformRE = regexp.MustCompile(`^linux/(amd64|arm64|arm/v7)$`)
+	buildArgRE      = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]{0,63}$`)
+	buildTagRE      = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$`)
+	// An ECR repository: <account>.dkr.ecr.<region>.amazonaws.com/<name>, name in ECR's own lower-case form.
+	BuildPushRE = regexp.MustCompile(`^[0-9]{12}\.dkr\.ecr\.[a-z]{2}(-[a-z]+)+-[0-9]\.amazonaws\.com/[a-z0-9]+([._-][a-z0-9]+)*(/[a-z0-9]+([._-][a-z0-9]+)*)*$`)
+)
+
+// buildPathOK says whether p is a clean relative path that stays inside its base.
+func buildPathOK(p string) bool {
+	return p == "" || (filepath.IsLocal(p) && !strings.ContainsAny(p, "\\\x00") && filepath.Clean(p) == p)
+}
+
+// validateBuild checks a build step. The server checks the push again, against its push rules.
+func validateBuild(s Step, path string, add func(path, format string, args ...any)) {
+	b := s.Build
+	bpath := path + ".build"
+	if b.Context != "." && !buildPathOK(b.Context) {
+		add(bpath+".context", "must be a clean path inside the workspace such as app or services/web, got %q", b.Context)
+	}
+	if !buildPathOK(b.Dockerfile) {
+		add(bpath+".dockerfile", "must be a clean path inside the context such as Dockerfile or docker/Dockerfile.prod, got %q", b.Dockerfile)
+	}
+	if b.Platform != "" && !buildPlatformRE.MatchString(b.Platform) {
+		add(bpath+".platform", "must be linux/amd64, linux/arm64 or linux/arm/v7, got %q", b.Platform)
+	}
+	if b.Network != "" && b.Network != NetworkNone && b.Network != NetworkEgress {
+		add(bpath+".network", "must be none or egress, got %q", b.Network)
+	}
+	if len(b.Args) > 25 {
+		add(bpath+".args", "at most 25 build arguments, got %d", len(b.Args))
+	}
+	names := make([]string, 0, len(b.Args))
+	for k := range b.Args {
+		names = append(names, k)
+	}
+	sort.Strings(names)
+	for _, k := range names {
+		if !buildArgRE.MatchString(k) || len(b.Args[k]) > 1000 {
+			add(bpath+".args", "argument %q has a bad name or a value over 1000 bytes", k)
+		}
+	}
+	if b.Push != "" && !BuildPushRE.MatchString(b.Push) {
+		add(bpath+".push", "must be an ECR repository such as 123456789012.dkr.ecr.ap-south-1.amazonaws.com/web, without a tag, got %q", b.Push)
+	}
+	if len(b.Tags) > 5 {
+		add(bpath+".tags", "at most 5 tags, got %d", len(b.Tags))
+	}
+	for j, t := range b.Tags {
+		if !buildTagRE.MatchString(t) {
+			add(fmt.Sprintf("%s.tags[%d]", bpath, j), "is not a valid image tag: %q", t)
+		}
+	}
+	if len(b.Tags) > 0 && b.Push == "" {
+		add(bpath+".tags", "tags are only used when pushing; set push too")
+	}
+	if s.Image != "" || len(s.Env) > 0 || s.WorkDir != "" || len(s.Inputs) > 0 || s.Permissions.Network != "" || len(s.Permissions.Secrets) > 0 {
+		add(path, "a build step is run by Forgeline: it takes no image, env, workdir, inputs or permissions (use build.network)")
 	}
 }
 

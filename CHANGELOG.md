@@ -52,6 +52,11 @@ section in the pull request that makes the change; a release moves it under its 
 - **After a session ends**, the console stops polling the server (it asked every minute, forever).
 
 ### Added
+- **Build images in Forgeline.** A `build` step builds a container image from the run's files with BuildKit, and can
+  push it to Amazon ECR. Any run may build; only a run GitHub started for a push to a branch an administrator's push rule
+  (Settings › Image builds) allows may push, and only to that rule's repository, with a short-lived ECR token that never
+  enters a container or a log. The Dockerfile gets no secrets or privileges; `network: none` cuts it off. `forgeline
+  run` builds on a laptop and never pushes. The editor's Add a step offers it (note 043).
 - **A refused argument names the allowed values**, so the model can correct its call (found on the Pi: the model asked
   GitHub's `list_commits` for a field it does not offer).
 - **A tool its server says changes things cannot be marked read-only.** `readOnlyHint: false` (GitHub's write tools,

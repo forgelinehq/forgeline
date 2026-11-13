@@ -131,7 +131,7 @@ export async function pipelineEditorPage({ params }) {
     return modal('Add a step', (close) => {
       const idIn = h('input', { id: 'sid', class: 'input', placeholder: 'build', pattern: '[a-z][a-z0-9-]*' });
       const imgIn = h('input', { id: 'simg', class: 'input', value: 'alpine:3.24' });
-      const kind = h('select', { id: 'skind', class: 'input' }, h('option', { value: 'script' }, 'Script'), h('option', { value: 'claude-code' }, 'Claude Code agent'), h('option', { value: 'workflow' }, 'GitHub Actions workflow'));
+      const kind = h('select', { id: 'skind', class: 'input' }, h('option', { value: 'script' }, 'Script'), h('option', { value: 'claude-code' }, 'Claude Code agent'), h('option', { value: 'workflow' }, 'GitHub Actions workflow'), h('option', { value: 'build' }, 'Build an image'));
       kind.addEventListener('change', () => { if (kind.value === 'claude-code' && imgIn.value === 'alpine:3.24') imgIn.value = 'forgeline-agent-claude'; sync(); });
       const toolsIn = h('input', { id: 'stools', class: 'input', placeholder: 'Read, Grep, Glob (read-only if empty)' });
       const cmd = h('textarea', { id: 'scmd', class: 'input h-28 font-mono text-[13px]', placeholder: 'echo hello', spellcheck: 'false' });
@@ -149,15 +149,26 @@ export async function pipelineEditorPage({ params }) {
         h('div', { class: 'grid gap-4 sm:grid-cols-2' }, field('Repository', wfRepo), field('Workflow file', wfFile, 'File name under .github/workflows, or its number.')),
         field('Branch', wfRef), field('Inputs (optional)', wfInputs, 'One name=value per line.'),
         h('label', { class: 'flex items-center gap-2 text-sm' }, wfDetach, 'Do not wait for it to finish'));
+      const bCtx = h('input', { id: 'bctx', class: 'input font-mono', placeholder: '. (the repository root)' });
+      const bFile = h('input', { id: 'bfile', class: 'input font-mono', placeholder: 'Dockerfile' });
+      const bPlat = h('select', { id: 'bplat', class: 'input' }, h('option', { value: '' }, 'The builder\u2019s own'), ['linux/amd64', 'linux/arm64', 'linux/arm/v7'].map(p => h('option', { value: p }, p)));
+      const bNet = h('select', { id: 'bnet', class: 'input' }, h('option', { value: '' }, 'Allowed (default)'), h('option', { value: 'none' }, 'None: RUN lines get no network'));
+      const bPush = h('input', { id: 'bpush', class: 'input font-mono', placeholder: '123456789012.dkr.ecr.ap-south-1.amazonaws.com/web (optional)' });
+      const bTags = h('input', { id: 'btags', class: 'input font-mono', placeholder: 'the commit (default), or latest, v1' });
+      const buildBox = h('div', { class: 'hidden space-y-4' },
+        notice('info', 'Forgeline builds the image from the run\u2019s files with BuildKit. The Dockerfile gets no secrets. It pushes only for runs GitHub starts for a push to a branch that an administrator\u2019s push rule allows, to that rule\u2019s repository; any other run builds without pushing.'),
+        h('div', { class: 'grid gap-4 sm:grid-cols-2' }, field('Directory to build', bCtx, 'Inside the repository.'), field('Dockerfile', bFile, 'Relative to that directory.')),
+        h('div', { class: 'grid gap-4 sm:grid-cols-2' }, field('Platform', bPlat), field('Network while building', bNet)),
+        field('Push to (ECR repository)', bPush, 'Without a tag. Leave empty to only build.'), field('Tags', bTags, 'Comma separated; only used when pushing.'));
       const containerOnly = [];
-      const sync = () => { const wf = kind.value === 'workflow'; wfBox.classList.toggle('hidden', !wf); containerOnly.forEach(e => e.classList.toggle('hidden', wf)); };
+      const sync = () => { const wf = kind.value === 'workflow', bd = kind.value === 'build'; wfBox.classList.toggle('hidden', !wf); buildBox.classList.toggle('hidden', !bd); containerOnly.forEach(e => e.classList.toggle('hidden', wf || bd)); };
       const err = h('div', { class: 'mt-3 hidden' });
       const checks = (items, empty) => h('div', { class: 'flex flex-wrap gap-x-4 gap-y-1.5' }, items.length ? items.map(i => h('label', { class: 'flex items-center gap-1.5 text-sm' }, i.box, i.s)) : h('span', { class: 'muted text-sm' }, empty));
       const cont = (el) => { containerOnly.push(el); return el; };
       return h('div', { class: 'space-y-4' },
         field('Kind', kind, 'A Claude Code agent runs the claude command line in the image with your prompt. It needs a login secret ticked below (CLAUDE_CODE_OAUTH_TOKEN from claude setup-token, or ANTHROPIC_API_KEY).'),
         h('div', { class: 'grid gap-4 sm:grid-cols-2' }, field('Step id', idIn, 'Lowercase letters, digits and hyphens.'), cont(field('Container image', imgIn, 'Pin a version or digest.'))),
-        wfBox,
+        wfBox, buildBox,
         cont(field('Command or prompt', cmd, 'Script: one command per line. Agent: what to ask it.')),
         cont(field('Agent tools', toolsIn, 'Agent only. Comma separated, for example Read, Edit, Bash(go test:*). The agent cannot ask for approval in a pipeline, so anything not listed is refused.')),
         field('Runs after', checks(needs, 'No other steps yet.'), 'Steps that must succeed first.'),
@@ -168,19 +179,32 @@ export async function pipelineEditorPage({ params }) {
             const sid = idIn.value.trim();
             const fail = (m) => { mount(err, errorBox(m)); err.classList.remove('hidden'); };
             if (!/^[a-z][a-z0-9-]{0,62}$/.test(sid)) return fail('The step id must be lowercase letters, digits and hyphens, starting with a letter.');
-            const wf = kind.value === 'workflow';
+            const bd = kind.value === 'build';
+            const wf = kind.value === 'workflow' || bd; // neither runs a container the step chooses
             if (!wf && !cmd.value.trim()) return fail('Give the step something to run.');
             if (!wf && !imgIn.value.trim()) return fail('Give a container image.');
-            if (wf && !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(wfRepo.value.trim())) return fail('The repository must look like owner/name.');
-            if (wf && !wfFile.value.trim()) return fail('Give the workflow file, such as ci.yml.');
-            if (wf && !wfRef.value.trim()) return fail('Give the branch to run it on.');
+            const tags = bTags.value.split(',').map(t => t.trim()).filter(Boolean);
+            if (bd && bPush.value.trim() && !/^[0-9]{12}\.dkr\.ecr\.[a-z0-9-]+\.amazonaws\.com\/[a-z0-9._/-]+$/.test(bPush.value.trim())) return fail('Push to must be an ECR repository without a tag, such as 123456789012.dkr.ecr.ap-south-1.amazonaws.com/web.');
+            if (bd && tags.length && !bPush.value.trim()) return fail('Tags are only used when pushing.');
+            if (wf && !bd && !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(wfRepo.value.trim())) return fail('The repository must look like owner/name.');
+            if (wf && !bd && !wfFile.value.trim()) return fail('Give the workflow file, such as ci.yml.');
+            if (wf && !bd && !wfRef.value.trim()) return fail('Give the branch to run it on.');
             if (steps.includes(sid)) return fail('A step called ' + sid + ' already exists.');
             const idx = text.search(/^steps:\s*$/m);
             if (idx < 0 || /^[A-Za-z]/m.test(text.slice(idx + 6))) return fail('The steps list is not at the end of the file, so the step cannot be added automatically. Add it by hand.');
             const pick = (items) => items.filter(i => i.box.checked).map(i => i.s);
             const agent = kind.value === 'claude-code';
             let b = wf ? `  - id: ${sid}\n` : `  - id: ${sid}\n    image: ${imgIn.value.trim()}\n`;
-            if (wf) {
+            if (bd) {
+              b += '    build:\n';
+              if (bCtx.value.trim()) b += `      context: ${JSON.stringify(bCtx.value.trim())}\n`;
+              if (bFile.value.trim()) b += `      dockerfile: ${JSON.stringify(bFile.value.trim())}\n`;
+              if (bPlat.value) b += `      platform: ${bPlat.value}\n`;
+              if (bNet.value) b += `      network: ${bNet.value}\n`;
+              if (bPush.value.trim()) b += `      push: ${JSON.stringify(bPush.value.trim())}\n`;
+              if (tags.length) b += `      tags: [${tags.map(t => JSON.stringify(t)).join(', ')}]\n`;
+              if (b.endsWith('build:\n')) b = b.replace(/build:\n$/, 'build: {}\n');
+            } else if (wf) {
               // JSON strings are valid double-quoted YAML scalars.
               b += `    workflow:\n      repo: ${JSON.stringify(wfRepo.value.trim())}\n      workflow: ${JSON.stringify(wfFile.value.trim())}\n      ref: ${JSON.stringify(wfRef.value.trim())}\n`;
               const ins = wfInputs.value.split('\n').map(l => l.trim()).filter(Boolean).map(l => { const i = l.indexOf('='); return i > 0 ? [l.slice(0, i).trim(), l.slice(i + 1)] : null; }).filter(Boolean);

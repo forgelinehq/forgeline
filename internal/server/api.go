@@ -145,6 +145,10 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /v1/blueprints/{id}/assist", s.requireRole(authn.Developer, s.handleBlueprintAssist))
 	mux.Handle("GET /v1/plugins", s.requireRole(authn.Developer, s.handleGetPlugins))
 	mux.Handle("PUT /v1/plugins/settings", s.requireRole(authn.Admin, s.handlePluginSettings))
+	// Push rules for build steps (note 043): which repository and branches may push to which ECR repository.
+	mux.Handle("GET /v1/build-push-rules", s.requireRole(authn.Admin, s.handleListPushRules))
+	mux.Handle("PUT /v1/build-push-rules/{id}", s.requireRole(authn.Admin, s.handlePutPushRule))
+	mux.Handle("DELETE /v1/build-push-rules/{id}", s.requireRole(authn.Admin, s.handleDeletePushRule))
 	// MCP servers an administrator adds, remote or local (note 042).
 	mux.Handle("GET /v1/mcp-servers", s.requireRole(authn.Admin, s.handleListMCPServers))
 	mux.Handle("POST /v1/mcp-servers", s.requireRole(authn.Admin, s.handleCreateMCPServer))

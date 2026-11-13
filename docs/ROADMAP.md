@@ -21,6 +21,13 @@ in [PLAN.md](PLAN.md).
 | M6 | AI agents | Governed agent steps with scoped credentials and cost tracking; failure triage; fix suggestions as pull requests, never auto-applied | In progress: Claude Code agent steps built (note 007); Codex, Copilot, triage and cost tracking open |
 | M7 | Migration and breadth | Importers for Jenkinsfile and GitHub Actions workflows; Bitbucket and GitLab triggers; additional cloud targets | Not started |
 
+## Native image builds (note 043)
+
+Status: **slice 1 built (2026-11-13).** A `build` step builds with BuildKit and pushes to ECR only for runs GitHub
+started for a push to a branch a push rule allows, with a short-lived token. Next: source checkout for console and
+scheduled runs (slice 2), then choosing native builds for a blueprint's app block (slice 3). See
+[note 043](design/043-native-image-builds.md).
+
 ## MCP servers you add (note 042)
 
 Status: **slice 1 built (2026-11-13).** Remote MCP servers over HTTPS and local ones as containers; tools discovered,

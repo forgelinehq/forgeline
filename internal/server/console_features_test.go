@@ -59,6 +59,11 @@ func TestValidateReturnsGraphProblemsAndWarnings(t *testing.T) {
 	if !strings.Contains(strings.Join(v.Warnings, " "), "mutable image tag") {
 		t.Errorf("an untagged image should warn: %v", v.Warnings)
 	}
+	v = ValidateJSON{}
+	json.Unmarshal(admin.expect(200, "POST", "/v1/pipelines/validate", map[string]string{"yaml": "version: v1alpha1\nname: a\nsteps:\n  - id: image\n    build: {context: app}\n"}), &v)
+	if !v.Valid || strings.Contains(strings.Join(v.Warnings, " "), "mutable image tag") {
+		t.Errorf("a build step (no image of its own) = %+v", v)
+	}
 }
 
 func TestPipelineLifecycleVersionsAndConflicts(t *testing.T) {

@@ -39,6 +39,52 @@
       ],
       "type": "object"
     },
+    "Build": {
+      "additionalProperties": false,
+      "properties": {
+        "args": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Build arguments (--build-arg), at most 25, each value at most 1000 bytes. Never put secrets here: they end up in the image's history.",
+          "type": "object"
+        },
+        "context": {
+          "description": "Directory to build, relative to the workspace. Empty means the workspace itself.",
+          "type": "string"
+        },
+        "dockerfile": {
+          "description": "Dockerfile path relative to the context. Empty means Dockerfile.",
+          "type": "string"
+        },
+        "network": {
+          "description": "Network for the Dockerfile's RUN lines: egress (the default) or none.",
+          "enum": [
+            "none",
+            "egress"
+          ],
+          "type": "string"
+        },
+        "platform": {
+          "description": "Target platform such as linux/amd64 or linux/arm64. Empty means the builder's own.",
+          "pattern": "^linux/(amd64|arm64|arm/v7)$",
+          "type": "string"
+        },
+        "push": {
+          "description": "Repository to push to, such as 123456789012.dkr.ecr.ap-south-1.amazonaws.com/web. The server pushes only when a push rule allows this repository for the run's source repository and branch.",
+          "type": "string"
+        },
+        "tags": {
+          "description": "Tags to push. Empty means the first 12 characters of the commit. At most 5.",
+          "items": {
+            "pattern": "^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$",
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
     "Permissions": {
       "additionalProperties": false,
       "properties": {
@@ -79,6 +125,10 @@
         "agent": {
           "$ref": "#/$defs/Agent",
           "description": "Run a coding agent with a prompt instead of a script. The image must contain the agent's command line. Set this or run or command."
+        },
+        "build": {
+          "$ref": "#/$defs/Build",
+          "description": "Build a container image from the workspace with BuildKit, and optionally push it, instead of running a container (design note 043). The step has no image, script, environment or permissions. Set this or run or command or agent or workflow."
         },
         "command": {
           "description": "Command and arguments, run without a shell. Set this or run, not both.",
