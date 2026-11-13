@@ -87,6 +87,14 @@ preview and send for approval. GitHub's OIDC provider must be set up in the AWS 
 
 ![Build from GitHub]({{ '/console/121-design-github-build.png' | relative_url }})
 
+The same dialog offers **Built by Forgeline** instead: a `forgeline.yaml` for the repository with a `build` step that
+pushes to the block's image repository, and the push rule that allows it (an administrator clicks **Allow this push**
+once the blueprint has been previewed, since the rule needs the AWS account). No GitHub Actions and no role for GitHub:
+Forgeline's own AWS connection pushes, only for runs GitHub starts for a push to that branch; pull requests build
+without pushing. See [Build an image]({{ '/guides/pipelines/' | relative_url }}#build-an-image).
+
+![Built by Forgeline]({{ '/console/139-built-by-forgeline.png' | relative_url }})
+
 ![An agent on the canvas]({{ '/console/120-design-agent.png' | relative_url }})
 
 ![Removing what a blueprint built]({{ '/console/119-design-removal.png' | relative_url }})

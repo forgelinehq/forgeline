@@ -55,6 +55,14 @@ GitHub-started run does, and records repository, ref and commit on the run. The 
 starts. The pipeline still comes from the console, so the run keeps the console's trust: secrets as before, builds
 without pushing. Letting a console run push, and pipeline schedules, are left for later.
 
+## Slice 3: native builds for blueprint blocks (built 2026-11-13)
+
+A block with a source gets a second delivery suggestion next to the GitHub Actions workflow: a `forgeline.yaml` with a
+`build` step whose `push` is the block's ECR repository, the platform the block runs on, and the context its folder; and
+the push rule it needs (the block's repository and branch, that repository, the blueprint's AWS account). The rule is
+only offered once a preview knows the account; an administrator creates it with one click, which is the same audited
+`PUT /v1/build-push-rules/{id}`. Nothing is written to the repository: the person adds the file through a pull request.
+
 ## Not in this slice
 
 - Scheduled pipeline runs, pushes from console runs, and builds an agent starts.
@@ -63,7 +71,6 @@ without pushing. Letting a console run push, and pipeline schedules, are left fo
 - Rootless BuildKit in its own container (for servers without a Docker daemon, or Kubernetes): it needs seccomp and
   AppArmor turned off for the container, which is a weaker sandbox than the host daemon's BuildKit with no
   entitlements. It comes with the Kubernetes runner.
-- Choosing native builds for a blueprint's app block instead of the suggested GitHub workflow (slice 3).
 
 ## Checks
 

@@ -17,6 +17,20 @@ type Delivery struct {
 	ImageRepo    string `json:"image_repository"` // where images go; the account is a placeholder until it is known
 	Platform     string `json:"platform"`
 	Next         string `json:"next"`
+	// Native is the other way (design note 043, slice 3): Forgeline builds and pushes the image itself.
+	Native NativeDelivery `json:"native"`
+}
+
+// NativeDelivery is a forgeline.yaml with a build step for the repository, and the push rule that lets it push. No
+// GitHub Actions, no role for GitHub: Forgeline's own AWS connection pushes, for runs GitHub starts for a push.
+type NativeDelivery struct {
+	PipelinePath string   `json:"pipeline_path"`
+	Pipeline     string   `json:"pipeline"`
+	RuleID       string   `json:"rule_id"`
+	RuleRepo     string   `json:"rule_repo"`
+	RuleBranches []string `json:"rule_branches"`
+	RuleTarget   string   `json:"rule_target"` // empty until the account is known
+	Next         string   `json:"next"`
 }
 
 // Actions pinned to full commit SHAs, each checked against its repository (2026-11-12).
@@ -117,7 +131,61 @@ steps:
 	if account == "" {
 		d.Next = "The AWS account is not known until the blueprint is previewed, so the workflow says <account-id>. " + d.Next
 	}
+	d.Native = nativeDelivery(b, *bl, registry+"/"+repo, d.Branch, platform, account != "")
 	return d, nil
+}
+
+// nativeDelivery writes the forgeline.yaml that builds the block's image in Forgeline, and the push rule it needs.
+func nativeDelivery(b Blueprint, bl Block, target, branch, platform string, known bool) NativeDelivery {
+	n := NativeDelivery{PipelinePath: "forgeline.yaml", RuleID: ruleID(b.ID, bl.ID), RuleRepo: bl.Source.Repo, RuleBranches: []string{branch}}
+	ctx := bl.Source.PathOr()
+	ctxLine := ""
+	if ctx != "." {
+		ctxLine = "      context: " + ctx + "\n"
+	}
+	n.Pipeline = fmt.Sprintf(`# Builds %s's image and pushes it to its private ECR repository (made by the Forgeline blueprint %q).
+# Forgeline runs it when GitHub reports a push to %s; it pushes only through the push rule %s. Pull requests build
+# it without pushing. Running the new image is a blueprint change that is previewed and approved in Forgeline.
+version: v1alpha1
+name: build-%s
+steps:
+  - id: image
+    build:
+%s      platform: %s
+      push: %s
+    timeout: 30m
+`, yamlText(bl.Name), b.Name, branch, n.RuleID, bl.ID, ctxLine, platform, target)
+	if known {
+		n.RuleTarget = target
+	}
+	n.Next = "Add forgeline.yaml to " + bl.Source.Repo + " (or this step to the one there), through a pull request someone merges. " +
+		"An administrator allows the push (the rule below, under Settings › Image builds); GitHub must be able to reach Forgeline's webhook. " +
+		"After a push to " + branch + ", set " + bl.Name + "'s image to the new tag (the commit) and send the preview for approval."
+	if platform != "linux/arm64" {
+		n.Next += " Building " + platform + " on an ARM server (a Raspberry Pi) needs QEMU emulation in its Docker."
+	}
+	if !known {
+		n.Next = "The AWS account is not known until the blueprint is previewed, so the file says <account-id> and the push rule cannot be made yet. " + n.Next
+	}
+	return n
+}
+
+// ruleID is the push rule a blueprint block suggests: short, lower case, stable.
+func ruleID(bpID, blockID string) string {
+	id := strings.ToLower("bp-" + blockID + "-" + bpID)
+	clean := make([]rune, 0, len(id))
+	for _, r := range id {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' {
+			clean = append(clean, r)
+		} else {
+			clean = append(clean, '-')
+		}
+	}
+	id = strings.Trim(string(clean), "-")
+	if len(id) > 40 {
+		id = strings.Trim(id[:40], "-")
+	}
+	return id
 }
 
 // yamlText keeps a name safe inside a YAML comment line.
