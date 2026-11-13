@@ -52,6 +52,9 @@ section in the pull request that makes the change; a release moves it under its 
 - **After a session ends**, the console stops polling the server (it asked every minute, forever).
 
 ### Added
+- **Pull requests build images without pushing.** A build step with `push` failed in a pull request (found on the
+  Pi); pull requests, console and API runs now build it without pushing and succeed, saying why in the log and the audit
+  log. A push to a branch without a matching rule still fails.
 - **Build images in Forgeline.** A `build` step builds a container image from the run's files with BuildKit, and can
   push it to Amazon ECR. Any run may build; only a run GitHub started for a push to a branch an administrator's push rule
   (Settings › Image builds) allows may push, and only to that rule's repository, with a short-lived ECR token that never
