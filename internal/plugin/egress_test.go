@@ -809,3 +809,21 @@ func TestShutdownWaitsForHandlersStillInFlightAndCancelsTheirDials(t *testing.T)
 		t.Errorf("shutdown took %v: the dial was not cancelled", time.Since(start))
 	}
 }
+
+func TestWithEgressHint(t *testing.T) {
+	base := errors.New("the MCP server took too long")
+	quiet := EgressReport{Allowed: map[string]int{}, Denied: map[string]int{}, Failed: map[string]int{}}
+	if got := withEgressHint(base, quiet); !errors.Is(got, base) || !strings.Contains(got.Error(), "firewall") {
+		t.Errorf("no request reached the proxy: %v", got)
+	}
+	for name, rep := range map[string]EgressReport{
+		"allowed":      {Allowed: map[string]int{"api.github.com:443": 1}},
+		"denied":       {Denied: map[string]int{"evil.example:443": 1}},
+		"failed":       {Failed: map[string]int{"api.github.com:443": 1}},
+		"unauthorized": {Unauthorized: 1},
+	} {
+		if got := withEgressHint(base, rep); got != base {
+			t.Errorf("%s: the proxy was reached, but the hint was added: %v", name, got)
+		}
+	}
+}

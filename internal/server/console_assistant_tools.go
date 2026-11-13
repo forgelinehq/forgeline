@@ -160,7 +160,7 @@ func (s *Server) runLookup(ctx context.Context, p Principal, c lookupCall) (stri
 		if len(c.Args) == 0 {
 			c.Args = json.RawMessage(`{}`)
 		}
-		return s.runExtMCPLookup(ctx, c)
+		return s.runExtMCPLookup(ctx, p, c)
 	}
 	if strings.HasPrefix(c.Tool, pluginToolPrefix) {
 		if !p.Role.AtLeast(authn.Developer) {
