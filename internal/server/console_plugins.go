@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"regexp"
@@ -55,6 +56,15 @@ func (s *Server) pluginRunner() pluginRunner {
 			docker = "docker"
 		}
 		s.realRunner = &plugin.Runner{Docker: docker, Report: s.reportEgress}
+		// A fixed port range lets a host firewall (ufw drops container-to-host traffic by default) allow just the
+		// egress proxy's ports from the Docker networks.
+		if v := os.Getenv("FORGELINE_EGRESS_PORTS"); v != "" {
+			if pr, err := plugin.ParsePortRange(v); err != nil {
+				slog.Warn("FORGELINE_EGRESS_PORTS is ignored", "err", err)
+			} else {
+				s.realRunner.ProxyPorts = pr
+			}
+		}
 	})
 	return s.realRunner
 }
@@ -195,17 +205,30 @@ func (p MarketPackage) checkPlugins() ([]string, error) {
 // --- argument schema: a small subset, enough to refuse anything unexpected ---
 
 type argProp struct {
-	Type      string `json:"type"`
-	MaxLength int    `json:"maxLength"`
-	Minimum   *float64
-	Maximum   *float64
-	Enum      []any `json:"enum"`
+	Type      string   `json:"type"`
+	MaxLength int      `json:"maxLength"`
+	Minimum   *float64 `json:"minimum"`
+	Maximum   *float64 `json:"maximum"`
+	Enum      []any    `json:"enum"`
+	Items     *argProp `json:"items"`    // for an array: the type of every element (a simple type)
+	MaxItems  int      `json:"maxItems"` // for an array; never more than maxArgItems
 }
 
 type argSchema struct {
 	Type       string             `json:"type"`
 	Properties map[string]argProp `json:"properties"`
 	Required   []string           `json:"required"`
+}
+
+// maxArgItems caps any array argument, whatever its schema says.
+const maxArgItems = 100
+
+func simpleArgType(t string) bool {
+	switch t {
+	case "string", "integer", "number", "boolean":
+		return true
+	}
+	return false
 }
 
 func parseArgSchema(raw json.RawMessage) (argSchema, error) {
@@ -218,8 +241,12 @@ func parseArgSchema(raw json.RawMessage) (argSchema, error) {
 		return sc, errors.New(`the schema must be {"type":"object","properties":{...}}`)
 	}
 	for k, pr := range sc.Properties {
-		switch pr.Type {
-		case "string", "integer", "number", "boolean":
+		switch {
+		case simpleArgType(pr.Type):
+		case pr.Type == "array":
+			if pr.Items == nil || !simpleArgType(pr.Items.Type) {
+				return sc, fmt.Errorf("argument %q is a list of something other than text, numbers or true/false", k)
+			}
 		default:
 			return sc, fmt.Errorf("argument %q has an unsupported type %q", k, pr.Type)
 		}
@@ -239,26 +266,22 @@ func (sc argSchema) checkArgs(args map[string]any) error {
 		if !ok {
 			return fmt.Errorf("unknown argument %q", k)
 		}
-		switch pr.Type {
-		case "string":
-			str, ok := v.(string)
-			if !ok {
-				return fmt.Errorf("argument %q must be text", k)
+		if pr.Type != "array" {
+			if err := pr.checkValue(fmt.Sprintf("argument %q", k), v); err != nil {
+				return err
 			}
-			if len(str) > 2000 || pr.MaxLength > 0 && len(str) > pr.MaxLength {
-				return fmt.Errorf("argument %q is too long", k)
-			}
-			if len(pr.Enum) > 0 && !inEnum(pr.Enum, v) {
-				return fmt.Errorf("argument %q is not one of the allowed values", k)
-			}
-		case "integer", "number":
-			f, ok := v.(float64)
-			if !ok || pr.Type == "integer" && f != float64(int64(f)) {
-				return fmt.Errorf("argument %q must be a %s", k, pr.Type)
-			}
-		case "boolean":
-			if _, ok := v.(bool); !ok {
-				return fmt.Errorf("argument %q must be true or false", k)
+			continue
+		}
+		list, ok := v.([]any)
+		if !ok {
+			return fmt.Errorf("argument %q must be a list", k)
+		}
+		if len(list) > maxArgItems || pr.MaxItems > 0 && len(list) > pr.MaxItems {
+			return fmt.Errorf("argument %q has too many items", k)
+		}
+		for i, e := range list {
+			if err := pr.Items.checkValue(fmt.Sprintf("argument %q item %d", k, i), e); err != nil {
+				return err
 			}
 		}
 	}
@@ -266,6 +289,38 @@ func (sc argSchema) checkArgs(args map[string]any) error {
 		if _, ok := args[r]; !ok {
 			return fmt.Errorf("argument %q is required", r)
 		}
+	}
+	return nil
+}
+
+// checkValue checks one value of a simple type; what names it in an error.
+func (pr argProp) checkValue(what string, v any) error {
+	switch pr.Type {
+	case "string":
+		str, ok := v.(string)
+		if !ok {
+			return fmt.Errorf("%s must be text", what)
+		}
+		if len(str) > 2000 || pr.MaxLength > 0 && len(str) > pr.MaxLength {
+			return fmt.Errorf("%s is too long", what)
+		}
+	case "integer", "number":
+		f, ok := v.(float64)
+		if !ok || pr.Type == "integer" && f != float64(int64(f)) {
+			return fmt.Errorf("%s must be a %s", what, pr.Type)
+		}
+		if pr.Minimum != nil && f < *pr.Minimum || pr.Maximum != nil && f > *pr.Maximum {
+			return fmt.Errorf("%s is out of range", what)
+		}
+	case "boolean":
+		if _, ok := v.(bool); !ok {
+			return fmt.Errorf("%s must be true or false", what)
+		}
+	default:
+		return fmt.Errorf("%s has a type Forgeline does not check", what)
+	}
+	if len(pr.Enum) > 0 && !inEnum(pr.Enum, v) {
+		return fmt.Errorf("%s is not one of the allowed values", what)
 	}
 	return nil
 }
@@ -479,7 +534,12 @@ func argHelp(sc argSchema) string {
 	sort.Strings(names)
 	parts := make([]string, len(names))
 	for i, k := range names {
-		parts[i] = fmt.Sprintf("%q:%s", k, sc.Properties[k].Type)
+		pr := sc.Properties[k]
+		if pr.Type == "array" && pr.Items != nil {
+			parts[i] = fmt.Sprintf("%q:[%s]", k, pr.Items.Type)
+			continue
+		}
+		parts[i] = fmt.Sprintf("%q:%s", k, pr.Type)
 	}
 	return "{" + strings.Join(parts, ",") + "}"
 }

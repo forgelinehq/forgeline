@@ -31,6 +31,7 @@ export async function mcpServersPage() {
             s.discovered_at ? `Tools read ${relTime(s.discovered_at)}${s.protocol ? ' (' + (s.protocol === 'stdio' ? 'container' : 'MCP ' + s.protocol) + ')' : ''}` : 'Tools not read yet',
             `${on} of ${s.tools.length} on`, s.for_assistant ? 'offered to the assistant' : 'agents only',
             s.auth_secret ? 'token from secret ' + s.auth_secret : null, s.allow_private ? 'may reach a private network' : null,
+            s.run_as_image_user ? "runs as the image's own user" : null,
           ].filter(Boolean).join(' · '))),
         h('div', { class: 'flex flex-wrap gap-2' },
           h('button', { class: 'btn-secondary btn-sm', type: 'button', 'data-discover': s.id, onclick: () => discover(s) }, icon('refresh', 'size-3.5'), 'Read its tools'),
@@ -42,22 +43,32 @@ export async function mcpServersPage() {
   }
 
   function tool(s, t) {
-    const can = !t.problem || t.problem.startsWith('its definition changed');
+    const can = !t.problem || t.problem.startsWith('its definition changed') || t.markable;
     const cb = h('input', { type: 'checkbox', class: 'mt-1 size-4', checked: !!t.enabled, disabled: !can && !t.enabled, 'aria-label': 'Turn on ' + t.name,
-      onchange: () => setTools(s, t.name, cb.checked) });
+      onchange: () => setTools(s, t, cb) });
     return h('li', { class: 'flex items-start gap-3 px-5 py-3', 'data-tool': t.name },
       cb,
       h('div', { class: 'min-w-0 flex-1' },
         h('div', { class: 'flex flex-wrap items-center gap-2' }, h('code', { class: 'text-sm font-medium' }, t.name),
-          t.read_only ? h('span', { class: 'pill-ok' }, 'reads only') : h('span', { class: 'pill-wait' }, 'may change things'),
+          t.read_only ? h('span', { class: 'pill-ok' }, 'reads only')
+            : t.marked_read_only_by ? h('span', { class: 'pill-ok' }, 'reads only, marked by ' + t.marked_read_only_by)
+            : t.destructive ? h('span', { class: 'pill-bad' }, 'destructive') : h('span', { class: 'pill-wait' }, 'may change things'),
           t.enabled ? h('span', { class: 'muted text-xs' }, 'agents use it as ' + toolName(s.id, t.name)) : null),
         h('p', { class: 'muted mt-0.5 text-sm' }, t.description || 'No description.'),
         t.problem ? h('p', { class: 'mt-1 text-xs text-amber-700 dark:text-amber-400' }, t.problem) : null));
   }
 
-  async function setTools(s, name, on) {
-    const enabled = s.tools.filter(t => t.enabled && t.name !== name).map(t => t.name).concat(on ? [name] : []);
-    try { await put('/v1/mcp-servers/' + encodeURIComponent(s.id) + '/tools', { enabled }); toast(on ? 'Turned on' : 'Turned off', 'ok'); } catch (e) { toast(e.message, 'error'); }
+  async function setTools(s, tool, cb) {
+    const on = cb.checked;
+    // A tool its server does not call read-only is turned on only when the administrator says they checked it.
+    if (on && !tool.read_only && tool.markable && !await confirmDialog({ title: 'Mark ' + tool.name + ' read-only?',
+      body: 'Its server does not say this tool only reads. Turn it on only if you have checked that it changes nothing: ' +
+        'a tool that changes things would bypass approvals. You are named as the one who marked it, in the audit log and on this page. ' +
+        'If the server changes the tool, it turns off again.', confirmLabel: 'It only reads: turn it on' })) { cb.checked = false; return; }
+    const others = s.tools.filter(t => t.enabled && t.name !== tool.name);
+    const enabled = others.map(t => t.name).concat(on ? [tool.name] : []);
+    const readOnly = others.filter(t => t.marked_read_only_by).map(t => t.name).concat(on && !tool.read_only ? [tool.name] : []);
+    try { await put('/v1/mcp-servers/' + encodeURIComponent(s.id) + '/tools', { enabled, read_only: readOnly }); toast(on ? 'Turned on' : 'Turned off', 'ok'); } catch (e) { toast(e.message, 'error'); }
     load();
   }
 
@@ -87,6 +98,7 @@ export async function mcpServersPage() {
       const net = h('select', { id: 'mcp-net', class: 'input' }, [['none', 'No network'], ['hosts', 'Only these hosts'], ['all', 'The whole network']].map(([k, l]) =>
         h('option', { value: k, selected: (s?.network ? 'all' : s?.hosts?.length ? 'hosts' : 'none') === k }, l)));
       const hosts = v('mcp-hosts', (s?.hosts || []).join(', '), { placeholder: 'api.example.com, *.example.org' });
+      const imgUser = h('input', { id: 'mcp-image-user', type: 'checkbox', class: 'size-4', checked: !!s?.run_as_image_user });
       const envs = h('textarea', { id: 'mcp-env', class: 'input font-mono text-xs', rows: '2', placeholder: 'API_KEY=NAME_OF_A_SECRET' }, Object.entries(s?.secrets || {}).map(([k, n]) => k + '=' + n).join('\n'));
       const asst = h('input', { id: 'mcp-assistant', type: 'checkbox', class: 'size-4', checked: !!s?.for_assistant });
       const err = h('div', {});
@@ -95,7 +107,9 @@ export async function mcpServersPage() {
         h('label', { class: 'flex items-center gap-2 text-sm', for: 'mcp-private' }, priv, 'It is on a private network (otherwise private and cloud-internal addresses are refused)'));
       const localBox = h('div', { class: 'space-y-3' }, field('Container image', image, 'Pinned by digest. It runs once per call, with the limits plugins have.'),
         h('div', { class: 'grid grid-cols-2 gap-2' }, field('Network', net), field('Hosts', hosts, 'When only some hosts')),
-        field('Secrets it gets', envs, 'One ENV_NAME=SECRET_NAME per line, from Settings › Secrets.'));
+        field('Secrets it gets', envs, 'One ENV_NAME=SECRET_NAME per line, from Settings › Secrets.'),
+        h('label', { class: 'flex items-start gap-2 text-sm', for: 'mcp-image-user' }, imgUser,
+          h('span', {}, "Run as the image's own user (often root). Only for images that cannot start as nobody; the file system stays read-only, with no extra privileges and the same network.")));
       const kindBtns = h('div', { class: 'inline-flex overflow-hidden rounded-lg border border-slate-300 text-sm dark:border-slate-700', role: 'group' });
       const drawKind = () => {
         mount(kindBtns, ...[['remote', 'Remote (HTTPS)'], ['local', 'Local (container)']].map(([k, l]) => h('button', { type: 'button', 'aria-pressed': String(kind === k), disabled: !!s,
@@ -108,7 +122,7 @@ export async function mcpServersPage() {
         for (const line of envs.value.split('\n')) { const i = line.indexOf('='); if (i > 0) secretsMap[line.slice(0, i).trim()] = line.slice(i + 1).trim(); }
         const body = { id: id.value.trim(), name: name.value.trim(), kind, for_assistant: asst.checked };
         if (kind === 'remote') Object.assign(body, { url: url.value.trim(), auth_secret: secret.value, auth_header: secret.value ? header.value.trim() : '', auth_scheme: secret.value ? scheme.value.trim() : '', allow_private: priv.checked });
-        else Object.assign(body, { image: image.value.trim(), network: net.value === 'all', hosts: net.value === 'hosts' ? hosts.value.split(',').map(x => x.trim()).filter(Boolean) : [], secrets: secretsMap });
+        else Object.assign(body, { image: image.value.trim(), network: net.value === 'all', hosts: net.value === 'hosts' ? hosts.value.split(',').map(x => x.trim()).filter(Boolean) : [], secrets: secretsMap, run_as_image_user: imgUser.checked });
         try {
           if (s) await put('/v1/mcp-servers/' + encodeURIComponent(s.id), body); else await post('/v1/mcp-servers', body);
           close(); toast(s ? 'Saved' : 'Added. Press Read its tools next.', 'ok'); load();

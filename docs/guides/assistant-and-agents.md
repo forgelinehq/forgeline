@@ -112,10 +112,18 @@ address (with a token or header value taken from Secrets, never shown again), or
 pinned by digest, which runs like a plugin: a fresh container per call, no network unless you grant it (all of it, or
 only named hosts), secrets from the vault as environment variables.
 
-Press **Read its tools** to see what it offers. Every tool starts off. Only tools the server marks read-only can be turned
-on; a tool that may change things says why it stays off, because it would bypass approvals. When you turn a tool on,
-its definition is pinned: if the server later offers a different description or arguments, the tool turns itself off
-until you read it again. Changing a server's address or image turns all its tools off.
+Press **Read its tools** to see what it offers. Every tool starts off. A tool its server marks read-only can be turned
+on. Many servers do not mark their tools at all: if you have checked that such a tool only reads, turning it on asks you
+to confirm, and the tool shows **marked by** you here and in the audit log. A tool its server marks destructive can never
+be turned on, because it would bypass approvals. When you turn a tool on, its definition is pinned: if the server later
+offers a different description or arguments, the tool turns itself off (and loses your mark) until you read it again.
+Changing a server's address or image turns all its tools off.
+
+A local server runs as the unprivileged user nobody. Some images (Docker's `mcp/time` and `mcp/fetch`, for example)
+keep their program where only root can reach it and fail with `Permission denied`; for those, tick **Run as the image's
+own user**. The file system stays read-only, with no extra privileges and the same network. If a local server with a
+host list always runs out of time, see `FORGELINE_EGRESS_PORTS` in
+[Get started]({{ '/get-started/' | relative_url }}#server-settings).
 
 A turned-on tool is named `mcp_<server>_<tool>`. Agents get it only when you add it to their tools; the assistant gets
 it only when the server is marked **Offer its turned-on tools to the assistant**, and only for developers and above.

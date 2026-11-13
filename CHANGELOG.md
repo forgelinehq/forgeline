@@ -52,6 +52,14 @@ section in the pull request that makes the change; a release moves it under its 
 - **After a session ends**, the console stops polling the server (it asked every minute, forever).
 
 ### Added
+- **Use MCP servers that do not mark their tools.** An administrator who has checked that a tool only reads can turn it
+  on anyway; the page and the audit log name who marked it, and the mark goes when the server changes the tool. Tools a
+  server marks destructive still cannot be turned on.
+- **Local MCP servers whose image needs its own user.** Images such as `mcp/time` keep their program where nobody cannot
+  reach it; "Run as the image's own user" runs them, with the rest of the sandbox unchanged.
+- **List arguments.** Tools whose arguments include lists of text, numbers or true/false (8 of GitHub's read tools) can be
+  turned on; each item is checked, at most 100. `minimum` and `maximum` on numbers are now enforced too.
+- **`FORGELINE_EGRESS_PORTS`** fixes the egress proxy's ports, so a host firewall can let containers reach just those.
 - **MCP servers you add.** Under Settings › Connections › MCP servers an administrator adds a remote MCP server (an
   HTTPS address, with a token from the vault) or a local one (a container image pinned by digest, run like a plugin with
   no network unless granted). Forgeline reads its tools; each starts off, and only tools marked read-only can be turned

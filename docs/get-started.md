@@ -138,6 +138,7 @@ Follow **Set up Forgeline** on Home, or go straight to:
 | `FORGELINE_DATABASE_URL` | Postgres URL. Without it, runs live in memory and accounts, pipelines and settings are kept in `<data-dir>/console.json`. |
 | `FORGELINE_MASTER_KEY` | 32 random bytes, base64 (`head -c 32 /dev/urandom \| base64`), that encrypt stored secrets. Without it a key file is created in the data directory. |
 | `FORGELINE_SECRET_<NAME>` | A secret steps can request without using the vault. |
+| `FORGELINE_EGRESS_PORTS` | A port range such as `47100-47199` for the proxy that plugins and local MCP servers with a host list go out through. Set it when a host firewall drops traffic from containers to this machine (ufw does by default), and allow just that range from the Docker networks, for example `sudo ufw allow from 172.16.0.0/12 to any port 47100:47199 proto tcp`. Without it the proxy takes any free port. |
 
 Flags: `--listen`, `--data-dir`, `--max-runs`, `--parallel`, `--public-url`, `--github-allow`.
 Run `forgeline server -h` for the full text.

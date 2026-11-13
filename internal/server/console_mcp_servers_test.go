@@ -43,7 +43,7 @@ func (s *weatherMCP) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		tools := []map[string]any{
 			{"name": "get_weather", "description": desc, "annotations": map[string]any{"readOnlyHint": true},
 				"inputSchema": map[string]any{"type": "object", "properties": map[string]any{"city": map[string]any{"type": "string"}}, "required": []string{"city"}}},
-			{"name": "set_alert", "description": "Creates an alert", "inputSchema": map[string]any{"type": "object", "properties": map[string]any{}}},
+			{"name": "set_alert", "description": "Creates an alert. " + desc, "inputSchema": map[string]any{"type": "object", "properties": map[string]any{}}},
 		}
 		if destructive {
 			tools = append(tools, map[string]any{"name": "wipe", "description": "Wipes the history", "annotations": map[string]any{"readOnlyHint": true, "destructiveHint": true},
@@ -185,7 +185,7 @@ func TestMCPServersWhoMayCall(t *testing.T) {
 			t.Errorf("a destructive tool counts as read-only: %+v", tl)
 		}
 	}
-	if msg := string(m.admin.expect(400, "PUT", "/v1/mcp-servers/weather/tools", map[string]any{"enabled": []string{"wipe"}})); !strings.Contains(msg, "not marked read-only") {
+	if msg := string(m.admin.expect(400, "PUT", "/v1/mcp-servers/weather/tools", map[string]any{"enabled": []string{"wipe"}, "read_only": []string{"wipe"}})); !strings.Contains(msg, "destructive") {
 		t.Errorf("a destructive tool was turned on: %s", msg)
 	}
 	m.admin.expect(200, "PUT", "/v1/mcp-servers/weather/tools", map[string]any{"enabled": []string{"get_weather"}})
@@ -215,6 +215,22 @@ func TestMCPServersWhoMayCall(t *testing.T) {
 	m.run(m.dev, map[string]any{"message": "weather?"}, call)
 	if u := m.llm.lastUser(1); !strings.Contains(u, "sunny") {
 		t.Fatalf("a developer could not use it: %s", u)
+	}
+
+	// A destructive tool marked read-only and turned on in storage, behind Forgeline's back, is still not offered.
+	var st0 MCPServer
+	m.harness.srv.docs.Get(t.Context(), kindMCPServer, "weather", &st0)
+	for i, tl := range st0.Tools {
+		if tl.Name == "wipe" {
+			st0.Tools[i].MarkedReadOnly, st0.Tools[i].Enabled = "ada", true
+			st0.Tools[i].Pinned = st0.Tools[i].defHash()
+		}
+	}
+	m.harness.srv.docs.Put(t.Context(), kindMCPServer, "weather", st0)
+	for _, n := range m.harness.srv.extMCPToolNames(t.Context()) {
+		if n == "mcp_weather_wipe" {
+			t.Error("a destructive tool with a mark is offered")
+		}
 	}
 
 	// The stored definition is changed behind Forgeline's back: the pin no longer matches, so the tool is not offered.
@@ -340,10 +356,110 @@ func TestMCPServersLocalRunsAsContainer(t *testing.T) {
 		t.Fatalf("the agent was told: %s", u)
 	}
 	run.mu.Lock()
-	defer run.mu.Unlock()
 	last := run.specs[len(run.specs)-1]
+	run.mu.Unlock()
+	if last.ImageUser {
+		t.Error("a container runs as the image's user without being asked")
+	}
 	if last.Image != pluginImage || last.Network || len(last.Hosts) != 1 || last.Hosts[0] != "example.com" ||
 		len(last.Env) != 1 || last.Env["API_KEY"] != "key-0123456789abcdef" || last.ID != "mcp-fetcher" {
 		t.Errorf("the container was started with %+v", last)
+	}
+
+	// Running as the image's user is an administrator's choice for a local server only, and it is audited.
+	m.admin.expect(400, "POST", "/v1/mcp-servers", map[string]any{"id": "remote-root", "name": "R", "kind": "remote", "url": "https://mcp.example.com/mcp", "run_as_image_user": true})
+	body["run_as_image_user"] = true
+	m.admin.expect(200, "PUT", "/v1/mcp-servers/fetcher", body)
+	if !hasAudit(t, m.admin, "mcp.server.update") || !strings.Contains(string(m.admin.expect(200, "GET", "/v1/audit?action=mcp.server.update", nil)), "as the image's user") {
+		t.Error("running as the image's user is not in the audit log")
+	}
+	var after MCPServer
+	json.Unmarshal(m.admin.expect(200, "POST", "/v1/mcp-servers/fetcher/discover", nil), &after)
+	if !after.Tools[0].Enabled {
+		t.Errorf("changing only the user turned the tool off: %+v", after.Tools[0])
+	}
+	run.mu.Lock()
+	last = run.specs[len(run.specs)-1]
+	run.mu.Unlock()
+	if !last.ImageUser {
+		t.Errorf("run_as_image_user did not reach the runner: %+v", last)
+	}
+}
+
+// A tool its server does not mark read-only can be turned on only when an administrator marks it read-only; the mark
+// is named, audited, pinned with the definition and dropped when the definition changes.
+func TestMCPServersAdminMarksReadOnly(t *testing.T) {
+	m := newMCPHarness(t)
+	ws := &weatherMCP{desc: "Weather for a city"}
+	srv := httptest.NewServer(ws)
+	defer srv.Close()
+	m.admin.expect(201, "POST", "/v1/mcp-servers", map[string]any{"id": "weather", "name": "Weather", "kind": "remote", "url": srv.URL + "/mcp", "for_assistant": true})
+	var got MCPServer
+	json.Unmarshal(m.admin.expect(200, "POST", "/v1/mcp-servers/weather/discover", nil), &got)
+	find := func(name string) MCPServerTool {
+		for _, tl := range got.Tools {
+			if tl.Name == name {
+				return tl
+			}
+		}
+		t.Fatalf("no tool %s in %+v", name, got.Tools)
+		return MCPServerTool{}
+	}
+	if st := find("set_alert"); !st.Markable || st.ReadOnly || !strings.Contains(st.Problem, "mark it read-only yourself") {
+		t.Fatalf("set_alert = %+v", st)
+	}
+	tools := func(want int, body map[string]any) string {
+		t.Helper()
+		raw := m.admin.expect(want, "PUT", "/v1/mcp-servers/weather/tools", body)
+		if want == 200 {
+			got = MCPServer{}
+			json.Unmarshal(raw, &got)
+		}
+		return string(raw)
+	}
+	tools(400, map[string]any{"enabled": []string{"set_alert"}})                                       // not marked
+	tools(400, map[string]any{"enabled": []string{"get_weather"}, "read_only": []string{"set_alert"}}) // marked but not turned on
+	m.dev.expect(403, "PUT", "/v1/mcp-servers/weather/tools", map[string]any{"enabled": []string{"set_alert"}, "read_only": []string{"set_alert"}})
+	tools(200, map[string]any{"enabled": []string{"set_alert"}, "read_only": []string{"set_alert"}})
+	if st := find("set_alert"); !st.Enabled || st.MarkedReadOnly != "ada" || st.Problem != "" {
+		t.Fatalf("after marking: %+v", st)
+	}
+	if a := string(m.admin.expect(200, "GET", "/v1/audit?action=mcp.server.tools", nil)); !strings.Contains(a, "marked read-only by an administrator: set_alert") {
+		t.Errorf("the mark is not audited: %s", a)
+	}
+	names := func() string { return strings.Join(m.harness.srv.extMCPToolNames(t.Context()), ",") }
+	if names() != "mcp_weather_set_alert" {
+		t.Fatalf("offered = %s", names())
+	}
+	// Read again, unchanged: still on and still marked.
+	got = MCPServer{}
+	json.Unmarshal(m.admin.expect(200, "POST", "/v1/mcp-servers/weather/discover", nil), &got)
+	if st := find("set_alert"); !st.Enabled || st.MarkedReadOnly != "ada" {
+		t.Fatalf("an unchanged marked tool lost its mark: %+v", st)
+	}
+	// The server changes the marked tool: off, the mark gone, and it can be looked at and marked again.
+	ws.mu.Lock()
+	ws.desc = "Weather for a city, and it now also deletes alerts"
+	ws.mu.Unlock()
+	got = MCPServer{}
+	json.Unmarshal(m.admin.expect(200, "POST", "/v1/mcp-servers/weather/discover", nil), &got)
+	if st := find("set_alert"); st.Enabled || st.MarkedReadOnly != "" || !st.Markable || !strings.Contains(st.Problem, "definition changed") {
+		t.Fatalf("a changed marked tool = %+v", st)
+	}
+	if names() != "" {
+		t.Fatalf("a changed marked tool is offered: %s", names())
+	}
+	tools(200, map[string]any{"enabled": []string{"set_alert"}, "read_only": []string{"set_alert"}})
+	// Saving the list again without the mark turns it off rather than keeping an unmarked tool on.
+	tools(400, map[string]any{"enabled": []string{"set_alert"}})
+	// The stored mark is removed behind Forgeline's back: the tool is not offered.
+	var stored MCPServer
+	m.harness.srv.docs.Get(t.Context(), kindMCPServer, "weather", &stored)
+	for i := range stored.Tools {
+		stored.Tools[i].MarkedReadOnly = ""
+	}
+	m.harness.srv.docs.Put(t.Context(), kindMCPServer, "weather", stored)
+	if names() != "" {
+		t.Errorf("a tool without its mark is offered: %s", names())
 	}
 }
