@@ -155,3 +155,18 @@ func TestHeaderValueUsesBase64WhenNotPlainASCII(t *testing.T) {
 		}
 	}
 }
+
+func TestAnnotationsTellSilenceFromFalse(t *testing.T) {
+	for in, want := range map[string]Annotations{
+		`{}`:                       {},
+		`{"readOnlyHint":true}`:    {ReadOnly: true},
+		`{"readOnlyHint":false}`:   {Writes: true},
+		`{"destructiveHint":true}`: {Destructive: true},
+		`{"readOnlyHint":false,"destructiveHint":true}`: {Writes: true, Destructive: true},
+	} {
+		var a Annotations
+		if err := json.Unmarshal([]byte(in), &a); err != nil || a != want {
+			t.Errorf("%s = %+v, %v; want %+v", in, a, err, want)
+		}
+	}
+}

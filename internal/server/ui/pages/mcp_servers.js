@@ -52,7 +52,8 @@ export async function mcpServersPage() {
         h('div', { class: 'flex flex-wrap items-center gap-2' }, h('code', { class: 'text-sm font-medium' }, t.name),
           t.read_only ? h('span', { class: 'pill-ok' }, 'reads only')
             : t.marked_read_only_by ? h('span', { class: 'pill-ok' }, 'reads only, marked by ' + t.marked_read_only_by)
-            : t.destructive ? h('span', { class: 'pill-bad' }, 'destructive') : h('span', { class: 'pill-wait' }, 'may change things'),
+            : t.destructive ? h('span', { class: 'pill-bad' }, 'destructive')
+            : t.writes ? h('span', { class: 'pill-bad' }, 'changes things') : h('span', { class: 'pill-wait' }, 'not marked by its server'),
           t.enabled ? h('span', { class: 'muted text-xs' }, 'agents use it as ' + toolName(s.id, t.name)) : null),
         h('p', { class: 'muted mt-0.5 text-sm' }, t.description || 'No description.'),
         t.problem ? h('p', { class: 'mt-1 text-xs text-amber-700 dark:text-amber-400' }, t.problem) : null));

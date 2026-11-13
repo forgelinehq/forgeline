@@ -320,9 +320,22 @@ func (pr argProp) checkValue(what string, v any) error {
 		return fmt.Errorf("%s has a type Forgeline does not check", what)
 	}
 	if len(pr.Enum) > 0 && !inEnum(pr.Enum, v) {
-		return fmt.Errorf("%s is not one of the allowed values", what)
+		return fmt.Errorf("%s is not one of the allowed values%s", what, enumHint(pr.Enum))
 	}
 	return nil
+}
+
+// enumHint lists a short set of allowed values so the model can correct its call; a long one is left out.
+func enumHint(enum []any) string {
+	if len(enum) > 20 {
+		return ""
+	}
+	parts := make([]string, len(enum))
+	for i, e := range enum {
+		b, _ := json.Marshal(e)
+		parts[i] = truncate(string(b), 40)
+	}
+	return " (" + strings.Join(parts, ", ") + ")"
 }
 
 func inEnum(enum []any, v any) bool {
