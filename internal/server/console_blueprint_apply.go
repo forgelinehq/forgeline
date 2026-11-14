@@ -80,9 +80,11 @@ type BlueprintPlan struct {
 type storedPlan struct {
 	BlueprintPlan
 	Profile string `json:"profile"`
-	Code    string `json:"code"`   // main.tf.json as planned
-	Lock    string `json:"lock"`   // .terraform.lock.hcl: the providers' versions and hashes
-	Sealed  string `json:"sealed"` // the plan file, base64, sealed by the vault
+	Code    string `json:"code"` // main.tf.json as planned
+	// Modules are the template modules main.tf.json calls, by path, as planned: the apply uses exactly these.
+	Modules map[string]string `json:"modules,omitempty"`
+	Lock    string            `json:"lock"`   // .terraform.lock.hcl: the providers' versions and hashes
+	Sealed  string            `json:"sealed"` // the plan file, base64, sealed by the vault
 }
 
 func (p storedPlan) view() BlueprintPlan {
@@ -261,7 +263,7 @@ func (s *Server) handleGetBlueprintPlan(w http.ResponseWriter, r *http.Request) 
 
 // workdir makes a private directory for one tofu run, with the code, the provider lock and the state. The
 // caller removes it: it holds the state unsealed.
-func (s *Server) workdir(code, lock, state string) (string, error) {
+func (s *Server) workdir(code, lock, state string, modules map[string]string) (string, error) {
 	base := filepath.Join(s.cfg.DataDir, "tmp")
 	if err := os.MkdirAll(base, 0o700); err != nil {
 		return "", err
@@ -271,9 +273,21 @@ func (s *Server) workdir(code, lock, state string) (string, error) {
 		return "", err
 	}
 	files := map[string]string{"main.tf.json": code, ".terraform.lock.hcl": lock, "terraform.tfstate": state}
+	for p, body := range modules {
+		// Only templates/<name>/<version>/main.tf.json, never a path that leaves the directory.
+		if !filepath.IsLocal(p) || !strings.HasPrefix(p, "templates/") || filepath.Base(p) != "main.tf.json" || strings.Count(p, "/") != 3 {
+			os.RemoveAll(dir)
+			return "", fmt.Errorf("refused module path %q", p)
+		}
+		files[p] = body
+	}
 	for name, body := range files {
 		if body == "" {
 			continue
+		}
+		if err := os.MkdirAll(filepath.Join(dir, filepath.Dir(name)), 0o700); err != nil {
+			os.RemoveAll(dir)
+			return "", err
 		}
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o600); err != nil {
 			os.RemoveAll(dir)
@@ -313,7 +327,11 @@ func (s *Server) runPlan(ctx context.Context, b StoredBlueprint, st awsSettings,
 	if err != nil {
 		return err
 	}
-	dir, err := s.workdir(string(code), state.Lock, stateText)
+	modules, err := blueprint.ModulesFor(code)
+	if err != nil {
+		return err
+	}
+	dir, err := s.workdir(string(code), state.Lock, stateText, modules)
 	if err != nil {
 		return err
 	}
@@ -352,7 +370,7 @@ func (s *Server) runPlan(ctx context.Context, b StoredBlueprint, st awsSettings,
 		return err
 	}
 	lock, _ := os.ReadFile(filepath.Join(dir, ".terraform.lock.hcl"))
-	plan.Code, plan.Lock = string(code), string(lock)
+	plan.Code, plan.Lock, plan.Modules = string(code), string(lock), modules
 	return nil
 }
 
@@ -602,7 +620,7 @@ func (s *Server) executeBlueprint(ctx context.Context, c CloudChange, st awsSett
 	if err != nil {
 		return "", err
 	}
-	dir, err := s.workdir(p.Code, p.Lock, stateText)
+	dir, err := s.workdir(p.Code, p.Lock, stateText, p.Modules)
 	if err != nil {
 		return "", err
 	}

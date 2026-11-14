@@ -42,10 +42,12 @@ func Denied(fs []Finding) bool {
 
 type change struct {
 	Address string `json:"address"`
-	Mode    string `json:"mode"`
-	Type    string `json:"type"`
-	Name    string `json:"name"`
-	Change  struct {
+	// ModuleAddress is set for a resource inside a module (a template): main.tf.json does not hold its code.
+	ModuleAddress string `json:"module_address"`
+	Mode          string `json:"mode"`
+	Type          string `json:"type"`
+	Name          string `json:"name"`
+	Change        struct {
 		Actions      []string        `json:"actions"`
 		After        map[string]any  `json:"after"`
 		AfterUnknown json.RawMessage `json:"after_unknown"`
@@ -86,6 +88,9 @@ func Check(plan, code []byte) ([]Finding, error) {
 		}
 		unknown := unknownKeys(rc.Change.AfterUnknown)
 		r := raw[rc.Type+"."+rc.Name]
+		if rc.ModuleAddress != "" {
+			r = nil // a template's resource: never read the root's code for it, which may name another resource alike
+		}
 		val := func(k string) any {
 			if v, ok := a[k]; ok && v != nil {
 				return v

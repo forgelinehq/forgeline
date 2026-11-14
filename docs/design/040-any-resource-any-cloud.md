@@ -110,6 +110,9 @@ The blueprint calls a template block as a module (`module.<block>`). The module 
 `main.tf.json`, so an approved plan applies exactly the code it was planned with. Every plan still goes through the
 built-in guardrails.
 
+Built 2026-11-14: the format and checks (`internal/template`), template blocks in blueprints (module calls, links by
+role, module files stored with the plan), and `GET /v1/templates`. The canvas form and a real build on the Pi follow.
+
 The first template is **AWS Lambda function** (`aws-lambda-function`), chosen by the maintainer because it can be built
 on real AWS now: a container image from ECR, its own log group and role, a schedule, queues that trigger it, and the
 tables, buckets, queues and secrets it uses. The AgentCore agent template follows once the account's AgentCore quota is

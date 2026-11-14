@@ -111,6 +111,18 @@ func TestUnknownPolicyReadFromCode(t *testing.T) {
 	}
 }
 
+// A resource inside a module (a template) never borrows the root's code for a resource with the same type and name:
+// its unknown policy is reported as unchecked, not read from someone else's.
+func TestModuleResourceDoesNotUseRootCode(t *testing.T) {
+	root := []byte(`{"resource":{"aws_iam_role_policy":{"fn":{"policy":"{\"Statement\":[{\"Effect\":\"Allow\",\"Action\":[\"sqs:SendMessage\"],\"Resource\":[\"x\"]}]}"}}}}`)
+	b, _ := json.Marshal(map[string]any{"resource_changes": []map[string]any{{"address": "module.jobs.aws_iam_role_policy.fn", "module_address": "module.jobs",
+		"mode": "managed", "type": "aws_iam_role_policy", "name": "fn", "change": map[string]any{"actions": []string{"create"}, "after": map[string]any{}, "after_unknown": map[string]any{"policy": true}}}}})
+	fs, _ := Check(b, root)
+	if rules(fs) != "warn:unchecked-policy" {
+		t.Errorf("a module's unknown policy = %v", fs)
+	}
+}
+
 func TestDeniesComeFirstAndBadPlans(t *testing.T) {
 	fs, _ := Check(plan(t,
 		rc{addr: "aws_vpc_security_group_ingress_rule.web", after: map[string]any{"cidr_ipv4": "0.0.0.0/0", "ip_protocol": "tcp", "from_port": 80, "to_port": 80}},

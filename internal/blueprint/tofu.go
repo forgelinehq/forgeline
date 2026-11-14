@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	"github.com/forgelinehq/forgeline/internal/template"
 )
 
 // The OpenTofu provider this code is written for (note 035). Bump it with the generator, never on its own.
@@ -28,7 +30,7 @@ func (b Blueprint) Tofu() ([]byte, error) {
 }
 
 func (b Blueprint) tofu(rm removal) ([]byte, error) {
-	g := gen{b: b, rm: rm, res: obj{}, data: obj{}, out: obj{}, byID: map[string]Block{}}
+	g := gen{b: b, rm: rm, res: obj{}, data: obj{}, out: obj{}, mod: obj{}, byID: map[string]Block{}}
 	sum := sha256.Sum256([]byte(b.ID))
 	g.short = hex.EncodeToString(sum[:])[:6]
 	for _, bl := range b.Blocks {
@@ -50,6 +52,9 @@ func (b Blueprint) tofu(rm removal) ([]byte, error) {
 	if len(g.out) > 0 {
 		doc["output"] = g.out
 	}
+	if len(g.mod) > 0 {
+		doc["module"] = g.mod
+	}
 	var buf bytes.Buffer
 	enc := json.NewEncoder(&buf)
 	enc.SetEscapeHTML(false)
@@ -67,6 +72,7 @@ type gen struct {
 	res   obj     // resource type -> name -> body
 	data  obj
 	out   obj
+	mod   obj // template blocks: module name -> call
 	byID  map[string]Block
 }
 
@@ -171,6 +177,8 @@ func (g *gen) build() {
 			g.service(bl)
 		} else if bl.Kind == KindAgent {
 			g.agent(bl)
+		} else if bl.Kind == KindTemplate {
+			g.template(bl)
 		}
 		if bl := g.byID[id]; bl.Source != nil {
 			g.source(bl)
@@ -750,4 +758,128 @@ func githubSubjects(repo, branch string) []string {
 		"repo:" + repo + ":ref:refs/heads/" + branch,
 		"repo:" + owner + "@*/" + name + "@*:ref:refs/heads/" + branch,
 	}
+}
+
+// ModulePath is where a template's module sits next to main.tf.json.
+func ModulePath(t template.Template) string { return "templates/" + t.Name + "/" + t.Version }
+
+// Modules returns the template modules the blueprint's code calls, by path, to be written next to main.tf.json.
+func (b Blueprint) Modules() (map[string]string, error) {
+	out := map[string]string{}
+	for _, bl := range b.Blocks {
+		if bl.Kind != KindTemplate {
+			continue
+		}
+		t, err := template.Get(bl.Template)
+		if err != nil {
+			return nil, err
+		}
+		out[ModulePath(t)+"/main.tf.json"] = string(t.Code)
+	}
+	return out, nil
+}
+
+// escValue makes a checked input safe to pass to OpenTofu: text cannot become an expression.
+func escValue(v any) any {
+	switch x := v.(type) {
+	case string:
+		return esc(x)
+	case map[string]any:
+		m := obj{}
+		for k, e := range x {
+			m[esc(k)] = escValue(e)
+		}
+		return m
+	}
+	return v
+}
+
+// template calls a template block's module with its checked inputs and, for each link role, the linked blocks in
+// the role's shape. What the module may do with them is the reviewed template's code.
+func (g *gen) template(bl Block) {
+	t, err := template.Get(bl.Template)
+	if err != nil {
+		return // Validate refused it already
+	}
+	in, err := t.Inputs.Resolve(bl.Inputs)
+	if err != nil {
+		return
+	}
+	call := obj{"source": "./" + ModulePath(t), "name": g.awsName(bl.ID, 64), "tags": tags(bl)}
+	for k, v := range in {
+		call[k] = escValue(v)
+	}
+	lists := map[string][]obj{}
+	for _, r := range t.Diagram.Links {
+		lists[r.Variable] = []obj{}
+	}
+	for _, l := range g.b.Links {
+		switch {
+		case l.From == bl.ID:
+			to := g.byID[l.To]
+			r, ok := t.Role("out", kindOf(to))
+			if !ok {
+				continue
+			}
+			switch r.Shape {
+			case template.ShapeData:
+				kind, arn, value := g.dataRef(to)
+				lists[r.Variable] = append(lists[r.Variable], obj{"id": to.ID, "kind": kind, "arn": arn, "value": value, "env": envName(kind, to.ID), "access": l.Access})
+			case template.ShapeSecret:
+				arn := ref("aws_secretsmanager_secret", to.ID, "arn")
+				if to.Kind == KindExisting {
+					arn = "${data.aws_secretsmanager_secret." + to.ID + ".arn}"
+				}
+				lists[r.Variable] = append(lists[r.Variable], obj{"id": to.ID, "arn": arn, "env": envKey(to.ID) + "_SECRET_ARN"})
+			}
+		case l.To == bl.ID:
+			from := g.byID[l.From]
+			r, ok := t.Role("in", kindOf(from))
+			if !ok {
+				continue
+			}
+			_, arn, _ := g.dataRef(from)
+			lists[r.Variable] = append(lists[r.Variable], obj{"id": from.ID, "arn": arn})
+		}
+	}
+	for k, v := range lists {
+		call[k] = v
+	}
+	g.mod[bl.ID] = call
+	var code struct {
+		Output map[string]struct {
+			Description string `json:"description"`
+		} `json:"output"`
+	}
+	json.Unmarshal(t.Code, &code)
+	for name, o := range code.Output {
+		g.out[bl.ID+"_"+name] = obj{"description": esc(bl.Name) + ": " + o.Description, "value": "${module." + bl.ID + "." + name + "}"}
+	}
+}
+
+// ModulesFor returns the template modules a generated main.tf.json calls, by path, from the module sources in it. It
+// refuses any source that is not a library template, so only reviewed code is ever written next to the plan.
+func ModulesFor(code []byte) (map[string]string, error) {
+	var doc struct {
+		Module map[string]struct {
+			Source string `json:"source"`
+		} `json:"module"`
+	}
+	if err := json.Unmarshal(code, &doc); err != nil {
+		return nil, err
+	}
+	out := map[string]string{}
+	for name, m := range doc.Module {
+		rest, ok := strings.CutPrefix(m.Source, "./templates/")
+		parts := strings.Split(rest, "/")
+		if !ok || len(parts) != 2 {
+			return nil, fmt.Errorf("module %s: %q is not a library template", name, m.Source)
+		}
+		t, err := template.Get(parts[0] + "@" + parts[1])
+		if err != nil {
+			return nil, fmt.Errorf("module %s: %w", name, err)
+		}
+		out[ModulePath(t)+"/main.tf.json"] = string(t.Code)
+	}
+	return out, nil
 }

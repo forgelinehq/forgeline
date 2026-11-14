@@ -7,7 +7,10 @@ import (
 	"fmt"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
+
+	"github.com/forgelinehq/forgeline/internal/template"
 )
 
 // Block kinds.
@@ -23,9 +26,11 @@ const (
 	KindCache     = "cache"     // a Redis cache (ElastiCache)
 	KindSecret    = "secret"    // a Secrets Manager secret whose value a person sets in AWS
 	KindAgent     = "agent"     // an AI agent on Amazon Bedrock AgentCore Runtime, from a container image in ECR (note 040)
+	KindTemplate  = "template"  // a reviewed template from the library, drawn as one block (note 040, step 2)
 )
 
-// Kinds lists the block kinds in the order the canvas offers them.
+// Kinds lists the block kinds in the order the canvas offers them. Template blocks are offered one per template
+// (GET /v1/templates), not as a kind of their own.
 var Kinds = []string{KindFrontDoor, KindService, KindTable, KindBucket, KindQueue, KindLogs, KindDatabase, KindCache, KindSecret, KindAgent, KindExisting}
 
 // Access a service has to what it uses.
@@ -109,6 +114,10 @@ type Block struct {
 
 	// existing
 	Existing *Existing `json:"existing,omitempty"`
+
+	// template: which template (name@version) and its inputs, checked against the template's schema.
+	Template string         `json:"template,omitempty"`
+	Inputs   map[string]any `json:"inputs,omitempty"`
 
 	// Source is where an app's or agent's code lives (note 040, step 4): the blueprint then makes a private image
 	// repository for it and a role only that repository's branch can use from GitHub Actions to push images.
@@ -337,6 +346,10 @@ func (b Blueprint) Validate() error {
 			if l.Access != "" {
 				return fmt.Errorf("%s.access: a link to a secret is the access; leave access out", at)
 			}
+		case from.Kind == KindTemplate || to.Kind == KindTemplate:
+			if err := templateLink(at, from, to, l); err != nil {
+				return err
+			}
 		case from.Kind == KindService && to.Kind == KindService:
 			if l.Access != "" {
 				return fmt.Errorf("%s.access: one service calling another takes no access level", at)
@@ -359,6 +372,66 @@ func (b Blueprint) Validate() error {
 	return nil
 }
 
+// fillChecks puts input values into a template's check text: {memory} becomes 512.
+func fillChecks(text string, in map[string]any) string {
+	for k, v := range in {
+		val := fmt.Sprint(v)
+		if f, isNum := v.(float64); isNum {
+			val = strconv.FormatFloat(f, 'f', -1, 64)
+		}
+		text = strings.ReplaceAll(text, "{"+k+"}", val)
+	}
+	return text
+}
+
+func blockByID(b Blueprint, id string) Block {
+	for _, bl := range b.Blocks {
+		if bl.ID == id {
+			return bl
+		}
+	}
+	return Block{}
+}
+
+// kindOf is what a block is for linking: an existing block counts as what it names.
+func kindOf(bl Block) string {
+	if bl.Kind == KindExisting && bl.Existing != nil {
+		return bl.Existing.Type
+	}
+	return bl.Kind
+}
+
+// templateLink checks a link to or from a template block against the roles the template offers.
+func templateLink(at string, from, to Block, l Link) error {
+	tb, other, dir := from, to, "out"
+	if to.Kind == KindTemplate && from.Kind != KindTemplate {
+		tb, other, dir = to, from, "in"
+	}
+	tpl, err := template.Get(tb.Template)
+	if err != nil {
+		return fmt.Errorf("%s: %v", at, err)
+	}
+	role, ok := tpl.Role(dir, kindOf(other))
+	if !ok || other.Kind == KindTemplate {
+		var offers []string
+		for _, r := range tpl.Diagram.Links {
+			if r.Direction == "out" {
+				offers = append(offers, r.Name+" "+strings.Join(r.Kinds, ", "))
+			} else {
+				offers = append(offers, "a "+strings.Join(r.Kinds, " or ")+" "+r.Name+" it")
+			}
+		}
+		return fmt.Errorf("%s: a %s cannot link to a %s (%s offers: %s)", at, kindOf(from), kindOf(to), tpl.Title, strings.Join(offers, "; "))
+	}
+	if role.Access && l.Access != AccessRead && l.Access != AccessReadWrite {
+		return fmt.Errorf("%s.access: say read or readwrite, got %q", at, l.Access)
+	}
+	if !role.Access && l.Access != "" {
+		return fmt.Errorf("%s.access: this link takes no access level", at)
+	}
+	return nil
+}
+
 func (bl Block) validate(at string) error {
 	if strings.TrimSpace(bl.Name) == "" || len(bl.Name) > 60 {
 		return fmt.Errorf("%s.name: give a name of at most 60 characters", at)
@@ -375,6 +448,7 @@ func (bl Block) validate(at string) error {
 		KindCache:     {"size", "nodes"},
 		KindSecret:    {"description"},
 		KindAgent:     {"image", "env", "description", "source"},
+		KindTemplate:  {"template", "inputs", "source"},
 		KindExisting:  {"existing"},
 	}
 	ok, known := allowed[bl.Kind]
@@ -508,6 +582,14 @@ func (bl Block) validate(at string) error {
 		if len(bl.Description) > 200 || strings.ContainsAny(bl.Description, "$%{}") {
 			return fmt.Errorf("%s.description: at most 200 characters, without $, %%, { or }", at)
 		}
+	case KindTemplate:
+		tpl, err := template.Get(bl.Template)
+		if err != nil {
+			return fmt.Errorf("%s.template: %v", at, err)
+		}
+		if _, err := tpl.Inputs.Resolve(bl.Inputs); err != nil {
+			return fmt.Errorf("%s.inputs: %v", at, err)
+		}
 	case KindExisting:
 		e := bl.Existing
 		if e == nil {
@@ -558,6 +640,8 @@ func (bl Block) setFields() []string {
 	add(bl.Nodes != 0, "nodes")
 	add(bl.Description != "", "description")
 	add(bl.Existing != nil, "existing")
+	add(bl.Template != "", "template")
+	add(len(bl.Inputs) > 0, "inputs")
 	return out
 }
 
@@ -662,6 +746,32 @@ func (b Blueprint) Checks() []Check {
 	}
 	for _, l := range byKind[KindLogs] {
 		ok(fmt.Sprintf("%s: logs are kept %d days.", l.Name, l.RetentionDays))
+	}
+	for _, tb := range byKind[KindTemplate] {
+		tpl, err := template.Get(tb.Template)
+		if err != nil {
+			continue
+		}
+		in, _ := tpl.Inputs.Resolve(tb.Inputs)
+		for _, c := range tpl.Checks {
+			ok(tb.Name + ": " + fillChecks(c, in))
+		}
+		for _, l := range b.Links {
+			switch {
+			case l.From == tb.ID:
+				if role, found := tpl.Role("out", kindOf(blockByID(b, l.To))); found {
+					t := tb.Name + " " + role.Name + " " + l.To
+					if l.Access != "" {
+						t += map[string]string{AccessRead: " (read only)", AccessReadWrite: " (read and write)"}[l.Access]
+					}
+					ok(t + ".")
+				}
+			case l.To == tb.ID:
+				if role, found := tpl.Role("in", kindOf(blockByID(b, l.From))); found {
+					ok(l.From + " " + role.Name + " " + tb.Name + ".")
+				}
+			}
+		}
 	}
 	if len(byKind[KindExisting]) > 0 {
 		ok(plural(len(byKind[KindExisting]), "One existing resource is", fmt.Sprintf("%d existing resources are", len(byKind[KindExisting]))) + " used as it is and never changed.")
