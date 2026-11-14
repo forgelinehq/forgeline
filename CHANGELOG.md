@@ -52,6 +52,9 @@ section in the pull request that makes the change; a release moves it under its 
 - **After a session ends**, the console stops polling the server (it asked every minute, forever).
 
 ### Added
+- **Templates on the design canvas.** Each library template is a button on the Add bar; its form is drawn from the
+  template's inputs, and links follow the roles it offers (a queue triggers a Lambda function; the function uses tables,
+  buckets, queues and reads secrets). Build from GitHub suggests the image platform the template runs on.
 - **Template blocks in blueprints.** A blueprint block can be a library template (`kind: template`): its inputs are
   checked against the template's schema, its links against the roles it offers, the code calls it as a module, and a
   plan keeps the module files so the approved apply runs exactly them. `GET /v1/templates` lists them for the canvas.

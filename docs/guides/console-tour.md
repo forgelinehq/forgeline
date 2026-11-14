@@ -87,6 +87,15 @@ preview and send for approval. GitHub's OIDC provider must be set up in the AWS 
 
 ![Build from GitHub]({{ '/console/121-design-github-build.png' | relative_url }})
 
+**Templates** are reviewed, versioned solutions from Forgeline's library, added like any block (the dashed buttons at
+the end of the Add bar). The first is **Lambda function**: a container image from ECR on AWS Lambda, run on a schedule,
+by messages on a queue linked to it, or on demand, with its own log group and a role that reaches only what it is
+linked to. Its settings form is drawn from the template's inputs, and the server checks every save against the same
+rules; **Read its code** shows the OpenTofu module it builds. A plan keeps the template's code, so the approved apply
+builds exactly what was previewed.
+
+![A Lambda function template on the canvas]({{ '/console/140-template-block.png' | relative_url }})
+
 The same dialog offers **Built by Forgeline** instead: a `forgeline.yaml` for the repository with a `build` step that
 pushes to the block's image repository, and the push rule that allows it (an administrator clicks **Allow this push**
 once the blueprint has been previewed, since the rule needs the AWS account). No GitHub Actions and no role for GitHub:

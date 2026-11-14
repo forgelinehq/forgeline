@@ -9,6 +9,7 @@ import { KINDS, EXISTING, DB_SIZES, CACHE_SIZES, blockFacts, linkWords } from '.
 import { flowPath } from '../lib/flow.js';
 import { guardrailList } from '../lib/guardrails.js';
 import {
+  addTemplateBlock,
   BLOCK_W, BLOCK_H, FARGATE, LOG_DAYS, autoLayout, addBlock, removeBlock, updateBlock, moveBlock, linkTargets,
   addLink, removeLink, toBody, linkPath, linkPorts, bounds, fit, explainError, planByBlock, planState, planWords, placeNew, flowOf,
 } from '../lib/canvas.js';
@@ -36,6 +37,10 @@ export async function designPage({ params }) {
   try { others = (await get('/v1/blueprints')).blueprints; } catch { /* the switcher is optional */ }
   let repos = [];
   try { repos = ((await get('/v1/integrations/github')).rules || []).map(r => r.repo); } catch { /* typing the name still works */ }
+  // Templates from the library (note 040): one block each, with a form drawn from its inputs.
+  const templates = {};
+  try { for (const t of (await get('/v1/templates')).templates) templates[t.ref] = t; } catch { /* the canvas works without them */ }
+  const kindInfo = (b) => KINDS[b.kind] || (b.kind === 'template' ? { label: 'Template', tech: templates[b.template]?.title || b.template, icon: templates[b.template]?.icon || 'layers' } : { label: b.kind, tech: '' });
 
   let revision = saved.revision;
   let bp = autoLayout({ name: saved.name, description: saved.description || '', target: saved.target, blocks: saved.blocks, links: saved.links });
@@ -164,7 +169,11 @@ export async function designPage({ params }) {
       h('span', { class: 'muted mr-1 text-xs' }, 'Add'),
       Object.entries(KINDS).map(([k, v]) =>
         h('button', { type: 'button', class: 'flex items-center gap-1.5 rounded-lg border border-slate-200 px-2 py-1 text-xs hover:border-brand-400 dark:border-slate-700', 'data-add': k,
-          onclick: () => { const r = addBlock(bp, k); selected = r.id; change(r.bp); drawInspector(); } }, icon(v.icon, 'size-3.5 text-slate-500'), v.label))));
+          onclick: () => { const r = addBlock(bp, k); selected = r.id; change(r.bp); drawInspector(); } }, icon(v.icon, 'size-3.5 text-slate-500'), v.label)),
+      // The newest version of each template (the list comes newest first).
+      Object.values(templates).filter((t, i, all) => all.findIndex(x => x.name === t.name) === i).map(t =>
+        h('button', { type: 'button', class: 'flex items-center gap-1.5 rounded-lg border border-dashed border-slate-300 px-2 py-1 text-xs hover:border-brand-400 dark:border-slate-600', 'data-add-template': t.ref, title: t.summary,
+          onclick: () => { const r = addTemplateBlock(bp, t); selected = r.id; change(r.bp); drawInspector(); } }, icon(t.icon || 'layers', 'size-3.5 text-slate-500'), t.title))));
   }
 
   function previewCard() {
@@ -228,7 +237,7 @@ export async function designPage({ params }) {
   const ACT = { add: ['+ add', 'fill-emerald-600 dark:fill-emerald-400', 'stroke-emerald-500'], change: ['~ change', 'fill-amber-600 dark:fill-amber-400', 'stroke-amber-500'],
     replace: ['replace', 'fill-rose-600 dark:fill-rose-400', 'stroke-rose-500'], remove: ['remove', 'fill-rose-600 dark:fill-rose-400', 'stroke-rose-500'] };
   function blockNode(b) {
-    const k = KINDS[b.kind] || { label: b.kind, tech: '' };
+    const k = kindInfo(b);
     const ps = planState(plan, revision, dirty(), undefined, built?.applies || 0);
     const act = ps === 'ready' || ps === 'nothing' || ps === 'blocked' ? ACT[planByBlock(plan)[b.id]] : null;
     const on = b.id === selected, existing = b.kind === 'existing';
@@ -406,6 +415,48 @@ export async function designPage({ params }) {
     }, { xl: true });
   }
 
+  // A template block's form, drawn from the template's inputs: a list where it has allowed values, numbers within
+  // their range, text, and NAME=value lines for a map. The server checks every save against the same schema.
+  function templateFields(b, set) {
+    const tpl = templates[b.template];
+    if (!tpl) return [notice('warn', 'This template is not in the library: ' + b.template)];
+    const props = tpl.inputs.properties || {}, req = new Set(tpl.inputs.required || []), cur = b.inputs || {};
+    const setInput = (name, v) => {
+      // Read the inputs as they are now: another field may have changed them since this form was drawn.
+      const next = { ...(bp.blocks.find(x => x.id === b.id)?.inputs || {}) };
+      if (v === '' || v === null || v === undefined || (typeof v === 'number' && Number.isNaN(v))) delete next[name]; else next[name] = v;
+      set({ inputs: Object.keys(next).length ? next : null });
+    };
+    const out = [h('p', { class: 'hint' }, tpl.summary)];
+    for (const name of tpl.input_order) {
+      const p = props[name], label = (p.title || name) + (req.has(name) && p.default === undefined ? ' *' : '');
+      if (p.enum) {
+        out.push(select_(label, cur[name] ?? p.default ?? p.enum[0], p.enum.map(e => [e, String(e)]), v => setInput(name, p.type === 'string' ? v : Number(v))));
+      } else if (p.type === 'boolean') {
+        const id = 'f-in-' + name, cb = h('input', { id, type: 'checkbox', class: 'size-4', checked: !!(cur[name] ?? p.default) });
+        cb.addEventListener('change', () => setInput(name, cb.checked));
+        out.push(h('label', { class: 'flex items-center gap-2 text-sm', for: id }, cb, label));
+      } else if (p.type === 'integer' || p.type === 'number') {
+        out.push(input(label, cur[name] ?? '', v => setInput(name, v), { type: 'number', min: p.minimum ?? '', max: p.maximum ?? '', step: p.type === 'integer' ? '1' : 'any', placeholder: p.default ?? '' }));
+      } else if (p.type === 'object') {
+        const id = 'f-in-' + name, ta = h('textarea', { id, class: 'input font-mono text-xs', rows: '3', placeholder: 'NAME=value' }, Object.entries(cur[name] || {}).map(([k2, v]) => k2 + '=' + v).join('\n'));
+        ta.addEventListener('change', () => {
+          const m = {};
+          for (const line of ta.value.split('\n')) { const i = line.indexOf('='); if (i > 0) m[line.slice(0, i).trim()] = line.slice(i + 1); }
+          setInput(name, Object.keys(m).length ? m : null);
+        });
+        out.push(h('div', {}, h('label', { class: 'label', for: id }, label), ta));
+      } else {
+        out.push(input(label, cur[name] ?? '', v => setInput(name, v), { placeholder: p.default || '', maxlength: String(p.maxLength || '') }));
+      }
+      if (p.description) out.push(h('p', { class: 'hint -mt-2' }, p.description));
+    }
+    out.push(sourceField(b, set),
+      h('p', { class: 'hint' }, 'A reviewed template (' + tpl.ref + '). ',
+        h('a', { href: '/v1/templates/' + encodeURIComponent(tpl.name) + '/' + encodeURIComponent(tpl.version) + '/code', target: '_blank', rel: 'noopener', class: 'underline' }, 'Read its code'), '.'));
+    return out;
+  }
+
   function drawInspector() {
     const b = bp.blocks.find(x => x.id === selected);
     if (!b) {
@@ -416,7 +467,7 @@ export async function designPage({ params }) {
       return;
     }
     const set = (fields) => change(updateBlock(bp, b.id, fields));
-    const k = KINDS[b.kind];
+    const k = kindInfo(b);
     const fields = [input('Name', b.name, v => set({ name: v }))];
     switch (b.kind) {
       case 'service':
@@ -490,6 +541,9 @@ export async function designPage({ params }) {
         fields.push(input('What it holds', b.description, v => set({ description: v }), { placeholder: 'the payments API key' }),
           h('p', { class: 'hint' }, 'Created empty. Set its value in AWS Secrets Manager after it is built; linked apps get it when they start. Forgeline never reads or stores it.'));
         break;
+      case 'template':
+        fields.push(...templateFields(b, set));
+        break;
       case 'existing':
         fields.push(select_('What it is', b.existing?.type, Object.entries(EXISTING), v => set({ existing: { ...b.existing, type: v } })),
           input('Its name in AWS', b.existing?.name, v => set({ existing: { ...b.existing, name: v } })),
@@ -499,7 +553,7 @@ export async function designPage({ params }) {
 
     // Links from and to this block, in words, and the ones it may add.
     const mine = bp.links.filter(l => l.from === b.id || l.to === b.id);
-    const targets = linkTargets(bp, b.id);
+    const targets = linkTargets(bp, b.id, templates);
     let linkUI = null;
     if (targets.length) {
       const to = h('select', { id: 'f-link-to', class: 'input', 'aria-label': 'Link to' }, targets.map(t => h('option', { value: t.id }, t.name)));

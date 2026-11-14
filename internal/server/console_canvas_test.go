@@ -12,7 +12,7 @@ import (
 )
 
 const canvasCases = `
-import { DEFAULTS, autoLayout, addBlock, removeBlock, updateBlock, moveBlock, linkTargets, addLink, removeLink, toBody, explainError, linkPath, linkPorts, bounds, fit, newID, planByBlock, planState, planWords, placeNew, flowOf } from './canvas.mjs';
+import { DEFAULTS, autoLayout, addBlock, addTemplateBlock, removeBlock, updateBlock, moveBlock, linkTargets, addLink, removeLink, toBody, explainError, linkPath, linkPorts, bounds, fit, newID, planByBlock, planState, planWords, placeNew, flowOf } from './canvas.mjs';
 let failed = 0;
 const eq = (name, got, want) => { const g = JSON.stringify(got), w = JSON.stringify(want); if (g !== w) { failed++; console.error('FAIL ' + name + '\n  got  ' + g + '\n  want ' + w); } };
 const empty = { name: 'T', target: { cloud: 'aws', account: 'primary', region: 'ap-south-1' }, blocks: [], links: [] };
@@ -109,6 +109,28 @@ eq('a link to nothing has no flow', flowOf(fb, { from: 'a', to: 'gone' }), null)
   eq('a call in one column runs from the bottom of one block to the top of the next', linkPath({ x: 346, y: 40 }, { x: 346, y: 140 }), 'M441 106 C441 126, 441 120, 441 140');
   eq('and upwards from the top', linkPath({ x: 346, y: 140 }, { x: 346, y: 40 }), 'M441 140 C441 120, 441 126, 441 106');
   eq('calls and databases flow both ways, secrets come back', [flowOf(w, { from: fe, to: be }), flowOf(w, { from: be, to: db }), flowOf(w, { from: be, to: sc }), flowOf(w, { from: be, to: old })], ['both', 'both', 'back', 'both']);
+}
+{
+  // A template block links by its template's roles: out to what it uses, in from what triggers it.
+  const lambda = { ref: 'aws-lambda-function@1.0.0', name: 'aws-lambda-function', title: 'Lambda function', links: [
+    { name: 'uses', direction: 'out', kinds: ['table', 'bucket', 'queue'], access: true },
+    { name: 'reads', direction: 'out', kinds: ['secret'], access: false },
+    { name: 'triggers', direction: 'in', kinds: ['queue'], access: false }] };
+  const tpls = { [lambda.ref]: lambda };
+  let x = addBlock(empty, 'queue').bp; x = addBlock(x, 'table').bp; x = addBlock(x, 'secret').bp; x = addBlock(x, 'database').bp;
+  const tr = addTemplateBlock(x, lambda); x = tr.bp;
+  const fn = x.blocks.find(b => b.id === tr.id);
+  eq('a template block', [tr.id, fn.kind, fn.template, fn.name, fn.x, 'inputs' in fn], ['function', 'template', lambda.ref, 'Lambda function', 346, false]);
+  eq('it uses data and reads secrets, not a database', linkTargets(x, 'function', tpls).map(t => [t.id, t.access]), [['queue', true], ['table', true], ['secret', false]]);
+  eq('a queue may trigger it', linkTargets(x, 'queue', tpls), [{ id: 'function', name: 'Lambda function', access: false, path: false }]);
+  eq('a table may not', linkTargets(x, 'table', tpls), []);
+  eq('without the template list it offers nothing', linkTargets(x, 'function'), []);
+  x = addLink(x, 'queue', 'function');
+  eq('a trigger once', linkTargets(x, 'queue', tpls), []);
+  eq('a trigger flows into it', flowOf(x, { from: 'queue', to: 'function' }), 'forward');
+  const two = addTemplateBlock(x, lambda);
+  eq('a second one', [two.id, two.bp.blocks.find(b => b.id === two.id).name], ['function-2', 'Lambda function 2']);
+  eq('templates never link to each other', linkTargets(two.bp, 'function', tpls).some(t => t.id === 'function-2'), false);
 }
 console.log(JSON.stringify({ built: toBody(bp, 3), defaults: DEFAULTS }));
 if (failed) process.exit(1);

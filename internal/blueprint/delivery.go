@@ -3,6 +3,8 @@ package blueprint
 import (
 	"fmt"
 	"strings"
+
+	"github.com/forgelinehq/forgeline/internal/template"
 )
 
 // Delivery is what Forgeline suggests for a block with a source (note 040, step 4): a GitHub Actions workflow the
@@ -69,6 +71,14 @@ func (b Blueprint) SuggestDelivery(blockID, account string) (Delivery, error) {
 	platform := "linux/amd64" // Fargate's default
 	if bl.Kind == KindAgent {
 		platform = "linux/arm64" // AgentCore runs arm64 images only
+	}
+	if bl.Kind == KindTemplate {
+		// A template that runs an image says which processor through its architecture input (Lambda: arm64 unless set).
+		if t, err := template.Get(bl.Template); err == nil {
+			if in, err := t.Inputs.Resolve(bl.Inputs); err == nil && in["architecture"] == "arm64" {
+				platform = "linux/arm64"
+			}
+		}
 	}
 	d := Delivery{Block: bl.ID, Repo: bl.Source.Repo, Branch: bl.Source.BranchOr(), WorkflowPath: ".github/workflows/forgeline-" + bl.ID + ".yml",
 		ImageRepo: registry + "/" + repo, Platform: platform}
