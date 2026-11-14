@@ -40,6 +40,10 @@ export function blockFacts(b) {
     case 'secret': return 'value set in AWS, never seen by Forgeline';
     case 'agent': return (b.image ? 'from ' + b.image.split('/').pop() + ' · calls Bedrock models' : 'needs its ECR image') + (b.source ? ' · code in ' + b.source.repo : '');
     case 'existing': return (EXISTING[b.existing?.type] || 'resource') + ' ' + (b.existing?.name || '') + ' · used, never changed';
+    case 'template': {
+      const i = b.inputs || {};
+      return [i.image ? 'from ' + String(i.image).split('/').pop() : 'needs its inputs', i.schedule ? i.schedule : null, b.template].filter(Boolean).join(' · ');
+    }
     default: return '';
   }
 }
@@ -51,6 +55,7 @@ export function linkWords(bp, l) {
   if (!from || !to) return l.from + ' → ' + l.to;
   if (from.kind === 'frontdoor') return `${from.name} sends ${l.path || 'traffic'} to ${to.name}`;
   if (to.kind === 'logs') return `${from.name} writes its logs to ${to.name}`;
+  if (to.kind === 'template') return `${from.name} triggers ${to.name}`;
   if (to.kind === 'service') return `${from.name} calls ${to.name}`;
   const t = to.kind === 'existing' ? to.existing?.type : to.kind;
   if (t === 'secret') return `${from.name} reads the secret ${to.name}`;

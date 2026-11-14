@@ -23,7 +23,7 @@ export const DEFAULTS = {
 };
 const ID_BASE = { frontdoor: 'door', service: 'app', table: 'table', bucket: 'files', queue: 'queue', logs: 'logs', database: 'db', cache: 'cache', secret: 'secret', agent: 'agent', existing: 'existing' };
 // Which column a kind sits in: front doors, then apps, then what apps use.
-const COLUMN = { frontdoor: 0, service: 1, agent: 1 };
+const COLUMN = { frontdoor: 0, service: 1, agent: 1, template: 1 };
 
 // Fargate's memory sizes (MiB) per CPU size, as in internal/blueprint.
 export const FARGATE = {
@@ -73,6 +73,21 @@ export function addBlock(bp, kind) {
   return { bp: out, id };
 }
 
+/**
+ * Adds a block for a template (one of GET /v1/templates); returns { bp, id }. Its inputs start empty: the template's
+ * defaults apply, and a required input without one shows as a problem until it is filled.
+ */
+export function addTemplateBlock(bp, tpl) {
+  const out = clone(bp);
+  const base = tpl.name.split('-').pop() || 'block';
+  const taken = new Set(out.blocks.map(b => b.id));
+  let id = base;
+  for (let n = 2; taken.has(id); n++) id = base + '-' + n;
+  const same = out.blocks.filter(b => b.kind === 'template' && b.template === tpl.ref).length;
+  out.blocks.push({ id, kind: 'template', name: tpl.title + (same ? ' ' + (same + 1) : ''), template: tpl.ref, ...spotFor(out, 'template') });
+  return { bp: out, id };
+}
+
 /** Removes a block and every link to or from it. */
 export function removeBlock(bp, id) {
   const out = clone(bp);
@@ -107,10 +122,26 @@ const usesData = (b) => DATA.includes(b.kind) || (b.kind === 'existing' && DATA.
  * paths to others; a service uses data, a database, a cache or a secret (once each), calls another service that
  * has a port, and writes logs to at most one logs block.
  */
-export function linkTargets(bp, fromId) {
+export function linkTargets(bp, fromId, templates = {}) {
   const from = bp.blocks.find(b => b.id === fromId);
   if (!from) return [];
   const linked = new Set(bp.links.filter(l => l.from === fromId).map(l => l.to));
+  const what = (b) => b.kind === 'existing' ? b.existing?.type : b.kind;
+  // A template block links by the roles its template offers: out to what it uses, and in from what drives it.
+  if (from.kind === 'template') {
+    const roles = (templates[from.template]?.links || []).filter(r => r.direction === 'out');
+    return bp.blocks.filter(b => b.id !== fromId && !linked.has(b.id) && b.kind !== 'template' && roles.some(r => r.kinds.includes(what(b))))
+      .map(b => ({ id: b.id, name: b.name, access: roles.find(r => r.kinds.includes(what(b))).access, path: false }));
+  }
+  const drives = bp.blocks.filter(b => b.kind === 'template' && !linked.has(b.id) &&
+      !bp.links.some(l => l.from === b.id && l.to === fromId) &&
+      (templates[b.template]?.links || []).some(r => r.direction === 'in' && r.kinds.includes(what(from))))
+    .map(b => ({ id: b.id, name: b.name, access: false, path: false }));
+  return [...ordinaryTargets(bp, from, linked), ...drives];
+}
+
+function ordinaryTargets(bp, from, linked) {
+  const fromId = from.id;
   const kindOf = Object.fromEntries(bp.blocks.map(b => [b.id, b.kind]));
   if (from.kind === 'frontdoor') {
     const fronted = new Set(bp.links.filter(l => kindOf[l.from] === 'frontdoor').map(l => l.to));
@@ -296,6 +327,7 @@ export function flowOf(bp, link) {
   if (from.kind === 'frontdoor' || to.kind === 'logs') return 'forward';
   const t = to.kind === 'existing' ? to.existing?.type : to.kind;
   if (t === 'secret') return 'back';
+  if (to.kind === 'template') return 'forward'; // something that drives it, such as a queue that triggers a function
   if (to.kind === 'service' || t === 'database' || t === 'cache') return 'both';
   return link.access === 'readwrite' ? 'both' : 'back';
 }

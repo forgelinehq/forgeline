@@ -123,6 +123,19 @@ func TestTemplateBlockCodeAndChecks(t *testing.T) {
 	}
 }
 
+func TestTemplateDeliveryFollowsItsArchitecture(t *testing.T) {
+	b := withJobs()
+	b.Blocks[0].Source = &Source{Repo: "acme/jobs"}
+	d, err := b.SuggestDelivery("jobs", "111122223333")
+	if err != nil || d.Platform != "linux/arm64" || !strings.Contains(d.Native.Pipeline, "platform: linux/arm64") {
+		t.Fatalf("arm64 by default: %v %s", err, d.Platform)
+	}
+	b.Blocks[0].Inputs["architecture"] = "x86_64"
+	if d, _ := b.SuggestDelivery("jobs", "111122223333"); d.Platform != "linux/amd64" {
+		t.Errorf("x86_64: %s", d.Platform)
+	}
+}
+
 func TestModulesForAcceptsOnlyLibraryTemplates(t *testing.T) {
 	code, _ := withJobs().Tofu()
 	if mods, err := ModulesFor(code); err != nil || len(mods) != 1 {
