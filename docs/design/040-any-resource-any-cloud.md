@@ -83,6 +83,38 @@ First-party templates, in this order, each its own pull request with a real prev
 7. **Code pipeline**: CodeBuild and CodePipeline, or (preferred) a Forgeline pipeline that builds an image and updates
    a service (layer 3).
 
+#### The template format (decided 2026-11-14)
+
+A template is a directory `<name>/<version>/` with three files. First-party templates are compiled into Forgeline
+(`internal/template/library`); the library (layer 7) adds reviewed, checksummed third-party ones later.
+
+- **`template.json`**: `name`, `version` (semver), `title`, `summary`, `cloud`, `providers` (each must equal the
+  version Forgeline pins: a template cannot bring its own provider), `holds_data` (whether removing it loses data), the
+  plain-words `checks` it adds (with `{input}` placeholders), and `inputs`, a JSON Schema subset the canvas draws as a
+  form and Forgeline checks before any code is generated: `string` (`pattern`, `maxLength`, `enum`), `integer` and
+  `number` (`minimum`, `maximum`, `enum`), `boolean`, a map of strings (`additionalProperties` a string schema,
+  `maxProperties`, `propertyNames.pattern`), `default`, `title`, `description`, `required`. Any other keyword makes the
+  template invalid, so the form never leaves out a rule the code relies on.
+- **`diagram.json`**: how the block draws (`icon`) and the **link roles** it offers. Each role names its direction
+  (out: the template uses the other block; in: the other block drives it), the block kinds it accepts, whether it takes
+  read or read-write access, and the module variable that receives the linked blocks. The variable's shape is fixed by
+  the role (`data`: id, kind, ARN, value, environment name, access; `secret`: id, ARN, environment name; `source`: id,
+  ARN), so the generator, not the template, says what a link points at, and the reviewed template code decides which
+  IAM actions it grants.
+- **`main.tf.json`**: an OpenTofu module. Its variables are exactly the inputs, the link variables and `name` and
+  `tags`. It may not declare providers or backends, call other modules, use provisioners, use resources or data sources
+  of a provider it does not declare, or read secret values (`aws_secretsmanager_secret_version`, `aws_ssm_parameter`
+  and similar). These are checked when the template loads, and tested by breaking them.
+
+The blueprint calls a template block as a module (`module.<block>`). The module files are stored with the plan, next to
+`main.tf.json`, so an approved plan applies exactly the code it was planned with. Every plan still goes through the
+built-in guardrails.
+
+The first template is **AWS Lambda function** (`aws-lambda-function`), chosen by the maintainer because it can be built
+on real AWS now: a container image from ECR, its own log group and role, a schedule, queues that trigger it, and the
+tables, buckets, queues and secrets it uses. The AgentCore agent template follows once the account's AgentCore quota is
+raised.
+
 ### 3. Repositories linked to what runs them
 
 A service, function or agent block can take a **source**: a GitHub repository (from the repositories the GitHub App may

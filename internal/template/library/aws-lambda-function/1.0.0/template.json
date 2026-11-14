@@ -1,0 +1,38 @@
+{
+  "name": "aws-lambda-function",
+  "version": "1.0.0",
+  "title": "Lambda function",
+  "summary": "Runs a container image from ECR on AWS Lambda when something calls it: on a schedule, when messages arrive on a linked queue, or on demand. It gets its own log group and a role that can reach only what it is linked to.",
+  "cloud": "aws",
+  "providers": {"aws": {"source": "hashicorp/aws", "version": "~> 6.72"}},
+  "holds_data": false,
+  "checks": [
+    "Runs {image} with {memory} MB of memory for at most {timeout} seconds per call",
+    "Writes its logs to its own log group, kept {log_retention_days} days",
+    "Its role can reach only the tables, buckets, queues and secrets it is linked to"
+  ],
+  "inputs": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["image"],
+    "properties": {
+      "image": {"type": "string", "title": "Container image", "maxLength": 400,
+        "description": "An image in ECR in this account and region, with a tag or digest. Build it with a build step or GitHub Actions.",
+        "pattern": "^[0-9]{12}\\.dkr\\.ecr\\.[a-z0-9-]+\\.amazonaws\\.com/[a-z0-9][a-z0-9._/-]{0,200}(:[A-Za-z0-9._-]{1,128}|@sha256:[a-f0-9]{64})$"},
+      "architecture": {"type": "string", "title": "Processor", "enum": ["arm64", "x86_64"], "default": "arm64",
+        "description": "The image must be built for it: linux/arm64 for arm64, linux/amd64 for x86_64."},
+      "memory": {"type": "integer", "title": "Memory (MB)", "minimum": 128, "maximum": 10240, "default": 512},
+      "timeout": {"type": "integer", "title": "Time limit (seconds)", "minimum": 1, "maximum": 900, "default": 30},
+      "schedule": {"type": "string", "title": "Schedule", "maxLength": 100, "default": "",
+        "description": "Optional: rate(5 minutes) or cron(0 9 * * ? *). Empty means no schedule.",
+        "pattern": "^(|rate\\([1-9][0-9]{0,3} (minute|minutes|hour|hours|day|days)\\)|cron\\([0-9A-Za-z*?,/#L -]{1,80}\\))$"},
+      "batch_size": {"type": "integer", "title": "Messages per call", "minimum": 1, "maximum": 10, "default": 10,
+        "description": "For linked queues that trigger it."},
+      "log_retention_days": {"type": "integer", "title": "Keep logs (days)", "enum": [1, 3, 5, 7, 14, 30, 60, 90, 180, 365], "default": 14},
+      "env": {"type": "object", "title": "Settings", "maxProperties": 20,
+        "description": "Plain settings passed as environment variables. Never secrets: link a secret block instead.",
+        "propertyNames": {"type": "string", "pattern": "^[A-Z_][A-Z0-9_]{0,63}$", "maxLength": 64},
+        "additionalProperties": {"type": "string", "maxLength": 1000}}
+    }
+  }
+}

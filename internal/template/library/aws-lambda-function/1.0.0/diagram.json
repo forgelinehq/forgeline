@@ -1,0 +1,8 @@
+{
+  "icon": "bolt",
+  "links": [
+    {"name": "uses", "direction": "out", "kinds": ["table", "bucket", "queue"], "access": true, "variable": "uses", "shape": "data"},
+    {"name": "reads", "direction": "out", "kinds": ["secret"], "access": false, "variable": "secrets", "shape": "secret"},
+    {"name": "triggers", "direction": "in", "kinds": ["queue"], "access": false, "variable": "trigger_queues", "shape": "source"}
+  ]
+}

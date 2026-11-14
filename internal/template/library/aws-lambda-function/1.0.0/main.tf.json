@@ -1,0 +1,205 @@
+{
+  "terraform": {
+    "required_providers": {
+      "aws": {
+        "source": "hashicorp/aws",
+        "version": "~> 6.72"
+      }
+    }
+  },
+  "variable": {
+    "name": {
+      "type": "string",
+      "description": "Set by Forgeline: the function's name, unique in the account."
+    },
+    "tags": {
+      "type": "map(string)",
+      "description": "Set by Forgeline."
+    },
+    "image": {
+      "type": "string"
+    },
+    "architecture": {
+      "type": "string"
+    },
+    "memory": {
+      "type": "number"
+    },
+    "timeout": {
+      "type": "number"
+    },
+    "schedule": {
+      "type": "string"
+    },
+    "batch_size": {
+      "type": "number"
+    },
+    "log_retention_days": {
+      "type": "number"
+    },
+    "env": {
+      "type": "map(string)"
+    },
+    "uses": {
+      "type": "list(object({id=string,kind=string,arn=string,value=string,env=string,access=string}))",
+      "description": "Set by Forgeline from the links: tables, buckets and queues the function uses."
+    },
+    "secrets": {
+      "type": "list(object({id=string,arn=string,env=string}))",
+      "description": "Set by Forgeline from the links: secrets the function reads."
+    },
+    "trigger_queues": {
+      "type": "list(object({id=string,arn=string}))",
+      "description": "Set by Forgeline from the links: queues whose messages trigger the function."
+    }
+  },
+  "locals": {
+    "grants": {
+      "table": {
+        "read": [
+          "dynamodb:BatchGetItem",
+          "dynamodb:DescribeTable",
+          "dynamodb:GetItem",
+          "dynamodb:Query",
+          "dynamodb:Scan"
+        ],
+        "readwrite": [
+          "dynamodb:BatchGetItem",
+          "dynamodb:BatchWriteItem",
+          "dynamodb:DeleteItem",
+          "dynamodb:DescribeTable",
+          "dynamodb:GetItem",
+          "dynamodb:PutItem",
+          "dynamodb:Query",
+          "dynamodb:Scan",
+          "dynamodb:UpdateItem"
+        ]
+      },
+      "bucket": {
+        "read": [
+          "s3:GetObject",
+          "s3:ListBucket"
+        ],
+        "readwrite": [
+          "s3:DeleteObject",
+          "s3:GetObject",
+          "s3:ListBucket",
+          "s3:PutObject"
+        ]
+      },
+      "queue": {
+        "read": [
+          "sqs:ChangeMessageVisibility",
+          "sqs:DeleteMessage",
+          "sqs:GetQueueAttributes",
+          "sqs:ReceiveMessage"
+        ],
+        "readwrite": [
+          "sqs:ChangeMessageVisibility",
+          "sqs:DeleteMessage",
+          "sqs:GetQueueAttributes",
+          "sqs:ReceiveMessage",
+          "sqs:SendMessage"
+        ]
+      }
+    },
+    "environment": "${merge(var.env, {for u in var.uses : u.env => u.value}, {for s in var.secrets : s.env => s.arn})}"
+  },
+  "data": {
+    "aws_caller_identity": {
+      "current": {}
+    }
+  },
+  "resource": {
+    "aws_cloudwatch_log_group": {
+      "fn": {
+        "name": "/aws/lambda/${var.name}",
+        "retention_in_days": "${var.log_retention_days}",
+        "tags": "${var.tags}"
+      }
+    },
+    "aws_iam_role": {
+      "fn": {
+        "name": "${var.name}",
+        "assume_role_policy": "${jsonencode({Version = \"2012-10-17\", Statement = [{Effect = \"Allow\", Principal = {Service = \"lambda.amazonaws.com\"}, Action = \"sts:AssumeRole\", Condition = {StringEquals = {\"aws:SourceAccount\" = data.aws_caller_identity.current.account_id}}}]})}",
+        "tags": "${var.tags}"
+      }
+    },
+    "aws_iam_role_policy": {
+      "fn": {
+        "name": "lambda-function",
+        "role": "${aws_iam_role.fn.id}",
+        "policy": "${jsonencode({Version = \"2012-10-17\", Statement = concat([{Sid = \"OwnLogs\", Effect = \"Allow\", Action = [\"logs:CreateLogStream\", \"logs:PutLogEvents\"], Resource = [format(\"%s:*\", aws_cloudwatch_log_group.fn.arn)]}], [for u in var.uses : {Effect = \"Allow\", Action = local.grants[u.kind][u.access], Resource = u.kind == \"table\" ? [u.arn, format(\"%s/index/*\", u.arn)] : u.kind == \"bucket\" ? [u.arn, format(\"%s/*\", u.arn)] : [u.arn]}], [for one in [1] : {Sid = \"LinkedSecrets\", Effect = \"Allow\", Action = [\"secretsmanager:GetSecretValue\"], Resource = [for s in var.secrets : s.arn]} if length(var.secrets) > 0], [for one in [1] : {Sid = \"TriggerQueues\", Effect = \"Allow\", Action = [\"sqs:ChangeMessageVisibility\", \"sqs:DeleteMessage\", \"sqs:GetQueueAttributes\", \"sqs:ReceiveMessage\"], Resource = [for q in var.trigger_queues : q.arn]} if length(var.trigger_queues) > 0])})}"
+      }
+    },
+    "aws_lambda_function": {
+      "fn": {
+        "function_name": "${var.name}",
+        "role": "${aws_iam_role.fn.arn}",
+        "package_type": "Image",
+        "image_uri": "${var.image}",
+        "architectures": [
+          "${var.architecture}"
+        ],
+        "memory_size": "${var.memory}",
+        "timeout": "${var.timeout}",
+        "environment": {
+          "variables": "${local.environment}"
+        },
+        "logging_config": {
+          "log_format": "Text",
+          "log_group": "${aws_cloudwatch_log_group.fn.name}"
+        },
+        "tags": "${var.tags}",
+        "depends_on": [
+          "aws_iam_role_policy.fn",
+          "aws_cloudwatch_log_group.fn"
+        ]
+      }
+    },
+    "aws_lambda_event_source_mapping": {
+      "queue": {
+        "for_each": "${{for q in var.trigger_queues : q.id => q}}",
+        "event_source_arn": "${each.value.arn}",
+        "function_name": "${aws_lambda_function.fn.arn}",
+        "batch_size": "${var.batch_size}",
+        "tags": "${var.tags}"
+      }
+    },
+    "aws_cloudwatch_event_rule": {
+      "schedule": {
+        "count": "${var.schedule == \"\" ? 0 : 1}",
+        "name": "${var.name}",
+        "schedule_expression": "${var.schedule}",
+        "tags": "${var.tags}"
+      }
+    },
+    "aws_cloudwatch_event_target": {
+      "schedule": {
+        "count": "${var.schedule == \"\" ? 0 : 1}",
+        "rule": "${aws_cloudwatch_event_rule.schedule[0].name}",
+        "arn": "${aws_lambda_function.fn.arn}"
+      }
+    },
+    "aws_lambda_permission": {
+      "schedule": {
+        "count": "${var.schedule == \"\" ? 0 : 1}",
+        "statement_id": "AllowSchedule",
+        "action": "lambda:InvokeFunction",
+        "function_name": "${aws_lambda_function.fn.function_name}",
+        "principal": "events.amazonaws.com",
+        "source_arn": "${aws_cloudwatch_event_rule.schedule[0].arn}"
+      }
+    }
+  },
+  "output": {
+    "function_arn": {
+      "description": "The function's ARN",
+      "value": "${aws_lambda_function.fn.arn}"
+    },
+    "function_name": {
+      "description": "The function's name",
+      "value": "${aws_lambda_function.fn.function_name}"
+    }
+  }
+}
