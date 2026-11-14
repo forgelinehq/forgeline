@@ -52,6 +52,11 @@ section in the pull request that makes the change; a release moves it under its 
 - **After a session ends**, the console stops polling the server (it asked every minute, forever).
 
 ### Added
+- **The template format, and a Lambda function template.** A template is a reviewed, versioned OpenTofu module with
+  its inputs as a JSON Schema subset and the links it offers; Forgeline checks it when it loads (no providers, modules,
+  backends or provisioners of its own, no secret readers, exactly the declared variables, Forgeline's provider pin). The
+  first one, `aws-lambda-function`, runs an ECR image with a schedule, triggering queues and linked data. Not on the
+  canvas yet (note 040, step 2).
 - **Blueprints can have Forgeline build an app's image.** Build from GitHub… offers Built by Forgeline next to GitHub
   Actions: a `forgeline.yaml` with a build step that pushes to the block's image repository, and the push rule it needs,
   which an administrator allows with one click (note 043, slice 3).
