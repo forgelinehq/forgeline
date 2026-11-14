@@ -52,6 +52,10 @@ section in the pull request that makes the change; a release moves it under its 
 - **After a session ends**, the console stops polling the server (it asked every minute, forever).
 
 ### Added
+- **Template blocks in blueprints.** A blueprint block can be a library template (`kind: template`): its inputs are
+  checked against the template's schema, its links against the roles it offers, the code calls it as a module, and a
+  plan keeps the module files so the approved apply runs exactly them. `GET /v1/templates` lists them for the canvas.
+  The guardrails no longer read the root's code for a template's resource with the same name.
 - **The template format, and a Lambda function template.** A template is a reviewed, versioned OpenTofu module with
   its inputs as a JSON Schema subset and the links it offers; Forgeline checks it when it loads (no providers, modules,
   backends or provisioners of its own, no secret readers, exactly the declared variables, Forgeline's provider pin). The

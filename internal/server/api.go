@@ -142,6 +142,8 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /v1/built", s.requireRole(authn.Developer, s.handleBuilt))
 	mux.Handle("GET /v1/onboarding", s.requireRole(authn.Developer, s.handleOnboarding))
 	mux.Handle("PUT /v1/onboarding/{step}", s.requireRole(authn.Admin, s.handleSkipOnboarding))
+	mux.Handle("GET /v1/templates", s.requireRole(authn.Developer, s.handleListTemplates))
+	mux.Handle("GET /v1/templates/{name}/{version}/code", s.requireRole(authn.Developer, s.handleTemplateCode))
 	mux.Handle("POST /v1/blueprints/{id}/assist", s.requireRole(authn.Developer, s.handleBlueprintAssist))
 	mux.Handle("GET /v1/plugins", s.requireRole(authn.Developer, s.handleGetPlugins))
 	mux.Handle("PUT /v1/plugins/settings", s.requireRole(authn.Admin, s.handlePluginSettings))
