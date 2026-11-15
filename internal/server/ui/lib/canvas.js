@@ -126,11 +126,11 @@ export function linkTargets(bp, fromId, templates = {}) {
   const from = bp.blocks.find(b => b.id === fromId);
   if (!from) return [];
   const linked = new Set(bp.links.filter(l => l.from === fromId).map(l => l.to));
-  const what = (b) => b.kind === 'existing' ? b.existing?.type : b.kind;
+  const what = (b) => b.kind === 'existing' ? b.existing?.type : b.kind === 'template' ? 'template:' + String(b.template).split('@')[0] : b.kind;
   // A template block links by the roles its template offers: out to what it uses, and in from what drives it.
   if (from.kind === 'template') {
     const roles = (templates[from.template]?.links || []).filter(r => r.direction === 'out');
-    return bp.blocks.filter(b => b.id !== fromId && !linked.has(b.id) && b.kind !== 'template' && roles.some(r => r.kinds.includes(what(b))))
+    return bp.blocks.filter(b => b.id !== fromId && !linked.has(b.id) && roles.some(r => r.kinds.includes(what(b))))
       .map(b => ({ id: b.id, name: b.name, access: roles.find(r => r.kinds.includes(what(b))).access, path: false }));
   }
   const drives = bp.blocks.filter(b => b.kind === 'template' && !linked.has(b.id) &&

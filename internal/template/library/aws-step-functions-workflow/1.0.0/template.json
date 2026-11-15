@@ -1,0 +1,49 @@
+{
+  "name": "aws-step-functions-workflow",
+  "version": "1.0.0",
+  "title": "Step Functions workflow",
+  "summary": "Runs the Lambda functions it is linked to, one after another in the order of the links, passing each one's result to the next and retrying a step that fails with backoff. Start it from the AWS console, the API, or another service.",
+  "cloud": "aws",
+  "providers": {
+    "aws": {
+      "source": "hashicorp/aws",
+      "version": "~> 6.72"
+    }
+  },
+  "holds_data": false,
+  "checks": [
+    "Runs its linked functions in the order of the links, retrying a failed step up to {retries} times",
+    "A {type} workflow; each step may take at most {timeout_seconds} seconds",
+    "Its role can start only the functions it is linked to"
+  ],
+  "inputs": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "type": {
+        "type": "string",
+        "title": "Kind",
+        "enum": [
+          "STANDARD",
+          "EXPRESS"
+        ],
+        "default": "STANDARD",
+        "description": "STANDARD keeps each run's history for 90 days and can run up to a year; EXPRESS is for short, high-volume runs of up to 5 minutes."
+      },
+      "retries": {
+        "type": "integer",
+        "title": "Retries per step",
+        "minimum": 0,
+        "maximum": 5,
+        "default": 2
+      },
+      "timeout_seconds": {
+        "type": "integer",
+        "title": "Time limit per step (seconds)",
+        "minimum": 1,
+        "maximum": 900,
+        "default": 60
+      }
+    }
+  }
+}

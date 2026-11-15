@@ -1,0 +1,16 @@
+{
+  "icon": "layers",
+  "links": [
+    {
+      "name": "runs",
+      "direction": "out",
+      "kinds": [
+        "template:aws-lambda-function"
+      ],
+      "access": false,
+      "variable": "functions",
+      "shape": "target",
+      "output": "function_arn"
+    }
+  ]
+}

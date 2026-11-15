@@ -21,6 +21,7 @@ const (
 	ShapeData   = "data"   // a table, bucket or queue it uses: id, kind, ARN, value, environment name, access
 	ShapeSecret = "secret" // a secret it reads: id, ARN, environment name
 	ShapeSource = "source" // something that drives it (a queue that triggers it): id, ARN
+	ShapeTarget = "target" // another template's block it calls: id, and the ARN from that template's named output
 )
 
 // ShapeTypes are the OpenTofu types of the variables that receive each shape.
@@ -28,6 +29,7 @@ var ShapeTypes = map[string]string{
 	ShapeData:   "list(object({id=string,kind=string,arn=string,value=string,env=string,access=string}))",
 	ShapeSecret: "list(object({id=string,arn=string,env=string}))",
 	ShapeSource: "list(object({id=string,arn=string}))",
+	ShapeTarget: "list(object({id=string,arn=string}))",
 }
 
 // Standard variables every template module declares; Forgeline sets them.
@@ -69,6 +71,7 @@ type LinkRole struct {
 	Access    bool     `json:"access"`    // the link takes read or readwrite
 	Variable  string   `json:"variable"`  // the module variable that receives the linked blocks
 	Shape     string   `json:"shape"`
+	Output    string   `json:"output,omitempty"` // target links: the linked template's output that holds its ARN
 }
 
 // Ref is name@version.
@@ -173,10 +176,19 @@ func (t *Template) checkDiagram() error {
 			return fmt.Errorf("%s: list the block kinds it accepts", at)
 		}
 		seen[r.Variable] = true
+		if (r.Shape == ShapeTarget) != (r.Output != "") {
+			return fmt.Errorf("%s: a target link names the output that holds the ARN, and only a target link does", at)
+		}
 		for _, k := range r.Kinds {
 			want := linkKinds[k]
 			if r.Direction == "in" {
 				want = ShapeSource // something that drives the template: only its ARN is passed
+			}
+			if name, ok := strings.CutPrefix(k, "template:"); ok {
+				want = ""
+				if r.Direction == "out" && nameRE.MatchString(name) && name != t.Name {
+					want = ShapeTarget
+				}
 			}
 			if want == "" || want != r.Shape {
 				return fmt.Errorf("%s: kind %q does not fit shape %s", at, k, r.Shape)
@@ -364,8 +376,49 @@ func Library() (map[string]Template, error) {
 			libAll[t.Ref()] = t
 			return nil
 		})
+		if libErr == nil {
+			libErr = checkTargets(libAll)
+		}
 	})
 	return libAll, libErr
+}
+
+// checkTargets checks that every template:<name> link names a template in the library that declares the output.
+func checkTargets(all map[string]Template) error {
+	for _, t := range all {
+		for _, r := range t.Diagram.Links {
+			for _, k := range r.Kinds {
+				name, ok := strings.CutPrefix(k, "template:")
+				if !ok {
+					continue
+				}
+				found := false
+				for _, o := range all {
+					if o.Name == name && contains(o.Outputs(), r.Output) {
+						found = true
+					}
+				}
+				if !found {
+					return fmt.Errorf("%s: link %q needs template %s with output %q in the library", t.Ref(), r.Name, name, r.Output)
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// Outputs lists the module's output names.
+func (t Template) Outputs() []string {
+	var code struct {
+		Output map[string]json.RawMessage `json:"output"`
+	}
+	json.Unmarshal(t.Code, &code)
+	out := make([]string, 0, len(code.Output))
+	for k := range code.Output {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
 }
 
 // Get returns one template by name@version.

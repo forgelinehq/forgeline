@@ -1,0 +1,78 @@
+{
+  "terraform": {
+    "required_providers": {
+      "aws": {
+        "source": "hashicorp/aws",
+        "version": "~> 6.72"
+      }
+    }
+  },
+  "variable": {
+    "name": {
+      "type": "string",
+      "description": "Set by Forgeline: the workflow's name, unique in the account."
+    },
+    "tags": {
+      "type": "map(string)",
+      "description": "Set by Forgeline."
+    },
+    "type": {
+      "type": "string"
+    },
+    "retries": {
+      "type": "number"
+    },
+    "timeout_seconds": {
+      "type": "number"
+    },
+    "functions": {
+      "type": "list(object({id=string,arn=string}))",
+      "description": "Set by Forgeline from the links: the functions it runs, in order."
+    }
+  },
+  "locals": {
+    "states": "${{for i, f in var.functions : f.id => merge({Type = \"Task\", Resource = \"arn:aws:states:::lambda:invoke\", Parameters = {FunctionName = f.arn, \"Payload.$\" = \"$\"}, OutputPath = \"$.Payload\", TimeoutSeconds = var.timeout_seconds, Retry = [{ErrorEquals = [\"Lambda.ServiceException\", \"Lambda.AWSLambdaException\", \"Lambda.SdkClientException\", \"Lambda.TooManyRequestsException\", \"States.Timeout\"], IntervalSeconds = 2, MaxAttempts = var.retries, BackoffRate = 2}]}, {for k in [\"End\"] : k => true if i == length(var.functions) - 1}, {for k in [\"Next\"] : k => try(var.functions[i + 1].id, \"\") if i < length(var.functions) - 1})}}",
+    "definition": "${jsonencode({Comment = \"Made by Forgeline\", StartAt = try(var.functions[0].id, \"\"), States = local.states})}"
+  },
+  "data": {
+    "aws_caller_identity": {
+      "current": {}
+    }
+  },
+  "resource": {
+    "aws_iam_role": {
+      "wf": {
+        "name": "${var.name}",
+        "assume_role_policy": "${jsonencode({Version = \"2012-10-17\", Statement = [{Effect = \"Allow\", Principal = {Service = \"states.amazonaws.com\"}, Action = \"sts:AssumeRole\", Condition = {StringEquals = {\"aws:SourceAccount\" = data.aws_caller_identity.current.account_id}}}]})}",
+        "tags": "${var.tags}"
+      }
+    },
+    "aws_iam_role_policy": {
+      "wf": {
+        "count": "${length(var.functions) > 0 ? 1 : 0}",
+        "name": "step-functions-workflow",
+        "role": "${aws_iam_role.wf.id}",
+        "policy": "${jsonencode({Version = \"2012-10-17\", Statement = [{Sid = \"InvokeLinkedFunctions\", Effect = \"Allow\", Action = [\"lambda:InvokeFunction\"], Resource = concat([for f in var.functions : f.arn], [for f in var.functions : format(\"%s:*\", f.arn)])}]})}"
+      }
+    },
+    "aws_sfn_state_machine": {
+      "wf": {
+        "count": "${length(var.functions) > 0 ? 1 : 0}",
+        "name": "${var.name}",
+        "role_arn": "${aws_iam_role.wf.arn}",
+        "type": "${var.type}",
+        "definition": "${local.definition}",
+        "tags": "${var.tags}",
+        "depends_on": [
+          "aws_iam_role_policy.wf"
+        ]
+      }
+    }
+  },
+  "output": {
+    "state_machine_arn": {
+      "description": "The workflow's ARN; start it with StartExecution",
+      "value": "${try(aws_sfn_state_machine.wf[0].arn, \"\")}"
+    }
+  }
+}
