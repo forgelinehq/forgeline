@@ -132,7 +132,8 @@ both need a role passed to another service, and Step Functions' log delivery nee
 **ECS cluster (decided 2026-11-16, maintainer).** Blueprints already run all app blocks on one shared cluster, so the
 "ECS cluster with many services" template became a setting on app blocks instead: Fargate Spot, alone or behind one
 regular task. Service Connect is left out: apps already call each other by name through the blueprint's private DNS
-namespace, and Service Connect would add a proxy to every task mainly for metrics and retries.
+namespace, and Service Connect would add a proxy to every task mainly for metrics and retries. Built and checked on real
+AWS (#137, [2026-11-16](../testing/2026-11-16-step-functions-template.md#fargate-spot-137-same-day)).
 
 The first template is **AWS Lambda function** (`aws-lambda-function`), chosen by the maintainer because it can be built
 on real AWS now: a container image from ECR, its own log group and role, a schedule, queues that trigger it, and the

@@ -36,3 +36,10 @@ repository deleted with its image. AWS reports no state machine, functions, role
 
 A workflow may refuse its first runs for up to a minute after it is first built, while AWS spreads its new role. The
 console tour says so.
+
+## Fargate Spot (#137), same day
+
+A blueprint with one nginx app set to Fargate Spot: the preview added the cluster's capacity providers (10 resources);
+after the approved apply AWS reported the task `RUNNING` with capacity provider `FARGATE_SPOT`, and the cluster offering
+`FARGATE` and `FARGATE_SPOT`. Removed in one approved step (10 removed), the blueprint deleted; the cluster is
+`INACTIVE`.
