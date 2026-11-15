@@ -112,7 +112,8 @@ built-in guardrails.
 
 Built 2026-11-14: the format and checks (`internal/template`), template blocks in blueprints (module calls, links by
 role, module files stored with the plan), `GET /v1/templates`, and the canvas (a button per template, a form drawn
-from its inputs, links by role). A real build on the Pi follows.
+from its inputs, links by role). Checked on real AWS ([2026-11-15](../testing/2026-11-15-lambda-template.md)): a queue
+triggers the Lambda template, which writes to its linked table; built, used and removed through approvals.
 
 The first template is **AWS Lambda function** (`aws-lambda-function`), chosen by the maintainer because it can be built
 on real AWS now: a container image from ECR, its own log group and role, a schedule, queues that trigger it, and the
