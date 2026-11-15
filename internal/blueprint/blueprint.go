@@ -33,6 +33,12 @@ const (
 // (GET /v1/templates), not as a kind of their own.
 var Kinds = []string{KindFrontDoor, KindService, KindTable, KindBucket, KindQueue, KindLogs, KindDatabase, KindCache, KindSecret, KindAgent, KindExisting}
 
+// Where an app's tasks run (Block.Capacity).
+const (
+	CapacitySpot  = "spot"  // Fargate Spot only
+	CapacityMixed = "mixed" // one task on regular Fargate, the rest on Spot
+)
+
 // Access a service has to what it uses.
 const (
 	AccessRead      = "read"
@@ -82,6 +88,9 @@ type Block struct {
 	Min       int `json:"min,omitempty"`
 	Max       int `json:"max,omitempty"`
 	CPUTarget int `json:"cpu_target,omitempty"`
+	// Capacity is where an app's tasks run: empty for regular Fargate, "spot" for Fargate Spot (cheaper, but AWS may
+	// stop a task with two minutes' warning), "mixed" for one regular task and the rest on Spot.
+	Capacity string `json:"capacity,omitempty"`
 
 	// frontdoor
 	HealthPath  string `json:"health_path,omitempty"`
@@ -442,7 +451,7 @@ func (bl Block) validate(at string) error {
 	}
 	set := bl.setFields()
 	allowed := map[string][]string{
-		KindService:   {"image", "cpu", "memory", "count", "port", "env", "min", "max", "cpu_target", "source"},
+		KindService:   {"image", "cpu", "memory", "count", "port", "env", "min", "max", "cpu_target", "source", "capacity"},
 		KindFrontDoor: {"health_path", "certificate"},
 		KindTable:     {"partition_key", "partition_type", "sort_key", "sort_type"},
 		KindBucket:    {"versioning"},
@@ -476,6 +485,9 @@ func (bl Block) validate(at string) error {
 	}
 	switch bl.Kind {
 	case KindService:
+		if bl.Capacity != "" && bl.Capacity != CapacitySpot && bl.Capacity != CapacityMixed {
+			return fmt.Errorf("%s.capacity: spot or mixed, or leave it out for regular Fargate; got %q", at, bl.Capacity)
+		}
 		if !imageRE.MatchString(bl.Image) {
 			return fmt.Errorf("%s.image: give a container image such as nginx:1.29 or an ECR address", at)
 		}
@@ -636,6 +648,7 @@ func (bl Block) setFields() []string {
 	add(bl.Min != 0, "min")
 	add(bl.Max != 0, "max")
 	add(bl.CPUTarget != 0, "cpu_target")
+	add(bl.Capacity != "", "capacity")
 	add(bl.Engine != "", "engine")
 	add(bl.Size != "", "size")
 	add(bl.StorageGB != 0, "storage_gb")
@@ -702,6 +715,12 @@ func (b Blueprint) Checks() []Check {
 		}
 		if !logged[s.ID] {
 			ok(s.Name + " writes its logs to its own log group, kept 30 days.")
+		}
+		switch s.Capacity {
+		case CapacitySpot:
+			warn(s.Name + " runs on Fargate Spot: cheaper, but AWS may stop a task with two minutes' warning. Use it for work that can restart.")
+		case CapacityMixed:
+			ok(s.Name + " keeps one task on regular Fargate and runs the rest on Fargate Spot, which is cheaper but can be stopped by AWS.")
 		}
 	}
 	for _, d := range byKind[KindDatabase] {

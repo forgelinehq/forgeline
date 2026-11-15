@@ -137,6 +137,12 @@ func (g *gen) build() {
 		g.addData("aws_vpc", "default", obj{"default": true})
 		g.addData("aws_subnets", "default", obj{"filter": []obj{{"name": "vpc-id", "values": []string{"${data.aws_vpc.default.id}"}}}})
 	}
+	if needCluster && g.anySpot() {
+		// Apps may run on Fargate Spot: the cluster offers both; an app without a strategy keeps regular Fargate.
+		g.add("aws_ecs_cluster_capacity_providers", "main", obj{"cluster_name": "${aws_ecs_cluster.main.name}",
+			"capacity_providers":                 []string{"FARGATE", "FARGATE_SPOT"},
+			"default_capacity_provider_strategy": []obj{{"capacity_provider": "FARGATE", "weight": 1}}})
+	}
 	if needCluster {
 		g.add("aws_ecs_cluster", "main", obj{"name": g.awsName("cluster", 255), "setting": []obj{{"name": "containerInsights", "value": "disabled"}}})
 		g.addData("aws_iam_policy_document", "ecs_tasks_assume", obj{"statement": []obj{{
@@ -543,7 +549,7 @@ func (g *gen) service(bl Block) {
 	g.add("aws_vpc_security_group_egress_rule", sg, obj{"security_group_id": ref("aws_security_group", sg, "id"), "cidr_ipv4": "0.0.0.0/0", "ip_protocol": "-1"})
 	svc := obj{
 		"name": g.awsName(bl.ID, 255), "cluster": "${aws_ecs_cluster.main.id}", "task_definition": ref("aws_ecs_task_definition", bl.ID, "arn"),
-		"desired_count": bl.Count, "launch_type": "FARGATE",
+		"desired_count": bl.Count,
 		// A public address only so the task can pull its image without a NAT gateway; inbound traffic is
 		// still limited by the security group to the front door.
 		"network_configuration": obj{"subnets": "${data.aws_subnets.default.ids}", "security_groups": []string{ref("aws_security_group", sg, "id")}, "assign_public_ip": true},
@@ -593,6 +599,17 @@ func (g *gen) service(bl Block) {
 			"service_namespace": ref("aws_appautoscaling_target", bl.ID, "service_namespace"),
 			"target_tracking_scaling_policy_configuration": obj{"target_value": target, "scale_in_cooldown": 120, "scale_out_cooldown": 60,
 				"predefined_metric_specification": obj{"predefined_metric_type": "ECSServiceAverageCPUUtilization"}}})
+	}
+	switch bl.Capacity {
+	case CapacitySpot:
+		svc["capacity_provider_strategy"] = []obj{{"capacity_provider": "FARGATE_SPOT", "weight": 1}}
+	case CapacityMixed:
+		svc["capacity_provider_strategy"] = []obj{{"capacity_provider": "FARGATE", "base": 1, "weight": 1}, {"capacity_provider": "FARGATE_SPOT", "weight": 3}}
+	default:
+		svc["launch_type"] = "FARGATE"
+	}
+	if bl.Capacity != "" {
+		svc["depends_on"] = append(toStrings(svc["depends_on"]), "aws_ecs_cluster_capacity_providers.main")
 	}
 	g.add("aws_ecs_service", bl.ID, svc)
 }
@@ -907,4 +924,18 @@ func PassRoleServices() ([]string, error) {
 	}
 	sort.Strings(out)
 	return out, nil
+}
+
+func (g *gen) anySpot() bool {
+	for _, bl := range g.b.Blocks {
+		if bl.Kind == KindService && bl.Capacity != "" {
+			return true
+		}
+	}
+	return false
+}
+
+func toStrings(v any) []string {
+	s, _ := v.([]string)
+	return s
 }

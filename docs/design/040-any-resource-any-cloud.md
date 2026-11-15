@@ -129,6 +129,11 @@ taking a person's own Amazon States Language with the functions' ARNs filled in 
 which can also call functions such as `file()` on the server while planning. A schedule and execution logs wait too:
 both need a role passed to another service, and Step Functions' log delivery needs actions IAM only allows on `*`.
 
+**ECS cluster (decided 2026-11-16, maintainer).** Blueprints already run all app blocks on one shared cluster, so the
+"ECS cluster with many services" template became a setting on app blocks instead: Fargate Spot, alone or behind one
+regular task. Service Connect is left out: apps already call each other by name through the blueprint's private DNS
+namespace, and Service Connect would add a proxy to every task mainly for metrics and retries.
+
 The first template is **AWS Lambda function** (`aws-lambda-function`), chosen by the maintainer because it can be built
 on real AWS now: a container image from ECR, its own log group and role, a schedule, queues that trigger it, and the
 tables, buckets, queues and secrets it uses. The AgentCore agent template follows once the account's AgentCore quota is
