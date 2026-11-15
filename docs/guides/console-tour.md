@@ -95,7 +95,9 @@ rules; **Read its code** shows the OpenTofu module it builds. A plan keeps the t
 builds exactly what was previewed.
 
 A **Step Functions workflow** runs the Lambda functions it is linked to, one after another in the order you link them,
-passing each result to the next and retrying a step that fails. Start it from the AWS console or the API.
+passing each result to the next and retrying a step that fails. Start it from the AWS console or the API. Right after
+it is first built, AWS can take up to a minute to let its new role start the functions, so a run started at once may be
+refused; start it again a minute later.
 
 ![A Lambda function template on the canvas]({{ '/console/140-template-block.png' | relative_url }})
 

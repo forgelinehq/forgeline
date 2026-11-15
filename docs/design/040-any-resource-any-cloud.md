@@ -113,7 +113,9 @@ built-in guardrails.
 Built 2026-11-14: the format and checks (`internal/template`), template blocks in blueprints (module calls, links by
 role, module files stored with the plan), `GET /v1/templates`, and the canvas (a button per template, a form drawn
 from its inputs, links by role). Checked on real AWS ([2026-11-15](../testing/2026-11-15-lambda-template.md)): a queue
-triggers the Lambda template, which writes to its linked table; built, used and removed through approvals.
+triggers the Lambda template, which writes to its linked table; built, used and removed through approvals. The Step
+Functions workflow template too ([2026-11-16](../testing/2026-11-16-step-functions-template.md)): it ran two linked
+functions in order.
 
 **Links between templates (decided 2026-11-15).** A link role may accept another template's blocks, named
 `template:<name>`, with the shape `target`: the generator passes each linked block's id and the ARN from the output
