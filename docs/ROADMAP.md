@@ -53,7 +53,8 @@ approved steps. Checked with tests, `tofu validate` and a browser walk against s
 ## Next: any resource, any cloud (note 040)
 
 Status: **step 1 built (guardrails on every preview); step 2 partly built: the template format, template blocks on the
-canvas, and a Lambda function template checked on real AWS ([2026-11-15](testing/2026-11-15-lambda-template.md)); the
+canvas, and Lambda function and Step Functions workflow templates checked on real AWS
+([2026-11-15](testing/2026-11-15-lambda-template.md), [2026-11-16](testing/2026-11-16-step-functions-template.md)); the
 AgentCore template waits for the account's quota.** Templates for whole solutions (an AgentCore agent, Lambda, Step Functions, ECS clusters, EKS with
 namespaces, data and code pipelines), repositories linked to what runs them, guardrails on every plan (built-in rules,
 then Conftest, Checkov or Trivy packs), a generic block for any resource type an administrator allows, and a library for templates, skills, tools, agents and guardrail packs. Guardrails come
