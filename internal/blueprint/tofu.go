@@ -886,3 +886,25 @@ func ModulesFor(code []byte) (map[string]string, error) {
 	}
 	return out, nil
 }
+
+// PassRoleServices are the AWS services the code Forgeline generates may hand a role to (iam:PassRole): what the
+// role Forgeline builds with must allow, for every block kind and every library template. The setup guide's policy
+// lists exactly these (a test checks it).
+func PassRoleServices() ([]string, error) {
+	set := map[string]bool{"ecs-tasks.amazonaws.com": true, "bedrock-agentcore.amazonaws.com": true} // app and agent blocks
+	all, err := template.Library()
+	if err != nil {
+		return nil, err
+	}
+	for _, t := range all {
+		for _, s := range t.PassesRoleTo {
+			set[s] = true
+		}
+	}
+	out := make([]string, 0, len(set))
+	for s := range set {
+		out = append(out, s)
+	}
+	sort.Strings(out)
+	return out, nil
+}

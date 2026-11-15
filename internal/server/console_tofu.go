@@ -17,6 +17,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/forgelinehq/forgeline/internal/blueprint"
 )
 
 // OpenTofu for blueprints (design note 035, slice 3). Forgeline runs a pinned release, downloaded once into the
@@ -206,6 +208,14 @@ func tail(s string, n int) string {
 // show a page of plan output and cut the error off.
 func tofuFailure(errText string, out []byte) string {
 	e := strings.TrimSpace(errText)
+	if strings.Contains(e, "iam:PassRole") && strings.Contains(e, "not authorized") {
+		// The commonest setup gap: the role Forgeline builds with may create fl-* roles but not hand one to a service.
+		if svcs, err := blueprint.PassRoleServices(); err == nil {
+			e = "The role Forgeline builds with may not hand this role to the service that needs it. Its iam:PassRole " +
+				"permission (forgeline-blueprint-roles, see Connect AWS › Building blueprints) must allow iam:PassedToService: " +
+				strings.Join(svcs, ", ") + ".\n\n" + e
+		}
+	}
 	if len(e) > 2400 {
 		e = e[:2400] + " …"
 	}

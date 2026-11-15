@@ -115,3 +115,14 @@ func TestWorkdirRefusesModulePathsOutsideTemplates(t *testing.T) {
 		}
 	}
 }
+
+func TestPassRoleFailureSaysWhatToAllow(t *testing.T) {
+	aws := "Error: creating Lambda Function: AccessDeniedException: User: arn:aws:sts::111122223333:assumed-role/X/y is not authorized to perform: iam:PassRole on resource: arn:aws:iam::111122223333:role/fl-1-fn"
+	got := tofuFailure(aws, nil)
+	if !strings.Contains(got, "lambda.amazonaws.com") || !strings.Contains(got, "states.amazonaws.com") || !strings.Contains(got, "Building blueprints") || !strings.HasSuffix(got, aws) {
+		t.Errorf("hint = %s", got)
+	}
+	if other := tofuFailure("Error: something else broke", nil); strings.Contains(other, "PassedToService") {
+		t.Errorf("a hint on another error: %s", other)
+	}
+}
