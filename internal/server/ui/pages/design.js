@@ -488,6 +488,8 @@ export async function designPage({ params }) {
             input('CPU aim %', b.cpu_target ?? 60, v => set({ cpu_target: v }), { type: 'number', min: '20', max: '90' })),
             h('p', { class: 'hint' }, 'Adds tasks when average CPU is above the aim and removes them when it is below. Tasks is where it starts.'));
         }
+        fields.push(select_('Where it runs', b.capacity || '', [['', 'Regular Fargate'], ['mixed', 'One regular task, the rest on Spot'], ['spot', 'Fargate Spot only (cheapest)']], v => set({ capacity: v || null })),
+          h('p', { class: 'hint' }, 'Fargate Spot costs much less, but AWS may stop a task with two minutes\u2019 warning; it is started again. Good for work that can restart.'));
         fields.push(settingsField(b, set), sourceField(b, set));
         break;
       case 'agent':

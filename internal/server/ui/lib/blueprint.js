@@ -29,7 +29,7 @@ export function blockFacts(b) {
     case 'service': {
       const vcpu = (b.cpu || 0) / 1024, gb = (b.memory || 0) / 1024;
       const n = b.max ? `${b.min}–${b.max}` : String(b.count || 0);
-      return `${n} × ${vcpu} vCPU, ${gb} GB · ${b.image}` + (b.port ? ` · port ${b.port}` : '') + (b.source ? ' · code in ' + b.source.repo : '');
+      return `${n} × ${vcpu} vCPU, ${gb} GB · ${b.image}` + (b.port ? ` · port ${b.port}` : '') + ({ spot: ' · Spot', mixed: ' · part Spot' }[b.capacity] || '') + (b.source ? ' · code in ' + b.source.repo : '');
     }
     case 'table': return 'key ' + b.partition_key + (b.sort_key ? ', sorted by ' + b.sort_key : '') + ' · pay per request';
     case 'bucket': return 'private · encrypted' + (b.versioning ? ' · keeps old versions' : '');

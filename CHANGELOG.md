@@ -62,6 +62,10 @@ section in the pull request that makes the change; a release moves it under its 
 - **After a session ends**, the console stops polling the server (it asked every minute, forever).
 
 ### Added
+- **Apps can run on Fargate Spot.** An app block's "Where it runs" is regular Fargate (as before), Fargate Spot, or one
+  regular task with the rest on Spot. The cluster offers Spot only when an app uses it; apps without the setting keep
+  exactly the code they had (a test compares it byte for byte). This is the useful part of note 040's "ECS cluster"
+  template, added to app blocks instead (maintainer's choice).
 - **A Step Functions workflow template, and links between templates.** `aws-step-functions-workflow` runs the Lambda
   function blocks it is linked to, in the order of the links, retrying a failed step with backoff; its role may start
   only those functions. A template's link role can now accept another template's blocks and receive their ARN from a

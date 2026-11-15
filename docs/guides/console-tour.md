@@ -87,6 +87,10 @@ preview and send for approval. GitHub's OIDC provider must be set up in the AWS 
 
 ![Build from GitHub]({{ '/console/121-design-github-build.png' | relative_url }})
 
+An app can run on **Fargate Spot** (Where it runs): much cheaper, but AWS may stop a task with two minutes' warning and
+it is started again, so it suits workers and anything that can restart. "One regular task, the rest on Spot" keeps one
+task on regular Fargate. The checks say which apps use Spot.
+
 **Templates** are reviewed, versioned solutions from Forgeline's library, added like any block (the dashed buttons at
 the end of the Add bar). The first is **Lambda function**: a container image from ECR on AWS Lambda, run on a schedule,
 by messages on a queue linked to it, or on demand, with its own log group and a role that reaches only what it is

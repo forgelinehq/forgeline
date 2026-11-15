@@ -1,0 +1,253 @@
+{
+  "data": {
+    "aws_iam_policy_document": {
+      "ecs_tasks_assume": {
+        "statement": [
+          {
+            "actions": [
+              "sts:AssumeRole"
+            ],
+            "principals": [
+              {
+                "identifiers": [
+                  "ecs-tasks.amazonaws.com"
+                ],
+                "type": "Service"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "aws_subnets": {
+      "default": {
+        "filter": [
+          {
+            "name": "vpc-id",
+            "values": [
+              "${data.aws_vpc.default.id}"
+            ]
+          }
+        ]
+      }
+    },
+    "aws_vpc": {
+      "default": {
+        "default": true
+      }
+    }
+  },
+  "output": {
+    "web_url": {
+      "description": "Where Web answers",
+      "value": "http://${aws_lb.web.dns_name}"
+    }
+  },
+  "provider": {
+    "aws": {
+      "default_tags": {
+        "tags": {
+          "forgeline:blueprint": "bp-x",
+          "forgeline:managed-by": "forgeline"
+        }
+      },
+      "region": "ap-south-1"
+    }
+  },
+  "resource": {
+    "aws_cloudwatch_log_group": {
+      "app": {
+        "name": "/forgeline/bp-x/app",
+        "retention_in_days": 30,
+        "tags": {
+          "Name": "App",
+          "forgeline:block": "app"
+        }
+      }
+    },
+    "aws_ecs_cluster": {
+      "main": {
+        "name": "fl-3d8951-cluster",
+        "setting": [
+          {
+            "name": "containerInsights",
+            "value": "disabled"
+          }
+        ]
+      }
+    },
+    "aws_ecs_service": {
+      "app": {
+        "cluster": "${aws_ecs_cluster.main.id}",
+        "depends_on": [
+          "aws_lb_listener.web_http"
+        ],
+        "desired_count": 1,
+        "launch_type": "FARGATE",
+        "load_balancer": [
+          {
+            "container_name": "app",
+            "container_port": 80,
+            "target_group_arn": "${aws_lb_target_group.web.arn}"
+          }
+        ],
+        "name": "fl-3d8951-app",
+        "network_configuration": {
+          "assign_public_ip": true,
+          "security_groups": [
+            "${aws_security_group.app_svc.id}"
+          ],
+          "subnets": "${data.aws_subnets.default.ids}"
+        },
+        "tags": {
+          "Name": "App",
+          "forgeline:block": "app"
+        },
+        "task_definition": "${aws_ecs_task_definition.app.arn}"
+      }
+    },
+    "aws_ecs_task_definition": {
+      "app": {
+        "container_definitions": "[{\"environment\":null,\"essential\":true,\"image\":\"nginx:1.29\",\"logConfiguration\":{\"logDriver\":\"awslogs\",\"options\":{\"awslogs-group\":\"${aws_cloudwatch_log_group.app.name}\",\"awslogs-region\":\"ap-south-1\",\"awslogs-stream-prefix\":\"app\"}},\"name\":\"app\",\"portMappings\":[{\"containerPort\":80,\"protocol\":\"tcp\"}]}]",
+        "cpu": "256",
+        "execution_role_arn": "${aws_iam_role.app_exec.arn}",
+        "family": "fl-3d8951-app",
+        "memory": "512",
+        "network_mode": "awsvpc",
+        "requires_compatibilities": [
+          "FARGATE"
+        ],
+        "tags": {
+          "Name": "App",
+          "forgeline:block": "app"
+        },
+        "task_role_arn": "${aws_iam_role.app_task.arn}"
+      }
+    },
+    "aws_iam_role": {
+      "app_exec": {
+        "assume_role_policy": "${data.aws_iam_policy_document.ecs_tasks_assume.json}",
+        "name": "fl-3d8951-app-exec",
+        "tags": {
+          "Name": "App",
+          "forgeline:block": "app"
+        }
+      },
+      "app_task": {
+        "assume_role_policy": "${data.aws_iam_policy_document.ecs_tasks_assume.json}",
+        "name": "fl-3d8951-app-task",
+        "tags": {
+          "Name": "App",
+          "forgeline:block": "app"
+        }
+      }
+    },
+    "aws_iam_role_policy_attachment": {
+      "app_exec": {
+        "policy_arn": "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy",
+        "role": "${aws_iam_role.app_exec.name}"
+      }
+    },
+    "aws_lb": {
+      "web": {
+        "internal": false,
+        "load_balancer_type": "application",
+        "name": "fl-3d8951-web",
+        "security_groups": [
+          "${aws_security_group.web_lb.id}"
+        ],
+        "subnets": "${data.aws_subnets.default.ids}",
+        "tags": {
+          "Name": "Web",
+          "forgeline:block": "web"
+        }
+      }
+    },
+    "aws_lb_listener": {
+      "web_http": {
+        "default_action": [
+          {
+            "target_group_arn": "${aws_lb_target_group.web.arn}",
+            "type": "forward"
+          }
+        ],
+        "load_balancer_arn": "${aws_lb.web.arn}",
+        "port": 80,
+        "protocol": "HTTP"
+      }
+    },
+    "aws_lb_target_group": {
+      "web": {
+        "health_check": {
+          "matcher": "200-399",
+          "path": "/"
+        },
+        "name": "fl-3d8951-web",
+        "port": 80,
+        "protocol": "HTTP",
+        "tags": {
+          "Name": "Web",
+          "forgeline:block": "web"
+        },
+        "target_type": "ip",
+        "vpc_id": "${data.aws_vpc.default.id}"
+      }
+    },
+    "aws_security_group": {
+      "app_svc": {
+        "description": "Service app: only its front door and the services that call it may connect",
+        "name": "fl-3d8951-app-svc",
+        "tags": {
+          "Name": "App",
+          "forgeline:block": "app"
+        },
+        "vpc_id": "${data.aws_vpc.default.id}"
+      },
+      "web_lb": {
+        "description": "Front door web: open to the internet",
+        "name": "fl-3d8951-web-lb",
+        "tags": {
+          "Name": "Web",
+          "forgeline:block": "web"
+        },
+        "vpc_id": "${data.aws_vpc.default.id}"
+      }
+    },
+    "aws_vpc_security_group_egress_rule": {
+      "app_svc": {
+        "cidr_ipv4": "0.0.0.0/0",
+        "ip_protocol": "-1",
+        "security_group_id": "${aws_security_group.app_svc.id}"
+      },
+      "web_lb": {
+        "cidr_ipv4": "0.0.0.0/0",
+        "ip_protocol": "-1",
+        "security_group_id": "${aws_security_group.web_lb.id}"
+      }
+    },
+    "aws_vpc_security_group_ingress_rule": {
+      "app_svc_from_web": {
+        "from_port": 80,
+        "ip_protocol": "tcp",
+        "referenced_security_group_id": "${aws_security_group.web_lb.id}",
+        "security_group_id": "${aws_security_group.app_svc.id}",
+        "to_port": 80
+      },
+      "web_lb_80": {
+        "cidr_ipv4": "0.0.0.0/0",
+        "from_port": 80,
+        "ip_protocol": "tcp",
+        "security_group_id": "${aws_security_group.web_lb.id}",
+        "to_port": 80
+      }
+    }
+  },
+  "terraform": {
+    "required_providers": {
+      "aws": {
+        "source": "hashicorp/aws",
+        "version": "~> 6.72"
+      }
+    }
+  }
+}
