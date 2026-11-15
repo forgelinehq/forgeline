@@ -7,6 +7,9 @@ section in the pull request that makes the change; a release moves it under its 
 ## [Unreleased]
 
 ### Fixed
+- **Two tests that failed now and then on CI.** The plugin sweeper test ended while the sweeper could still write into
+  its directory (it now waits for the sweeper to stop), and the server tests waited only 5 seconds for background work
+  on a busy runner (now 20; a passing test still returns at once). A red main stops the Pi's updater from deploying.
 - **The setup guide's role policy covers every block and template.** It let Forgeline hand `fl-*` roles only to ECS and
   AgentCore, so a Lambda or Step Functions template failed to apply with `iam:PassRole` (found on real AWS). The guide's
   policy now lists every service; templates declare the services they pass roles to (`passes_role_to`), and a test

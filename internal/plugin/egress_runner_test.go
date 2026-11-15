@@ -190,6 +190,12 @@ func TestTheSweeperRunsInTheBackgroundRepeatsAndSparesCallsInFlight(t *testing.T
 		time.Sleep(50 * time.Millisecond)
 	}
 	cancel()
+	// Wait for the sweeper to stop: it must not write into the test's directory after the test ends.
+	select {
+	case <-r.sweepDone:
+	case <-time.After(10 * time.Second):
+		t.Fatal("the sweeper did not stop when its context ended")
+	}
 	lines := logLines(t, log)
 	if n := len(linesWith(lines, "NET ls")); n < 3 {
 		t.Errorf("the sweeper ran %d times; it must repeat", n)

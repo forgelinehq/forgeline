@@ -131,6 +131,7 @@ type Runner struct {
 
 	sweepOnce  sync.Once
 	sweepKick  chan struct{}
+	sweepDone  chan struct{}   // closed when the sweeper has stopped (its context ended)
 	sweepEvery time.Duration   // 0 means every 5 minutes
 	active     map[string]bool // private networks of calls in flight; the sweeper leaves them alone
 	// allowPrivate lets the proxy reach loopback; set only by tests that need a server on this machine.
@@ -366,13 +367,15 @@ func (r *Runner) StartSweeper(ctx context.Context) {
 	r.sweepOnce.Do(func() {
 		r.mu.Lock()
 		r.sweepKick = make(chan struct{}, 1)
-		kick := r.sweepKick
+		r.sweepDone = make(chan struct{})
+		kick, done := r.sweepKick, r.sweepDone
 		every := r.sweepEvery
 		r.mu.Unlock()
 		if every == 0 {
 			every = 5 * time.Minute
 		}
 		go func() {
+			defer close(done)
 			t := time.NewTicker(every)
 			defer t.Stop()
 			for {

@@ -166,7 +166,7 @@ func (f *fakeTofu) run(_ context.Context, dir string, env []string, args ...stri
 
 func waitFor(t *testing.T, what string, ok func() bool) {
 	t.Helper()
-	for i := 0; i < 200; i++ {
+	for deadline := time.Now().Add(20 * time.Second); time.Now().Before(deadline); {
 		if ok() {
 			return
 		}
