@@ -2,6 +2,7 @@ package blueprint
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -243,5 +244,42 @@ func TestWorkflowBlueprintValidates(t *testing.T) {
 		if out, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("tofu %s: %v\n%s", args[0], err, out)
 		}
+	}
+}
+
+// The setup guide's policy lets the role Forgeline builds with hand roles to exactly the services the generated code
+// needs: every block kind and every library template. A new template that needs another service fails here until the
+// guide says so.
+func TestSetupGuidePolicyCoversEveryService(t *testing.T) {
+	guide, err := os.ReadFile(filepath.Join("..", "..", "docs", "guides", "connect-aws.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var found []string
+	for _, block := range strings.Split(string(guide), "```json")[1:] {
+		var doc struct {
+			Statement []struct {
+				Action    any
+				Condition map[string]map[string]any
+			}
+		}
+		if json.Unmarshal([]byte(strings.SplitN(block, "```", 2)[0]), &doc) != nil {
+			continue
+		}
+		for _, s := range doc.Statement {
+			if s.Action == "iam:PassRole" {
+				list, _ := s.Condition["StringEquals"]["iam:PassedToService"].([]any)
+				for _, v := range list {
+					found = append(found, fmt.Sprint(v))
+				}
+			}
+		}
+	}
+	want, err := PassRoleServices()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(found, ",") != strings.Join(want, ",") {
+		t.Errorf("the guide's policy passes roles to %v; the code needs exactly %v (sorted)", found, want)
 	}
 }

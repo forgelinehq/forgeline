@@ -11,6 +11,7 @@
     }
   },
   "holds_data": false,
+  "passes_role_to": ["states.amazonaws.com"],
   "checks": [
     "Runs its linked functions in the order of the links, retrying a failed step up to {retries} times",
     "A {type} workflow; each step may take at most {timeout_seconds} seconds",

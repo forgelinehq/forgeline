@@ -140,6 +140,7 @@ func TestCodeRulesAreEnforced(t *testing.T) {
 			d["providers"] = map[string]any{"aws": map[string]any{"source": "hashicorp/aws", "version": ">= 1.0"}}
 		}},
 		"wrong directory":     {"template.json", func(d map[string]any) { d["version"] = "1.0.1" }},
+		"not a service":       {"template.json", func(d map[string]any) { d["passes_role_to"] = []any{"*"} }},
 		"a link to anything":  {"diagram.json", func(d map[string]any) { d["links"].([]any)[0].(map[string]any)["kinds"] = []any{"table", "database"} }},
 		"secret as data":      {"diagram.json", func(d map[string]any) { d["links"].([]any)[1].(map[string]any)["shape"] = "data" }},
 		"access on a trigger": {"diagram.json", func(d map[string]any) { d["links"].([]any)[2].(map[string]any)["access"] = true }},
@@ -173,6 +174,14 @@ func TestProviderPinIsForgelines(t *testing.T) {
 	m["t/aws-lambda-function/1.0.0/main.tf.json"] = code["t/aws-lambda-function/1.0.0/main.tf.json"]
 	if _, err := Load(m, "t/aws-lambda-function/1.0.0"); err == nil || !strings.Contains(err.Error(), "Forgeline pins") {
 		t.Errorf("a template with its own provider version: %v", err)
+	}
+}
+
+func TestTemplatesSayWhereTheyPassRoles(t *testing.T) {
+	for ref, want := range map[string]string{"aws-lambda-function@1.0.0": "lambda.amazonaws.com", "aws-step-functions-workflow@1.0.0": "states.amazonaws.com"} {
+		if tpl, _ := Get(ref); strings.Join(tpl.PassesRoleTo, ",") != want {
+			t.Errorf("%s passes roles to %v, want %s", ref, tpl.PassesRoleTo, want)
+		}
 	}
 }
 

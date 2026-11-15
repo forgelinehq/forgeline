@@ -44,11 +44,14 @@ type Template struct {
 	Cloud     string              `json:"cloud"`
 	Providers map[string]Provider `json:"providers"`
 	HoldsData bool                `json:"holds_data"`
-	Checks    []string            `json:"checks"`
-	Inputs    *Schema             `json:"-"`
-	RawInputs json.RawMessage     `json:"inputs"`
-	Diagram   Diagram             `json:"-"`
-	Code      []byte              `json:"-"` // main.tf.json
+	// PassesRoleTo lists the AWS services the template hands a role to (iam:PassRole), such as lambda.amazonaws.com:
+	// the role Forgeline builds with must allow each one (docs/guides/connect-aws.md).
+	PassesRoleTo []string        `json:"passes_role_to"`
+	Checks       []string        `json:"checks"`
+	Inputs       *Schema         `json:"-"`
+	RawInputs    json.RawMessage `json:"inputs"`
+	Diagram      Diagram         `json:"-"`
+	Code         []byte          `json:"-"` // main.tf.json
 }
 
 // Provider is a provider a template uses, pinned to the version Forgeline uses.
@@ -81,6 +84,7 @@ var (
 	nameRE    = regexp.MustCompile(`^[a-z][a-z0-9-]{2,39}$`)
 	versionRE = regexp.MustCompile(`^(0|[1-9]\d{0,3})\.(0|[1-9]\d{0,3})\.(0|[1-9]\d{0,3})$`)
 	varRE     = regexp.MustCompile(`^[a-z][a-z0-9_]{0,39}$`)
+	serviceRE = regexp.MustCompile(`^[a-z0-9-]+(\.[a-z0-9-]+)*\.amazonaws\.com$`)
 	linkKinds = map[string]string{"table": ShapeData, "bucket": ShapeData, "queue": ShapeData, "secret": ShapeSecret}
 )
 
@@ -149,6 +153,11 @@ func (t *Template) checkMeta(dir string) error {
 		return fmt.Errorf("%s: declare the providers the code uses", dir)
 	case len(t.Checks) > 20:
 		return fmt.Errorf("%s: at most 20 checks", dir)
+	}
+	for _, s := range t.PassesRoleTo {
+		if !serviceRE.MatchString(s) {
+			return fmt.Errorf("%s: passes_role_to: %q is not an AWS service principal such as lambda.amazonaws.com", dir, s)
+		}
 	}
 	for name, p := range t.Providers {
 		pin, ok := Pinned[name]

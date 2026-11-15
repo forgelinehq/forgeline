@@ -11,6 +11,7 @@
     }
   },
   "holds_data": false,
+  "passes_role_to": ["lambda.amazonaws.com"],
   "checks": [
     "Runs {image} with {memory} MB of memory for at most {timeout} seconds per call",
     "Writes its logs to its own log group, kept {log_retention_days} days",

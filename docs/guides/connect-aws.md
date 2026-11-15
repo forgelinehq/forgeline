@@ -52,8 +52,10 @@ in [design note 035](https://github.com/forgelinehq/forgeline/blob/main/docs/des
 `arn:aws:iam::<account>:role/fl-*` only, so Forgeline cannot change any other role.
 
 The policy below is that permission, ready to attach to the role Forgeline builds with. It lets Forgeline manage only
-roles named `fl-*`, attach only the ECS task execution policy to them, and hand them only to ECS tasks and Bedrock
-AgentCore, so it cannot give any role more than a blueprint asks for:
+roles named `fl-*`, attach only the ECS task execution policy to them, and hand them only to the services blueprints
+use (ECS tasks, Bedrock AgentCore, Lambda and Step Functions, for the templates), so it cannot give any role more than a
+blueprint asks for. Set it once: it covers every block and template Forgeline offers, and a test keeps this list in step
+with them. If an apply ever fails with `iam:PassRole`, Forgeline says which services the list must hold:
 
 ```json
 {
@@ -78,11 +80,13 @@ AgentCore, so it cannot give any role more than a blueprint asks for:
       "Condition": { "ArnEquals": { "iam:PolicyARN": "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy" } }
     },
     {
-      "Sid": "PassOnlyToEcsAndAgentCore",
+      "Sid": "PassOnlyToBlueprintServices",
       "Effect": "Allow",
       "Action": "iam:PassRole",
       "Resource": "arn:aws:iam::*:role/fl-*",
-      "Condition": { "StringEquals": { "iam:PassedToService": ["ecs-tasks.amazonaws.com", "bedrock-agentcore.amazonaws.com"] } }
+      "Condition": { "StringEquals": { "iam:PassedToService": [
+        "bedrock-agentcore.amazonaws.com", "ecs-tasks.amazonaws.com", "lambda.amazonaws.com", "states.amazonaws.com"
+      ] } }
     }
   ]
 }

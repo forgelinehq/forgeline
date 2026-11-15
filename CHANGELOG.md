@@ -7,6 +7,10 @@ section in the pull request that makes the change; a release moves it under its 
 ## [Unreleased]
 
 ### Fixed
+- **The setup guide's role policy covers every block and template.** It let Forgeline hand `fl-*` roles only to ECS and
+  AgentCore, so a Lambda or Step Functions template failed to apply with `iam:PassRole` (found on real AWS). The guide's
+  policy now lists every service; templates declare the services they pass roles to (`passes_role_to`), and a test
+  fails if the guide misses one. When AWS refuses `iam:PassRole`, the error now starts with which services to allow.
 - **A template input left unset could break the plan.** The Lambda template's optional `env` had no default, so a
   function without settings failed `tofu validate` (found by the real validate test). Every template input must now be
   required or have a default, checked when a template loads.
