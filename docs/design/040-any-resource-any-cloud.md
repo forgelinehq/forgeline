@@ -115,6 +115,18 @@ role, module files stored with the plan), `GET /v1/templates`, and the canvas (a
 from its inputs, links by role). Checked on real AWS ([2026-11-15](../testing/2026-11-15-lambda-template.md)): a queue
 triggers the Lambda template, which writes to its linked table; built, used and removed through approvals.
 
+**Links between templates (decided 2026-11-15).** A link role may accept another template's blocks, named
+`template:<name>`, with the shape `target`: the generator passes each linked block's id and the ARN from the output
+the role names (`output`), read from that template's module (`module.<block>.<output>`). The role's template must be in
+the library and declare that output; the check refuses anything else. Template blocks still never link to each other
+otherwise.
+
+The second template is **Step Functions workflow** (`aws-step-functions-workflow`): it runs the Lambda function blocks
+it is linked to, in the order of the links, each step retried with backoff. Its definition is generated, not typed:
+taking a person's own Amazon States Language with the functions' ARNs filled in would need OpenTofu's `templatestring`,
+which can also call functions such as `file()` on the server while planning. A schedule and execution logs wait too:
+both need a role passed to another service, and Step Functions' log delivery needs actions IAM only allows on `*`.
+
 The first template is **AWS Lambda function** (`aws-lambda-function`), chosen by the maintainer because it can be built
 on real AWS now: a container image from ECR, its own log group and role, a schedule, queues that trigger it, and the
 tables, buckets, queues and secrets it uses. The AgentCore agent template follows once the account's AgentCore quota is

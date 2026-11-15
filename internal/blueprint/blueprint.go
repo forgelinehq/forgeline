@@ -398,6 +398,10 @@ func kindOf(bl Block) string {
 	if bl.Kind == KindExisting && bl.Existing != nil {
 		return bl.Existing.Type
 	}
+	if bl.Kind == KindTemplate {
+		name, _, _ := strings.Cut(bl.Template, "@")
+		return "template:" + name // what a link role names to accept this template's blocks
+	}
 	return bl.Kind
 }
 
@@ -412,7 +416,7 @@ func templateLink(at string, from, to Block, l Link) error {
 		return fmt.Errorf("%s: %v", at, err)
 	}
 	role, ok := tpl.Role(dir, kindOf(other))
-	if !ok || other.Kind == KindTemplate {
+	if !ok || from.ID == to.ID {
 		var offers []string
 		for _, r := range tpl.Diagram.Links {
 			if r.Direction == "out" {

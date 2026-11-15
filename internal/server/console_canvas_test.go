@@ -130,7 +130,13 @@ eq('a link to nothing has no flow', flowOf(fb, { from: 'a', to: 'gone' }), null)
   eq('a trigger flows into it', flowOf(x, { from: 'queue', to: 'function' }), 'forward');
   const two = addTemplateBlock(x, lambda);
   eq('a second one', [two.id, two.bp.blocks.find(b => b.id === two.id).name], ['function-2', 'Lambda function 2']);
-  eq('templates never link to each other', linkTargets(two.bp, 'function', tpls).some(t => t.id === 'function-2'), false);
+  eq('functions never link to each other', linkTargets(two.bp, 'function', tpls).some(t => t.id === 'function-2'), false);
+  const flow = { ref: 'aws-step-functions-workflow@1.0.0', name: 'aws-step-functions-workflow', title: 'Step Functions workflow', links: [
+    { name: 'runs', direction: 'out', kinds: ['template:aws-lambda-function'], access: false }] };
+  tpls[flow.ref] = flow;
+  const wr = addTemplateBlock(two.bp, flow);
+  eq('a workflow runs functions, nothing else', linkTargets(wr.bp, wr.id, tpls).map(t => [t.id, t.access]), [['function', false], ['function-2', false]]);
+  eq('a function does not run a workflow', linkTargets(wr.bp, 'function', tpls).some(t => t.id === wr.id), false);
 }
 console.log(JSON.stringify({ built: toBody(bp, 3), defaults: DEFAULTS }));
 if (failed) process.exit(1);

@@ -84,6 +84,12 @@ func ParseSchema(raw json.RawMessage) (*Schema, error) {
 			return nil, fmt.Errorf("inputs.required: %q is not an input", r)
 		}
 	}
+	// The module gets a value for every input: each one is required or has a default.
+	for _, name := range s.Order {
+		if s.Properties[name].Default == nil && !contains(s.Required, name) {
+			return nil, fmt.Errorf("inputs.%s: give a default, or list it as required", name)
+		}
+	}
 	return &s, nil
 }
 

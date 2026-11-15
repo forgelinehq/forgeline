@@ -825,6 +825,9 @@ func (g *gen) template(bl Block) {
 			case template.ShapeData:
 				kind, arn, value := g.dataRef(to)
 				lists[r.Variable] = append(lists[r.Variable], obj{"id": to.ID, "kind": kind, "arn": arn, "value": value, "env": envName(kind, to.ID), "access": l.Access})
+			case template.ShapeTarget:
+				// Another template's block: its ARN is the output the role names, read from its module.
+				lists[r.Variable] = append(lists[r.Variable], obj{"id": to.ID, "arn": "${module." + to.ID + "." + r.Output + "}"})
 			case template.ShapeSecret:
 				arn := ref("aws_secretsmanager_secret", to.ID, "arn")
 				if to.Kind == KindExisting {

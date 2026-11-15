@@ -173,3 +173,75 @@ func TestTemplateBlueprintValidates(t *testing.T) {
 		}
 	}
 }
+
+// withWorkflow: a Step Functions workflow running two Lambda functions in the order of its links.
+func withWorkflow() Blueprint {
+	b := withJobs()
+	b.Blocks = append(b.Blocks,
+		Block{ID: "enrich", Kind: KindTemplate, Name: "Enrich", Template: "aws-lambda-function@1.0.0", Inputs: map[string]any{"image": jobsImage}},
+		Block{ID: "flow", Kind: KindTemplate, Name: "Order flow", Template: "aws-step-functions-workflow@1.0.0", Inputs: map[string]any{"retries": 3.0}})
+	b.Links = append(b.Links, Link{From: "flow", To: "enrich"}, Link{From: "flow", To: "jobs"})
+	return b
+}
+
+func TestWorkflowRunsLinkedFunctions(t *testing.T) {
+	b := withWorkflow()
+	if err := b.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	code, _ := b.Tofu()
+	var doc struct {
+		Module map[string]map[string]any `json:"module"`
+	}
+	json.Unmarshal(code, &doc)
+	j, _ := json.Marshal(doc.Module["flow"]["functions"])
+	if string(j) != `[{"arn":"${module.enrich.function_arn}","id":"enrich"},{"arn":"${module.jobs.function_arn}","id":"jobs"}]` {
+		t.Errorf("functions = %s", j)
+	}
+	if mods, _ := b.Modules(); len(mods) != 2 {
+		t.Errorf("modules = %d", len(mods))
+	}
+	for name, mut := range map[string]func(*Blueprint){
+		"a workflow uses a table":      func(b *Blueprint) { b.Links = append(b.Links, Link{From: "flow", To: "orders", Access: AccessRead}) },
+		"a function runs the workflow": func(b *Blueprint) { b.Links = append(b.Links, Link{From: "jobs", To: "flow"}) },
+		"access on a run":              func(b *Blueprint) { b.Links[len(b.Links)-1].Access = AccessRead },
+		"a workflow runs itself":       func(b *Blueprint) { b.Links = append(b.Links, Link{From: "flow", To: "flow"}) },
+		"a queue triggers a workflow":  func(b *Blueprint) { b.Links = append(b.Links, Link{From: "inbox", To: "flow"}) },
+	} {
+		x := withWorkflow()
+		mut(&x)
+		if err := x.Validate(); err == nil {
+			t.Errorf("%s: accepted", name)
+		}
+	}
+	var text []string
+	for _, c := range b.Checks() {
+		text = append(text, c.Text)
+	}
+	if all := strings.Join(text, "\n"); !strings.Contains(all, "Order flow runs enrich.") || !strings.Contains(all, "retrying a failed step up to 3 times") {
+		t.Errorf("checks:\n%s", all)
+	}
+}
+
+func TestWorkflowBlueprintValidates(t *testing.T) {
+	bin := os.Getenv("FORGELINE_TOFU")
+	if bin == "" {
+		t.Skip("set FORGELINE_TOFU to a tofu binary to check the code with tofu validate")
+	}
+	b := withWorkflow()
+	dir := t.TempDir()
+	code, _ := b.Tofu()
+	os.WriteFile(filepath.Join(dir, "main.tf.json"), code, 0o600)
+	mods, _ := b.Modules()
+	for p, body := range mods {
+		os.MkdirAll(filepath.Join(dir, filepath.Dir(p)), 0o755)
+		os.WriteFile(filepath.Join(dir, p), []byte(body), 0o600)
+	}
+	for _, args := range [][]string{{"init", "-backend=false", "-input=false", "-no-color"}, {"validate", "-no-color"}} {
+		cmd := exec.Command(bin, args...)
+		cmd.Dir = dir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("tofu %s: %v\n%s", args[0], err, out)
+		}
+	}
+}

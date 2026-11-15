@@ -94,6 +94,9 @@ linked to. Its settings form is drawn from the template's inputs, and the server
 rules; **Read its code** shows the OpenTofu module it builds. A plan keeps the template's code, so the approved apply
 builds exactly what was previewed.
 
+A **Step Functions workflow** runs the Lambda functions it is linked to, one after another in the order you link them,
+passing each result to the next and retrying a step that fails. Start it from the AWS console or the API.
+
 ![A Lambda function template on the canvas]({{ '/console/140-template-block.png' | relative_url }})
 
 The same dialog offers **Built by Forgeline** instead: a `forgeline.yaml` for the repository with a `build` step that

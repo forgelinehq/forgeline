@@ -63,16 +63,17 @@ func TestResolveChecksInputsAndFillsDefaults(t *testing.T) {
 
 func TestSchemaSubsetIsEnforced(t *testing.T) {
 	for name, s := range map[string]string{
-		"unknown keyword":         `{"type":"object","additionalProperties":false,"properties":{"a":{"type":"string","maxLength":5,"format":"email"}}}`,
-		"open object":             `{"type":"object","properties":{"a":{"type":"string","maxLength":5}}}`,
-		"array input":             `{"type":"object","additionalProperties":false,"properties":{"a":{"type":"array"}}}`,
-		"text without a limit":    `{"type":"object","additionalProperties":false,"properties":{"a":{"type":"string"}}}`,
-		"unanchored pattern":      `{"type":"object","additionalProperties":false,"properties":{"a":{"type":"string","maxLength":5,"pattern":"a+"}}}`,
-		"bad default":             `{"type":"object","additionalProperties":false,"properties":{"a":{"type":"integer","maximum":3,"default":4}}}`,
-		"forgeline's name":        `{"type":"object","additionalProperties":false,"properties":{"name":{"type":"string","maxLength":5}}}`,
-		"map without key pattern": `{"type":"object","additionalProperties":false,"properties":{"a":{"type":"object","maxProperties":3,"additionalProperties":{"type":"string","maxLength":5}}}}`,
-		"required unknown":        `{"type":"object","additionalProperties":false,"required":["b"],"properties":{"a":{"type":"boolean"}}}`,
-		"min on text":             `{"type":"object","additionalProperties":false,"properties":{"a":{"type":"string","maxLength":5,"minimum":1}}}`,
+		"unknown keyword":          `{"type":"object","additionalProperties":false,"properties":{"a":{"type":"string","maxLength":5,"format":"email"}}}`,
+		"open object":              `{"type":"object","properties":{"a":{"type":"string","maxLength":5}}}`,
+		"array input":              `{"type":"object","additionalProperties":false,"properties":{"a":{"type":"array"}}}`,
+		"text without a limit":     `{"type":"object","additionalProperties":false,"properties":{"a":{"type":"string"}}}`,
+		"unanchored pattern":       `{"type":"object","additionalProperties":false,"properties":{"a":{"type":"string","maxLength":5,"pattern":"a+"}}}`,
+		"bad default":              `{"type":"object","additionalProperties":false,"properties":{"a":{"type":"integer","maximum":3,"default":4}}}`,
+		"forgeline's name":         `{"type":"object","additionalProperties":false,"properties":{"name":{"type":"string","maxLength":5}}}`,
+		"map without key pattern":  `{"type":"object","additionalProperties":false,"properties":{"a":{"type":"object","maxProperties":3,"additionalProperties":{"type":"string","maxLength":5}}}}`,
+		"required unknown":         `{"type":"object","additionalProperties":false,"required":["b"],"properties":{"a":{"type":"boolean"}}}`,
+		"min on text":              `{"type":"object","additionalProperties":false,"properties":{"a":{"type":"string","maxLength":5,"minimum":1}}}`,
+		"optional without default": `{"type":"object","additionalProperties":false,"properties":{"a":{"type":"string","maxLength":5}}}`,
 	} {
 		if _, err := ParseSchema(json.RawMessage(s)); err == nil {
 			t.Errorf("%s: accepted", name)
@@ -144,6 +145,19 @@ func TestCodeRulesAreEnforced(t *testing.T) {
 		"access on a trigger": {"diagram.json", func(d map[string]any) { d["links"].([]any)[2].(map[string]any)["access"] = true }},
 		"a link on an input":  {"diagram.json", func(d map[string]any) { d["links"].([]any)[0].(map[string]any)["variable"] = "memory" }},
 		"unknown field":       {"diagram.json", func(d map[string]any) { d["script"] = "x" }},
+		"template as data": {"diagram.json", func(d map[string]any) {
+			d["links"].([]any)[0].(map[string]any)["kinds"] = []any{"template:aws-step-functions-workflow"}
+		}},
+		"target without output": {"diagram.json", func(d map[string]any) {
+			d["links"].([]any)[0] = map[string]any{"name": "runs", "direction": "out", "kinds": []any{"template:aws-step-functions-workflow"}, "access": false, "variable": "uses", "shape": "target"}
+		}},
+		"target to itself": {"diagram.json", func(d map[string]any) {
+			d["links"].([]any)[0] = map[string]any{"name": "runs", "direction": "out", "kinds": []any{"template:aws-lambda-function"}, "access": false, "variable": "uses", "shape": "target", "output": "function_arn"}
+		}},
+		"output on a secret link": {"diagram.json", func(d map[string]any) { d["links"].([]any)[1].(map[string]any)["output"] = "function_arn" }},
+		"target coming in": {"diagram.json", func(d map[string]any) {
+			d["links"].([]any)[2] = map[string]any{"name": "is run by", "direction": "in", "kinds": []any{"template:aws-step-functions-workflow"}, "access": false, "variable": "trigger_queues", "shape": "target", "output": "state_machine_arn"}
+		}},
 	} {
 		if _, err := Load(fsWith(t, c.file, c.change), "t/aws-lambda-function/1.0.0"); err == nil {
 			t.Errorf("%s: accepted", name)
@@ -159,6 +173,33 @@ func TestProviderPinIsForgelines(t *testing.T) {
 	m["t/aws-lambda-function/1.0.0/main.tf.json"] = code["t/aws-lambda-function/1.0.0/main.tf.json"]
 	if _, err := Load(m, "t/aws-lambda-function/1.0.0"); err == nil || !strings.Contains(err.Error(), "Forgeline pins") {
 		t.Errorf("a template with its own provider version: %v", err)
+	}
+}
+
+func TestTargetLinks(t *testing.T) {
+	all, err := Library()
+	if err != nil {
+		t.Fatal(err)
+	}
+	wf := all["aws-step-functions-workflow@1.0.0"]
+	if r, ok := wf.Role("out", "template:aws-lambda-function"); !ok || r.Shape != ShapeTarget || r.Output != "function_arn" {
+		t.Fatalf("a workflow runs functions: %+v %v", r, ok)
+	}
+	// A target link to a template or output that is not there is refused when the library loads.
+	bad := map[string]Template{}
+	for k, v := range all {
+		bad[k] = v
+	}
+	w2 := wf
+	w2.Diagram.Links = []LinkRole{{Name: "runs", Direction: "out", Kinds: []string{"template:aws-lambda-function"}, Variable: "functions", Shape: ShapeTarget, Output: "nope"}}
+	bad[wf.Ref()] = w2
+	if err := checkTargets(bad); err == nil {
+		t.Error("a missing output was accepted")
+	}
+	w2.Diagram.Links[0].Kinds, w2.Diagram.Links[0].Output = []string{"template:no-such-thing"}, "function_arn"
+	bad[wf.Ref()] = w2
+	if err := checkTargets(bad); err == nil {
+		t.Error("a missing template was accepted")
 	}
 }
 

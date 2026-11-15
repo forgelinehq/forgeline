@@ -7,6 +7,9 @@ section in the pull request that makes the change; a release moves it under its 
 ## [Unreleased]
 
 ### Fixed
+- **A template input left unset could break the plan.** The Lambda template's optional `env` had no default, so a
+  function without settings failed `tofu validate` (found by the real validate test). Every template input must now be
+  required or have a default, checked when a template loads.
 - **MCP tool calls are audited as the person who asked.** Calls from an agent chat were logged as `system`; they now
   name the person (found on the Pi with a real MCP server).
 - **A plugin that cannot reach Forgeline's egress proxy says why.** On a machine whose firewall drops traffic from
@@ -52,6 +55,10 @@ section in the pull request that makes the change; a release moves it under its 
 - **After a session ends**, the console stops polling the server (it asked every minute, forever).
 
 ### Added
+- **A Step Functions workflow template, and links between templates.** `aws-step-functions-workflow` runs the Lambda
+  function blocks it is linked to, in the order of the links, retrying a failed step with backoff; its role may start
+  only those functions. A template's link role can now accept another template's blocks and receive their ARN from a
+  named output, checked when the library loads.
 - **Templates on the design canvas.** Each library template is a button on the Add bar; its form is drawn from the
   template's inputs, and links follow the roles it offers (a queue triggers a Lambda function; the function uses tables,
   buckets, queues and reads secrets). Build from GitHub suggests the image platform the template runs on.

@@ -55,7 +55,7 @@ export function linkWords(bp, l) {
   if (!from || !to) return l.from + ' → ' + l.to;
   if (from.kind === 'frontdoor') return `${from.name} sends ${l.path || 'traffic'} to ${to.name}`;
   if (to.kind === 'logs') return `${from.name} writes its logs to ${to.name}`;
-  if (to.kind === 'template') return `${from.name} triggers ${to.name}`;
+  if (to.kind === 'template') return `${from.name} ${from.kind === 'template' ? 'runs' : 'triggers'} ${to.name}`;
   if (to.kind === 'service') return `${from.name} calls ${to.name}`;
   const t = to.kind === 'existing' ? to.existing?.type : to.kind;
   if (t === 'secret') return `${from.name} reads the secret ${to.name}`;
