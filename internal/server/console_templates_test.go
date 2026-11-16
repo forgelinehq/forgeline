@@ -29,8 +29,15 @@ func TestTemplatesAPI(t *testing.T) {
 	m := newMCPHarness(t)
 	var list struct{ Templates []TemplateJSON }
 	json.Unmarshal(m.dev.expect(200, "GET", "/v1/templates", nil), &list)
-	if len(list.Templates) == 0 || list.Templates[0].Ref != "aws-lambda-function@1.0.0" || list.Templates[0].Order[0] != "image" || len(list.Templates[0].Links) != 3 {
+	byRef := map[string]TemplateJSON{}
+	for _, tp := range list.Templates {
+		byRef[tp.Ref] = tp
+	}
+	if fn := byRef["aws-lambda-function@1.0.0"]; len(fn.Order) == 0 || fn.Order[0] != "image" || len(fn.Links) != 3 {
 		t.Fatalf("templates = %+v", list.Templates)
+	}
+	if p := byRef["aws-data-pipeline@1.0.0"]; len(p.Links) != 3 || p.Links[2].Shape != "writer" || p.Links[2].EnvSuffix != "STREAM" || p.Links[0].Min != 1 {
+		t.Errorf("the pipeline as the canvas sees it: %+v", p.Links)
 	}
 	m.v.expect(403, "GET", "/v1/templates", nil)
 	code := string(m.dev.expect(200, "GET", "/v1/templates/aws-lambda-function/1.0.0/code", nil))

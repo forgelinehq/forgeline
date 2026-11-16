@@ -1,0 +1,241 @@
+{
+  "terraform": {
+    "required_providers": {
+      "aws": {
+        "source": "hashicorp/aws",
+        "version": "~> 6.72"
+      }
+    }
+  },
+  "variable": {
+    "name": {
+      "type": "string",
+      "description": "Set by Forgeline: the pipeline's name, unique in the account."
+    },
+    "tags": {
+      "type": "map(string)",
+      "description": "Set by Forgeline."
+    },
+    "columns": {
+      "type": "map(string)"
+    },
+    "buffer_seconds": {
+      "type": "number"
+    },
+    "buffer_mb": {
+      "type": "number"
+    },
+    "scan_limit_gb": {
+      "type": "number"
+    },
+    "log_retention_days": {
+      "type": "number"
+    },
+    "store": {
+      "type": "list(object({id=string,kind=string,arn=string,value=string,env=string,access=string}))",
+      "description": "Set by Forgeline from the links: the one bucket it stores records in."
+    },
+    "transform": {
+      "type": "list(object({id=string,arn=string}))",
+      "description": "Set by Forgeline from the links: the Lambda function that reshapes records, if any."
+    },
+    "writers": {
+      "type": "list(object({id=string}))",
+      "description": "Set by Forgeline from the links: the apps that send to it (their roles get firehose:PutRecord and PutRecordBatch on it)."
+    }
+  },
+  "data": {
+    "aws_caller_identity": {
+      "current": {}
+    }
+  },
+  "locals": {
+    "db": "${lower(replace(substr(var.name, 0, 60), \"-\", \"_\"))}"
+  },
+  "resource": {
+    "aws_cloudwatch_log_group": {
+      "delivery": {
+        "name": "/aws/kinesisfirehose/${var.name}",
+        "retention_in_days": "${var.log_retention_days}",
+        "tags": "${var.tags}"
+      }
+    },
+    "aws_cloudwatch_log_stream": {
+      "delivery": {
+        "name": "DestinationDelivery",
+        "log_group_name": "${aws_cloudwatch_log_group.delivery.name}"
+      }
+    },
+    "aws_iam_role": {
+      "delivery": {
+        "name": "${substr(var.name, 0, 55)}-delivery",
+        "assume_role_policy": "${jsonencode({Version = \"2012-10-17\", Statement = [{Effect = \"Allow\", Principal = {Service = \"firehose.amazonaws.com\"}, Action = \"sts:AssumeRole\", Condition = {StringEquals = {\"sts:ExternalId\" = data.aws_caller_identity.current.account_id}}}]})}",
+        "tags": "${var.tags}"
+      }
+    },
+    "aws_iam_role_policy": {
+      "delivery": {
+        "name": "deliver",
+        "role": "${aws_iam_role.delivery.id}",
+        "policy": "${jsonencode({Version = \"2012-10-17\", Statement = concat([{Sid = \"StoreInBucket\", Effect = \"Allow\", Action = [\"s3:AbortMultipartUpload\", \"s3:GetBucketLocation\", \"s3:GetObject\", \"s3:ListBucket\", \"s3:ListBucketMultipartUploads\", \"s3:PutObject\"], Resource = [var.store[0].arn, \"${var.store[0].arn}/*\"]}, {Sid = \"DeliveryLogs\", Effect = \"Allow\", Action = [\"logs:PutLogEvents\"], Resource = [\"${aws_cloudwatch_log_group.delivery.arn}:*\"]}], [for t in var.transform : {Sid = \"Reshape\", Effect = \"Allow\", Action = [\"lambda:InvokeFunction\", \"lambda:GetFunctionConfiguration\"], Resource = [t.arn, \"${t.arn}:*\"]}])})}"
+      }
+    },
+    "aws_kinesis_firehose_delivery_stream": {
+      "stream": {
+        "name": "${var.name}",
+        "destination": "extended_s3",
+        "tags": "${var.tags}",
+        "server_side_encryption": {
+          "enabled": true,
+          "key_type": "AWS_OWNED_CMK"
+        },
+        "extended_s3_configuration": {
+          "role_arn": "${aws_iam_role.delivery.arn}",
+          "bucket_arn": "${var.store[0].arn}",
+          "prefix": "${var.name}/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/",
+          "error_output_prefix": "${var.name}-errors/!{firehose:error-output-type}/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/",
+          "buffering_interval": "${var.buffer_seconds}",
+          "buffering_size": "${var.buffer_mb}",
+          "compression_format": "GZIP",
+          "cloudwatch_logging_options": {
+            "enabled": true,
+            "log_group_name": "${aws_cloudwatch_log_group.delivery.name}",
+            "log_stream_name": "${aws_cloudwatch_log_stream.delivery.name}"
+          },
+          "dynamic": {
+            "processing_configuration": {
+              "for_each": "${slice(var.transform, 0, min(length(var.transform), 1))}",
+              "content": {
+                "enabled": true,
+                "processors": [
+                  {
+                    "type": "Lambda",
+                    "parameters": [
+                      {
+                        "parameter_name": "LambdaArn",
+                        "parameter_value": "${processing_configuration.value.arn}"
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "lifecycle": {
+          "precondition": [
+            {
+              "condition": "${length(var.store) == 1 && var.store[0].access == \"readwrite\"}",
+              "error_message": "The data pipeline stores in exactly one bucket, linked with read and write access."
+            }
+          ]
+        },
+        "depends_on": [
+          "aws_iam_role_policy.delivery"
+        ]
+      }
+    },
+    "aws_glue_catalog_database": {
+      "db": {
+        "name": "${local.db}",
+        "description": "Records of the Forgeline data pipeline ${var.name}",
+        "tags": "${var.tags}"
+      }
+    },
+    "aws_glue_catalog_table": {
+      "records": {
+        "name": "records",
+        "database_name": "${aws_glue_catalog_database.db.name}",
+        "table_type": "EXTERNAL_TABLE",
+        "parameters": {
+          "classification": "json",
+          "compressionType": "gzip",
+          "projection.enabled": "true",
+          "projection.year.type": "integer",
+          "projection.year.range": "2025,2100",
+          "projection.month.type": "integer",
+          "projection.month.range": "1,12",
+          "projection.month.digits": "2",
+          "projection.day.type": "integer",
+          "projection.day.range": "1,31",
+          "projection.day.digits": "2",
+          "storage.location.template": "s3://${var.store[0].value}/${var.name}/year=$${year}/month=$${month}/day=$${day}/"
+        },
+        "partition_keys": [
+          {
+            "name": "year",
+            "type": "int"
+          },
+          {
+            "name": "month",
+            "type": "int"
+          },
+          {
+            "name": "day",
+            "type": "int"
+          }
+        ],
+        "storage_descriptor": {
+          "location": "s3://${var.store[0].value}/${var.name}/",
+          "input_format": "org.apache.hadoop.mapred.TextInputFormat",
+          "output_format": "org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat",
+          "ser_de_info": {
+            "serialization_library": "org.openx.data.jsonserde.JsonSerDe",
+            "parameters": {
+              "ignore.malformed.json": "true"
+            }
+          },
+          "dynamic": {
+            "columns": {
+              "for_each": "${var.columns}",
+              "content": {
+                "name": "${columns.key}",
+                "type": "${columns.value}"
+              }
+            }
+          }
+        }
+      }
+    },
+    "aws_athena_workgroup": {
+      "sql": {
+        "name": "${var.name}",
+        "force_destroy": true,
+        "tags": "${var.tags}",
+        "configuration": {
+          "enforce_workgroup_configuration": true,
+          "publish_cloudwatch_metrics_enabled": true,
+          "bytes_scanned_cutoff_per_query": "${var.scan_limit_gb * 1073741824}",
+          "result_configuration": {
+            "output_location": "s3://${var.store[0].value}/${var.name}-athena/",
+            "encryption_configuration": {
+              "encryption_option": "SSE_S3"
+            }
+          }
+        }
+      }
+    }
+  },
+  "output": {
+    "stream_arn": {
+      "description": "The Firehose stream apps send records to",
+      "value": "${aws_kinesis_firehose_delivery_stream.stream.arn}"
+    },
+    "stream_name": {
+      "description": "Its name, which linked apps get as <BLOCK>_STREAM",
+      "value": "${aws_kinesis_firehose_delivery_stream.stream.name}"
+    },
+    "database": {
+      "description": "The Glue database",
+      "value": "${aws_glue_catalog_database.db.name}"
+    },
+    "table": {
+      "description": "The table to query: <database>.records",
+      "value": "${aws_glue_catalog_table.records.name}"
+    },
+    "workgroup": {
+      "description": "The Athena workgroup to query in",
+      "value": "${aws_athena_workgroup.sql.name}"
+    }
+  }
+}

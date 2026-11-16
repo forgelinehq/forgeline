@@ -85,7 +85,8 @@ with them. If an apply ever fails with `iam:PassRole`, Forgeline says which serv
       "Action": "iam:PassRole",
       "Resource": "arn:aws:iam::*:role/fl-*",
       "Condition": { "StringEquals": { "iam:PassedToService": [
-        "bedrock-agentcore.amazonaws.com", "ecs-tasks.amazonaws.com", "lambda.amazonaws.com", "states.amazonaws.com"
+        "bedrock-agentcore.amazonaws.com", "ecs-tasks.amazonaws.com", "firehose.amazonaws.com", "lambda.amazonaws.com",
+        "states.amazonaws.com"
       ] } }
     }
   ]
