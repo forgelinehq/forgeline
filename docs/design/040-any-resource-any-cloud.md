@@ -14,7 +14,8 @@ that repository and branch can take through GitHub's OIDC provider, able to push
 suggests the workflow (actions pinned to commit SHAs; arm64 for agents) for a person to add by pull request, and a
 Forgeline pipeline that starts it; running a new image stays a previewed, approved blueprint change. **Built 2026-11-16: moving a block to a newly pushed
 image in one step** ("Run a new image…": the images in the block's own repository, newest first; picking one saves the
-blueprint with it and starts the preview; only that repository's images are accepted). Still to do: reading the
+blueprint with it and starts the preview; only that repository's images are accepted; checked on real AWS,
+[2026-11-16](../testing/2026-11-16-run-new-image.md)). Still to do: reading the
 repository to suggest which one fits a block. Extends notes 035 and 039. Builds in the order under "Plan".
 
 ## Question

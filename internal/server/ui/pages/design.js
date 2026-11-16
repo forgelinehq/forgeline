@@ -367,10 +367,11 @@ export async function designPage({ params }) {
       src.repo ? h('div', { class: 'grid grid-cols-2 gap-2' },
         input('Branch', src.branch, v => update({ branch: v || undefined }), { placeholder: 'main' }),
         input('Folder', src.path, v => update({ path: v || undefined }), { placeholder: '.' })) : null,
-      src.repo ? h('button', { class: 'btn-secondary btn-sm', type: 'button', id: 'f-delivery', title: 'Suggests the workflow that builds it, for the saved blueprint',
-        onclick: () => dirty() ? toast('Save first: the suggestion is for the saved blueprint', 'error') : delivery(b) }, icon('git', 'size-3.5'), 'Build from GitHub…') : null,
-      src.repo && built?.built ? h('button', { class: 'btn-secondary btn-sm ml-2', type: 'button', id: 'f-images', title: 'Pick an image pushed to its repository; the change is previewed and approved like any other',
-        onclick: () => dirty() ? toast('Save first: the new image is set on the saved blueprint', 'error') : newImage(b) }, icon('layers', 'size-3.5'), 'Run a new image…') : null,
+      src.repo ? h('div', { class: 'flex flex-wrap gap-2' },
+        h('button', { class: 'btn-secondary btn-sm', type: 'button', id: 'f-delivery', title: 'Suggests the workflow that builds it, for the saved blueprint',
+          onclick: () => dirty() ? toast('Save first: the suggestion is for the saved blueprint', 'error') : delivery(b) }, icon('git', 'size-3.5'), 'Build from GitHub…'),
+        built?.built ? h('button', { class: 'btn-secondary btn-sm', type: 'button', id: 'f-images', title: 'Pick an image pushed to its repository; the change is previewed and approved like any other',
+          onclick: () => dirty() ? toast('Save first: the new image is set on the saved blueprint', 'error') : newImage(b) }, icon('layers', 'size-3.5'), 'Run a new image…') : null) : null,
       src.repo ? null : h('p', { class: 'hint' }, 'Optional. With a repository, the blueprint makes a private image repository for it and a role only that branch can use to push images.'));
   }
 
