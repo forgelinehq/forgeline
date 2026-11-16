@@ -85,6 +85,11 @@ makes a private image repository for it and a role that only that branch can use
 pipeline that starts it. Forgeline never pushes to your repository, and running a new image is a blueprint change you
 preview and send for approval. GitHub's OIDC provider must be set up in the AWS account once.
 
+Once the blueprint is built, **Run a new image…** lists the images pushed to the block's repository, newest first, and
+marks the one running now. **Use and preview** saves the blueprint with that image and starts the preview, so the next
+step is Send for approval. Only images from the block's own repository are offered; any other image is set in the
+block's fields as before.
+
 ![Build from GitHub]({{ '/console/121-design-github-build.png' | relative_url }})
 
 An app can run on **Fargate Spot** (Where it runs): much cheaper, but AWS may stop a task with two minutes' warning and

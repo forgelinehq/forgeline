@@ -368,8 +368,10 @@ export async function designPage({ params }) {
         input('Branch', src.branch, v => update({ branch: v || undefined }), { placeholder: 'main' }),
         input('Folder', src.path, v => update({ path: v || undefined }), { placeholder: '.' })) : null,
       src.repo ? h('button', { class: 'btn-secondary btn-sm', type: 'button', id: 'f-delivery', title: 'Suggests the workflow that builds it, for the saved blueprint',
-        onclick: () => dirty() ? toast('Save first: the suggestion is for the saved blueprint', 'error') : delivery(b) }, icon('git', 'size-3.5'), 'Build from GitHub…')
-        : h('p', { class: 'hint' }, 'Optional. With a repository, the blueprint makes a private image repository for it and a role only that branch can use to push images.'));
+        onclick: () => dirty() ? toast('Save first: the suggestion is for the saved blueprint', 'error') : delivery(b) }, icon('git', 'size-3.5'), 'Build from GitHub…') : null,
+      src.repo && built?.built ? h('button', { class: 'btn-secondary btn-sm ml-2', type: 'button', id: 'f-images', title: 'Pick an image pushed to its repository; the change is previewed and approved like any other',
+        onclick: () => dirty() ? toast('Save first: the new image is set on the saved blueprint', 'error') : newImage(b) }, icon('layers', 'size-3.5'), 'Run a new image…') : null,
+      src.repo ? null : h('p', { class: 'hint' }, 'Optional. With a repository, the blueprint makes a private image repository for it and a role only that branch can use to push images.'));
   }
 
   async function delivery(b) {
@@ -413,6 +415,40 @@ export async function designPage({ params }) {
       draw();
       return h('div', { id: 'delivery' }, body);
     }, { xl: true });
+  }
+
+  // Run a newly pushed image (note 040, step 4): the images in the block's own repository, newest first. Picking one
+  // saves the blueprint with it and starts a preview; sending that preview for approval is what runs it.
+  async function newImage(b) {
+    const base = '/v1/blueprints/' + encodeURIComponent(saved.id) + '/blocks/' + encodeURIComponent(b.id);
+    let list;
+    try { list = await get(base + '/images'); } catch (e) { toast(e.message, 'error'); return; }
+    await modal('Run a new image of ' + b.name, (close) => {
+      const err = h('div', {});
+      const use = async (img) => {
+        try {
+          const r = await post(base + '/image', { image: img.image, revision });
+          saved = r; revision = r.revision; checks = r.checks;
+          bp = autoLayout({ name: r.name, description: r.description || '', target: r.target, blocks: r.blocks, links: r.links });
+          clean = JSON.stringify(bp); problem = '';
+          close();
+          draw(); drawInspector(); drawSide(); drawBar();
+          await preview();
+          toast('Saved with the new image. When the preview is ready, send it for approval.', 'ok');
+        } catch (e) { mount(err, errorBox(e.message)); }
+      };
+      const rows = list.images.map(img => h('li', { class: 'flex flex-wrap items-center justify-between gap-2 py-2' },
+        h('span', { class: 'min-w-0' },
+          h('code', { class: 'break-all font-mono text-xs' }, img.tags.length ? img.tags.join(', ') : img.digest.slice(0, 19) + '…'),
+          h('span', { class: 'muted block text-xs' }, 'Pushed ' + relTime(img.pushed_at) + ' · ' + img.size_mb + ' MB')),
+        img.current ? h('span', { class: 'pill-ok' }, 'running now')
+          : h('button', { class: 'btn-primary btn-sm', type: 'button', 'data-use-image': img.image, onclick: () => use(img) }, 'Use and preview')));
+      return h('div', { class: 'space-y-3', id: 'images' },
+        h('p', { class: 'text-sm' }, 'Images pushed to ', h('code', { class: 'break-all font-mono text-xs' }, list.repository), '. Picking one saves the blueprint with it and previews the change; a different administrator approves it before it runs.'),
+        rows.length ? h('ul', { class: 'divide-y divide-slate-200 dark:divide-slate-800' }, rows)
+          : notice('info', 'Nothing has been pushed yet. Use “Build from GitHub…” to set up the build.'),
+        err);
+    });
   }
 
   // A template block's form, drawn from the template's inputs: a list where it has allowed values, numbers within

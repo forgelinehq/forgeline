@@ -12,8 +12,10 @@ policy is added).
 private ECR repository (immutable tags, scanned, the 30 newest images kept) and a push role that only GitHub Actions in
 that repository and branch can take through GitHub's OIDC provider, able to push to that one repository. Forgeline
 suggests the workflow (actions pinned to commit SHAs; arm64 for agents) for a person to add by pull request, and a
-Forgeline pipeline that starts it; running a new image stays a previewed, approved blueprint change. Still to do:
-reading the repository to suggest which one fits a block, and moving a block to a newly pushed image in one step. Extends notes 035 and 039. Builds in the order under "Plan".
+Forgeline pipeline that starts it; running a new image stays a previewed, approved blueprint change. **Built 2026-11-16: moving a block to a newly pushed
+image in one step** ("Run a new image…": the images in the block's own repository, newest first; picking one saves the
+blueprint with it and starts the preview; only that repository's images are accepted). Still to do: reading the
+repository to suggest which one fits a block. Extends notes 035 and 039. Builds in the order under "Plan".
 
 ## Question
 
