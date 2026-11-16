@@ -1,0 +1,114 @@
+{
+  "name": "aws-eks-cluster",
+  "version": "1.0.0",
+  "title": "EKS cluster with namespaces",
+  "summary": "A Kubernetes cluster (Amazon EKS) on nodes it manages, in the account's default network. Each namespace you name gets a quota, default container sizes and a network policy that lets its pods take traffic only from the same namespace. People sign in with AWS IAM roles: an administrator, and per namespace, editors.",
+  "cloud": "aws",
+  "providers": {
+    "aws": {
+      "source": "hashicorp/aws",
+      "version": "~> 6.72"
+    },
+    "kubernetes": {
+      "source": "hashicorp/kubernetes",
+      "version": "~> 3.5"
+    }
+  },
+  "kubernetes": {
+    "cluster": "aws_eks_cluster.this"
+  },
+  "holds_data": false,
+  "passes_role_to": ["eks.amazonaws.com"],
+  "attaches_policies": [
+    "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy",
+    "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy",
+    "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy",
+    "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryPullOnly"
+  ],
+  "checks": [
+    "Built in two approved steps: the cluster and its nodes first, then its namespaces in the next preview, once the cluster exists",
+    "Costs about $0.10 an hour for the cluster plus {nodes} {instance_type} node(s); it stays on standard support, never the six times dearer extended support",
+    "Pods in each namespace take traffic only from their own namespace, within the namespace's quota",
+    "People reach the cluster with AWS IAM roles only; the API is public, signed in with IAM",
+    "The cluster's audit and sign-in logs are kept {log_retention_days} days"
+  ],
+  "inputs": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["namespaces"],
+    "properties": {
+      "namespaces": {
+        "type": "object",
+        "title": "Namespaces",
+        "description": "Each namespace and its size: small (2 CPUs, 4 GiB, 20 pods requested at most), medium (4, 8 GiB, 50) or large (8, 16 GiB, 100).",
+        "maxProperties": 20,
+        "propertyNames": {
+          "type": "string",
+          "pattern": "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$",
+          "maxLength": 63
+        },
+        "additionalProperties": {
+          "type": "string",
+          "enum": ["small", "medium", "large"]
+        }
+      },
+      "namespace_editors": {
+        "type": "object",
+        "title": "Namespace editors",
+        "description": "Optional: per namespace, the IAM role whose people may change what runs in it (and nothing else in the cluster).",
+        "maxProperties": 20,
+        "default": {},
+        "propertyNames": {
+          "type": "string",
+          "pattern": "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$",
+          "maxLength": 63
+        },
+        "additionalProperties": {
+          "type": "string",
+          "pattern": "^arn:aws:iam::[0-9]{12}:role/[A-Za-z0-9+=,.@_/-]{1,128}$",
+          "maxLength": 200
+        }
+      },
+      "admin_role_arn": {
+        "type": "string",
+        "title": "Administrator role",
+        "description": "Optional: an IAM role whose people may do anything in the cluster.",
+        "pattern": "^(arn:aws:iam::[0-9]{12}:role/[A-Za-z0-9+=,.@_/-]{1,128})?$",
+        "maxLength": 200,
+        "default": ""
+      },
+      "instance_type": {
+        "type": "string",
+        "title": "Node size",
+        "enum": ["t4g.small", "t4g.medium", "t4g.large", "m7g.large", "t3.small", "t3.medium", "t3.large", "m7i.large"],
+        "default": "t4g.medium"
+      },
+      "nodes": {
+        "type": "integer",
+        "title": "Nodes",
+        "minimum": 1,
+        "maximum": 20,
+        "default": 2
+      },
+      "spot": {
+        "type": "boolean",
+        "title": "Spot nodes (cheaper, may be stopped by AWS)",
+        "default": false
+      },
+      "kubernetes_version": {
+        "type": "string",
+        "title": "Kubernetes version",
+        "description": "Optional, such as 1.34. Empty means the newest EKS offers when the cluster is made.",
+        "pattern": "^(1\\.[0-9]{2})?$",
+        "maxLength": 4,
+        "default": ""
+      },
+      "log_retention_days": {
+        "type": "integer",
+        "title": "Keep audit logs (days)",
+        "enum": [1, 3, 5, 7, 14, 30, 60, 90],
+        "default": 14
+      }
+    }
+  }
+}

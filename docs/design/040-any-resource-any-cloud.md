@@ -163,6 +163,41 @@ Athena workgroup (results in the same bucket, a limit on the data one query may 
 Built (#143) and checked on real AWS ([2026-11-16](../testing/2026-11-16-data-pipeline.md)): an app's own role sent records
 and was refused an action the template does not grant; Athena returned them by day; everything was removed.
 
+**EKS with namespaces (step 5, second part; decided 2026-11-16).** `aws-eks-cluster` makes an EKS cluster in the
+default VPC (its public subnets, so no NAT gateway to pay for), a managed node group, and in each namespace a person
+names: a resource quota, default container requests and a network policy that lets pods take traffic only from their
+own namespace (the VPC CNI's network policy agent enforces it). People reach the cluster with AWS IAM only: an optional
+administrator role, and per namespace an optional role that may edit only that namespace (EKS access entries).
+Choices:
+
+- **Two approved steps, not one.** The namespaces are Kubernetes objects: OpenTofu creates them through the Kubernetes
+  provider, which needs the cluster's address and certificate. Before the cluster exists, a plan cannot contain them,
+  so "two stages in one approval" (above) would have applied a second plan nobody saw. Instead, the first preview
+  builds the cluster and nodes. Once they exist, the next preview adds the namespaces, and it is approved like any
+  other. This is how removing everything already works when something is protected (note 041). The template's checks say so.
+- **The template format learns a second stage**: `template.json` may name its cluster (`"kubernetes": {"cluster":
+  "aws_eks_cluster.this"}`) and then may use the pinned `hashicorp/kubernetes` provider. Forgeline, not the template,
+  configures that provider, one per template block (`provider "kubernetes" { alias = "<block>" }`). Until the cluster is
+  in the blueprint's state, the provider is empty and the module gets `cluster_ready = false`. Once it is there, the
+  provider reads the cluster by name (a data source) and signs in with `aws eks get-token` when the plan applies.
+  A token fetched while planning would have expired by the time someone approves. When the template loads, Forgeline
+  checks: the cluster is named `var.name` (so Forgeline knows it); every Kubernetes resource is created only when
+  `var.cluster_ready` is true and depends on the cluster (so removal deletes the namespaces before the cluster);
+  Kubernetes secrets cannot be read.
+- **Removal keeps working.** When a removal drops the block, Forgeline still configures that provider from the
+  cluster's name while the cluster is in the state. OpenTofu can then delete the namespaces first.
+- **AWS managed policies a template attaches are listed**, like the services it passes roles to: `attaches_policies`
+  names exact `arn:aws:iam::aws:policy/…` ARNs. The template may attach no others, and never one of the broad ones. The
+  setup guide's attach statement lists them all, and a test keeps the two in step. EKS needs four:
+  `AmazonEKSClusterPolicy`, `AmazonEKSWorkerNodePolicy`, `AmazonEKS_CNI_Policy` and
+  `AmazonEC2ContainerRegistryPullOnly`. Copying them into inline policies would leave stale copies when AWS updates
+  them.
+- **Cost guard**: the cluster stays on standard support (`upgrade_policy`). Extended support costs six times as much
+  an hour, and a cluster left behind on an old version would switch to it silently. The check text names the price.
+- **The code pipeline template is not built.** Step 4 already builds an app's image from its repository with GitHub
+  Actions and lets a person run a new image through preview and approval. A CodePipeline template would be a second
+  way to do the same thing.
+
 The first template is **AWS Lambda function** (`aws-lambda-function`), chosen by the maintainer because it can be built
 on real AWS now: a container image from ECR, its own log group and role, a schedule, queues that trigger it, and the
 tables, buckets, queues and secrets it uses. The AgentCore agent template follows once the account's AgentCore quota is

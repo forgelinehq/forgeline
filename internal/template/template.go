@@ -48,12 +48,24 @@ type Template struct {
 	HoldsData bool                `json:"holds_data"`
 	// PassesRoleTo lists the AWS services the template hands a role to (iam:PassRole), such as lambda.amazonaws.com:
 	// the role Forgeline builds with must allow each one (docs/guides/connect-aws.md).
-	PassesRoleTo []string        `json:"passes_role_to"`
-	Checks       []string        `json:"checks"`
-	Inputs       *Schema         `json:"-"`
-	RawInputs    json.RawMessage `json:"inputs"`
-	Diagram      Diagram         `json:"-"`
-	Code         []byte          `json:"-"` // main.tf.json
+	PassesRoleTo []string `json:"passes_role_to"`
+	// AttachesPolicies lists the AWS managed policies the template attaches to its roles, as exact ARNs: the role
+	// Forgeline builds with must allow attaching each one (docs/guides/connect-aws.md), and the code may attach no other.
+	AttachesPolicies []string `json:"attaches_policies"`
+	// Kubernetes, when set, says the template builds a Kubernetes cluster and that its Kubernetes resources are a
+	// second stage, planned once the cluster exists (note 040, EKS with namespaces).
+	Kubernetes *KubeStage      `json:"kubernetes,omitempty"`
+	Checks     []string        `json:"checks"`
+	Inputs     *Schema         `json:"-"`
+	RawInputs  json.RawMessage `json:"inputs"`
+	Diagram    Diagram         `json:"-"`
+	Code       []byte          `json:"-"` // main.tf.json
+}
+
+// KubeStage names the cluster resource a template builds, such as aws_eks_cluster.this. Forgeline configures the
+// Kubernetes provider for the module from that cluster once it is in the blueprint's state.
+type KubeStage struct {
+	Cluster string `json:"cluster"`
 }
 
 // Provider is a provider a template uses, pinned to the version Forgeline uses.
@@ -101,11 +113,21 @@ var (
 	// A writer link never grants actions of these services: they change who may do what.
 	deniedActionPrefixes = map[string]bool{"iam": true, "sts": true, "kms": true, "organizations": true, "sso": true, "account": true}
 	arnOutputRE          = regexp.MustCompile(`^\$\{(aws_[a-z0-9_]+)\.([a-z0-9_]+)\.arn\}$`)
+	managedPolicyRE      = regexp.MustCompile(`^arn:aws:iam::aws:policy/[A-Za-z0-9_+=,.@-]+(/[A-Za-z0-9_+=,.@-]+)*$`)
+	clusterRE            = regexp.MustCompile(`^aws_eks_cluster\.([a-z0-9_]+)$`)
+	// Managed policies a template never attaches: they allow almost everything, or changing who may do what.
+	broadPolicies = map[string]bool{"AdministratorAccess": true, "PowerUserAccess": true, "IAMFullAccess": true}
 )
 
 // Pinned are the providers Forgeline allows, at the versions it pins. The AWS one must equal the blueprint package's
 // ProviderSource and ProviderVersion (a blueprint test checks it).
-var Pinned = map[string]Provider{"aws": {Source: "hashicorp/aws", Version: "~> 6.72"}}
+var Pinned = map[string]Provider{
+	"aws":        {Source: "hashicorp/aws", Version: "~> 6.72"},
+	"kubernetes": {Source: "hashicorp/kubernetes", Version: "~> 3.5"},
+}
+
+// ClusterReady is the variable a template with a Kubernetes stage declares: false until its cluster exists.
+const ClusterReady = "cluster_ready"
 
 // Load reads one template directory: template.json, diagram.json and main.tf.json.
 func Load(fsys fs.FS, dir string) (Template, error) {
@@ -176,6 +198,19 @@ func (t *Template) checkMeta(dir string) error {
 		if !serviceRE.MatchString(s) {
 			return fmt.Errorf("%s: passes_role_to: %q is not an AWS service principal such as lambda.amazonaws.com", dir, s)
 		}
+	}
+	for _, a := range t.AttachesPolicies {
+		name := a[strings.LastIndex(a, "/")+1:]
+		if !managedPolicyRE.MatchString(a) || broadPolicies[name] || strings.HasPrefix(name, "IAM") {
+			return fmt.Errorf("%s: attaches_policies: %q must be a narrow AWS managed policy ARN such as arn:aws:iam::aws:policy/AmazonEKSClusterPolicy", dir, a)
+		}
+	}
+	_, kube := t.Providers["kubernetes"]
+	switch {
+	case kube != (t.Kubernetes != nil):
+		return fmt.Errorf("%s: the kubernetes provider comes with \"kubernetes\": {\"cluster\": ...} and only with it", dir)
+	case t.Kubernetes != nil && !clusterRE.MatchString(t.Kubernetes.Cluster):
+		return fmt.Errorf("%s: kubernetes.cluster must be an aws_eks_cluster resource such as aws_eks_cluster.this", dir)
 	}
 	for name, p := range t.Providers {
 		pin, ok := Pinned[name]
@@ -344,6 +379,9 @@ func (t Template) CheckCode() error {
 			if section == "data" && secretReaders[typ] {
 				return fmt.Errorf("data %q would read a secret's value into the plan", typ)
 			}
+			if section == "data" && prov == "kubernetes" {
+				return fmt.Errorf("data %q: a template may not read from its cluster (there is none while the first stage plans)", typ)
+			}
 			for name, body := range items {
 				if hasKey(body, "provisioner") || hasKey(body, "connection") {
 					return fmt.Errorf("%s.%s.%s: provisioners are not allowed", section, typ, name)
@@ -354,7 +392,83 @@ func (t Template) CheckCode() error {
 			}
 		}
 	}
+	if err := t.checkAttachments(doc["resource"]); err != nil {
+		return err
+	}
+	if err := t.checkKubeStage(doc["resource"]); err != nil {
+		return err
+	}
 	return t.checkVariables(doc["variable"])
+}
+
+// checkAttachments allows only role attachments, each of a managed policy the template lists, written as a literal.
+func (t Template) checkAttachments(raw json.RawMessage) error {
+	var res map[string]map[string]map[string]any
+	if len(raw) > 0 {
+		if err := json.Unmarshal(raw, &res); err != nil {
+			return err
+		}
+	}
+	for typ, items := range res {
+		switch typ {
+		case "aws_iam_policy_attachment", "aws_iam_user_policy_attachment", "aws_iam_group_policy_attachment",
+			"aws_iam_role_policy_attachments_exclusive":
+			return fmt.Errorf("resource %q: a template attaches policies to its own roles only, with aws_iam_role_policy_attachment", typ)
+		case "aws_iam_role_policy_attachment":
+			for name, body := range items {
+				arn, _ := body["policy_arn"].(string)
+				if !contains(t.AttachesPolicies, arn) {
+					return fmt.Errorf("resource.%s.%s: policy_arn must be one of attaches_policies, written out", typ, name)
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// checkKubeStage checks a template with a Kubernetes stage: its cluster is declared and named var.name (so Forgeline
+// can find it), and every Kubernetes resource is made only once the cluster is ready and depends on the cluster (so
+// removal deletes it before the cluster).
+func (t Template) checkKubeStage(raw json.RawMessage) error {
+	if t.Kubernetes == nil {
+		return nil
+	}
+	var res map[string]map[string]map[string]any
+	if err := json.Unmarshal(raw, &res); err != nil {
+		return err
+	}
+	cl := clusterRE.FindStringSubmatch(t.Kubernetes.Cluster)
+	body, ok := res["aws_eks_cluster"][cl[1]]
+	if !ok {
+		return fmt.Errorf("kubernetes.cluster: %s is not declared", t.Kubernetes.Cluster)
+	}
+	if body["name"] != "${var.name}" {
+		return fmt.Errorf("resource.%s: name must be ${var.name}", t.Kubernetes.Cluster)
+	}
+	for typ, items := range res {
+		if !strings.HasPrefix(typ, "kubernetes_") {
+			continue
+		}
+		for name, body := range items {
+			at := "resource." + typ + "." + name
+			gate, _ := body["for_each"].(string)
+			if c, ok := body["count"].(string); ok {
+				gate = c
+			}
+			if !strings.Contains(gate, "var."+ClusterReady) {
+				return fmt.Errorf("%s: make it only when var.%s is true (in count or for_each)", at, ClusterReady)
+			}
+			deps, _ := body["depends_on"].([]any)
+			found := false
+			for _, d := range deps {
+				found = found || d == t.Kubernetes.Cluster
+			}
+			if !found {
+				return fmt.Errorf("%s: depends_on must name %s, so removal deletes it first", at, t.Kubernetes.Cluster)
+			}
+		}
+	}
+	return nil
 }
 
 func (t Template) checkTerraformBlock(raw json.RawMessage) error {
@@ -395,6 +509,12 @@ func (t Template) checkVariables(raw json.RawMessage) error {
 	want := map[string]string{}
 	for k, v := range standardVars {
 		want[k] = v
+	}
+	if t.Kubernetes != nil {
+		if t.Inputs.Properties[ClusterReady] != nil {
+			return fmt.Errorf("input %q: Forgeline sets it, not a person", ClusterReady)
+		}
+		want[ClusterReady] = "bool"
 	}
 	for name, p := range t.Inputs.Properties {
 		want[name] = p.tfType()

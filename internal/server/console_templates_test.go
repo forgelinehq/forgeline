@@ -129,7 +129,11 @@ func TestPassRoleFailureSaysWhatToAllow(t *testing.T) {
 	if !strings.Contains(got, "lambda.amazonaws.com") || !strings.Contains(got, "states.amazonaws.com") || !strings.Contains(got, "Building blueprints") || !strings.HasSuffix(got, aws) {
 		t.Errorf("hint = %s", got)
 	}
-	if other := tofuFailure("Error: something else broke", nil); strings.Contains(other, "PassedToService") {
+	attach := "Error: attaching policy: AccessDenied: User: arn:aws:sts::111122223333:assumed-role/X/y is not authorized to perform: iam:AttachRolePolicy on resource: role fl-1-k8s-nodes"
+	if got := tofuFailure(attach, nil); !strings.Contains(got, "AmazonEKS_CNI_Policy") || !strings.Contains(got, "iam:PolicyARN") || !strings.HasSuffix(got, attach) {
+		t.Errorf("attach hint = %s", got)
+	}
+	if other := tofuFailure("Error: something else broke", nil); strings.Contains(other, "PassedToService") || strings.Contains(other, "PolicyARN") {
 		t.Errorf("a hint on another error: %s", other)
 	}
 }

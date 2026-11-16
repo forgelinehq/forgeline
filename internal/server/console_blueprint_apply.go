@@ -420,7 +420,7 @@ func (s *Server) quotaFindings(ctx context.Context, st awsSettings, changes []Pl
 func (s *Server) planCode(b StoredBlueprint, plan *storedPlan, state string) ([]byte, error) {
 	switch plan.Removal {
 	case "":
-		return b.Tofu()
+		return b.TofuFrom([]byte(state))
 	case "keep-data":
 		plan.Removal = blueprint.RemoveKeepData
 	case "everything":
@@ -436,7 +436,7 @@ func (s *Server) planCode(b StoredBlueprint, plan *storedPlan, state string) ([]
 			plan.Removal = blueprint.RemoveUnprotect
 		}
 	}
-	return b.RemovalTofu(plan.Removal, plan.FinalSnapshot)
+	return b.RemovalTofuFrom(plan.Removal, plan.FinalSnapshot, []byte(state))
 }
 
 // planChanges reads `tofu show -json` of a plan: the managed resources it would add, change, replace or remove.

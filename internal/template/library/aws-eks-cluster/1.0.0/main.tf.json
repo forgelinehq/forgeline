@@ -1,0 +1,375 @@
+{
+  "terraform": {
+    "required_providers": {
+      "aws": {
+        "source": "hashicorp/aws",
+        "version": "~> 6.72"
+      },
+      "kubernetes": {
+        "source": "hashicorp/kubernetes",
+        "version": "~> 3.5"
+      }
+    }
+  },
+  "variable": {
+    "name": {
+      "type": "string",
+      "description": "Set by Forgeline: the cluster's name, unique in the account."
+    },
+    "tags": {
+      "type": "map(string)",
+      "description": "Set by Forgeline."
+    },
+    "cluster_ready": {
+      "type": "bool",
+      "description": "Set by Forgeline: true once the cluster exists, so the namespaces can be planned."
+    },
+    "namespaces": {
+      "type": "map(string)"
+    },
+    "namespace_editors": {
+      "type": "map(string)",
+      "default": {}
+    },
+    "admin_role_arn": {
+      "type": "string",
+      "default": ""
+    },
+    "instance_type": {
+      "type": "string"
+    },
+    "nodes": {
+      "type": "number"
+    },
+    "spot": {
+      "type": "bool"
+    },
+    "kubernetes_version": {
+      "type": "string",
+      "default": ""
+    },
+    "log_retention_days": {
+      "type": "number"
+    }
+  },
+  "data": {
+    "aws_region": {
+      "current": {}
+    },
+    "aws_vpc": {
+      "default": {
+        "default": true
+      }
+    },
+    "aws_subnets": {
+      "default": {
+        "filter": [
+          {
+            "name": "vpc-id",
+            "values": [
+              "${data.aws_vpc.default.id}"
+            ]
+          },
+          {
+            "name": "default-for-az",
+            "values": [
+              "true"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "locals": {
+    "arm": "${can(regex(\"^[a-z]+[0-9]+g[a-z]*\\\\.\", var.instance_type))}",
+    "quota": {
+      "small": {
+        "requests.cpu": "2",
+        "requests.memory": "4Gi",
+        "limits.cpu": "4",
+        "limits.memory": "8Gi",
+        "pods": "20"
+      },
+      "medium": {
+        "requests.cpu": "4",
+        "requests.memory": "8Gi",
+        "limits.cpu": "8",
+        "limits.memory": "16Gi",
+        "pods": "50"
+      },
+      "large": {
+        "requests.cpu": "8",
+        "requests.memory": "16Gi",
+        "limits.cpu": "16",
+        "limits.memory": "32Gi",
+        "pods": "100"
+      }
+    },
+    "editors": "${{ for ns, role in var.namespace_editors : role => ns... }}",
+    "reserved": [
+      "default",
+      "kube-system",
+      "kube-public",
+      "kube-node-lease"
+    ]
+  },
+  "resource": {
+    "aws_cloudwatch_log_group": {
+      "cluster": {
+        "name": "/aws/eks/${var.name}/cluster",
+        "retention_in_days": "${var.log_retention_days}",
+        "tags": "${var.tags}"
+      }
+    },
+    "aws_iam_role": {
+      "cluster": {
+        "name": "${substr(var.name, 0, 55)}-cluster",
+        "assume_role_policy": "${jsonencode({Version = \"2012-10-17\", Statement = [{Effect = \"Allow\", Principal = {Service = \"eks.amazonaws.com\"}, Action = [\"sts:AssumeRole\", \"sts:TagSession\"]}]})}",
+        "tags": "${var.tags}"
+      },
+      "nodes": {
+        "name": "${substr(var.name, 0, 57)}-nodes",
+        "assume_role_policy": "${jsonencode({Version = \"2012-10-17\", Statement = [{Effect = \"Allow\", Principal = {Service = \"ec2.amazonaws.com\"}, Action = \"sts:AssumeRole\"}]})}",
+        "tags": "${var.tags}"
+      }
+    },
+    "aws_iam_role_policy_attachment": {
+      "cluster": {
+        "role": "${aws_iam_role.cluster.name}",
+        "policy_arn": "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
+      },
+      "nodes_worker": {
+        "role": "${aws_iam_role.nodes.name}",
+        "policy_arn": "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
+      },
+      "nodes_cni": {
+        "role": "${aws_iam_role.nodes.name}",
+        "policy_arn": "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
+      },
+      "nodes_pull": {
+        "role": "${aws_iam_role.nodes.name}",
+        "policy_arn": "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryPullOnly"
+      }
+    },
+    "aws_eks_cluster": {
+      "this": {
+        "name": "${var.name}",
+        "role_arn": "${aws_iam_role.cluster.arn}",
+        "version": "${var.kubernetes_version == \"\" ? null : var.kubernetes_version}",
+        "enabled_cluster_log_types": [
+          "audit",
+          "authenticator"
+        ],
+        "vpc_config": {
+          "subnet_ids": "${data.aws_subnets.default.ids}",
+          "endpoint_public_access": true,
+          "endpoint_private_access": true
+        },
+        "access_config": {
+          "authentication_mode": "API",
+          "bootstrap_cluster_creator_admin_permissions": true
+        },
+        "upgrade_policy": {
+          "support_type": "STANDARD"
+        },
+        "tags": "${var.tags}",
+        "depends_on": [
+          "aws_iam_role_policy_attachment.cluster",
+          "aws_cloudwatch_log_group.cluster"
+        ],
+        "lifecycle": {
+          "precondition": [
+            {
+              "condition": "${length(setintersection(keys(var.namespaces), local.reserved)) == 0}",
+              "error_message": "default, kube-system, kube-public and kube-node-lease belong to Kubernetes: name the namespaces something else."
+            },
+            {
+              "condition": "${length(setsubtract(keys(var.namespace_editors), keys(var.namespaces))) == 0}",
+              "error_message": "Every namespace with an editor must be one of the namespaces."
+            },
+            {
+              "condition": "${var.admin_role_arn == \"\" || !contains(values(var.namespace_editors), var.admin_role_arn)}",
+              "error_message": "The administrator role already edits every namespace: do not also name it as a namespace editor."
+            }
+          ]
+        }
+      }
+    },
+    "aws_eks_addon": {
+      "vpc_cni": {
+        "cluster_name": "${aws_eks_cluster.this.name}",
+        "addon_name": "vpc-cni",
+        "configuration_values": "${jsonencode({enableNetworkPolicy = \"true\"})}",
+        "resolve_conflicts_on_create": "OVERWRITE",
+        "resolve_conflicts_on_update": "OVERWRITE",
+        "tags": "${var.tags}"
+      }
+    },
+    "aws_eks_node_group": {
+      "nodes": {
+        "cluster_name": "${aws_eks_cluster.this.name}",
+        "node_group_name": "nodes",
+        "node_role_arn": "${aws_iam_role.nodes.arn}",
+        "subnet_ids": "${data.aws_subnets.default.ids}",
+        "instance_types": [
+          "${var.instance_type}"
+        ],
+        "ami_type": "${local.arm ? \"AL2023_ARM_64_STANDARD\" : \"AL2023_x86_64_STANDARD\"}",
+        "capacity_type": "${var.spot ? \"SPOT\" : \"ON_DEMAND\"}",
+        "scaling_config": {
+          "desired_size": "${var.nodes}",
+          "min_size": "${var.nodes}",
+          "max_size": "${var.nodes}"
+        },
+        "update_config": {
+          "max_unavailable": 1
+        },
+        "tags": "${var.tags}",
+        "depends_on": [
+          "aws_iam_role_policy_attachment.nodes_worker",
+          "aws_iam_role_policy_attachment.nodes_cni",
+          "aws_iam_role_policy_attachment.nodes_pull",
+          "aws_eks_addon.vpc_cni"
+        ]
+      }
+    },
+    "aws_eks_access_entry": {
+      "admin": {
+        "count": "${var.admin_role_arn == \"\" ? 0 : 1}",
+        "cluster_name": "${aws_eks_cluster.this.name}",
+        "principal_arn": "${var.admin_role_arn}",
+        "tags": "${var.tags}"
+      },
+      "editors": {
+        "for_each": "${local.editors}",
+        "cluster_name": "${aws_eks_cluster.this.name}",
+        "principal_arn": "${each.key}",
+        "tags": "${var.tags}"
+      }
+    },
+    "aws_eks_access_policy_association": {
+      "admin": {
+        "count": "${var.admin_role_arn == \"\" ? 0 : 1}",
+        "cluster_name": "${aws_eks_cluster.this.name}",
+        "principal_arn": "${aws_eks_access_entry.admin[0].principal_arn}",
+        "policy_arn": "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy",
+        "access_scope": {
+          "type": "cluster"
+        }
+      },
+      "editors": {
+        "for_each": "${local.editors}",
+        "cluster_name": "${aws_eks_cluster.this.name}",
+        "principal_arn": "${aws_eks_access_entry.editors[each.key].principal_arn}",
+        "policy_arn": "arn:aws:eks::aws:cluster-access-policy/AmazonEKSEditPolicy",
+        "access_scope": {
+          "type": "namespace",
+          "namespaces": "${each.value}"
+        }
+      }
+    },
+    "kubernetes_namespace_v1": {
+      "this": {
+        "for_each": "${var.cluster_ready ? var.namespaces : {}}",
+        "metadata": {
+          "name": "${each.key}",
+          "labels": {
+            "app.kubernetes.io/managed-by": "forgeline"
+          }
+        },
+        "depends_on": [
+          "aws_eks_cluster.this",
+          "aws_eks_addon.vpc_cni"
+        ]
+      }
+    },
+    "kubernetes_resource_quota_v1": {
+      "this": {
+        "for_each": "${var.cluster_ready ? var.namespaces : {}}",
+        "metadata": {
+          "name": "quota",
+          "namespace": "${kubernetes_namespace_v1.this[each.key].metadata[0].name}"
+        },
+        "spec": {
+          "hard": "${local.quota[each.value]}"
+        },
+        "depends_on": [
+          "aws_eks_cluster.this",
+          "aws_eks_addon.vpc_cni"
+        ]
+      }
+    },
+    "kubernetes_limit_range_v1": {
+      "this": {
+        "for_each": "${var.cluster_ready ? var.namespaces : {}}",
+        "metadata": {
+          "name": "defaults",
+          "namespace": "${kubernetes_namespace_v1.this[each.key].metadata[0].name}"
+        },
+        "spec": {
+          "limit": {
+            "type": "Container",
+            "default": {
+              "cpu": "500m",
+              "memory": "512Mi"
+            },
+            "default_request": {
+              "cpu": "100m",
+              "memory": "128Mi"
+            }
+          }
+        },
+        "depends_on": [
+          "aws_eks_cluster.this",
+          "aws_eks_addon.vpc_cni"
+        ]
+      }
+    },
+    "kubernetes_network_policy_v1": {
+      "this": {
+        "for_each": "${var.cluster_ready ? var.namespaces : {}}",
+        "metadata": {
+          "name": "own-namespace-only",
+          "namespace": "${kubernetes_namespace_v1.this[each.key].metadata[0].name}"
+        },
+        "spec": {
+          "pod_selector": {},
+          "policy_types": [
+            "Ingress"
+          ],
+          "ingress": {
+            "from": {
+              "pod_selector": {}
+            }
+          }
+        },
+        "depends_on": [
+          "aws_eks_cluster.this",
+          "aws_eks_addon.vpc_cni"
+        ]
+      }
+    }
+  },
+  "output": {
+    "cluster_name": {
+      "description": "The EKS cluster's name",
+      "value": "${aws_eks_cluster.this.name}"
+    },
+    "cluster_arn": {
+      "description": "The EKS cluster's ARN",
+      "value": "${aws_eks_cluster.this.arn}"
+    },
+    "endpoint": {
+      "description": "The Kubernetes API address",
+      "value": "${aws_eks_cluster.this.endpoint}"
+    },
+    "namespaces": {
+      "description": "The namespaces it made",
+      "value": "${join(\", \", sort(keys(var.namespaces)))}"
+    },
+    "connect": {
+      "description": "How to point kubectl at it",
+      "value": "aws eks update-kubeconfig --name ${aws_eks_cluster.this.name} --region ${data.aws_region.current.region}"
+    }
+  }
+}

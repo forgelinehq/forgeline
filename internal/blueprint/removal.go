@@ -3,6 +3,8 @@ package blueprint
 import (
 	"encoding/json"
 	"fmt"
+
+	"github.com/forgelinehq/forgeline/internal/template"
 )
 
 // Removing what a blueprint built (design note 041). A removal is an ordinary plan of different code, so it goes
@@ -33,7 +35,18 @@ func HoldsData(kind string) bool {
 // RemovalTofu is the code whose plan removes what the blueprint built, for one stage. finalSnapshot keeps a last
 // snapshot of each database when it is deleted (it costs a little storage until someone deletes it in AWS).
 func (b Blueprint) RemovalTofu(stage string, finalSnapshot bool) ([]byte, error) {
+	return b.RemovalTofuFrom(stage, finalSnapshot, nil)
+}
+
+// RemovalTofuFrom is RemovalTofu for a blueprint with this OpenTofu state. A template block with a built cluster is
+// dropped like any other, but its Kubernetes provider stays configured, so OpenTofu can delete what it made in the
+// cluster before the cluster.
+func (b Blueprint) RemovalTofuFrom(stage string, finalSnapshot bool, state []byte) ([]byte, error) {
 	if err := b.Validate(); err != nil {
+		return nil, err
+	}
+	built, err := builtAddresses(state)
+	if err != nil {
 		return nil, err
 	}
 	kept := b
@@ -56,13 +69,23 @@ func (b Blueprint) RemovalTofu(stage string, finalSnapshot bool) ([]byte, error)
 	default:
 		return nil, fmt.Errorf("removal: unknown stage %q", stage)
 	}
-	return kept.tofu(removal{unprotect: stage == RemoveUnprotect, finalSnapshot: finalSnapshot})
+	rm := removal{unprotect: stage == RemoveUnprotect, finalSnapshot: finalSnapshot}
+	for _, bl := range b.Blocks {
+		if bl.Kind != KindTemplate {
+			continue
+		}
+		if t, err := template.Get(bl.Template); err == nil && t.Kubernetes != nil && built["module."+bl.ID+"."+t.Kubernetes.Cluster] {
+			rm.kube = append(rm.kube, bl)
+		}
+	}
+	return kept.tofu(rm, built)
 }
 
 // removal changes how data blocks are generated for step 1 of removing everything.
 type removal struct {
 	unprotect     bool
 	finalSnapshot bool
+	kube          []Block // dropped template blocks whose cluster is built: their Kubernetes provider stays
 }
 
 // NeedsUnprotect reads a blueprint's OpenTofu state and says whether something in it must have its protection

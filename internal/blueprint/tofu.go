@@ -22,26 +22,71 @@ type obj = map[string]any
 
 // Tofu returns the blueprint as an OpenTofu configuration in JSON syntax (main.tf.json). The blueprint must be
 // valid. Everything a person typed is escaped, so OpenTofu never evaluates it.
-func (b Blueprint) Tofu() ([]byte, error) {
+func (b Blueprint) Tofu() ([]byte, error) { return b.TofuFrom(nil) }
+
+// TofuFrom is Tofu for a blueprint that has this OpenTofu state (nil before it is built). A template's Kubernetes
+// stage is in the code only once its cluster is in the state: before that, a plan cannot reach the cluster.
+func (b Blueprint) TofuFrom(state []byte) ([]byte, error) {
 	if err := b.Validate(); err != nil {
 		return nil, err
 	}
-	return b.tofu(removal{})
+	built, err := builtAddresses(state)
+	if err != nil {
+		return nil, err
+	}
+	return b.tofu(removal{}, built)
 }
 
-func (b Blueprint) tofu(rm removal) ([]byte, error) {
-	g := gen{b: b, rm: rm, res: obj{}, data: obj{}, out: obj{}, mod: obj{}, byID: map[string]Block{}}
+// builtAddresses reads the managed resources in an OpenTofu state, as module.<name>.<type>.<name> or <type>.<name>.
+func builtAddresses(state []byte) (map[string]bool, error) {
+	out := map[string]bool{}
+	if len(state) == 0 {
+		return out, nil
+	}
+	var s struct {
+		Resources []struct {
+			Module, Mode, Type, Name string
+			Instances                []json.RawMessage
+		}
+	}
+	if err := json.Unmarshal(state, &s); err != nil {
+		return nil, fmt.Errorf("the saved state could not be read: %w", err)
+	}
+	for _, r := range s.Resources {
+		if r.Mode != "managed" || len(r.Instances) == 0 {
+			continue
+		}
+		addr := r.Type + "." + r.Name
+		if r.Module != "" {
+			addr = r.Module + "." + addr
+		}
+		out[addr] = true
+	}
+	return out, nil
+}
+
+func (b Blueprint) tofu(rm removal, built map[string]bool) ([]byte, error) {
+	g := gen{b: b, rm: rm, built: built, res: obj{}, data: obj{}, out: obj{}, mod: obj{}, byID: map[string]Block{}}
 	sum := sha256.Sum256([]byte(b.ID))
 	g.short = hex.EncodeToString(sum[:])[:6]
 	for _, bl := range b.Blocks {
 		g.byID[bl.ID] = bl
 	}
 	g.build()
+	for _, bl := range rm.kube {
+		g.kubeProvider(bl)
+	}
+	providers := obj{"aws": obj{"source": ProviderSource, "version": ProviderVersion}}
 	doc := obj{
-		"terraform": obj{"required_providers": obj{"aws": obj{"source": ProviderSource, "version": ProviderVersion}}},
+		"terraform": obj{"required_providers": providers},
 		"provider": obj{"aws": obj{"region": b.Target.Region, "default_tags": obj{"tags": obj{
 			"forgeline:blueprint": esc(b.ID), "forgeline:managed-by": "forgeline",
 		}}}},
+	}
+	if len(g.kube) > 0 {
+		k := template.Pinned["kubernetes"]
+		providers["kubernetes"] = obj{"source": k.Source, "version": k.Version}
+		doc["provider"].(obj)["kubernetes"] = g.kube
 	}
 	if len(g.res) > 0 {
 		doc["resource"] = g.res
@@ -74,6 +119,8 @@ type gen struct {
 	out   obj
 	mod   obj // template blocks: module name -> call
 	byID  map[string]Block
+	built map[string]bool // resource addresses in the blueprint's state
+	kube  []obj           // Kubernetes provider configurations, one per template block with a cluster
 }
 
 func (g *gen) add(kind, name string, body obj) {
@@ -426,7 +473,7 @@ func envName(kind, id string) string {
 func (g *gen) service(bl Block) {
 	exec, task := bl.ID+"_exec", bl.ID+"_task"
 	g.add("aws_iam_role", exec, obj{"name": g.awsName(bl.ID+"-exec", 64), "assume_role_policy": "${data.aws_iam_policy_document.ecs_tasks_assume.json}", "tags": tags(bl)})
-	g.add("aws_iam_role_policy_attachment", exec, obj{"role": ref("aws_iam_role", exec, "name"), "policy_arn": "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"})
+	g.add("aws_iam_role_policy_attachment", exec, obj{"role": ref("aws_iam_role", exec, "name"), "policy_arn": ecsExecutionPolicy})
 	g.add("aws_iam_role", task, obj{"name": g.awsName(bl.ID+"-task", 64), "assume_role_policy": "${data.aws_iam_policy_document.ecs_tasks_assume.json}", "tags": tags(bl)})
 
 	env := map[string]string{}
@@ -878,6 +925,11 @@ func (g *gen) template(bl Block) {
 	for k, v := range lists {
 		call[k] = v
 	}
+	if t.Kubernetes != nil {
+		call[template.ClusterReady] = g.clusterBuilt(bl, t)
+		call["providers"] = obj{"aws": "aws", "kubernetes": "kubernetes." + bl.ID}
+		g.kubeProvider(bl)
+	}
 	g.mod[bl.ID] = call
 	var code struct {
 		Output map[string]struct {
@@ -888,6 +940,27 @@ func (g *gen) template(bl Block) {
 	for name, o := range code.Output {
 		g.out[bl.ID+"_"+name] = obj{"description": esc(bl.Name) + ": " + o.Description, "value": "${module." + bl.ID + "." + name + "}"}
 	}
+}
+
+// clusterBuilt says whether a template block's cluster is in the blueprint's state.
+func (g *gen) clusterBuilt(bl Block, t template.Template) bool {
+	return g.built["module."+bl.ID+"."+t.Kubernetes.Cluster]
+}
+
+// kubeProvider configures the Kubernetes provider for a template block's cluster. Until the cluster is built it is
+// empty (the module makes no Kubernetes resources then). Once built, it reads the cluster by name and signs in with
+// a token fetched when OpenTofu runs: one fetched while planning would expire before someone approves.
+func (g *gen) kubeProvider(bl Block) {
+	cfg := obj{"alias": bl.ID}
+	if t, err := template.Get(bl.Template); err == nil && t.Kubernetes != nil && g.clusterBuilt(bl, t) {
+		name := g.awsName(bl.ID, 64)
+		g.addData("aws_eks_cluster", bl.ID, obj{"name": name})
+		cfg["host"] = "${data.aws_eks_cluster." + bl.ID + ".endpoint}"
+		cfg["cluster_ca_certificate"] = "${base64decode(data.aws_eks_cluster." + bl.ID + ".certificate_authority[0].data)}"
+		cfg["exec"] = obj{"api_version": "client.authentication.k8s.io/v1beta1", "command": "aws",
+			"args": []string{"eks", "get-token", "--cluster-name", name, "--region", g.b.Target.Region, "--output", "json"}}
+	}
+	g.kube = append(g.kube, cfg)
 }
 
 // ModulesFor returns the template modules a generated main.tf.json calls, by path, from the module sources in it. It
@@ -934,6 +1007,30 @@ func PassRoleServices() ([]string, error) {
 	out := make([]string, 0, len(set))
 	for s := range set {
 		out = append(out, s)
+	}
+	sort.Strings(out)
+	return out, nil
+}
+
+const ecsExecutionPolicy = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+
+// AttachedPolicies are the AWS managed policies the code Forgeline generates may attach to fl-* roles: the ECS task
+// execution policy for app blocks, and those the library templates list. The setup guide's attach statement lists
+// exactly these (a test checks it).
+func AttachedPolicies() ([]string, error) {
+	set := map[string]bool{ecsExecutionPolicy: true}
+	all, err := template.Library()
+	if err != nil {
+		return nil, err
+	}
+	for _, t := range all {
+		for _, p := range t.AttachesPolicies {
+			set[p] = true
+		}
+	}
+	out := make([]string, 0, len(set))
+	for p := range set {
+		out = append(out, p)
 	}
 	sort.Strings(out)
 	return out, nil

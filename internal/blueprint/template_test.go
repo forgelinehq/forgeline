@@ -255,7 +255,7 @@ func TestSetupGuidePolicyCoversEveryService(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var found []string
+	var found, attach []string
 	for _, block := range strings.Split(string(guide), "```json")[1:] {
 		var doc struct {
 			Statement []struct {
@@ -273,7 +273,20 @@ func TestSetupGuidePolicyCoversEveryService(t *testing.T) {
 					found = append(found, fmt.Sprint(v))
 				}
 			}
+			if fmt.Sprint(s.Action) == "[iam:AttachRolePolicy iam:DetachRolePolicy]" {
+				list, _ := s.Condition["ArnEquals"]["iam:PolicyARN"].([]any)
+				for _, v := range list {
+					attach = append(attach, fmt.Sprint(v))
+				}
+			}
 		}
+	}
+	policies, err := AttachedPolicies()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(attach, ",") != strings.Join(policies, ",") {
+		t.Errorf("the guide's policy may attach %v; the code attaches exactly %v (sorted)", attach, policies)
 	}
 	want, err := PassRoleServices()
 	if err != nil {
