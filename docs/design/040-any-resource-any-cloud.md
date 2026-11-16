@@ -160,6 +160,9 @@ Athena workgroup (results in the same bucket, a limit on the data one query may 
 - **Firehose needs a role passed to it**, so `firehose.amazonaws.com` joins the setup guide's PassRole list (an IAM
   change on existing installations, which the error hint names).
 
+Built (#143) and checked on real AWS ([2026-11-16](../testing/2026-11-16-data-pipeline.md)): an app's own role sent records
+and was refused an action the template does not grant; Athena returned them by day; everything was removed.
+
 The first template is **AWS Lambda function** (`aws-lambda-function`), chosen by the maintainer because it can be built
 on real AWS now: a container image from ECR, its own log group and role, a schedule, queues that trigger it, and the
 tables, buckets, queues and secrets it uses. The AgentCore agent template follows once the account's AgentCore quota is
