@@ -135,6 +135,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("DELETE /v1/blueprints/{id}", s.requireRole(authn.Developer, s.handleDeleteBlueprint))
 	mux.Handle("GET /v1/blueprints/{id}/code", s.requireRole(authn.Developer, s.handleBlueprintCode))
 	mux.Handle("GET /v1/blueprints/{id}/blocks/{block}/delivery", s.requireRole(authn.Developer, s.handleBlueprintDelivery))
+	mux.Handle("POST /v1/blueprints/suggest-source", s.requireRole(authn.Developer, s.handleSuggestSource))
 	mux.Handle("GET /v1/blueprints/{id}/blocks/{block}/images", s.requireRole(authn.Developer, s.handleBlockImages))
 	mux.Handle("POST /v1/blueprints/{id}/blocks/{block}/image", s.requireRole(authn.Developer, s.handleUseBlockImage))
 	mux.Handle("POST /v1/blueprints/{id}/plan", s.requireRole(authn.Developer, s.handlePlanBlueprint))

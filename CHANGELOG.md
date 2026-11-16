@@ -62,6 +62,10 @@ section in the pull request that makes the change; a release moves it under its 
 - **After a session ends**, the console stops polling the server (it asked every minute, forever).
 
 ### Added
+- **Which repository fits a block.** Under Code, **Suggest a repository…** reads the Dockerfiles in the repositories on
+  the GitHub allow list and lists the folders that fit the app, agent or Lambda function, with why (its port, a Lambda
+  base image, the AgentCore SDK, arm64, the block's name, the language). **Use** fills in the repository, branch and
+  folder (`POST /v1/blueprints/suggest-source`).
 - **Run a new image in one step.** A built app, agent or Lambda template with a source repository has **Run a new
   image…** on the design canvas: the images pushed to its own ECR repository, newest first, the running one marked.
   Picking one saves the blueprint with it and starts the preview; approving that preview is what runs it. Only images

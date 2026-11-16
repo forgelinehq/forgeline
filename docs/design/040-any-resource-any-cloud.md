@@ -15,8 +15,8 @@ suggests the workflow (actions pinned to commit SHAs; arm64 for agents) for a pe
 Forgeline pipeline that starts it; running a new image stays a previewed, approved blueprint change. **Built 2026-11-16: moving a block to a newly pushed
 image in one step** ("Run a new image…": the images in the block's own repository, newest first; picking one saves the
 blueprint with it and starts the preview; only that repository's images are accepted; checked on real AWS,
-[2026-11-16](../testing/2026-11-16-run-new-image.md)). Still to do: reading the
-repository to suggest which one fits a block. Extends notes 035 and 039. Builds in the order under "Plan".
+[2026-11-16](../testing/2026-11-16-run-new-image.md)). **Built 2026-11-16: which repository fits a block** (see
+"Suggesting a repository" under layer 3). Extends notes 035 and 039. Builds in the order under "Plan".
 
 ## Question
 
@@ -152,6 +152,18 @@ read), a path and a branch. Forgeline then:
   image through a proposal), using the read-only repository lookups the assistant already has;
 - suggests which repository fits a block by reading Dockerfiles and manifests, and says why;
 - never pushes to the repository; changes to it are pull requests a person merges.
+
+**Suggesting a repository (decided 2026-11-16).** No model reads the repositories: Forgeline parses them. For each
+repository on the GitHub allow list it reads the file tree of the default branch (or, when the allow list does not let
+that branch run, the first branch the list names outright) and up to 5 `Dockerfile`s per repository, 25 in all, at most
+4 folders deep, skipping `node_modules`, `vendor`, `testdata`, `third_party`. From each it takes facts only: the ports
+it exposes, whether the final stage starts from an AWS Lambda base image, whether it builds for arm64, whether it
+installs the Bedrock AgentCore or Strands Agents SDK, and which manifests sit beside it (the language). A folder is scored
+against the block: an app wants its port and not a Lambda image; an agent wants the SDK, port 8080 and arm64; a Lambda
+function wants a Lambda base image; words of the block's name in the repository name or path add to it. Each suggestion
+says why in fixed sentences; the repository's own text is never returned, so a hostile Dockerfile cannot put words in
+the console. Using one fills in the block's Code fields, and nothing is saved until the person saves. Only files named
+`Dockerfile` count, because the suggested build uses the folder as its context with the default file name.
 
 ### 4. Guardrails on every plan
 

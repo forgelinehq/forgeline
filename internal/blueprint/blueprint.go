@@ -148,6 +148,16 @@ type Source struct {
 	Path   string `json:"path,omitempty"`   // the folder with the Dockerfile; default the top
 }
 
+// ValidBranch says whether a source may name this branch.
+func ValidBranch(b string) bool {
+	return branchRE.MatchString(b) && !strings.Contains(b, "..") && !strings.HasPrefix(b, "/") && !strings.HasSuffix(b, "/")
+}
+
+// ValidSourcePath says whether a source may name this folder ("" is the top of the repository).
+func ValidSourcePath(p string) bool {
+	return srcPathRE.MatchString(p) && !strings.Contains(p, "..") && !strings.HasPrefix(p, "/")
+}
+
 // BranchOr is the branch, or main when none is set.
 func (s Source) BranchOr() string {
 	if s.Branch == "" {
@@ -477,9 +487,9 @@ func (bl Block) validate(at string) error {
 		switch {
 		case !repoRE.MatchString(s.Repo):
 			return fmt.Errorf("%s.source.repo: a GitHub repository as owner/name", at)
-		case s.Branch != "" && (!branchRE.MatchString(s.Branch) || strings.Contains(s.Branch, "..") || strings.HasPrefix(s.Branch, "/") || strings.HasSuffix(s.Branch, "/")):
+		case s.Branch != "" && !ValidBranch(s.Branch):
 			return fmt.Errorf("%s.source.branch: a branch name such as main", at)
-		case !srcPathRE.MatchString(s.Path) || strings.Contains(s.Path, "..") || strings.HasPrefix(s.Path, "/"):
+		case !ValidSourcePath(s.Path):
 			return fmt.Errorf("%s.source.path: a folder inside the repository, such as services/api", at)
 		}
 	}
