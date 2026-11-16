@@ -138,6 +138,28 @@ regular task. Service Connect is left out: apps already call each other by name 
 namespace, and Service Connect would add a proxy to every task mainly for metrics and retries. Built and checked on real
 AWS (#137, [2026-11-16](../testing/2026-11-16-step-functions-template.md#fargate-spot-137-same-day)).
 
+**The data pipeline template and writer links (step 5, first part; decided 2026-11-16).** `aws-data-pipeline` takes
+records apps send it, through Amazon Data Firehose (optionally passed through a linked Lambda function template that
+reshapes them), and stores them as JSON in a **linked bucket block**, under `<name>/year=…/month=…/day=…/`. A Glue
+catalog table over that prefix (columns from an input, partitions found by projection, so no crawler runs) and an
+Athena workgroup (results in the same bucket, a limit on the data one query may scan) make it queryable. Choices:
+
+- **The data lives in an ordinary bucket block, not in the template.** Removal keeps data by block kind (note 041): a
+  bucket block is protected and kept by "keep the data", while a template's own resources cannot carry
+  `prevent_destroy` per blueprint. So a template that would hold data links to the block that holds it.
+- **Link roles may say how many links they need** (`min`, `max`): the pipeline needs exactly one bucket and at most one
+  transform. Validation refuses a blueprint with fewer or more.
+- **Writer links: an app sends data into a template.** A role with the new shape `writer` (direction in, kinds
+  `service`) names the actions an app gets (`actions`, no wildcards, no IAM, STS, KMS or Organizations actions), the
+  template output holding the ARN they apply to (`output`), and the output whose value the app gets as an environment
+  variable (`env_output`, named `<BLOCK>_<env_suffix>`, such as `EVENTS_STREAM`). The output named in `output` must be
+  the `.arn` of a resource the template itself declares, checked when the template loads, so a template cannot hand an
+  app rights on `*` or on something outside itself. The generator adds exactly that statement to the app's task role.
+  This is a trust-model change: a reviewed template now decides a few actions in an app's role, always on its own
+  resource. It is mutation-tested.
+- **Firehose needs a role passed to it**, so `firehose.amazonaws.com` joins the setup guide's PassRole list (an IAM
+  change on existing installations, which the error hint names).
+
 The first template is **AWS Lambda function** (`aws-lambda-function`), chosen by the maintainer because it can be built
 on real AWS now: a container image from ECR, its own log group and role, a schedule, queues that trigger it, and the
 tables, buckets, queues and secrets it uses. The AgentCore agent template follows once the account's AgentCore quota is

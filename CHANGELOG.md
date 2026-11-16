@@ -62,6 +62,12 @@ section in the pull request that makes the change; a release moves it under its 
 - **After a session ends**, the console stops polling the server (it asked every minute, forever).
 
 ### Added
+- **A data pipeline template.** Apps send records to it, an optional Lambda function reshapes them, and Amazon Data
+  Firehose stores them as JSON in a linked bucket, by day; a Glue table and an Athena workgroup make them queryable.
+  To make this possible, templates gained **writer links** (an app's role gets exactly the actions the template lists,
+  only on a resource the template declares, never IAM, STS or KMS actions, and the app gets its name as
+  `<BLOCK>_<SUFFIX>`) and **link counts** (`min`, `max`). The setup guide's role policy now also passes roles to
+  `firehose.amazonaws.com`.
 - **Which repository fits a block.** Under Code, **Suggest a repository…** reads the Dockerfiles in the repositories on
   the GitHub allow list and lists the folders that fit the app, agent or Lambda function, with why (its port, a Lambda
   base image, the AgentCore SDK, arm64, the block's name, the language). **Use** fills in the repository, branch and

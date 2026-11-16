@@ -1,0 +1,9 @@
+{
+  "icon": "layers",
+  "links": [
+    {"name": "stores in", "direction": "out", "kinds": ["bucket"], "access": true, "variable": "store", "shape": "data", "min": 1, "max": 1},
+    {"name": "reshapes with", "direction": "out", "kinds": ["template:aws-lambda-function"], "access": false, "variable": "transform", "shape": "target", "output": "function_arn", "max": 1},
+    {"name": "sends to", "direction": "in", "kinds": ["service"], "access": false, "variable": "writers", "shape": "writer",
+     "output": "stream_arn", "env_output": "stream_name", "env_suffix": "STREAM", "actions": ["firehose:PutRecord", "firehose:PutRecordBatch"]}
+  ]
+}

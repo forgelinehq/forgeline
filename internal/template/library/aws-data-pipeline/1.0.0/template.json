@@ -1,0 +1,87 @@
+{
+  "name": "aws-data-pipeline",
+  "version": "1.0.0",
+  "title": "Data pipeline",
+  "summary": "Takes records that linked apps send, optionally reshapes them with a linked Lambda function, and stores them as JSON in a linked bucket, by day. A Glue table and an Athena workgroup make them queryable with SQL, with no crawler to run.",
+  "cloud": "aws",
+  "providers": {
+    "aws": {
+      "source": "hashicorp/aws",
+      "version": "~> 6.72"
+    }
+  },
+  "holds_data": false,
+  "passes_role_to": ["firehose.amazonaws.com"],
+  "checks": [
+    "Stores what it receives in its linked bucket every {buffer_seconds} seconds or {buffer_mb} MB, compressed, by day",
+    "Records are encrypted in transit and at rest",
+    "One Athena query may scan at most {scan_limit_gb} GB",
+    "Apps linked to it may only send records to it; the data stays in the bucket, which removal keeps"
+  ],
+  "inputs": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "columns"
+    ],
+    "properties": {
+      "columns": {
+        "type": "object",
+        "title": "Columns",
+        "maxProperties": 50,
+        "description": "The fields of each JSON record and their types, for the Athena table: string, bigint, double, boolean or timestamp.",
+        "propertyNames": {
+          "type": "string",
+          "pattern": "^[a-z_][a-z0-9_]{0,63}$",
+          "maxLength": 64
+        },
+        "additionalProperties": {
+          "type": "string",
+          "enum": [
+            "string",
+            "bigint",
+            "double",
+            "boolean",
+            "timestamp"
+          ]
+        }
+      },
+      "buffer_seconds": {
+        "type": "integer",
+        "title": "Store at least every (seconds)",
+        "minimum": 60,
+        "maximum": 900,
+        "default": 300
+      },
+      "buffer_mb": {
+        "type": "integer",
+        "title": "Or every (MB)",
+        "minimum": 1,
+        "maximum": 128,
+        "default": 5
+      },
+      "scan_limit_gb": {
+        "type": "integer",
+        "title": "Most data one query may scan (GB)",
+        "minimum": 1,
+        "maximum": 1000,
+        "default": 10
+      },
+      "log_retention_days": {
+        "type": "integer",
+        "title": "Keep delivery logs (days)",
+        "enum": [
+          1,
+          3,
+          5,
+          7,
+          14,
+          30,
+          60,
+          90
+        ],
+        "default": 14
+      }
+    }
+  }
+}

@@ -383,9 +383,42 @@ func (b Blueprint) Validate() error {
 			return fmt.Errorf("%s: a %s cannot link to a %s (a front door sends traffic to a service; a service uses data, a database, a cache or a secret, calls another service, or writes logs; an agent uses tables, buckets, queues and secrets)", at, from.Kind, to.Kind)
 		}
 	}
+	if err := b.checkRoleCounts(); err != nil {
+		return err
+	}
 	for i, bl := range b.Blocks {
 		if bl.Kind == KindFrontDoor && doors[bl.ID] != 1 {
 			return fmt.Errorf("blocks[%d]: front door %s must send its default traffic (a link without a path) to exactly one service", i, bl.ID)
+		}
+	}
+	return nil
+}
+
+// checkRoleCounts makes sure each template block has as many links of each role as its template needs and takes.
+func (b Blueprint) checkRoleCounts() error {
+	for i, tb := range b.Blocks {
+		if tb.Kind != KindTemplate {
+			continue
+		}
+		tpl, err := template.Get(tb.Template)
+		if err != nil {
+			continue // reported where the block is checked
+		}
+		for _, r := range tpl.Diagram.Links {
+			n := 0
+			for _, l := range b.Links {
+				switch {
+				case r.Direction == "out" && l.From == tb.ID && slices.Contains(r.Kinds, kindOf(blockByID(b, l.To))),
+					r.Direction == "in" && l.To == tb.ID && slices.Contains(r.Kinds, kindOf(blockByID(b, l.From))):
+					n++
+				}
+			}
+			switch {
+			case n < r.Min:
+				return fmt.Errorf("blocks[%d]: %s needs %d link%s of the kind \"%s\" (%s); it has %d", i, tb.Name, r.Min, map[bool]string{true: "", false: "s"}[r.Min == 1], r.Name, strings.Join(r.Kinds, " or "), n)
+			case r.Max > 0 && n > r.Max:
+				return fmt.Errorf("blocks[%d]: %s takes at most %d link%s of the kind \"%s\"; it has %d", i, tb.Name, r.Max, map[bool]string{true: "", false: "s"}[r.Max == 1], r.Name, n)
+			}
 		}
 	}
 	return nil
@@ -801,7 +834,11 @@ func (b Blueprint) Checks() []Check {
 				}
 			case l.To == tb.ID:
 				if role, found := tpl.Role("in", kindOf(blockByID(b, l.From))); found {
-					ok(l.From + " " + role.Name + " " + tb.Name + ".")
+					t := l.From + " " + role.Name + " " + tb.Name
+					if role.Shape == template.ShapeWriter {
+						t += " (its role may only " + strings.Join(role.Actions, ", ") + " on it)"
+					}
+					ok(t + ".")
 				}
 			}
 		}

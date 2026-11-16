@@ -22,6 +22,7 @@ const (
 	ShapeSecret = "secret" // a secret it reads: id, ARN, environment name
 	ShapeSource = "source" // something that drives it (a queue that triggers it): id, ARN
 	ShapeTarget = "target" // another template's block it calls: id, and the ARN from that template's named output
+	ShapeWriter = "writer" // an app that sends to it: id. The app's role gets the role's actions on the template's output ARN
 )
 
 // ShapeTypes are the OpenTofu types of the variables that receive each shape.
@@ -30,6 +31,7 @@ var ShapeTypes = map[string]string{
 	ShapeSecret: "list(object({id=string,arn=string,env=string}))",
 	ShapeSource: "list(object({id=string,arn=string}))",
 	ShapeTarget: "list(object({id=string,arn=string}))",
+	ShapeWriter: "list(object({id=string}))",
 }
 
 // Standard variables every template module declares; Forgeline sets them.
@@ -74,7 +76,15 @@ type LinkRole struct {
 	Access    bool     `json:"access"`    // the link takes read or readwrite
 	Variable  string   `json:"variable"`  // the module variable that receives the linked blocks
 	Shape     string   `json:"shape"`
-	Output    string   `json:"output,omitempty"` // target links: the linked template's output that holds its ARN
+	Output    string   `json:"output,omitempty"` // target links: the linked template's output that holds its ARN; writer links: this template's
+	// Writer links (an app sends to the template): the actions the app's role gets on the ARN in Output, and the output
+	// whose value the app gets as <BLOCK>_<EnvSuffix>.
+	Actions   []string `json:"actions,omitempty"`
+	EnvOutput string   `json:"env_output,omitempty"`
+	EnvSuffix string   `json:"env_suffix,omitempty"`
+	// How many blocks the role needs and takes; 0 means no limit.
+	Min int `json:"min,omitempty"`
+	Max int `json:"max,omitempty"`
 }
 
 // Ref is name@version.
@@ -86,6 +96,11 @@ var (
 	varRE     = regexp.MustCompile(`^[a-z][a-z0-9_]{0,39}$`)
 	serviceRE = regexp.MustCompile(`^[a-z0-9-]+(\.[a-z0-9-]+)*\.amazonaws\.com$`)
 	linkKinds = map[string]string{"table": ShapeData, "bucket": ShapeData, "queue": ShapeData, "secret": ShapeSecret}
+	actionRE  = regexp.MustCompile(`^([a-z0-9-]{2,30}):[A-Za-z]{2,60}$`)
+	suffixRE  = regexp.MustCompile(`^[A-Z][A-Z0-9_]{0,19}$`)
+	// A writer link never grants actions of these services: they change who may do what.
+	deniedActionPrefixes = map[string]bool{"iam": true, "sts": true, "kms": true, "organizations": true, "sso": true, "account": true}
+	arnOutputRE          = regexp.MustCompile(`^\$\{(aws_[a-z0-9_]+)\.([a-z0-9_]+)\.arn\}$`)
 )
 
 // Pinned are the providers Forgeline allows, at the versions it pins. The AWS one must equal the blueprint package's
@@ -134,6 +149,9 @@ func Load(fsys fs.FS, dir string) (Template, error) {
 	if err := t.CheckCode(); err != nil {
 		return t, fmt.Errorf("%s/main.tf.json: %w", dir, err)
 	}
+	if err := t.checkWriterOutputs(); err != nil {
+		return t, fmt.Errorf("%s/diagram.json: %w", dir, err)
+	}
 	return t, nil
 }
 
@@ -180,18 +198,27 @@ func (t *Template) checkDiagram() error {
 		case !varRE.MatchString(r.Variable) || seen[r.Variable] || t.Inputs.Properties[r.Variable] != nil || standardVars[r.Variable] != "":
 			return fmt.Errorf("%s: variable %q must be a new lower-case name", at, r.Variable)
 		case ShapeTypes[r.Shape] == "":
-			return fmt.Errorf("%s: shape is data, secret or source", at)
+			return fmt.Errorf("%s: shape is data, secret, source, target or writer", at)
 		case len(r.Kinds) == 0:
 			return fmt.Errorf("%s: list the block kinds it accepts", at)
 		}
 		seen[r.Variable] = true
-		if (r.Shape == ShapeTarget) != (r.Output != "") {
-			return fmt.Errorf("%s: a target link names the output that holds the ARN, and only a target link does", at)
+		if (r.Shape == ShapeTarget || r.Shape == ShapeWriter) != (r.Output != "") {
+			return fmt.Errorf("%s: a target or writer link names the output that holds the ARN, and only those do", at)
+		}
+		if err := r.checkWriter(at); err != nil {
+			return err
+		}
+		if r.Min < 0 || r.Max < 0 || r.Max > 10 || (r.Max > 0 && r.Min > r.Max) {
+			return fmt.Errorf("%s: min and max are how many links it needs and takes, 0 to 10, min not above max", at)
 		}
 		for _, k := range r.Kinds {
 			want := linkKinds[k]
 			if r.Direction == "in" {
 				want = ShapeSource // something that drives the template: only its ARN is passed
+				if k == "service" {
+					want = ShapeWriter // an app that sends to it
+				}
 			}
 			if name, ok := strings.CutPrefix(k, "template:"); ok {
 				want = ""
@@ -205,6 +232,65 @@ func (t *Template) checkDiagram() error {
 		}
 		if r.Access != (r.Shape == ShapeData) {
 			return fmt.Errorf("%s: only data links take read or readwrite access", at)
+		}
+	}
+	return nil
+}
+
+// checkWriter checks a writer link's actions and outputs, and that no other link sets them.
+func (r LinkRole) checkWriter(at string) error {
+	if r.Shape != ShapeWriter {
+		if len(r.Actions) > 0 || r.EnvOutput != "" || r.EnvSuffix != "" {
+			return fmt.Errorf("%s: only a writer link names actions, env_output and env_suffix", at)
+		}
+		return nil
+	}
+	if r.Direction != "in" {
+		return fmt.Errorf("%s: a writer link points in: the app links to the template", at)
+	}
+	if len(r.Actions) == 0 || len(r.Actions) > 10 {
+		return fmt.Errorf("%s: a writer link lists 1 to 10 actions", at)
+	}
+	for _, a := range r.Actions {
+		m := actionRE.FindStringSubmatch(a)
+		if m == nil {
+			return fmt.Errorf("%s: action %q must be one action such as firehose:PutRecord, without wildcards", at, a)
+		}
+		if deniedActionPrefixes[m[1]] {
+			return fmt.Errorf("%s: action %q changes who may do what; a writer link never grants it", at, a)
+		}
+	}
+	if r.EnvOutput == "" || !suffixRE.MatchString(r.EnvSuffix) {
+		return fmt.Errorf("%s: a writer link names env_output and an env_suffix such as STREAM", at)
+	}
+	return nil
+}
+
+// checkWriterOutputs checks that a writer link's ARN output is the ARN of a resource this template declares, so it can
+// never hand an app rights on "*" or on something outside the template, and that its env_output exists.
+func (t Template) checkWriterOutputs() error {
+	var code struct {
+		Resource map[string]map[string]json.RawMessage `json:"resource"`
+		Output   map[string]struct {
+			Value any `json:"value"`
+		} `json:"output"`
+	}
+	if err := json.Unmarshal(t.Code, &code); err != nil {
+		return err
+	}
+	for i, r := range t.Diagram.Links {
+		if r.Shape != ShapeWriter {
+			continue
+		}
+		at := fmt.Sprintf("links[%d]", i)
+		o, ok := code.Output[r.Output]
+		v, _ := o.Value.(string)
+		m := arnOutputRE.FindStringSubmatch(v)
+		if !ok || m == nil || code.Resource[m[1]][m[2]] == nil {
+			return fmt.Errorf("%s: output %q must be the .arn of a resource the template declares", at, r.Output)
+		}
+		if _, ok := code.Output[r.EnvOutput]; !ok {
+			return fmt.Errorf("%s: env_output %q is not an output of the template", at, r.EnvOutput)
 		}
 	}
 	return nil

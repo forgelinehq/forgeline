@@ -112,6 +112,13 @@ passing each result to the next and retrying a step that fails. Start it from th
 it is first built, AWS can take up to a minute to let its new role start the functions, so a run started at once may be
 refused; start it again a minute later.
 
+A **Data pipeline** takes records that apps linked to it send ("sends to"; each app gets the stream's name as
+`<BLOCK>_STREAM` and may only put records into it), optionally reshapes them with a linked Lambda function, and stores
+them as compressed JSON in the one bucket it is linked to, by day. Name the record's fields and types under Columns
+(`event=string`, `at=timestamp`), and query them with Athena in the pipeline's workgroup, from the table
+`<database>.records`; no crawler runs. The data lives in the bucket block, so removing what the blueprint built keeps
+it unless you choose to remove everything.
+
 ![A Lambda function template on the canvas]({{ '/console/140-template-block.png' | relative_url }})
 
 The same dialog offers **Built by Forgeline** instead: a `forgeline.yaml` for the repository with a `build` step that

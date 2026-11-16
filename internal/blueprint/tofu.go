@@ -489,6 +489,15 @@ func (g *gen) service(bl Block) {
 			secrets = append(secrets, obj{"name": key, "valueFrom": "${data.aws_secretsmanager_secret." + to.ID + ".arn}"})
 			secretARNs = append(secretARNs, "${data.aws_secretsmanager_secret."+to.ID+".arn}")
 			continue
+		case to.Kind == KindTemplate:
+			// An app that sends to a template (a writer link): exactly the template's actions, on its own resource's ARN.
+			if t, err := template.Get(to.Template); err == nil {
+				if r, ok := t.Role("in", KindService); ok && r.Shape == template.ShapeWriter {
+					statements = append(statements, obj{"Effect": "Allow", "Action": r.Actions, "Resource": []string{"${module." + to.ID + "." + r.Output + "}"}})
+					env[key+"_"+r.EnvSuffix] = "${module." + to.ID + "." + r.EnvOutput + "}"
+				}
+			}
+			continue
 		}
 		kind, arn, value := g.dataRef(to)
 		res := []string{arn}
@@ -856,6 +865,10 @@ func (g *gen) template(bl Block) {
 			from := g.byID[l.From]
 			r, ok := t.Role("in", kindOf(from))
 			if !ok {
+				continue
+			}
+			if r.Shape == template.ShapeWriter {
+				lists[r.Variable] = append(lists[r.Variable], obj{"id": from.ID})
 				continue
 			}
 			_, arn, _ := g.dataRef(from)
