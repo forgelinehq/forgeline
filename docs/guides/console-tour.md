@@ -79,7 +79,9 @@ answering on port 8080). Link it to the tables, files, queues and secrets it may
 Bedrock models, and AWS's documented runtime permissions, nothing else. It is reached through AWS's API, never a public
 port.
 
-An app or an agent can name where its **Code** lives: a GitHub repository, a branch and a folder. The blueprint then
+An app or an agent can name where its **Code** lives: a GitHub repository, a branch and a folder. **Suggest a
+repository…** reads the Dockerfiles in the repositories on the GitHub allow list and lists the folders that fit the block,
+with why; **Use** fills them in. The blueprint then
 makes a private image repository for it and a role that only that branch can use, from GitHub Actions, to push images.
 **Build from GitHub…** shows the workflow to add to the repository (its actions pinned to commit SHAs) and a Forgeline
 pipeline that starts it. Forgeline never pushes to your repository, and running a new image is a blueprint change you

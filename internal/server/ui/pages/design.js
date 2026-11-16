@@ -372,7 +372,31 @@ export async function designPage({ params }) {
           onclick: () => dirty() ? toast('Save first: the suggestion is for the saved blueprint', 'error') : delivery(b) }, icon('git', 'size-3.5'), 'Build from GitHub…'),
         built?.built ? h('button', { class: 'btn-secondary btn-sm', type: 'button', id: 'f-images', title: 'Pick an image pushed to its repository; the change is previewed and approved like any other',
           onclick: () => dirty() ? toast('Save first: the new image is set on the saved blueprint', 'error') : newImage(b) }, icon('layers', 'size-3.5'), 'Run a new image…') : null) : null,
-      src.repo ? null : h('p', { class: 'hint' }, 'Optional. With a repository, the blueprint makes a private image repository for it and a role only that branch can use to push images.'));
+      src.repo ? null : h('p', { class: 'hint' }, 'Optional. With a repository, the blueprint makes a private image repository for it and a role only that branch can use to push images.'),
+      src.repo || !repos.length ? null : h('button', { class: 'btn-secondary btn-sm', type: 'button', id: 'f-suggest', title: 'Reads the Dockerfiles in the repositories on the GitHub allow list',
+        onclick: () => suggestSource(b, set) }, icon('git', 'size-3.5'), 'Suggest a repository…'));
+  }
+
+  // Which repository fits the block (note 040, step 4): Forgeline reads the Dockerfiles in the allowed repositories and
+  // says why each folder fits. Using one only fills in the block's Code; nothing is saved until Save.
+  async function suggestSource(b, set) {
+    let r;
+    try { r = await post('/v1/blueprints/suggest-source', { block: bp.blocks.find(x => x.id === b.id) || b }); } catch (e) { toast(e.message, 'error'); return; }
+    await modal('Code for ' + b.name, (close) => {
+      const rows = r.suggestions.map(s => h('li', { class: 'flex flex-wrap items-start justify-between gap-3 py-3' },
+        h('div', { class: 'min-w-0' },
+          h('div', { class: 'text-sm font-medium' }, s.repo, h('span', { class: 'muted font-normal' }, ' · ' + s.branch + (s.path ? ' · ' + s.path : ''))),
+          h('ul', { class: 'muted mt-1 list-disc pl-5 text-xs' }, s.reasons.map(t => h('li', {}, t)))),
+        h('button', { class: 'btn-primary btn-sm', type: 'button', 'data-use-source': s.repo + ':' + s.path, onclick: () => {
+          set({ source: { repo: s.repo, branch: s.branch === 'main' ? undefined : s.branch, path: s.path || undefined } });
+          close(); setTimeout(drawInspector);
+        } }, 'Use')));
+      return h('div', { class: 'space-y-3', id: 'suggest' },
+        h('p', { class: 'text-sm' }, 'From the Dockerfiles in ' + r.repositories + ' repositor' + (r.repositories === 1 ? 'y' : 'ies') + ' on the GitHub allow list. Using one fills in the Code fields; save to keep it.'),
+        rows.length ? h('ul', { class: 'divide-y divide-slate-200 dark:divide-slate-800' }, rows)
+          : notice('info', 'No folder with a Dockerfile fits this block. Type the repository yourself, or add a Dockerfile to the repository.'),
+        r.problems.length ? h('p', { class: 'hint' }, 'Could not read: ' + r.problems.join('; ')) : null);
+    });
   }
 
   async function delivery(b) {
