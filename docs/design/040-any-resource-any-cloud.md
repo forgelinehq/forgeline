@@ -1,6 +1,6 @@
 # 040: Any resource, any cloud: templates, a generic block, guardrails and a library
 
-Status: **Step 1 built (2026-11-09): built-in guardrails on every blueprint preview (`internal/guardrail`, rule set `builtin-1`).**
+Status: **Steps 3 and 4 built (2026-11-16); see below.** **Step 1 built (2026-11-09): built-in guardrails on every blueprint preview (`internal/guardrail`, rule set `builtin-1`).**
 **Step 2, first part, built (2026-11-12): the AgentCore agent as a block** (an `agent` block, not yet a template in the
 template format). It runs an ECR image on Bedrock AgentCore Runtime with the execution role AWS documents, scoped to the
 blueprint's region and account, its own image and its own workload identity, never `GetWorkloadAccessTokenForUserId`, plus

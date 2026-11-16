@@ -42,3 +42,19 @@ were filed by `claude-agent` and approved with the server token, as the maintain
 - An image pushed by GitHub Actions or by a Forgeline build step. The image here was pushed by hand; how it got there
   does not change what the list reads.
 - An agent block or a Lambda template block. Both use the same code path, covered by unit tests only.
+
+## Which repository fits a block (#141, same day)
+
+On the Pi, with the real GitHub App and the 18 repositories on its allow list, read as `claude-agent`:
+
+- An app block on port 8080 named after a `web` folder: five suggestions, best first. The top one was a `web` folder
+  whose Dockerfile listens on port 80 (said so: "Listens on port 80; … is set to 8080"), with its name and language
+  (Node.js) as reasons. The others were top-level and service folders with other ports, and a worker with no port. No
+  repository could not be read.
+- An agent block and a Lambda function block: no suggestions. None of the repositories installs the AgentCore or
+  Strands SDK or starts from a Lambda base image, and a folder that fits nothing is not offered.
+- In the console, on a draft blueprint (no AWS involved), **Suggest a repository…** listed the same folders with their
+  reasons. **Use** filled in the repository, an empty branch (main) and the folder, and the canvas showed "Not saved".
+  The draft was deleted afterwards.
+
+The repository names are the maintainer's and are left out here.
