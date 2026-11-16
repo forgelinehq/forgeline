@@ -198,6 +198,11 @@ Choices:
   Actions and lets a person run a new image through preview and approval. A CodePipeline template would be a second
   way to do the same thing.
 
+Built (#145) and checked on real AWS ([2026-11-16](../testing/2026-11-16-eks-namespaces.md)): the cluster, then its
+namespaces in a second approved preview; a pod in another namespace could not reach a pod that one in the same namespace
+could; everything was removed. The check found one more permission the builder role needs (reading AWS's EKS node group
+service role), now in the setup guide.
+
 The first template is **AWS Lambda function** (`aws-lambda-function`), chosen by the maintainer because it can be built
 on real AWS now: a container image from ECR, its own log group and role, a schedule, queues that trigger it, and the
 tables, buckets, queues and secrets it uses. The AgentCore agent template follows once the account's AgentCore quota is
@@ -286,7 +291,7 @@ AWS first: steps 1 to 8 are AWS only. In order, each step its own design-note ad
 2. The template format, and the AgentCore agent template.
 3. Lambda, Step Functions and ECS cluster templates.
 4. Repositories linked to blocks, with suggested pipelines (layer 3).
-5. EKS with namespaces (two-stage apply), data pipeline and code pipeline templates.
+5. EKS with namespaces (two approved steps) and the data pipeline template (built; the code pipeline is covered by step 4).
 6. Policy packs in containers: Conftest, Checkov or Trivy (layer 4, second part).
 7. The generic resource block from provider schemas, with the administrator's allow list (layer 5), for AWS.
 8. The library for templates, skills, tools, agents and guardrail packs (layer 7).

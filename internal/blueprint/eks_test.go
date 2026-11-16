@@ -47,6 +47,9 @@ func TestClusterIsBuiltInTwoStages(t *testing.T) {
 	if err := b.Validate(); err != nil {
 		t.Fatal(err)
 	}
+	if w := wordsOf(b); !strings.Contains(w, "reachable from the internet except Kube's Kubernetes API") {
+		t.Errorf("the summary hides the public API: %s", w)
+	}
 	// Before the cluster exists: no namespaces, and an empty provider the module is handed.
 	first, err := b.TofuFrom(nil)
 	if err != nil {
@@ -144,4 +147,12 @@ func TestClusterCodeValidates(t *testing.T) {
 			}
 		}
 	}
+}
+
+func wordsOf(b Blueprint) string {
+	s := ""
+	for _, c := range b.Checks() {
+		s += c.Level + ": " + c.Text + "\n"
+	}
+	return s
 }

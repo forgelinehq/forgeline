@@ -52,6 +52,9 @@ type Template struct {
 	// AttachesPolicies lists the AWS managed policies the template attaches to its roles, as exact ARNs: the role
 	// Forgeline builds with must allow attaching each one (docs/guides/connect-aws.md), and the code may attach no other.
 	AttachesPolicies []string `json:"attaches_policies"`
+	// InternetFacing names what of the template is reachable from the internet, such as "Kubernetes API"; empty when
+	// nothing is. The blueprint's summary repeats it.
+	InternetFacing string `json:"internet_facing,omitempty"`
 	// Kubernetes, when set, says the template builds a Kubernetes cluster and that its Kubernetes resources are a
 	// second stage, planned once the cluster exists (note 040, EKS with namespaces).
 	Kubernetes *KubeStage      `json:"kubernetes,omitempty"`
@@ -191,6 +194,10 @@ func (t *Template) checkMeta(dir string) error {
 		return fmt.Errorf("%s: only aws templates for now", dir)
 	case len(t.Providers) == 0:
 		return fmt.Errorf("%s: declare the providers the code uses", dir)
+	case len(t.InternetFacing) > 40:
+		return fmt.Errorf("%s: internet_facing names the endpoint in at most 40 characters", dir)
+	case t.Kubernetes != nil && t.InternetFacing == "":
+		return fmt.Errorf("%s: a cluster's API is on the internet: say so in internet_facing", dir)
 	case len(t.Checks) > 20:
 		return fmt.Errorf("%s: at most 20 checks", dir)
 	}

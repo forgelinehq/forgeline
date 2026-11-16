@@ -733,6 +733,8 @@ func (b Blueprint) Checks() []Check {
 	}
 	if n := len(byKind[KindFrontDoor]); n > 0 {
 		ok(plural(n, "Only the front door is", "Only the front doors are") + " reachable from the internet; services take traffic only from their front door and the services that call them.")
+	} else if open := internetFacing(b); len(open) > 0 {
+		ok("Nothing in it is reachable from the internet except " + strings.Join(open, " and ") + ", as its own checks say.")
 	} else {
 		ok("Nothing in it is reachable from the internet.")
 	}
@@ -857,4 +859,19 @@ func plural(n int, one, many string) string {
 		return one
 	}
 	return many
+}
+
+// internetFacing names the template blocks whose template says it has an endpoint on the internet (an EKS cluster's
+// API, signed in with IAM), so the summary never says "nothing is reachable" beside one.
+func internetFacing(b Blueprint) []string {
+	var out []string
+	for _, bl := range b.Blocks {
+		if bl.Kind != KindTemplate {
+			continue
+		}
+		if t, err := template.Get(bl.Template); err == nil && t.InternetFacing != "" {
+			out = append(out, bl.Name+"'s "+t.InternetFacing)
+		}
+	}
+	return out
 }

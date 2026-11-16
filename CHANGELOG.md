@@ -66,7 +66,8 @@ section in the pull request that makes the change; a release moves it under its 
   default container sizes and a network policy allowing traffic only from the same namespace; IAM access entries for an
   administrator and per-namespace editors. Built in two approved steps (namespaces need the cluster to exist). Templates
   may now declare a Kubernetes stage and the AWS managed policies they attach; the setup guide's IAM policy gains
-  `eks.amazonaws.com` and four EKS policies (an IAM change for existing installations). Not yet checked on real AWS.
+  `eks.amazonaws.com` and four EKS policies (an IAM change for existing installations), plus reading AWS's EKS node group service role. The blueprint summary
+  now names a template's internet-facing endpoint. Checked on real AWS.
 - **A data pipeline template.** Apps send records to it, an optional Lambda function reshapes them, and Amazon Data
   Firehose stores them as JSON in a linked bucket, by day; a Glue table and an Athena workgroup make them queryable.
   To make this possible, templates gained **writer links** (an app's role gets exactly the actions the template lists,
