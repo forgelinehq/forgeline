@@ -211,4 +211,10 @@ if key == "lambda list-functions":
 if key == "s3api list-buckets":
     out({"Buckets": [{"Name": "media-assets-demo"}, {"Name": "build-cache-demo"}]})
 
+if key == "ecr describe-images":
+    # Two pushes to whatever repository a blueprint block asks about, so "Run a new image…" has something to offer.
+    out({"imageDetails": [
+        {"imageDigest": "sha256:" + "1" * 64, "imageTags": ["4f2c9e1"], "imagePushedAt": "2026-11-16T08:00:00+00:00", "imageSizeInBytes": 31457280},
+        {"imageDigest": "sha256:" + "2" * 64, "imageTags": ["9ab03d7"], "imagePushedAt": "2026-11-15T17:30:00+00:00", "imageSizeInBytes": 30408704}]})
+
 err("fake-aws: unsupported call: " + key)

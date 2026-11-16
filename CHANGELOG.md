@@ -62,6 +62,10 @@ section in the pull request that makes the change; a release moves it under its 
 - **After a session ends**, the console stops polling the server (it asked every minute, forever).
 
 ### Added
+- **Run a new image in one step.** A built app, agent or Lambda template with a source repository has **Run a new
+  image…** on the design canvas: the images pushed to its own ECR repository, newest first, the running one marked.
+  Picking one saves the blueprint with it and starts the preview; approving that preview is what runs it. Only images
+  from the block's own repository are accepted (`GET .../blocks/{block}/images`, `POST .../blocks/{block}/image`).
 - **Apps can run on Fargate Spot.** An app block's "Where it runs" is regular Fargate (as before), Fargate Spot, or one
   regular task with the rest on Spot. The cluster offers Spot only when an app uses it; apps without the setting keep
   exactly the code they had (a test compares it byte for byte). This is the useful part of note 040's "ECS cluster"
