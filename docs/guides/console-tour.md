@@ -90,6 +90,8 @@ marks the one running now. **Use and preview** saves the blueprint with that ima
 step is Send for approval. Only images from the block's own repository are offered; any other image is set in the
 block's fields as before.
 
+![Run a new image]({{ '/console/139-design-run-new-image.png' | relative_url }})
+
 ![Build from GitHub]({{ '/console/121-design-github-build.png' | relative_url }})
 
 An app can run on **Fargate Spot** (Where it runs): much cheaper, but AWS may stop a task with two minutes' warning and
