@@ -112,6 +112,10 @@ passing each result to the next and retrying a step that fails. Start it from th
 it is first built, AWS can take up to a minute to let its new role start the functions, so a run started at once may be
 refused; start it again a minute later.
 
+An **EKS cluster with namespaces** is built in two approved steps: the first preview makes the cluster and its nodes;
+once they exist, the next preview adds the namespaces, each with a quota and a network policy that admits traffic only
+from the same namespace. It costs about $0.10 an hour plus the nodes.
+
 A **Data pipeline** takes records that apps linked to it send ("sends to"; each app gets the stream's name as
 `<BLOCK>_STREAM` and may only put records into it), optionally reshapes them with a linked Lambda function, and stores
 them as compressed JSON in the one bucket it is linked to, by day. Name the record's fields and types under Columns

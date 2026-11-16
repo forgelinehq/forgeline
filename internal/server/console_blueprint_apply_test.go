@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/forgelinehq/forgeline/internal/guardrail"
 	"os"
 	"path/filepath"
 	"sort"
@@ -12,6 +11,9 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/forgelinehq/forgeline/internal/blueprint"
+	"github.com/forgelinehq/forgeline/internal/guardrail"
 )
 
 // fakeTofu stands in for OpenTofu. Its state is the list of resource addresses that exist; a plan adds what
@@ -609,5 +611,27 @@ func TestBlueprintPreviewChecksTheAgentQuota(t *testing.T) {
 				t.Errorf("a denied preview must not be sent: %s", msg)
 			}
 		}
+	}
+}
+
+// A preview of a blueprint whose EKS cluster is built plans its namespaces; before, it does not (note 040).
+func TestPreviewPlansTheClusterStageFromState(t *testing.T) {
+	s := &Server{}
+	b := StoredBlueprint{Blueprint: blueprint.Blueprint{ID: "bp-eks", Name: "Cluster", Target: blueprint.Target{Cloud: "aws", Account: "primary", Region: "ap-south-1"},
+		Blocks: []blueprint.Block{{ID: "k8s", Kind: blueprint.KindTemplate, Name: "Kube", Template: "aws-eks-cluster@1.0.0",
+			Inputs: map[string]any{"namespaces": map[string]any{"shop": "small"}}}}}}
+	state := `{"version":4,"resources":[{"module":"module.k8s","mode":"managed","type":"aws_eks_cluster","name":"this","instances":[{"attributes":{}}]}]}`
+	for st, want := range map[string]string{"": `"cluster_ready": false`, state: `"cluster_ready": true`} {
+		code, err := s.planCode(b, &storedPlan{}, st)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(code), want) {
+			t.Errorf("state %q: code lacks %s", st, want)
+		}
+	}
+	code, err := s.planCode(b, &storedPlan{Removal: "everything"}, state)
+	if err != nil || !strings.Contains(string(code), "get-token") {
+		t.Errorf("removal: %v, reaches the cluster: %v", err, strings.Contains(string(code), "get-token"))
 	}
 }

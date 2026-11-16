@@ -52,8 +52,9 @@ in [design note 035](https://github.com/forgelinehq/forgeline/blob/main/docs/des
 `arn:aws:iam::<account>:role/fl-*` only, so Forgeline cannot change any other role.
 
 The policy below is that permission, ready to attach to the role Forgeline builds with. It lets Forgeline manage only
-roles named `fl-*`, attach only the ECS task execution policy to them, and hand them only to the services blueprints
-use (ECS tasks, Bedrock AgentCore, Lambda and Step Functions, for the templates), so it cannot give any role more than a
+roles named `fl-*`, attach to them only the AWS managed policies blueprints use (the ECS task execution policy, and
+for the EKS template the four EKS ones), and hand them only to the services blueprints use (ECS tasks, Bedrock
+AgentCore, and for the templates Lambda, Step Functions, Firehose and EKS), so it cannot give any role more than a
 blueprint asks for. Set it once: it covers every block and template Forgeline offers, and a test keeps this list in step
 with them. If an apply ever fails with `iam:PassRole`, Forgeline says which services the list must hold:
 
@@ -73,11 +74,15 @@ with them. If an apply ever fails with `iam:PassRole`, Forgeline says which serv
       "Resource": "arn:aws:iam::*:role/fl-*"
     },
     {
-      "Sid": "OnlyTheEcsExecutionPolicy",
+      "Sid": "OnlyListedAwsPolicies",
       "Effect": "Allow",
       "Action": ["iam:AttachRolePolicy", "iam:DetachRolePolicy"],
       "Resource": "arn:aws:iam::*:role/fl-*",
-      "Condition": { "ArnEquals": { "iam:PolicyARN": "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy" } }
+      "Condition": { "ArnEquals": { "iam:PolicyARN": [
+        "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryPullOnly", "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy",
+        "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy", "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy",
+        "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+      ] } }
     },
     {
       "Sid": "PassOnlyToBlueprintServices",
@@ -85,8 +90,8 @@ with them. If an apply ever fails with `iam:PassRole`, Forgeline says which serv
       "Action": "iam:PassRole",
       "Resource": "arn:aws:iam::*:role/fl-*",
       "Condition": { "StringEquals": { "iam:PassedToService": [
-        "bedrock-agentcore.amazonaws.com", "ecs-tasks.amazonaws.com", "firehose.amazonaws.com", "lambda.amazonaws.com",
-        "states.amazonaws.com"
+        "bedrock-agentcore.amazonaws.com", "ecs-tasks.amazonaws.com", "eks.amazonaws.com", "firehose.amazonaws.com",
+        "lambda.amazonaws.com", "states.amazonaws.com"
       ] } }
     }
   ]
