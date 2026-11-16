@@ -39,13 +39,20 @@ func TestKubernetesStageRules(t *testing.T) {
 	if _, err := Load(eksWith(t, "", nil), "t/aws-eks-cluster/1.0.0"); err != nil {
 		t.Fatalf("the unchanged copy: %v", err)
 	}
-	res := func(d map[string]any, typ string) map[string]any { return d["resource"].(map[string]any)[typ].(map[string]any) }
-	ns := func(d map[string]any) map[string]any { return res(d, "kubernetes_namespace_v1")["this"].(map[string]any) }
-	attach := func(d map[string]any) map[string]any { return res(d, "aws_iam_role_policy_attachment")["cluster"].(map[string]any) }
+	res := func(d map[string]any, typ string) map[string]any {
+		return d["resource"].(map[string]any)[typ].(map[string]any)
+	}
+	ns := func(d map[string]any) map[string]any {
+		return res(d, "kubernetes_namespace_v1")["this"].(map[string]any)
+	}
+	attach := func(d map[string]any) map[string]any {
+		return res(d, "aws_iam_role_policy_attachment")["cluster"].(map[string]any)
+	}
 	for name, c := range map[string]struct {
 		file   string
 		change func(map[string]any)
 	}{
+		"a cluster that hides its API": {"template.json", func(d map[string]any) { delete(d, "internet_facing") }},
 		"the provider without a stage": {"template.json", func(d map[string]any) { delete(d, "kubernetes") }},
 		"a stage without the provider": {"template.json", func(d map[string]any) { delete(d["providers"].(map[string]any), "kubernetes") }},
 		"a cluster of another kind":    {"template.json", func(d map[string]any) { d["kubernetes"] = map[string]any{"cluster": "aws_instance.this"} }},

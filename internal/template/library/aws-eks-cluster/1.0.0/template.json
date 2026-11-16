@@ -17,6 +17,7 @@
   "kubernetes": {
     "cluster": "aws_eks_cluster.this"
   },
+  "internet_facing": "Kubernetes API",
   "holds_data": false,
   "passes_role_to": ["eks.amazonaws.com"],
   "attaches_policies": [

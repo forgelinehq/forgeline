@@ -55,7 +55,9 @@ The policy below is that permission, ready to attach to the role Forgeline build
 roles named `fl-*`, attach to them only the AWS managed policies blueprints use (the ECS task execution policy, and
 for the EKS template the four EKS ones), and hand them only to the services blueprints use (ECS tasks, Bedrock
 AgentCore, and for the templates Lambda, Step Functions, Firehose and EKS), so it cannot give any role more than a
-blueprint asks for. Set it once: it covers every block and template Forgeline offers, and a test keeps this list in step
+blueprint asks for. The last statement only reads one of AWS's own roles: EKS refuses to make a node group unless the
+caller may look that role up (both forms are listed because IAM checks a role that does not exist yet by its bare
+name). Set it once: it covers every block and template Forgeline offers, and a test keeps this list in step
 with them. If an apply ever fails with `iam:PassRole`, Forgeline says which services the list must hold:
 
 ```json
@@ -93,6 +95,15 @@ with them. If an apply ever fails with `iam:PassRole`, Forgeline says which serv
         "bedrock-agentcore.amazonaws.com", "ecs-tasks.amazonaws.com", "eks.amazonaws.com", "firehose.amazonaws.com",
         "lambda.amazonaws.com", "states.amazonaws.com"
       ] } }
+    },
+    {
+      "Sid": "ReadTheEksNodeGroupServiceRole",
+      "Effect": "Allow",
+      "Action": "iam:GetRole",
+      "Resource": [
+        "arn:aws:iam::*:role/AWSServiceRoleForAmazonEKSNodegroup",
+        "arn:aws:iam::*:role/aws-service-role/eks-nodegroup.amazonaws.com/AWSServiceRoleForAmazonEKSNodegroup"
+      ]
     }
   ]
 }
