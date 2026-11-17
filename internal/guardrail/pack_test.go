@@ -183,7 +183,7 @@ func TestPackValidate(t *testing.T) {
 		"name:":           {ID: "a", Name: " ", Tool: ToolTrivy},
 		"tool:":           {ID: "a", Name: "x", Tool: "tfsec"},
 		"deny_at: only":   {ID: "a", Name: "x", Tool: ToolCheckov, DenyAt: "high"},
-		"deny_at: \"big": {ID: "a", Name: "x", Tool: ToolTrivy, DenyAt: "big"},
+		"deny_at: \"big":  {ID: "a", Name: "x", Tool: ToolTrivy, DenyAt: "big"},
 		"skip[0]":         {ID: "a", Name: "x", Tool: ToolTrivy, Skip: []string{"--flag x"}},
 		"deny: a Conf":    {ID: "a", Name: "x", Tool: ToolConftest, Rules: rego, Deny: []string{"x"}},
 		"rules: only":     {ID: "a", Name: "x", Tool: ToolTrivy, Rules: rego},
