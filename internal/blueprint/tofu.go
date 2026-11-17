@@ -73,6 +73,9 @@ func (b Blueprint) tofu(rm removal, built map[string]bool) ([]byte, error) {
 		g.byID[bl.ID] = bl
 	}
 	g.build()
+	if len(g.dups) > 0 {
+		return nil, fmt.Errorf("two blocks would make the same resource %s: rename the resource block", strings.Join(g.dups, ", "))
+	}
 	for _, bl := range rm.kube {
 		g.kubeProvider(bl)
 	}
@@ -121,6 +124,7 @@ type gen struct {
 	byID  map[string]Block
 	built map[string]bool // resource addresses in the blueprint's state
 	kube  []obj           // Kubernetes provider configurations, one per template block with a cluster
+	dups  []string        // resource addresses two blocks both made (a resource block named like another's part)
 }
 
 func (g *gen) add(kind, name string, body obj) {
@@ -128,6 +132,9 @@ func (g *gen) add(kind, name string, body obj) {
 	if m == nil {
 		m = obj{}
 		g.res[kind] = m
+	}
+	if _, dup := m[name]; dup {
+		g.dups = append(g.dups, kind+"."+name)
 	}
 	m[name] = body
 }
@@ -220,6 +227,8 @@ func (g *gen) build() {
 			g.database(bl)
 		case KindCache:
 			g.cache(bl)
+		case KindResource:
+			g.resource(bl)
 		case KindSecret:
 			g.add("aws_secretsmanager_secret", bl.ID, g.protect(obj{"name": "forgeline/" + g.short + "/" + bl.ID, "description": esc(bl.Description), "recovery_window_in_days": 7,
 				"lifecycle": obj{"prevent_destroy": true}, "tags": tags(bl)}))

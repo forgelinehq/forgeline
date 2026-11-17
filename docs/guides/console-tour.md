@@ -21,7 +21,7 @@ with the number of changes waiting. What you see depends on your role, and old a
 | Ship | Pipelines, GitHub Actions |
 | Team | Team, Agents, Missions, Marketplace |
 | Watch | Map, Infrastructure, Kubernetes, Security |
-| Settings | Setup, People and roles, Sign-in (SSO), Connections, Secrets, Models, Memory, AI use and budgets, Audit log, Approval rules, Policy packs, API tokens |
+| Settings | Setup, People and roles, Sign-in (SSO), Connections, Secrets, Models, Memory, AI use and budgets, Audit log, Approval rules, Resource types, Policy packs, API tokens |
 
 ## Home
 
@@ -157,6 +157,9 @@ until the blueprint changes, and the attempt is audited. An amber line is a **wa
 the internet on a front door or deleting a table: it does not stop anything, and the approver reads it next to the
 changes. An administrator can add more rules under Settings › Policy packs (Trivy, Checkov, or your own Conftest
 rules); their findings appear in the same list, and the line under it says which rule sets checked the preview.
+
+For anything the blocks and templates do not cover, a **Resource** block can make any AWS resource type an
+administrator allowed under Settings › Resource types, with a form made from the provider's schema.
 
 ![A blueprint]({{ '/console/90-blueprint.png' | relative_url }})
 

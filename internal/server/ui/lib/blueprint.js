@@ -14,6 +14,7 @@ export const KINDS = {
   cache: { label: 'Cache', tech: 'Redis (ElastiCache)', icon: 'bolt' },
   secret: { label: 'Secret', tech: 'Secrets Manager', icon: 'key' },
   agent: { label: 'Agent', tech: 'Bedrock AgentCore', icon: 'sparkle' },
+  resource: { label: 'Resource', tech: 'any allowed AWS type', icon: 'grid' },
   existing: { label: 'Already there', tech: 'kept as it is', icon: 'link' },
 };
 
@@ -40,6 +41,10 @@ export function blockFacts(b) {
     case 'secret': return 'value set in AWS, never seen by Forgeline';
     case 'agent': return (b.image ? 'from ' + b.image.split('/').pop() + ' · calls Bedrock models' : 'needs its ECR image') + (b.source ? ' · code in ' + b.source.repo : '');
     case 'existing': return (EXISTING[b.existing?.type] || 'resource') + ' ' + (b.existing?.name || '') + ' · used, never changed';
+    case 'resource': {
+      const n = Object.keys(b.attributes || {}).length;
+      return b.resource_type ? b.resource_type + ' · ' + n + ' setting' + (n === 1 ? '' : 's') : 'pick a resource type';
+    }
     case 'template': {
       const i = b.inputs || {};
       return [i.image ? 'from ' + String(i.image).split('/').pop() : 'needs its inputs', i.schedule ? i.schedule : null, b.template].filter(Boolean).join(' · ');
@@ -53,6 +58,7 @@ export function linkWords(bp, l) {
   const by = Object.fromEntries((bp.blocks || []).map(b => [b.id, b]));
   const from = by[l.from], to = by[l.to];
   if (!from || !to) return l.from + ' → ' + l.to;
+  if (from.kind === 'resource') return `${from.name} takes its ${l.attribute} from ${to.name}'s ${l.output}`;
   if (from.kind === 'frontdoor') return `${from.name} sends ${l.path || 'traffic'} to ${to.name}`;
   if (to.kind === 'logs') return `${from.name} writes its logs to ${to.name}`;
   if (to.kind === 'template') return `${from.name} ${from.kind === 'template' ? 'runs' : from.kind === 'service' ? 'sends to' : 'triggers'} ${to.name}`;

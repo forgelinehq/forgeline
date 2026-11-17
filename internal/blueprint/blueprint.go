@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"regexp"
 	"slices"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -31,7 +32,7 @@ const (
 
 // Kinds lists the block kinds in the order the canvas offers them. Template blocks are offered one per template
 // (GET /v1/templates), not as a kind of their own.
-var Kinds = []string{KindFrontDoor, KindService, KindTable, KindBucket, KindQueue, KindLogs, KindDatabase, KindCache, KindSecret, KindAgent, KindExisting}
+var Kinds = []string{KindFrontDoor, KindService, KindTable, KindBucket, KindQueue, KindLogs, KindDatabase, KindCache, KindSecret, KindAgent, KindResource, KindExisting}
 
 // Where an app's tasks run (Block.Capacity).
 const (
@@ -131,6 +132,10 @@ type Block struct {
 	// Source is where an app's or agent's code lives (note 040, step 4): the blueprint then makes a private image
 	// repository for it and a role only that repository's branch can use from GitHub Actions to push images.
 	Source *Source `json:"source,omitempty"`
+
+	// resource (note 040, step 7): any resource type an administrator allowed, with settings from its schema.
+	ResourceType string         `json:"resource_type,omitempty"`
+	Attributes   map[string]any `json:"attributes,omitempty"`
 }
 
 // Existing names something already in the account.
@@ -179,6 +184,11 @@ type Link struct {
 	To     string `json:"to"`
 	Access string `json:"access,omitempty"` // read or readwrite, for a service using a table, bucket or queue
 	Path   string `json:"path,omitempty"`   // for a front door: the path it sends to this service (/api/*); empty is the default
+	// For a link from a resource block: the setting it fills (Attribute) with what it reads from the other block
+	// (Output). List adds the value to a list setting, so several links can fill one.
+	Attribute string `json:"attribute,omitempty"`
+	Output    string `json:"output,omitempty"`
+	List      bool   `json:"list,omitempty"`
 }
 
 var (
@@ -299,6 +309,7 @@ func (b Blueprint) Validate() error {
 	doorPaths := map[[2]string]bool{}
 	logsOf := map[string]bool{}
 	seen := map[[2]string]bool{}
+	filled := map[[2]string]bool{} // resource block and setting a link fills
 	for i, l := range b.Links {
 		at := fmt.Sprintf("links[%d]", i)
 		from, ok := byID[l.From]
@@ -308,6 +319,16 @@ func (b Blueprint) Validate() error {
 		to, ok := byID[l.To]
 		if !ok {
 			return fmt.Errorf("%s.to: no block %q", at, l.To)
+		}
+		if from.Kind == KindResource {
+			// A resource may read several attributes of one block, one link per setting.
+			if err := resourceLink(at, from, to, l, filled); err != nil {
+				return err
+			}
+			continue
+		}
+		if l.Attribute != "" || l.Output != "" || l.List {
+			return fmt.Errorf("%s: only a resource's link fills a setting (attribute, output, list)", at)
 		}
 		if seen[[2]string{l.From, l.To}] {
 			return fmt.Errorf("%s: %s and %s are already linked", at, l.From, l.To)
@@ -380,7 +401,7 @@ func (b Blueprint) Validate() error {
 				return fmt.Errorf("%s: %s needs a port to be called", at, to.ID)
 			}
 		default:
-			return fmt.Errorf("%s: a %s cannot link to a %s (a front door sends traffic to a service; a service uses data, a database, a cache or a secret, calls another service, or writes logs; an agent uses tables, buckets, queues and secrets)", at, from.Kind, to.Kind)
+			return fmt.Errorf("%s: a %s cannot link to a %s (a front door sends traffic to a service; a service uses data, a database, a cache or a secret, calls another service, or writes logs; an agent uses tables, buckets, queues and secrets; a resource reads from other blocks, nothing links to it)", at, from.Kind, to.Kind)
 		}
 	}
 	if err := b.checkRoleCounts(); err != nil {
@@ -506,6 +527,7 @@ func (bl Block) validate(at string) error {
 		KindAgent:     {"image", "env", "description", "source"},
 		KindTemplate:  {"template", "inputs", "source"},
 		KindExisting:  {"existing"},
+		KindResource:  {"resource_type", "attributes"},
 	}
 	ok, known := allowed[bl.Kind]
 	if !known {
@@ -649,6 +671,10 @@ func (bl Block) validate(at string) error {
 		if _, err := tpl.Inputs.Resolve(bl.Inputs); err != nil {
 			return fmt.Errorf("%s.inputs: %v", at, err)
 		}
+	case KindResource:
+		if err := bl.validateResource(at); err != nil {
+			return err
+		}
 	case KindExisting:
 		e := bl.Existing
 		if e == nil {
@@ -702,6 +728,8 @@ func (bl Block) setFields() []string {
 	add(bl.Existing != nil, "existing")
 	add(bl.Template != "", "template")
 	add(len(bl.Inputs) > 0, "inputs")
+	add(bl.ResourceType != "", "resource_type")
+	add(len(bl.Attributes) > 0, "attributes")
 	return out
 }
 
@@ -844,6 +872,20 @@ func (b Blueprint) Checks() []Check {
 				}
 			}
 		}
+	}
+	for _, r := range byKind[KindResource] {
+		t := fmt.Sprintf("%s makes an AWS %s (%s) with the settings given here; Forgeline chooses none of them, so the guardrails, any policy packs and the approver check it.", r.Name, ResourceLabel(r.ResourceType), r.ResourceType)
+		var reads []string
+		for _, l := range b.Links {
+			if l.From == r.ID {
+				reads = append(reads, l.Attribute+" from "+blockByID(b, l.To).Name+"'s "+l.Output)
+			}
+		}
+		if len(reads) > 0 {
+			sort.Strings(reads)
+			t += " It takes " + strings.Join(reads, ", ") + "."
+		}
+		ok(t)
 	}
 	if len(byKind[KindExisting]) > 0 {
 		ok(plural(len(byKind[KindExisting]), "One existing resource is", fmt.Sprintf("%d existing resources are", len(byKind[KindExisting]))) + " used as it is and never changed.")

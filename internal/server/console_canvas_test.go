@@ -191,6 +191,13 @@ func TestConsoleCanvas(t *testing.T) {
 			}
 			continue
 		}
+		if kind == blueprint.KindResource {
+			// A resource starts without a type: only what an administrator allowed can be picked.
+			if err == nil || !strings.Contains(err.Error(), "pick a resource type") {
+				t.Errorf("resource default: %v", err)
+			}
+			continue
+		}
 		if kind == blueprint.KindAgent {
 			// An agent starts without an image: only the person knows their ECR image, and a made-up one would pass
 			// the checks and fail only when applied. Everything else about it is valid.

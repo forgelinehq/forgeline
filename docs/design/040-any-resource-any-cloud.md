@@ -297,6 +297,36 @@ from a secret block). Its links are references to other blocks' attributes, chos
 everywhere. It is drawn with the type's icon and named in plain words from the schema's description. This is the
 "anyone can create any kind of resource" path, with the administrator deciding how wide "any" is.
 
+**As built (step 7).**
+
+- **The schema.** `tofu providers schema -json` with the provider blueprints pin (`hashicorp/aws ~> 6.72`) prints
+  17 MB for 1,766 resource types, in about 6 seconds and 570 MB of memory. Forgeline makes it the first time someone
+  needs it, keeps a cut-down copy in the data directory (types, settings and nested blocks, with which are required,
+  computed, sensitive or write-only), and makes it again after 30 days or when the pin changes. No AWS credentials
+  are used. The AWS provider gives no descriptions (6 of 1,766 types have one), so a type is named from its own words
+  ("aws_sns_topic" is "SNS topic") and drawn with one icon.
+- **The allow list.** Settings › Resource types, per AWS account; administrators change it, developers read it, every
+  change is audited as "allows ... / no longer allows ...". Some types can never be allowed: IAM users, groups, access
+  keys and other long-lived credentials (the guardrails deny them anyway), and `aws_organizations_*`,
+  `aws_account_*` and `aws_iam_account_*`.
+- **The block.** `kind: resource`, `resource_type`, `attributes`. Every setting is checked against the schema when the
+  blueprint is saved, checked or previewed: it exists, it may be set (not computed only), it is never sensitive or
+  write-only (a secret belongs in a secret block), its value has the type's shape, nested blocks are within their
+  counts, and every required setting is set or linked. `region` cannot be set: a blueprint builds in its target
+  region. Everything typed is escaped, keys included, so no value becomes an OpenTofu expression. A resource named
+  like a part another block makes (`aws_ecs_cluster.main`) is refused, not merged.
+- **Links.** A link from a resource block fills one of its settings that takes text (or adds to a list of text) with
+  an attribute of the other block: any attribute of another resource block, or `arn`, `name`, `url` or `dns_name` of
+  a queue, table, files, logs, secret, front door or existing block. Nothing links *to* a resource block yet: an app
+  that publishes to a topic would need IAM permissions Forgeline cannot derive from an arbitrary type.
+- **What stays the same.** The guardrails and policy packs check the plan, a different administrator approves it, and
+  removal works as for other blocks: keep-data keeps a resource whose type holds data (the guardrails' list), and step
+  1 of removing everything turns off the protection of a bucket, table or database made this way.
+- A build preview is refused once a type is taken off the allow list; a removal preview never is.
+
+Not built: links into a resource block; icons per service; resources of other providers; the assistant drafting
+resource blocks (it may, but only with types already allowed, and the same checks apply).
+
 ### 6. Clouds: a connection per cloud, the same model
 
 `target` becomes `{cloud, connection, region}`. A **cloud connection** says how OpenTofu gets credentials without
@@ -339,7 +369,8 @@ AWS first: steps 1 to 8 are AWS only. In order, each step its own design-note ad
 5. EKS with namespaces (two approved steps) and the data pipeline template (built; the code pipeline is covered by step 4).
 6. Policy packs in containers: Conftest, Checkov or Trivy (layer 4, second part). **Built** (#147) and checked on the Pi
    ([2026-11-17](../testing/2026-11-17-policy-packs.md)); see "Policy packs, as built".
-7. The generic resource block from provider schemas, with the administrator's allow list (layer 5), for AWS.
+7. The generic resource block from provider schemas, with the administrator's allow list (layer 5), for AWS. **Built**;
+   see "As built (step 7)".
 8. The library for templates, skills, tools, agents and guardrail packs (layer 7).
 9. **Only after AWS is complete** (maintainer, 2026-11-08): Google Cloud, then Azure, then RunPod and others (layer 6),
    each with its first blocks, templates and guardrails.

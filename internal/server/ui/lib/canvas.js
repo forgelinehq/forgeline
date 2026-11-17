@@ -20,8 +20,9 @@ export const DEFAULTS = {
   secret: { name: 'Secret', description: '' },
   agent: { name: 'Agent', image: '' }, // the person's own ECR image; the check says what is missing until it is set
   existing: { name: 'Existing table', existing: { type: 'table', name: 'my-table' } },
+  resource: { name: 'Resource', resource_type: '' }, // the type is picked from what an administrator allowed
 };
-const ID_BASE = { frontdoor: 'door', service: 'app', table: 'table', bucket: 'files', queue: 'queue', logs: 'logs', database: 'db', cache: 'cache', secret: 'secret', agent: 'agent', existing: 'existing' };
+const ID_BASE = { frontdoor: 'door', service: 'app', table: 'table', bucket: 'files', queue: 'queue', logs: 'logs', database: 'db', cache: 'cache', secret: 'secret', agent: 'agent', existing: 'existing', resource: 'res' };
 // Which column a kind sits in: front doors, then apps, then what apps use.
 const COLUMN = { frontdoor: 0, service: 1, agent: 1, template: 1 };
 
@@ -140,8 +141,17 @@ export function linkTargets(bp, fromId, templates = {}) {
   return [...ordinaryTargets(bp, from, linked), ...drives];
 }
 
+// What a resource block's link can read from a block Forgeline makes, as in internal/blueprint (kindOutputs). A
+// resource block's own attributes come from its schema (outputs: null).
+export const OUTPUTS = { queue: ['arn', 'name', 'url'], table: ['arn', 'name'], bucket: ['arn', 'name'], logs: ['arn', 'name'], secret: ['arn', 'name'], frontdoor: ['arn', 'dns_name'] };
+const outputsOf = (b) => b.kind === 'resource' ? null : b.kind === 'existing' ? (b.existing?.type === 'table' || b.existing?.type === 'bucket' || b.existing?.type === 'queue' || b.existing?.type === 'secret' ? OUTPUTS[b.existing.type] : undefined) : OUTPUTS[b.kind];
+
 function ordinaryTargets(bp, from, linked) {
   const fromId = from.id;
+  if (from.kind === 'resource') {
+    // A resource reads attributes of other blocks, one link per setting it fills; nothing links to it.
+    return bp.blocks.filter(b => b.id !== fromId && outputsOf(b) !== undefined).map(b => ({ id: b.id, name: b.name, access: false, path: false, outputs: outputsOf(b), type: b.resource_type || '' }));
+  }
   const kindOf = Object.fromEntries(bp.blocks.map(b => [b.id, b.kind]));
   if (from.kind === 'frontdoor') {
     const fronted = new Set(bp.links.filter(l => kindOf[l.from] === 'frontdoor').map(l => l.to));
@@ -161,18 +171,20 @@ function ordinaryTargets(bp, from, linked) {
     .map(b => ({ id: b.id, name: b.name, access: usesData(b), path: false }));
 }
 
-export function addLink(bp, from, to, access, path) {
+export function addLink(bp, from, to, access, path, fill) {
   const out = clone(bp);
   const l = { from, to };
   if (access) l.access = access;
   if (path) l.path = path;
+  if (fill) { l.attribute = fill.attribute; l.output = fill.output; if (fill.list) l.list = true; }
   out.links.push(l);
   return out;
 }
 
-export function removeLink(bp, from, to) {
+/** Removes a link; for a resource's links, only the one that fills attribute. */
+export function removeLink(bp, from, to, attribute) {
   const out = clone(bp);
-  out.links = out.links.filter(l => !(l.from === from && l.to === to));
+  out.links = out.links.filter(l => !(l.from === from && l.to === to && (!attribute || l.attribute === attribute)));
   return out;
 }
 

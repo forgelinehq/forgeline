@@ -62,6 +62,12 @@ section in the pull request that makes the change; a release moves it under its 
 - **After a session ends**, the console stops polling the server (it asked every minute, forever).
 
 ### Added
+- **A resource block for any allowed AWS resource type** (note 040, step 7). An administrator allows resource types per
+  account under Settings › Resource types; a Resource block on the canvas then takes any of them, with a form made
+  from the AWS provider's own schema. Every setting is checked against that schema on save and preview; secrets,
+  what AWS sets and the region cannot be set, and nothing typed becomes an expression. A resource's links fill its
+  settings from other blocks (a topic's ARN, a queue's URL). IAM users, access keys and account-wide settings can never
+  be allowed. Guardrails, policy packs and approval apply as for every block.
 - **Policy packs check every preview** (note 040, step 6). Under Settings › Policy packs an administrator turns on
   Trivy or Checkov for known misconfigurations, or writes the organization's own rules in Rego for Conftest. Each pack
   runs in a container with no network, a read-only file system and no capabilities, on a copy of the plan without its

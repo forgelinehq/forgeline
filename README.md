@@ -53,7 +53,7 @@ fixes for a different administrator to approve, checks its work and reports, and
 that showed it. Watch › Map shows your AWS account with
 resources inside the stack that made them and lines where AWS says one uses another; Watch › Services reads each
 service on its own, tile by tile, and gives every service its own page. Build › Design and
-Blueprints draw what should exist (a front door with paths, apps that call each other and scale with load, tables, files, queues, MySQL or Postgres databases, Redis, secrets, and AI agents on Amazon Bedrock AgentCore) with safe settings chosen for you, say
+Blueprints draw what should exist (a front door with paths, apps that call each other and scale with load, tables, files, queues, MySQL or Postgres databases, Redis, secrets, AI agents on Amazon Bedrock AgentCore, and any other AWS resource type an administrator allows) with safe settings chosen for you, say
 in plain words what it means, and show the OpenTofu code it generates. Preview changes shows what OpenTofu would do in AWS and checks it against guardrails (nothing but web ports open to
 the internet, data encrypted, no IAM users or wildcard permissions) and against any policy packs an administrator turned on (Trivy, Checkov, or your own Conftest rules, each run in a locked-down container); a different
 administrator approves, and exactly that plan is applied. An app or agent can name its GitHub repository (Forgeline suggests which one fits, from its Dockerfiles): the blueprint makes a private image repository and a push role for

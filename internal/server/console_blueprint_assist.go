@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -55,6 +56,10 @@ func blockSwitch(b blueprint.Block) string {
 	api := map[string]string{blueprint.KindFrontDoor: "elbv2", blueprint.KindService: "ecs", blueprint.KindTable: "dynamodb", blueprint.KindBucket: "s3", blueprint.KindQueue: "sqs", blueprint.KindLogs: "logs"}[b.Kind]
 	if b.Kind == blueprint.KindExisting && b.Existing != nil {
 		api = map[string]string{"table": "dynamodb", "bucket": "s3", "queue": "sqs"}[b.Existing.Type]
+	}
+	if b.Kind == blueprint.KindResource {
+		// aws_sns_topic is SNS's: the service is the first word of the type.
+		api, _, _ = strings.Cut(strings.TrimPrefix(b.ResourceType, "aws_"), "_")
 	}
 	return awsSwitchForAPI(api)
 }
@@ -126,13 +131,13 @@ func (s *Server) handleBlueprintAssist(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	out := AssistReplyJSON{Changes: []string{}, Checks: []blueprint.Check{}}
-	next, problem := s.readDraft(reply, draft, off, readOnly)
+	next, problem := s.readDraft(r.Context(), reply, draft, off, readOnly)
 	if problem != "" && next == nil && blueprintTagRE.MatchString(reply) {
 		// One chance to fix it, with the reason.
 		turns = append(turns, chatTurn{Role: "assistant", Content: reply}, chatTurn{Role: "user", Content: "That draft was not accepted: " + problem + ". Send the whole draft again, fixed, in the same form."})
 		if again, err := ask(turns); err == nil {
 			reply = again
-			next, problem = s.readDraft(reply, draft, off, readOnly)
+			next, problem = s.readDraft(r.Context(), reply, draft, off, readOnly)
 		}
 	}
 	out.Reply = strings.TrimSpace(blueprintTagRE.ReplaceAllString(reply, ""))
@@ -149,7 +154,7 @@ func (s *Server) handleBlueprintAssist(w http.ResponseWriter, r *http.Request) {
 
 // readDraft takes the draft out of a reply. It returns nil and a reason when there is none or it may not be
 // offered: not valid, or touching a service the AI may not change.
-func (s *Server) readDraft(reply string, cur blueprint.Blueprint, off, readOnly map[string]bool) (*blueprint.Blueprint, string) {
+func (s *Server) readDraft(ctx context.Context, reply string, cur blueprint.Blueprint, off, readOnly map[string]bool) (*blueprint.Blueprint, string) {
 	m := blueprintTagRE.FindStringSubmatch(reply)
 	if m == nil {
 		return nil, ""
@@ -181,6 +186,9 @@ func (s *Server) readDraft(reply string, cur blueprint.Blueprint, off, readOnly 
 	}
 	if err := next.Validate(); err != nil {
 		return nil, err.Error()
+	}
+	if e := s.checkResources(ctx, next); e != nil {
+		return nil, e.msg
 	}
 	// A block the assistant adds or changes must be on a service the AI may change.
 	for _, b := range next.Blocks {
