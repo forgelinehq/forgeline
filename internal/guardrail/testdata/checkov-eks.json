@@ -1,0 +1,92 @@
+{
+ "check_type": "terraform_plan",
+ "results": {
+  "failed_checks": [
+   {
+    "check_id": "CKV_AWS_338",
+    "check_name": "Ensure CloudWatch log groups retains logs for at least 1 year",
+    "check_result": {
+     "result": "FAILED",
+     "evaluated_keys": [
+      "retention_in_days"
+     ]
+    },
+    "resource": "module.k8s.aws_cloudwatch_log_group.cluster",
+    "resource_address": "module.k8s.aws_cloudwatch_log_group.cluster",
+    "severity": null
+   },
+   {
+    "check_id": "CKV_AWS_158",
+    "check_name": "Ensure that CloudWatch Log Group is encrypted by KMS",
+    "check_result": {
+     "result": "FAILED",
+     "evaluated_keys": [
+      "kms_key_id"
+     ]
+    },
+    "resource": "module.k8s.aws_cloudwatch_log_group.cluster",
+    "resource_address": "module.k8s.aws_cloudwatch_log_group.cluster",
+    "severity": null
+   },
+   {
+    "check_id": "CKV_AWS_39",
+    "check_name": "Ensure Amazon EKS public endpoint disabled",
+    "check_result": {
+     "result": "FAILED",
+     "evaluated_keys": [
+      "vpc_config/[0]/endpoint_public_access"
+     ]
+    },
+    "resource": "module.k8s.aws_eks_cluster.this",
+    "resource_address": "module.k8s.aws_eks_cluster.this",
+    "severity": null
+   },
+   {
+    "check_id": "CKV_AWS_37",
+    "check_name": "Ensure Amazon EKS control plane logging is enabled for all log types",
+    "check_result": {
+     "result": "FAILED",
+     "evaluated_keys": [
+      "enabled_cluster_log_types"
+     ]
+    },
+    "resource": "module.k8s.aws_eks_cluster.this",
+    "resource_address": "module.k8s.aws_eks_cluster.this",
+    "severity": null
+   },
+   {
+    "check_id": "CKV_AWS_38",
+    "check_name": "Ensure Amazon EKS public endpoint not accessible to 0.0.0.0/0",
+    "check_result": {
+     "result": "FAILED",
+     "evaluated_keys": []
+    },
+    "resource": "module.k8s.aws_eks_cluster.this",
+    "resource_address": "module.k8s.aws_eks_cluster.this",
+    "severity": null
+   },
+   {
+    "check_id": "CKV_AWS_58",
+    "check_name": "Ensure EKS Cluster has Secrets Encryption Enabled",
+    "check_result": {
+     "result": "FAILED",
+     "evaluated_keys": [
+      "encryption_config/[0]/resources"
+     ]
+    },
+    "resource": "module.k8s.aws_eks_cluster.this",
+    "resource_address": "module.k8s.aws_eks_cluster.this",
+    "severity": null
+   }
+  ],
+  "passed_checks": []
+ },
+ "summary": {
+  "passed": 22,
+  "failed": 6,
+  "skipped": 0,
+  "parsing_errors": 0,
+  "resource_count": 12,
+  "checkov_version": "3.4.5"
+ }
+}

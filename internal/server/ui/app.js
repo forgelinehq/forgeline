@@ -28,6 +28,7 @@ import { visibleGroups, isSettingsPath, activeItem, canOpenSettings } from './li
 import { settingsPage } from './pages/settings.js';
 import { ssoPage } from './pages/sso.js';
 import { approvalRulesPage } from './pages/approval_rules.js';
+import { policyPacksPage } from './pages/policy_packs.js';
 import { teamPage } from './pages/team.js';
 import { mcpServersPage } from './pages/mcp_servers.js';
 import { buildRulesPage } from './pages/build_rules.js';
@@ -263,6 +264,7 @@ async function boot() {
     route('/people', guard('admin', inSettings(peoplePage)));
     route('/sso', guard('admin', inSettings(ssoPage)));
     route('/approval-rules', guard('developer', inSettings(approvalRulesPage)));
+    route('/policy-packs', guard('developer', inSettings(policyPacksPage)));
     route('/audit', guard('admin', inSettings(auditPage)));
     route('/account', guard('viewer', accountPage));
   }

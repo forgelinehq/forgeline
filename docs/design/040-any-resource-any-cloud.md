@@ -243,6 +243,51 @@ Before any plan can be sent for approval, Forgeline turns it into JSON (`tofu sh
 - Results show on the preview: **deny** stops Send for approval; **warn** is shown to the approver, who must read it.
 - The approver sees which pack version passed, and it is recorded in the audit log.
 
+**Policy packs, as built (step 6).** The three tools were run on real plans first (a 57-resource web stack and the EKS
+cluster, planned on the maintainer's Raspberry Pi), each as a container with no network, a read-only root, no
+capabilities and 256 MB:
+
+| | Conftest 0.71.1 | Trivy 0.76.2 | Checkov 3.4.5 |
+|---|---|---|---|
+| Image (arm64) | 91 MB | 186 MB | 579 MB |
+| Time on the web stack | under 1 s | about 2 s | 6 to 9 s |
+| Rules it brings | none (your own Rego) | yes, each rated low to critical | yes, more of them, **not rated offline** |
+| Findings, web stack / EKS | (own rules) | 11 / 7 | 29 / 6 |
+| Names the plan's resource | whatever the rule returns | not inside a module (`type.name_<hash>`) | yes |
+
+So the choice the note left open is: **no pack is on by default; Trivy is the pack to turn on for known
+misconfigurations; Conftest is for an organization's own rules; Checkov is offered for those who want its wider set.**
+Trivy rates its findings, so an administrator can say "deny from critical" in one setting; it is small and quick, and
+pipelines already use it for images. Checkov's ratings come only from its vendor's service, which a container with no
+network cannot reach, so each of its findings is a warning unless the administrator lists the rule as one that denies.
+Nothing is on by default because both tools flag choices Forgeline's own blocks make on purpose (a public load
+balancer, logs kept less than a year, AWS-owned encryption keys): an organization should decide which of those it
+denies or skips, and both lists are settings of a pack.
+
+- **Settings › Policy packs** (administrators change, developers read). A pack has a name, a tool, on or off, and:
+  for Trivy a severity from which it denies; for Trivy and Checkov, rule ids that always deny and rule ids to skip; for
+  Conftest, up to 10 Rego files (a `deny` rule denies, a `warn` rule warns, and a rule may return `{msg, address}` to
+  name the resource). Changes are audited; Rego text is counted in the audit entry, not copied.
+- **What a pack is given.** `tofu show -json` prints sensitive values in plain text and carries the whole earlier
+  state. The pack gets a copy with only the planned values, the resource changes and the configuration, in which every
+  value OpenTofu marks sensitive is replaced; variables, output changes and the earlier state are left out. Checkov and
+  Conftest report the same on the copy as on the full plan; Trivy differed by one finding on the web stack.
+- **How a pack runs.** `docker run` with the image named by digest (the same bytes on amd64 and arm64), `--network
+  none`, `--read-only` with a small `/tmp`, `--cap-drop ALL`, `no-new-privileges`, the server's own user, 1 GB of
+  memory, 256 processes, four minutes, and the copy of the plan mounted read-only. Each tool is told not to fetch rule
+  updates. Docker is the only way to run a pack; there is no in-process fallback (principle 3).
+- **Never a silent pass.** A pack that cannot start, runs out of time, or prints something Forgeline cannot read is a
+  **deny** named `pack-failed`, with the tool's last words. A preview records when the packs were last changed, and
+  Send for approval refuses a preview checked by other packs than today's.
+- **What people see.** Findings join the built-in ones (`trivy:AWS-0040`, `checkov:CKV_AWS_58`, `conftest:<pack>`),
+  denies first; under them, "Checked by built-in rules builtin-2; Broad (trivy 0.76.2, 1 skipped)". The approver's note
+  names each pack, tool version and warning count. Trivy's module names are matched back to the plan's addresses when
+  exactly one fits. A pack shows at most 100 findings and counts the rest.
+
+Not built: choosing another registry for the tool images (an organization that cannot reach Docker Hub must mirror
+them under the same digests); packs per cloud account; Trivy's or Checkov's own custom rule formats; packs from the
+library (step 8).
+
 ### 5. The generic block: any resource of an allowed provider
 
 For what no template covers, an administrator can allow **resource types** (per cloud account): for example
@@ -292,7 +337,7 @@ AWS first: steps 1 to 8 are AWS only. In order, each step its own design-note ad
 3. Lambda, Step Functions and ECS cluster templates.
 4. Repositories linked to blocks, with suggested pipelines (layer 3).
 5. EKS with namespaces (two approved steps) and the data pipeline template (built; the code pipeline is covered by step 4).
-6. Policy packs in containers: Conftest, Checkov or Trivy (layer 4, second part).
+6. Policy packs in containers: Conftest, Checkov or Trivy (layer 4, second part). **Built**; see "Policy packs, as built".
 7. The generic resource block from provider schemas, with the administrator's allow list (layer 5), for AWS.
 8. The library for templates, skills, tools, agents and guardrail packs (layer 7).
 9. **Only after AWS is complete** (maintainer, 2026-11-08): Google Cloud, then Azure, then RunPod and others (layer 6),
@@ -300,7 +345,5 @@ AWS first: steps 1 to 8 are AWS only. In order, each step its own design-note ad
 
 ## Not decided
 
-- Whether Conftest, Checkov or Trivy is the default pack (Checkov has the most Terraform rules; Trivy also scans images,
-  which pipelines already need). Decide in step 6 with real plans.
 - How far Watch goes on Azure and Google Cloud.
 - Signing library items (Sigstore) or checksums only.

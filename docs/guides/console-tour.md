@@ -21,7 +21,7 @@ with the number of changes waiting. What you see depends on your role, and old a
 | Ship | Pipelines, GitHub Actions |
 | Team | Team, Agents, Missions, Marketplace |
 | Watch | Map, Infrastructure, Kubernetes, Security |
-| Settings | Setup, People and roles, Sign-in (SSO), Connections, Secrets, Models, Memory, AI use and budgets, Audit log, Approval rules, API tokens |
+| Settings | Setup, People and roles, Sign-in (SSO), Connections, Secrets, Models, Memory, AI use and budgets, Audit log, Approval rules, Policy packs, API tokens |
 
 ## Home
 
@@ -155,7 +155,8 @@ block is created empty; you set its value in AWS, and only the apps linked to it
 open to the internet, an unencrypted disk, an IAM user, or a policy that allows every action: Send for approval stays off
 until the blueprint changes, and the attempt is audited. An amber line is a **warning**, for example a web port open to
 the internet on a front door or deleting a table: it does not stop anything, and the approver reads it next to the
-changes.
+changes. An administrator can add more rules under Settings › Policy packs (Trivy, Checkov, or your own Conftest
+rules); their findings appear in the same list, and the line under it says which rule sets checked the preview.
 
 ![A blueprint]({{ '/console/90-blueprint.png' | relative_url }})
 
@@ -291,7 +292,7 @@ up the agent stops before its next model call.
 
 ![AI use and budgets]({{ '/console/95-ai-use.png' | relative_url }})
 
-**People and roles**, **Sign-in (SSO)**, **Approval rules** and the **Audit log** are described in
+**People and roles**, **Sign-in (SSO)**, **Approval rules**, **Policy packs** and the **Audit log** are described in
 [People and security]({{ '/guides/people-and-security/' | relative_url }}). The audit log records who did what, including
 refusals and failed sign-ins; administrators can filter it, download it as CSV or JSON Lines, and choose how long it is
 kept.

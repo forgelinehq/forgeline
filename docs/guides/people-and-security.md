@@ -73,6 +73,40 @@ will review their changes; only administrators change them, and every change is 
 
 ![Approval rules]({{ '/console/86-approval-rules.png' | relative_url }})
 
+## Policy packs
+
+Every blueprint preview is checked by Forgeline's built-in guardrails. Under **Settings → Policy packs** an
+administrator can add more rules:
+
+- **Trivy**: known misconfigurations, each rated low to critical. Choose **Deny from** (for example Critical) and a
+  plan with such a finding cannot be sent for approval; everything below is a warning the approver reads.
+- **Checkov**: a wider set. It does not rate its findings when it runs without a network, so each is a warning unless
+  you list the rule under **Rules that always deny**.
+- **Conftest**: your own rules in Rego. A `deny` rule stops the plan; a `warn` rule is a warning. The plan is the
+  input, as OpenTofu prints it. A rule can return `{"msg": ..., "address": ...}` to name the resource:
+
+  ```rego
+  package main
+
+  import rego.v1
+
+  deny contains {"msg": msg, "address": rc.address} if {
+  	some rc in input.resource_changes
+  	rc.type == "aws_cloudwatch_log_group"
+  	rc.change.after.retention_in_days < 30
+  	msg := "logs must be kept at least 30 days"
+  }
+  ```
+
+Trivy and Checkov flag some choices Forgeline's blocks make on purpose, such as a load balancer open to the internet.
+Read the first previews, then list what your organization accepts under **Rules to skip** (the preview counts what was
+skipped) and what it never accepts under **Rules that always deny**.
+
+Each pack runs in a container with no network, a read-only file system and no capabilities, on a copy of the plan
+without its sensitive values. The server needs Docker. A pack that cannot run stops the plan; it never counts as a
+pass. After the packs change, a preview made earlier must be made again before it can be sent. The preview and the
+approval say which pack and tool version checked the plan, and every change to the packs is in the audit log.
+
 ## Downloading the audit log, and how long it is kept
 
 Under **Settings → Audit log**, filter by person, action or dates and choose **Download CSV** (for a spreadsheet or

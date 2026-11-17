@@ -70,6 +70,10 @@ type BlueprintPlan struct {
 	// Guardrails are the rules the plan breaks (note 040): a deny stops it being sent for approval.
 	Guardrails       []guardrail.Finding `json:"guardrails"`
 	GuardrailVersion string              `json:"guardrail_version,omitempty"`
+	// Packs are the policy packs that checked the plan (note 040, step 6), and PacksAt when the packs were last
+	// changed: a preview checked by other packs than today's cannot be sent.
+	Packs   []guardrail.PackRun `json:"packs,omitempty"`
+	PacksAt time.Time           `json:"packs_at"`
 	// Removal is set when the preview removes what the blueprint built (note 041): keep-data, unprotect (step 1
 	// of removing everything) or all (step 2). FinalSnapshot keeps a last snapshot of each database.
 	Removal       string `json:"removal,omitempty"`
@@ -362,6 +366,11 @@ func (s *Server) runPlan(ctx context.Context, b StoredBlueprint, st awsSettings,
 	}
 	plan.GuardrailVersion = guardrail.Version
 	plan.Guardrails = append(plan.Guardrails, s.quotaFindings(ctx, st, plan.Changes)...)
+	found, runs, at, err := s.runPacks(ctx, show)
+	if err != nil {
+		return err
+	}
+	plan.Guardrails, plan.Packs, plan.PacksAt = append(plan.Guardrails, found...), runs, at
 	file, err := os.ReadFile(filepath.Join(dir, "plan.bin"))
 	if err != nil || len(file) > maxPlanFile {
 		return errors.New("the plan file could not be kept")
@@ -539,6 +548,9 @@ func (s *Server) readyPlan(ctx context.Context, id string) (StoredBlueprint, sto
 			return b, p, refusal(http.StatusConflict, "the preview breaks a guardrail ("+f.Address+"): "+f.Text)
 		}
 	}
+	if packs, err := s.loadPolicyPacks(ctx); err != nil || !packs.UpdatedAt.Equal(p.PacksAt) {
+		return b, p, refusal(http.StatusConflict, "the policy packs changed since the preview; preview again")
+	}
 	return b, p, nil
 }
 
@@ -575,7 +587,7 @@ func (s *Server) proposeBlueprint(ctx context.Context, c *CloudChange, id string
 	}
 	c.Guardrails = p.Guardrails
 	c.PreviewNote = "Planned by OpenTofu " + tofuVersion + " at " + p.FinishedAt.Format(time.RFC3339) + "; exactly this plan is applied. " +
-		fmt.Sprintf("Guardrails %s: no rule denied it; %d warning(s) to read.", p.GuardrailVersion, len(p.Guardrails))
+		fmt.Sprintf("Guardrails %s: no rule denied it; %d warning(s) to read.", p.GuardrailVersion, len(p.Guardrails)) + packsLine(p.Packs)
 	return func(ctx context.Context, c *CloudChange, _ awsSettings) error {
 		if c.Account != p.AWSAccount {
 			return fmt.Errorf("the preview was made in AWS account %s, but the connection is now %s", p.AWSAccount, c.Account)

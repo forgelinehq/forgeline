@@ -113,6 +113,7 @@ type Server struct {
 	bp         bpBusy         // one blueprint preview or apply at a time
 	tofuBin    tofuState      // the OpenTofu binary, once found
 	tofuRun    tofuRunner     // tests replace OpenTofu
+	packRun    packRunner     // tests replace the policy pack containers
 	usage      usageState     // serialises updates to the AI use ledger
 	missions   missionState   // missions (note 037)
 	gcpInv     invCache       // Google Cloud inventories, by scope
