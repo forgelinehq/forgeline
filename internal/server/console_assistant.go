@@ -485,6 +485,9 @@ func (s *Server) callModel(ctx context.Context, system string, turns []chatTurn)
 	if model == "" {
 		model = defaultAssistModel
 	}
+	if sc := scopeFrom(ctx); sc != nil && sc.model != "" {
+		model, st.Model = sc.model, sc.model // an agent with its own model (note 044, part 3)
+	}
 	ctx, cancel := context.WithTimeout(ctx, assistTimeout)
 	defer cancel()
 	switch st.Backend {

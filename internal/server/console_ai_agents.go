@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -71,10 +72,12 @@ type AgentVersion struct {
 	Skills       []SkillPin `json:"skills"`
 	Tools        []string   `json:"tools"`
 	Tier         string     `json:"tier"`
-	Note         string     `json:"note,omitempty"`
-	By           string     `json:"by"`
-	At           time.Time  `json:"at"`
-	Hash         string     `json:"hash"`
+	// Model is the model this agent asks (note 044, part 3); empty uses the assistant's model.
+	Model string    `json:"model,omitempty"`
+	Note  string    `json:"note,omitempty"`
+	By    string    `json:"by"`
+	At    time.Time `json:"at"`
+	Hash  string    `json:"hash"`
 }
 
 // AIAgent is a named worker with a history.
@@ -105,7 +108,11 @@ func (v AgentVersion) computeHash(id string) string {
 	for i, p := range v.Skills {
 		pins[i] = fmt.Sprintf("%s@%d", p.ID, p.N)
 	}
-	return sha("agent", id, fmt.Sprint(v.N), v.Instructions, strings.Join(pins, ","), strings.Join(v.Tools, ","), v.Tier)
+	parts := []string{"agent", id, fmt.Sprint(v.N), v.Instructions, strings.Join(pins, ","), strings.Join(v.Tools, ","), v.Tier}
+	if v.Model != "" {
+		parts = append(parts, "model:"+v.Model) // only when set, so versions made before models keep their fingerprint
+	}
+	return sha(parts...)
 }
 
 func (a AIAgent) version(n int) (AgentVersion, bool) {
@@ -137,6 +144,7 @@ type agentScope struct {
 	label     string // "agent-id@version", for the audit log
 	agent     string // the agent's id, whose use and budget a call counts against (note 036)
 	agentName string
+	model     string // the agent's own model, or empty for the assistant's
 }
 
 func scopeFrom(ctx context.Context) *agentScope {
@@ -205,7 +213,7 @@ func (s *Server) composeAgent(ctx context.Context, a AIAgent, v AgentVersion) (*
 	for _, t := range v.Tools {
 		tools[t] = true
 	}
-	return &agentScope{persona: b.String(), tools: tools, label: fmt.Sprintf("%s@%d", a.ID, v.N), agent: a.ID, agentName: a.Name}, nil
+	return &agentScope{persona: b.String(), tools: tools, label: fmt.Sprintf("%s@%d", a.ID, v.N), agent: a.ID, agentName: a.Name, model: v.Model}, nil
 }
 
 // --- storage helpers ---
@@ -473,8 +481,12 @@ type agentRequest struct {
 	Skills       []SkillPin `json:"skills"` // N 0 pins the skill's current version
 	Tools        []string   `json:"tools"`
 	Tier         string     `json:"tier"`
+	Model        string     `json:"model"`
 	Note         string     `json:"note"`
 }
+
+// agentModelRE is the shape of a model name a backend takes (claude-sonnet-5-5, claude-haiku-4.5): never a flag.
+var agentModelRE = regexp.MustCompile(`^[a-z0-9][a-z0-9.\-]{1,60}$`)
 
 // resolve checks the request and returns the version it describes, with skill pins made exact.
 func (s *Server) resolveAgent(ctx context.Context, req agentRequest) (AgentVersion, string) {
@@ -492,6 +504,8 @@ func (s *Server) resolveAgent(ctx context.Context, req agentRequest) (AgentVersi
 		return AgentVersion{}, fmt.Sprintf("an agent can use at most %d skills", maxAgentSkills)
 	case !validTier(req.Tier):
 		return AgentVersion{}, "the tier must be T0 (advisory) or T1 (may file proposals)"
+	case req.Model != "" && !agentModelRE.MatchString(req.Model):
+		return AgentVersion{}, "the model is a name such as claude-haiku-5-5, or empty for the assistant's model"
 	}
 	if err := validTools(req.Tools, req.Tier, append(s.pluginToolNames(ctx), s.extMCPToolNames(ctx)...)...); err != nil {
 		return AgentVersion{}, err.Error()
@@ -517,7 +531,7 @@ func (s *Server) resolveAgent(ctx context.Context, req agentRequest) (AgentVersi
 	}
 	tools := append([]string{}, req.Tools...)
 	sort.Strings(tools)
-	return AgentVersion{Instructions: req.Instructions, Skills: pins, Tools: tools, Tier: req.Tier, Note: req.Note}, ""
+	return AgentVersion{Instructions: req.Instructions, Skills: pins, Tools: tools, Tier: req.Tier, Model: req.Model, Note: req.Note}, ""
 }
 
 func (s *Server) listAgents(ctx context.Context) ([]AIAgent, error) {
@@ -590,7 +604,7 @@ func (s *Server) saveNewAgent(ctx context.Context, p Principal, ip string, req a
 }
 
 func sameVersionContent(a, b AgentVersion) bool {
-	if a.Instructions != b.Instructions || a.Tier != b.Tier || strings.Join(a.Tools, ",") != strings.Join(b.Tools, ",") || len(a.Skills) != len(b.Skills) {
+	if a.Instructions != b.Instructions || a.Tier != b.Tier || a.Model != b.Model || strings.Join(a.Tools, ",") != strings.Join(b.Tools, ",") || len(a.Skills) != len(b.Skills) {
 		return false
 	}
 	for i := range a.Skills {

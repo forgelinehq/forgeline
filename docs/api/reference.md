@@ -168,7 +168,7 @@ A run's `status` is one of `queued`, `running`, `succeeded`, `failed`, `canceled
 | `DELETE /v1/ai/skills/{id}` | admin | Remove a skill no agent version uses. |
 | `GET /v1/ai/agents` | developer | Agents with current version, tier and tools. |
 | `GET /v1/ai/agents/{id}` | developer | One agent with every version. |
-| `POST /v1/ai/agents` | admin | Create an agent (version 1): instructions, pinned skills, tool allowlist, tier T0 or T1. |
+| `POST /v1/ai/agents` | admin | Create an agent (version 1): instructions, pinned skills, tool allowlist, tier T0 or T1, and optionally `model` (the model it asks, such as `claude-haiku-5-5`; empty uses the assistant's). |
 | `POST /v1/ai/agents/{id}/versions` | admin | Save a new version; skill pins are made exact. |
 | `POST /v1/ai/agents/{id}/rollback` | admin | Copy an old version forward as the current one. |
 | `POST /v1/ai/agents/{id}/disable` | admin | Turn an agent off (it cannot run or be listed). |

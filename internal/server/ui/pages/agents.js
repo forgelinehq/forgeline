@@ -187,7 +187,7 @@ export async function agentPage({ params }) {
         h('div', { class: 'min-w-0 flex-1' },
           h('h1', { class: 'h-page' }, ag.name),
           h('p', { class: 'muted mt-1 text-sm' }, ag.description || 'No description.'),
-          h('div', { class: 'mt-2 flex flex-wrap items-center gap-2 text-xs' }, ag.disabled ? h('span', { class: 'pill-idle' }, 'Off') : h('span', { class: 'pill-ok' }, 'On'), tierPill(v.tier),
+          h('div', { class: 'mt-2 flex flex-wrap items-center gap-2 text-xs' }, ag.disabled ? h('span', { class: 'pill-idle' }, 'Off') : h('span', { class: 'pill-ok' }, 'On'), tierPill(v.tier), v.model ? h('span', { class: 'pill-idle', id: 'agent-model-pill' }, v.model) : null,
             h('span', { class: 'muted' }, 'Version ' + v.n + (v.n === ag.current ? ' (current)' : ' (older)')), shortHash(v.hash))),
         admin && h('div', { class: 'flex w-full flex-wrap gap-2 sm:w-auto' },
           h('button', { class: 'btn-secondary btn-sm', type: 'button', id: 'toggle-agent', onclick: async () => {
@@ -293,11 +293,15 @@ function agentForm(ag, skills, tools, after, base) {
         h('div', { class: 'grid gap-2 sm:grid-cols-2' }, boxes));
     }));
     const note = h('input', { id: 'agent-note', class: 'input', maxlength: '200', placeholder: ag ? 'What changed and why' : 'First version' });
+    // Which model it asks (note 044, part 3): a quick one for routing, a stronger one for analysis.
+    const MODELS = [['', 'The assistant\u2019s model'], ['claude-haiku-5-5', 'Claude Haiku 5.5 (quick, cheap)'], ['claude-sonnet-5-5', 'Claude Sonnet 5.5'], ['claude-opus-5-5', 'Claude Opus 5.5'], ['claude-fable-5-2', 'Claude Fable 5.2 (most capable)']];
+    const curModel = cur?.model || '';
+    const model = h('select', { id: 'agent-model', class: 'input' }, [...MODELS, ...(curModel && !MODELS.some(m => m[0] === curModel) ? [[curModel, curModel]] : [])].map(([v, l]) => h('option', { value: v, selected: v === curModel }, l)));
     const err = h('div', { class: 'hidden' });
     const form = h('div', {});
     const go = h('button', { class: 'btn-primary', type: 'button', id: 'agent-save', onclick: async () => {
       err.classList.add('hidden'); go.disabled = true;
-      const body = { name: name.value, description: desc.value, instructions: ins.input.value, tier: tier.value, note: note.value,
+      const body = { name: name.value, description: desc.value, instructions: ins.input.value, tier: tier.value, model: model.value, note: note.value,
         // A skill already pinned stays at its pinned version; a newly ticked one takes the latest.
         skills: [...form.querySelectorAll('[data-skill]:checked')].map(b => ({ id: b.dataset.skill, n: pins[b.dataset.skill] || 0 })),
         tools: [...form.querySelectorAll('[data-tool]:checked')].map(b => b.dataset.tool) };
@@ -313,6 +317,7 @@ function agentForm(ag, skills, tools, after, base) {
     form.append(h('div', { class: 'space-y-6' },
       step('Who it is', null, h('div', { class: 'grid gap-4 sm:grid-cols-2' }, field('Name', name, null, 'agent-name'), field('What it is for', desc, null, 'agent-desc'))),
       step('How much it may do', 'Either way it works as the person who asks, and can never do more than they could.', tierBox, tier),
+      step('Model', 'Which model it asks. Agents in one workflow can differ: a quick model to route, a stronger one to analyse. Its use counts against its budget either way.', field('Model', model, null, 'agent-model')),
       step('Instructions', 'What it should do and how. Write in Markdown; the model receives exactly this text.', ins.el),
       step('Skills it follows', ag ? 'Skills stay on the version they were pinned to. Untick and tick one to take its latest version.' : 'Step-by-step procedures it can follow.', skillBoxes),
       step('What it can use', 'Pick the fewest it needs. Administrators can turn services off for every agent in Settings › Connections.', toolBoxes),

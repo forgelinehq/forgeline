@@ -1,6 +1,6 @@
 # 044: Agent graphs
 
-Status: **Parts 1 and 2 built (2026-11-17): the engine and the canvas.** Builds on workflows (Team › Agents › Workflows: stages of agents run in order, with
+Status: **Parts 1 to 3 built (2026-11-17): the engine, the canvas, a model per agent.** Builds on workflows (Team › Agents › Workflows: stages of agents run in order, with
 gates), agents and their tools (note 024), proposals and approval rules (notes 016, 032), budgets (036), missions (037)
 and the library (040, step 8).
 
@@ -91,6 +91,14 @@ Each part is checked on the Pi with the real model before the next.
 - With the real model on the Pi ([2026-11-17](../testing/2026-11-17-agent-graphs.md)): parallel lookups, a merge, an
   agent writing its fields, a rule branch, a question answered by an administrator (a developer refused), and an agent
   choosing its wire. It also showed that a lookup's arguments fail only when run; the error now says what the tool takes.
+
+## Part 3, as built: a model per agent
+
+An agent version may name its **model** (`claude-haiku-5-5`, `claude-sonnet-5-5`, `claude-opus-5-5`,
+`claude-fable-5-2`, or any name the backend takes; empty uses the assistant's model). It is part of the version and
+its fingerprint, so changing it is a new version; versions without one keep their fingerprints. A name must look like
+a model name (letters, digits, dots and dashes, never a flag), because the CLI backends receive it as `--model`. The
+agent's use still counts against its own budget. Tested with a scripted model: two agents in one graph ask two models.
 
 ## Not decided
 
