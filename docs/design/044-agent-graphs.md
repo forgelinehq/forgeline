@@ -98,7 +98,9 @@ An agent version may name its **model** (`claude-haiku-5-5`, `claude-sonnet-5-5`
 `claude-fable-5-2`, or any name the backend takes; empty uses the assistant's model). It is part of the version and
 its fingerprint, so changing it is a new version; versions without one keep their fingerprints. A name must look like
 a model name (letters, digits, dots and dashes, never a flag), because the CLI backends receive it as `--model`. The
-agent's use still counts against its own budget. Tested with a scripted model: two agents in one graph ask two models.
+agent's use still counts against its own budget. Tested with a scripted model (two agents in one graph ask two models)
+and on the Pi with real Claude: a Haiku agent and a default (Sonnet) agent each answered as their model, and an
+unknown model fails the step with a plain message.
 
 ## Not decided
 
