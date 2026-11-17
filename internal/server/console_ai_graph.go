@@ -283,12 +283,12 @@ func (s *Server) resolveGraph(ctx context.Context, in WFGraph) (WFGraph, string)
 			return g, fmt.Sprintf("node %s: wire it to what comes next, or to an end", n.ID)
 		}
 		for _, k := range n.Reads {
-			if _, isNode := ids[k]; !isNode && !fields[k] {
+			if _, isNode := ids[k]; !isNode && !fields[k] && k != "trigger" {
 				return g, fmt.Sprintf("node %s reads %q, which no node writes", n.ID, k)
 			}
 		}
 		for _, r := range n.Rules {
-			if _, isNode := ids[r.Key]; !isNode && !fields[r.Key] {
+			if _, isNode := ids[r.Key]; !isNode && !fields[r.Key] && r.Key != "trigger" {
 				return g, fmt.Sprintf("node %s tests %q, which no node writes", n.ID, r.Key)
 			}
 		}
@@ -771,11 +771,8 @@ func (s *Server) askGraphAgent(ctx context.Context, run WFRun, n WFNode, task st
 }
 
 func runPrincipal(run WFRun) Principal {
-	p := Principal{Name: run.By, Role: authn.Role(run.RunAs)}
-	if run.Trigger == "schedule" {
-		p.Name = "workflow:" + run.Workflow
-	}
-	return p
+	// A schedule, a webhook or a failed run records "workflow:<id>" as who started it: nobody is there.
+	return Principal{Name: run.By, Role: authn.Role(run.RunAs)}
 }
 
 // stateData is the named state values, each closed so it cannot end the data block early.

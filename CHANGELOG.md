@@ -62,6 +62,8 @@ section in the pull request that makes the change; a release moves it under its 
 - **After a session ends**, the console stops polling the server (it asked every minute, forever).
 
 ### Added
+- **Graph workflows start from a signed webhook or a failed pipeline run** (note 044, part 4). An administrator makes the
+  webhook secret (shown once); GitHub's signature header works too. What started the run reaches agents as data.
 - **A model per agent** (note 044, part 3). An agent can name the model it asks (for example Claude Haiku to route and
   Claude Opus to analyse); empty keeps the assistant's model. It is part of the agent's version.
 - **Agent workflows as graphs on a canvas** (note 044, parts 1 and 2), like LangGraph drawn like n8n. Nodes share one

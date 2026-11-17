@@ -1,6 +1,6 @@
 # 044: Agent graphs
 
-Status: **Parts 1 to 3 built (2026-11-17): the engine, the canvas, a model per agent.** Builds on workflows (Team › Agents › Workflows: stages of agents run in order, with
+Status: **Parts 1 to 4 built (2026-11-17): the engine, the canvas, a model per agent, triggers.** Builds on workflows (Team › Agents › Workflows: stages of agents run in order, with
 gates), agents and their tools (note 024), proposals and approval rules (notes 016, 032), budgets (036), missions (037)
 and the library (040, step 8).
 
@@ -101,6 +101,27 @@ a model name (letters, digits, dots and dashes, never a flag), because the CLI b
 agent's use still counts against its own budget. Tested with a scripted model (two agents in one graph ask two models)
 and on the Pi with real Claude: a Haiku agent and a default (Sonnet) agent each answered as their model, and an
 unknown model fails the step with a plain message.
+
+## Part 4, as built: triggers
+
+A graph version may also start:
+
+- **from a signed webhook** (`webhook: true`). An administrator makes the secret on the workflow's page; it is shown
+  once, kept sealed by the vault, and a new one ends the old. A sender POSTs JSON to `/hooks/workflows/<id>` with
+  `X-Forgeline-Signature-256: sha256=<hex HMAC-SHA256 of the body>`; GitHub's `X-Hub-Signature-256` is taken too, so a
+  repository webhook can start a graph. Every wrong signature, unknown workflow or missing secret answers 401 the same
+  way, and a bad signature is audited. At most 64 KB, at most 30 webhook runs an hour, one run at a time.
+- **after a failed pipeline run** (`on_run_failed`: pipeline names, or `*`). When such a run fails, each workflow that
+  follows it starts, with `{"run", "pipeline", "reason"}` as the state value `trigger`.
+
+Either way the run is recorded as started by `workflow:<id>`, never above its run-as role, and the payload reaches agents
+only as data (`reads: ["trigger"]`). Stage workflows take no triggers. On the maintainer's Pi the console is reachable
+only on the tailnet, so a webhook from outside needs a public route there (a maintainer's decision).
+
+Tested: signatures (none, wrong secret, wrong scheme, another body, an unknown workflow), a new secret ending the old,
+the payload as closed data, refusals (no webhook in the version, turned off, the hourly limit), only graphs take
+triggers, a real failing pipeline run starting the workflow that follows it with its steps audited as the workflow.
+11 mutations of the checks; the one that survived showed a redundant branch, now removed.
 
 ## Not decided
 
