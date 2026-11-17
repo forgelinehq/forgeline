@@ -205,7 +205,8 @@ off), whether it **advises** or **proposes**, and its budget for the month. The 
 
 **Agents** lists your agents, skills and workflows. An agent has instructions (Markdown, with a live preview and advisory
 checks), skills it follows, and a short list of tools, shown in plain words. **Advises** means it reads and explains;
-**Proposes** means it can also draft changes, which a person approves. Every save is a version you can roll back, and you
+**Proposes** means it can also draft changes, which a person approves. An agent can ask its own **model** (a quick one
+for routing, a stronger one for analysis); by default it uses the assistant's. Every save is a version you can roll back, and you
 can talk to an agent beside its page.
 
 A **workflow** runs agents together. Draw one on the canvas (**New workflow on the canvas**), as in n8n: add nodes from

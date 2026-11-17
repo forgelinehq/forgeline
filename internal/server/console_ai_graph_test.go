@@ -349,3 +349,40 @@ func TestGraphLookupArgumentsSayWhatTheToolTakes(t *testing.T) {
 		t.Errorf("run = %s %q", run.Status, run.Error)
 	}
 }
+
+// Different agents in one graph ask different models: an agent's own model, or the assistant's when it has none.
+func TestGraphAgentsUseTheirOwnModels(t *testing.T) {
+	m := newMCPHarness(t)
+	quick := agentBody("Router", nil, nil, "T0")
+	quick["model"] = "claude-haiku-5-5"
+	r := newAgent(t, m.admin, quick)
+	if r.Versions[0].Model != "claude-haiku-5-5" {
+		t.Fatalf("model not saved: %+v", r.Versions[0])
+	}
+	plain := newAgent(t, m.admin, agentBody("Analyst", nil, nil, "T0"))
+	for _, bad := range []string{"--yolo", "claude haiku", "-p", strings.Repeat("x", 70)} {
+		b := agentBody("Bad", nil, nil, "T0")
+		b["model"] = bad
+		m.admin.expect(400, "POST", "/v1/ai/agents", b)
+	}
+	w := newWorkflow(t, m.admin, graphBody("Mixed", []WFNode{{ID: "start", Kind: nodeStart}, agentNode("first", r.ID, "route"), agentNode("second", plain.ID, "analyse"), {ID: "end", Kind: nodeEnd}},
+		[]WFEdge{wire("start", "first"), wire("first", "second"), wire("second", "end")}))
+	m.llm.script("routed", "analysed")
+	run := m.waitRun(m.startWF(m.dev, w.ID, 202).ID, wfSucceeded, wfFailed)
+	if run.Status != wfSucceeded {
+		t.Fatalf("run = %+v", run)
+	}
+	m.llm.mu.Lock()
+	first, second := m.llm.reqs[0]["model"], m.llm.reqs[1]["model"]
+	m.llm.mu.Unlock()
+	if first != "claude-haiku-5-5" || second != defaultAssistModel {
+		t.Errorf("models asked: %v then %v", first, second)
+	}
+	// A version that differs only in its model is a new version, with a new fingerprint.
+	quick["model"] = "claude-opus-5-5"
+	var a AIAgent
+	json.Unmarshal(m.admin.expect(201, "POST", "/v1/ai/agents/"+r.ID+"/versions", quick), &a)
+	if a.Current != 2 || a.Versions[1].Hash == a.Versions[0].Hash {
+		t.Errorf("a model change is not a new version: %+v", a.Versions)
+	}
+}

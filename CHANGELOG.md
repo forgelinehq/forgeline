@@ -62,6 +62,8 @@ section in the pull request that makes the change; a release moves it under its 
 - **After a session ends**, the console stops polling the server (it asked every minute, forever).
 
 ### Added
+- **A model per agent** (note 044, part 3). An agent can name the model it asks (for example Claude Haiku to route and
+  Claude Opus to analyse); empty keeps the assistant's model. It is part of the agent's version.
 - **Agent workflows as graphs on a canvas** (note 044, parts 1 and 2), like LangGraph drawn like n8n. Nodes share one
   state: agents (which may also write named fields), read-only lookups without a model, decisions by a rule or by an
   agent's choice, questions a person answers, merges and ends. Loops are allowed, bounded per node (3, up to 10) and

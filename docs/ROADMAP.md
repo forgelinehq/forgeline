@@ -25,7 +25,7 @@ in [PLAN.md](PLAN.md).
 
 Status: **parts 1 and 2 built: the graph engine and the canvas.** Workflows as graphs of agents, lookups, decisions,
 questions for people, merges and ends, with shared state, bounded loops and every run drawn node by node. Checked with the real model on the Pi
-([2026-11-17](testing/2026-11-17-agent-graphs.md)). Next: different models per agent and decisions by agent (part 3), then webhook and
+([2026-11-17](testing/2026-11-17-agent-graphs.md)). Part 3 built: a model per agent. Next and decisions by agent (part 3), then webhook and
 Watch triggers (part 4). See [note 044](design/044-agent-graphs.md).
 
 ## Native image builds (note 043)
