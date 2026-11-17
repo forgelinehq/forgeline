@@ -96,7 +96,7 @@ export async function agentsPage({ query }) {
   mount(el, pageHeader('Agents', 'Your AI team. Each agent has instructions, skills it follows and a short list of tools, and works as the person who asks it. Every save is a version you can roll back.',
     admin && (tab === 'agents' ? h('button', { class: 'btn-primary', id: 'new-agent', type: 'button', onclick: () => agentForm(null, skills.skills, tools.tools) }, icon('plus', 'size-4'), 'New agent')
       : tab === 'skills' ? h('button', { class: 'btn-primary', id: 'new-skill', type: 'button', onclick: () => skillForm(null) }, icon('plus', 'size-4'), 'New skill')
-      : h('button', { class: 'btn-primary', id: 'new-workflow', type: 'button', onclick: () => workflowForm(null, agents.agents) }, icon('plus', 'size-4'), 'New workflow'))),
+      : h('div', { class: 'flex gap-2' }, h('a', { class: 'btn-primary', id: 'new-graph', href: '#/workflows/new/canvas' }, icon('plus', 'size-4'), 'New workflow on the canvas'), h('button', { class: 'btn-secondary', id: 'new-workflow', type: 'button', onclick: () => workflowForm(null, agents.agents) }, icon('plus', 'size-4'), 'New workflow in stages')))),
     h('div', { class: 'mb-4 flex gap-1', role: 'tablist' }, tabBtn('agents', 'Agents (' + agents.agents.length + ')'), tabBtn('skills', 'Skills (' + skills.skills.length + ')'), tabBtn('workflows', 'Workflows (' + workflows.workflows.length + ')')),
     tab === 'agents' ? agentCards : tab === 'skills' ? skillRows : workflowList(workflows.workflows, admin));
   return el;

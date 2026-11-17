@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -68,6 +69,8 @@ type WFVersion struct {
 	By           string    `json:"by"`
 	At           time.Time `json:"at"`
 	Hash         string    `json:"hash"`
+	// Graph is a graph workflow (note 044); a version has either stages or a graph.
+	Graph *WFGraph `json:"graph,omitempty"`
 }
 
 // Workflow is a named sequence with a history.
@@ -88,6 +91,10 @@ func (v WFVersion) computeHash(id string) string {
 			fmt.Fprintf(&b, "|%s@%d:%s", s.Agent, s.AgentN, s.Task)
 		}
 		b.WriteString("]")
+	}
+	if v.Graph != nil {
+		g, _ := json.Marshal(v.Graph)
+		b.Write(g)
 	}
 	return sha("workflow", id, fmt.Sprint(v.N), b.String(), fmt.Sprint(v.EveryMinutes), v.RunAs)
 }
@@ -144,6 +151,15 @@ type WFRun struct {
 	Error        string       `json:"error,omitempty"`
 	StartedAt    time.Time    `json:"started_at"`
 	FinishedAt   *time.Time   `json:"finished_at,omitempty"`
+	// A graph run (note 044): the state, every node visit, what is ready to run, what a merge has received, the
+	// question it waits at, and how many node steps it took.
+	Graph   bool                `json:"graph,omitempty"`
+	State   map[string]string   `json:"state,omitempty"`
+	Visits  []WFNodeRun         `json:"visits,omitempty"`
+	Ready   []string            `json:"ready,omitempty"`
+	Arrived map[string][]string `json:"arrived,omitempty"`
+	Waiting string              `json:"waiting,omitempty"`
+	Steps   int                 `json:"steps,omitempty"`
 }
 
 func (r WFRun) final() bool {
@@ -166,6 +182,7 @@ type wfRequest struct {
 	Name         string    `json:"name"`
 	Description  string    `json:"description"`
 	Stages       []WFStage `json:"stages"`
+	Graph        *WFGraph  `json:"graph"`
 	EveryMinutes int       `json:"every_minutes"`
 	RunAs        string    `json:"run_as"`
 	Note         string    `json:"note"`
@@ -174,6 +191,24 @@ type wfRequest struct {
 func (s *Server) resolveWorkflow(ctx context.Context, req wfRequest) (WFVersion, string) {
 	if m := checkNameDesc(req.Name, req.Description); m != "" {
 		return WFVersion{}, m
+	}
+	if req.Graph != nil {
+		if len(req.Stages) > 0 {
+			return WFVersion{}, "a workflow has stages or a graph, not both"
+		}
+		switch {
+		case req.RunAs != "viewer" && req.RunAs != "developer":
+			return WFVersion{}, "run it as viewer or developer: nobody is watching an unattended run, so it never runs as an administrator"
+		case req.EveryMinutes != 0 && (req.EveryMinutes < minEveryMinutes || req.EveryMinutes > maxEveryMinutes):
+			return WFVersion{}, fmt.Sprintf("a schedule is every %d to %d minutes", minEveryMinutes, maxEveryMinutes)
+		case len(req.Note) > maxNote:
+			return WFVersion{}, fmt.Sprintf("the note is longer than %d characters", maxNote)
+		}
+		g, msg := s.resolveGraph(ctx, *req.Graph)
+		if msg != "" {
+			return WFVersion{}, msg
+		}
+		return WFVersion{Graph: &g, EveryMinutes: req.EveryMinutes, RunAs: req.RunAs, Note: req.Note}, ""
 	}
 	switch {
 	case len(req.Stages) == 0:
@@ -257,12 +292,15 @@ func (s *Server) handleListWorkflows(w http.ResponseWriter, r *http.Request) {
 	out := make([]map[string]any, 0, len(all))
 	for _, wf := range all {
 		cur, _ := wf.version(wf.Current)
-		steps := 0
+		steps, nodes := 0, 0
 		for _, st := range cur.Stages {
 			steps += len(st.Steps)
 		}
+		if cur.Graph != nil {
+			nodes = len(cur.Graph.Nodes)
+		}
 		out = append(out, map[string]any{"id": wf.ID, "name": wf.Name, "description": wf.Description, "current": wf.Current, "disabled": wf.Disabled,
-			"stages": len(cur.Stages), "steps": steps, "every_minutes": cur.EveryMinutes, "run_as": cur.RunAs, "versions": len(wf.Versions)})
+			"stages": len(cur.Stages), "steps": steps, "nodes": nodes, "every_minutes": cur.EveryMinutes, "run_as": cur.RunAs, "versions": len(wf.Versions)})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"workflows": out})
 }
@@ -461,6 +499,9 @@ func (s *Server) startRun(ctx context.Context, wf Workflow, v WFVersion, trigger
 	}
 	run := WFRun{ID: timeID(), Workflow: wf.ID, WorkflowName: wf.Name, Version: v.N, Hash: v.Hash, Trigger: trigger, By: by.Name, RunAs: role,
 		Status: wfRunning, StartedAt: time.Now().UTC()}
+	if v.Graph != nil {
+		run.Graph, run.State, run.Ready = true, map[string]string{}, []string{v.Graph.start()}
+	}
 	for _, st := range v.Stages {
 		sr := WFStageRun{Name: st.Name, Gate: st.Gate, Status: wfPending}
 		for _, sp := range st.Steps {
@@ -557,6 +598,10 @@ func (s *Server) driveRun(ctx context.Context, id string) {
 		ver, ok := wf.version(run.Version)
 		if !ok {
 			s.finishRun(&run, wfFailed, "the workflow version is missing")
+			return
+		}
+		if ver.Graph != nil {
+			s.driveGraph(ctx, run, *ver.Graph)
 			return
 		}
 		i := -1
@@ -771,9 +816,9 @@ func (s *Server) handleReleaseGate(w http.ResponseWriter, r *http.Request) {
 		s.defError(w, "run", err)
 		return
 	}
-	if run.Status != wfWaiting {
+	if run.Status != wfWaiting || run.Graph {
 		s.wf.mu.Unlock()
-		writeError(w, http.StatusConflict, "this run is not waiting for anyone")
+		writeError(w, http.StatusConflict, "this run is not waiting at a stage gate (a graph run waits for an answer instead)")
 		return
 	}
 	for i := range run.Stages {
@@ -845,6 +890,11 @@ func (s *Server) startWorkflows(ctx context.Context) {
 			for i := range run.Stages {
 				if run.Stages[i].Status == wfRunning || run.Stages[i].Status == wfPending {
 					run.Stages[i].Status = wfSkipped
+				}
+			}
+			for i := range run.Visits {
+				if run.Visits[i].Status == wfRunning {
+					run.Visits[i].Status, run.Visits[i].Error = wfFailed, "interrupted by a restart"
 				}
 			}
 			s.finishRun(&run, wfFailed, "server restarted")

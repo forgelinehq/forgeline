@@ -208,6 +208,23 @@ checks), skills it follows, and a short list of tools, shown in plain words. **A
 **Proposes** means it can also draft changes, which a person approves. Every save is a version you can roll back, and you
 can talk to an agent beside its page.
 
+A **workflow** runs agents together. Draw one on the canvas (**New workflow on the canvas**), as in n8n: add nodes from
+the palette, drag from a node's blue port to the next to wire them, and pick a node to set it.
+
+- **Agent**: an agent does a task; it may also write named fields, such as `severity`.
+- **Lookup**: one read-only lookup, without a model.
+- **Decide**: takes one wire, either by a rule on what earlier nodes wrote or by an agent choosing.
+- **Ask a person**: waits for an answer or an approval.
+- **Merge**: waits for parallel branches.
+- **End**: finishes the run.
+
+Loops are allowed. Each node runs at most its limit (3 unless you say up to 10), and a run at most 50 steps. **Tidy up**
+lays the graph out left to right. A run is drawn on the same canvas: nodes turn green or red, the wires taken are bold,
+and picking a node shows what went in and what came out each time it ran. A question waiting for you is answered at the
+top of the run. Only an agent's own tools at the "Proposes" level can propose changes, and a different administrator
+approves them. Workflows made of stages still run as before; **Edit on the canvas** turns one into a graph as a new
+version.
+
 ![Agents]({{ '/console/106-agents.png' | relative_url }})
 ![An agent's page]({{ '/console/83-agent-page.png' | relative_url }})
 

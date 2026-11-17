@@ -62,6 +62,12 @@ section in the pull request that makes the change; a release moves it under its 
 - **After a session ends**, the console stops polling the server (it asked every minute, forever).
 
 ### Added
+- **Agent workflows as graphs on a canvas** (note 044, parts 1 and 2), like LangGraph drawn like n8n. Nodes share one
+  state: agents (which may also write named fields), read-only lookups without a model, decisions by a rule or by an
+  agent's choice, questions a person answers, merges and ends. Loops are allowed, bounded per node (3, up to 10) and
+  per run (50 steps). Each run is saved after every step and drawn on the canvas with every visit's input and output.
+  Writes still only go through an agent's own proposals, approved by a different administrator. Stage workflows keep
+  working and can be turned into graphs.
 - **Team › Library** (note 040, step 8; it was the Marketplace). Packages can now also hold guardrail packs (installed
   turned off) and MCP servers (installed with no token and no tools on), and say who reviewed them; the page lists the
   canvas's OpenTofu templates too, with a filter per kind. New packages: Incident response, Drift watch, Upgrade

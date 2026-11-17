@@ -5,6 +5,8 @@ import { session } from '../app.js';
 import { layoutWorkflow, edgePath, runStatuses, edgeLive, NODE_W, NODE_H } from '../lib/wfgraph.js';
 import { fit } from '../lib/canvas.js';
 import { flowPath } from '../lib/flow.js';
+import { graphCanvas, graphRunView } from './agent_canvas.js';
+import { autoPlace } from '../lib/agraph.js';
 
 // Workflows: stages of agents, run in order. Steps in a stage run together; a gated stage waits for
 // an administrator. Each save is a new version, like skills and agents.
@@ -54,7 +56,7 @@ export function workflowList(workflows, admin) {
   return h('div', { class: 'card overflow-x-auto' }, h('table', { class: 'tbl' }, h('thead', {}, h('tr', {}, ['Workflow', 'Stages', 'Runs', 'Run as', 'Version'].map(x => h('th', {}, x)))),
     h('tbody', {}, workflows.map(w => h('tr', { class: 'row-link', tabindex: '0', 'data-workflow': w.id, onclick: () => navigate('/workflows/' + w.id), onkeydown: (e) => { if (e.key === 'Enter') navigate('/workflows/' + w.id); } },
       h('td', {}, h('div', { class: 'font-medium' }, w.name, w.disabled && h('span', { class: 'pill-idle ml-2' }, 'off')), h('div', { class: 'muted max-w-md truncate text-xs' }, w.description)),
-      h('td', { class: 'text-sm' }, `${w.stages} stages, ${w.steps} steps`), h('td', { class: 'text-sm' }, scheduleLabel(w.every_minutes)),
+      h('td', { class: 'text-sm' }, w.nodes ? `a graph of ${w.nodes} nodes` : `${w.stages} stages, ${w.steps} steps`), h('td', { class: 'text-sm' }, scheduleLabel(w.every_minutes)),
       h('td', { class: 'text-sm' }, w.run_as), h('td', { class: 'text-sm' }, 'v' + w.current))))));
 }
 
@@ -77,16 +79,17 @@ export async function workflowPage({ params }) {
       try { const r = await post('/v1/ai/workflows/' + wf.id + '/run', { version: v.n }); navigate('/workflow-runs/' + r.id); } catch (e) { toast(e.message, 'error'); }
     } }, icon('play', 'size-3.5'), 'Run v' + v.n);
     mount(el, pageHeader(wf.name, wf.description, h('a', { class: 'btn-secondary btn-sm', href: '#/agents?tab=workflows' }, 'All workflows'), start,
-      admin && h('button', { class: 'btn-secondary btn-sm', id: 'new-version', type: 'button', onclick: () => workflowForm(wf, agents, () => load(false), v) }, icon('plus', 'size-3.5'), 'New version'),
+      admin && h('a', { class: 'btn-secondary btn-sm', id: 'edit-canvas', href: '#/workflows/' + wf.id + '/canvas' }, icon('edit', 'size-3.5'), 'Edit on the canvas'),
+      admin && !v.graph && h('button', { class: 'btn-secondary btn-sm', id: 'new-version', type: 'button', onclick: () => workflowForm(wf, agents, () => load(false), v) }, icon('plus', 'size-3.5'), 'New version'),
       admin && h('button', { class: 'btn-secondary btn-sm', type: 'button', onclick: async () => { try { await post('/v1/ai/workflows/' + wf.id + (wf.disabled ? '/enable' : '/disable')); load(true); } catch (e) { toast(e.message, 'error'); } } }, wf.disabled ? 'Turn on' : 'Turn off')),
       wf.disabled && h('div', { class: 'mb-4' }, notice('warn', 'This workflow is off. It cannot run and its schedule is paused.')),
       h('div', { class: 'space-y-4' },
         h('section', { class: 'card card-pad' },
           h('div', { class: 'mb-3 flex flex-wrap items-center justify-between gap-2' }, h('h2', { class: 'h-section' }, 'Version ' + v.n + (v.n === wf.current ? ' (current)' : '')),
             h('div', { class: 'flex flex-wrap items-center gap-2 text-sm' }, h('span', { class: 'pill-idle' }, scheduleLabel(v.every_minutes || 0)), h('span', { class: 'pill-idle', title: 'The most a run of this workflow may do. Never an administrator.' }, 'runs as ' + v.run_as), shortHash(v.hash))),
-          workflowGraph(layoutWorkflow(v, agentName)),
-          h('h3', { class: 'h-section mb-2 mt-4' }, 'Stages in detail'),
-          h('ol', { class: 'space-y-3', id: 'workflow-stages' }, v.stages.map((st, i) => h('li', { class: 'rounded-lg border border-slate-200 p-3 dark:border-slate-800' },
+          v.graph ? graphCanvas(autoPlace(v.graph), { agentName }) : workflowGraph(layoutWorkflow(v, agentName)),
+          v.graph ? null : h('h3', { class: 'h-section mb-2 mt-4' }, 'Stages in detail'),
+          v.graph ? null : h('ol', { class: 'space-y-3', id: 'workflow-stages' }, (v.stages || []).map((st, i) => h('li', { class: 'rounded-lg border border-slate-200 p-3 dark:border-slate-800' },
             h('div', { class: 'mb-2 flex items-center gap-2 text-sm font-medium' }, h('span', { class: 'muted' }, (i + 1) + '.'), st.name, st.gate && h('span', { class: 'pill-wait', title: 'An administrator releases this stage' }, icon('lock', 'size-3'), 'waits for approval')),
             h('div', { class: 'grid gap-2 ' + (st.steps.length > 1 ? 'sm:grid-cols-2' : '') }, st.steps.map(sp => h('div', { class: 'rounded-md bg-slate-50 p-2.5 text-sm dark:bg-slate-900' },
               h('div', { class: 'mb-1 flex items-center justify-between gap-2' }, h('a', { class: 'font-medium text-brand-700 hover:underline dark:text-brand-200', href: '#/agents/' + sp.agent }, agentName(sp.agent)), h('span', { class: 'muted text-xs' }, 'v' + sp.agent_n)),
@@ -169,8 +172,15 @@ export async function workflowRunPage({ params }) {
   const el = h('div', {});
   let timer;
   async function load() {
-    let r;
-    try { r = await get('/v1/ai/workflow-runs/' + encodeURIComponent(params.id)); } catch (e) { return mount(el, errorBox(e.message)); }
+    let r, g = null, agents = [];
+    try {
+      r = await get('/v1/ai/workflow-runs/' + encodeURIComponent(params.id));
+      if (r.graph) {
+        const [wf, ag] = await Promise.all([get('/v1/ai/workflows/' + encodeURIComponent(r.workflow)), get('/v1/ai/agents').then(x => x.agents).catch(() => [])]);
+        g = autoPlace(wf.versions.find(v => v.n === r.version)?.graph || { nodes: [], edges: [] });
+        agents = ag;
+      }
+    } catch (e) { return mount(el, errorBox(e.message)); }
     const live = r.status === 'running' || r.status === 'waiting';
     mount(el, pageHeader(r.workflow_name, `Run of version ${r.version}, ${r.trigger === 'schedule' ? 'by its schedule' : 'started by ' + r.by}, ${relTime(r.started_at)}`,
       h('a', { class: 'btn-secondary btn-sm', href: '#/workflows/' + r.workflow }, 'The workflow'),
@@ -183,8 +193,8 @@ export async function workflowRunPage({ params }) {
       r.error && h('div', { class: 'mb-4' }, r.status === 'failed' ? errorBox(r.error) : notice('info', r.error)),
       r.environments?.length ? h('div', { class: 'mb-4' }, notice('info', 'Environments requested: ', r.environments.length, '. They wait for an administrator. ', h('a', { class: 'underline', href: '#/environments' }, 'See Environments'))) : null,
       r.proposals?.length ? h('div', { class: 'mb-4' }, notice('info', 'Filed for approval: ', r.proposals.map(id => h('a', { class: 'mr-2 underline', href: '#/proposals/' + id }, id)), ' Nothing changes until a different administrator approves.')) : null,
-      runGraph(r),
-      h('ol', { class: 'space-y-3', id: 'run-stages' }, r.stages.map((st, i) => h('li', { class: 'card card-pad', 'data-stage-status': st.status },
+      r.graph ? graphRunView(r, g, agents, load) : runGraph(r),
+      r.graph ? null : h('ol', { class: 'space-y-3', id: 'run-stages' }, (r.stages || []).map((st, i) => h('li', { class: 'card card-pad', 'data-stage-status': st.status },
         h('div', { class: 'mb-2 flex flex-wrap items-center justify-between gap-2' }, h('div', { class: 'flex items-center gap-2 font-medium' }, h('span', { class: 'muted' }, (i + 1) + '.'), st.name, st.gate && h('span', { class: 'pill-idle' }, icon('lock', 'size-3'), st.gate_by ? 'released by ' + st.gate_by : 'gated')), statusPill(st.status)),
         st.status === 'waiting' && h('div', { class: 'mb-3' }, notice('warn', 'This stage waits for an administrator. ', admin ? h('button', { class: 'btn-primary btn-sm ml-2', id: 'release-gate', type: 'button', onclick: async () => {
           try { await post('/v1/ai/workflow-runs/' + r.id + '/release'); toast('Released', 'ok'); load(); } catch (e) { toast(e.message, 'error'); }

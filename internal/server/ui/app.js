@@ -14,6 +14,7 @@ import { workflowPage, workflowRunPage } from './pages/workflows.js';
 import { guardPage } from './pages/guard.js';
 import { kubernetesPage } from './pages/kubernetes.js';
 import { environmentsPage } from './pages/environments.js';
+import { graphEditorPage } from './pages/agent_canvas.js';
 import { marketplacePage } from './pages/marketplace.js';
 import { infraPage } from './pages/infra.js';
 import { githubSettingsPage, claudeSettingsPage } from './pages/integrations.js';
@@ -241,6 +242,7 @@ async function boot() {
     route('/agents', guard('developer', agentsPage));
     route('/agents/:id', guard('developer', agentPage));
     route('/skills/:id', guard('developer', skillPage));
+    route('/workflows/:id/canvas', guard('admin', graphEditorPage));
     route('/workflows/:id', guard('developer', workflowPage));
     route('/workflow-runs/:id', guard('developer', workflowRunPage));
     route('/proposals', guard('viewer', proposalsPage));
