@@ -88,7 +88,9 @@ Each part is checked on the Pi with the real model before the next.
   wires drawn by dragging from a port, **Tidy up**, and a stages workflow converted to a graph that the server's own
   checks accept (tested). Checked in a browser: a graph with an agent, a rule decision and a second agent, drawn by
   dragging and saved.
-- Not checked yet: a graph run with the real model on the Pi.
+- With the real model on the Pi ([2026-11-17](../testing/2026-11-17-agent-graphs.md)): parallel lookups, a merge, an
+  agent writing its fields, a rule branch, a question answered by an administrator (a developer refused), and an agent
+  choosing its wire. It also showed that a lookup's arguments fail only when run; the error now says what the tool takes.
 
 ## Not decided
 

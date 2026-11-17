@@ -234,6 +234,7 @@ export async function graphEditorPage({ params }) {
       case 'lookup':
         out.push(select_('Lookup', n.tool || '', [['', 'Pick a lookup'], ...lookups.map(t => [t, t])], v => set({ tool: v }), 'g-tool'),
           textarea('Arguments (JSON)', n.args ? JSON.stringify(n.args) : '{}', v => { try { set({ args: v ? JSON.parse(v) : null }); } catch { toast('Not valid JSON', 'error'); } }, 'g-args', 2),
+          n.tool ? h('p', { class: 'hint -mt-2', id: 'g-tool-help' }, 'It takes ' + (tools.find(t => t.name === n.tool)?.help || '{}') + '. Numbers without quotes.') : null,
           h('p', { class: 'hint' }, 'Reads one thing without a model. What it returns is saved under ' + n.id + '.'));
         break;
       case 'decide': {
