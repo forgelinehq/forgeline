@@ -1,0 +1,25 @@
+{
+  "id": "guardrails-cost",
+  "version": 1,
+  "title": "Cost guard",
+  "description": "Conftest rules that warn the approver before something expensive is made: EKS clusters, NAT gateways, two-zone databases, large sizes, provisioned tables and logs kept for ever.",
+  "publisher": "Forgeline",
+  "tags": [
+    "guardrails",
+    "cost"
+  ],
+  "skills": [],
+  "agents": [],
+  "policy_packs": [
+    {
+      "id": "cost-guard",
+      "name": "Cost guard",
+      "tool": "conftest",
+      "enabled": false,
+      "rules": {
+        "cost.rego": "package main\n\nimport rego.v1\n\n# Cost guard: warnings the approver reads before something that costs a lot is made. Nothing here denies.\n\ncreates(rc) if \"create\" in rc.change.actions\n\nwarn contains {\"msg\": \"an EKS cluster costs about 73 USD a month before any nodes\", \"address\": rc.address} if {\n\tsome rc in input.resource_changes\n\trc.type == \"aws_eks_cluster\"\n\tcreates(rc)\n}\n\nwarn contains {\"msg\": \"a NAT gateway costs about 32 USD a month plus every gigabyte through it\", \"address\": rc.address} if {\n\tsome rc in input.resource_changes\n\trc.type == \"aws_nat_gateway\"\n\tcreates(rc)\n}\n\nwarn contains {\"msg\": \"a database in two zones costs twice as much\", \"address\": rc.address} if {\n\tsome rc in input.resource_changes\n\trc.type == \"aws_db_instance\"\n\tcreates(rc)\n\trc.change.after.multi_az == true\n}\n\nwarn contains {\"msg\": sprintf(\"%s is a large size; check it is needed\", [size]), \"address\": rc.address} if {\n\tsome rc in input.resource_changes\n\trc.type in {\"aws_db_instance\", \"aws_instance\", \"aws_elasticache_replication_group\"}\n\tcreates(rc)\n\tsome field in [\"instance_class\", \"instance_type\", \"node_type\"]\n\tsize := rc.change.after[field]\n\tis_string(size)\n\tregex.match(`\\.(([4-9]|[1-9][0-9]+)xlarge|metal)`, size)\n}\n\nwarn contains {\"msg\": \"a table with provisioned capacity is paid for whether it is used or not\", \"address\": rc.address} if {\n\tsome rc in input.resource_changes\n\trc.type == \"aws_dynamodb_table\"\n\tcreates(rc)\n\trc.change.after.billing_mode == \"PROVISIONED\"\n}\n\nwarn contains {\"msg\": \"logs kept for ever keep costing; set how many days to keep them\", \"address\": rc.address} if {\n\tsome rc in input.resource_changes\n\trc.type == \"aws_cloudwatch_log_group\"\n\tcreates(rc)\n\trc.change.after.retention_in_days == 0\n}\n"
+      }
+    }
+  ],
+  "sha256": "3069c4b205eb3fb9c4b3d418e74d6579b232be87b309052c9a8d1600ff891638"
+}

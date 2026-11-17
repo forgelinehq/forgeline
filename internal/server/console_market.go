@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/forgelinehq/forgeline/internal/docstore"
+	"github.com/forgelinehq/forgeline/internal/guardrail"
 )
 
 // Marketplace (note 017, slice 7). A package is a bundle of skills and agents in a manifest that
@@ -79,7 +80,11 @@ type MarketPackage struct {
 	Plugins      []MarketPlugin      `json:"plugins,omitempty"`
 	Workflows    []MarketWorkflow    `json:"workflows,omitempty"`
 	EnvTemplates []MarketEnvTemplate `json:"env_templates,omitempty"`
-	SHA256       string              `json:"sha256"`
+	// The library (note 040, step 8): who reviewed it, guardrail packs, and MCP servers (tools).
+	ReviewedBy  string            `json:"reviewed_by,omitempty"`
+	PolicyPacks []guardrail.Pack  `json:"policy_packs,omitempty"`
+	MCPServers  []MarketMCPServer `json:"mcp_servers,omitempty"`
+	SHA256      string            `json:"sha256"`
 }
 
 // contentHash is the fingerprint of everything but the hash field itself.
@@ -99,10 +104,13 @@ func (p MarketPackage) check() error {
 		return errors.New("the version must be 1 or more")
 	case p.Title == "" || p.Publisher == "":
 		return errors.New("a package needs a title and a publisher")
-	case len(p.Skills)+len(p.Agents)+len(p.Plugins)+len(p.Workflows)+len(p.EnvTemplates) == 0:
+	case len(p.Skills)+len(p.Agents)+len(p.Plugins)+len(p.Workflows)+len(p.EnvTemplates)+len(p.PolicyPacks)+len(p.MCPServers) == 0:
 		return errors.New("a package must hold something to install")
 	case p.SHA256 != p.contentHash():
 		return errors.New("the content does not match its sha256")
+	}
+	if err := p.checkLibrary(); err != nil {
+		return err
 	}
 	keys := map[string]bool{}
 	for _, sk := range p.Skills {
@@ -221,6 +229,9 @@ type MarketInstall struct {
 	// environment template ids.
 	Workflows map[string]string `json:"workflows,omitempty"`
 	Templates []string          `json:"templates,omitempty"`
+	// PolicyPacks are the guardrail pack ids it added; MCPServers maps a package key to the MCP server it made.
+	PolicyPacks []string          `json:"policy_packs,omitempty"`
+	MCPServers  map[string]string `json:"mcp_servers,omitempty"`
 	// Source and Signer say where the package came from; an upgrade must come from the same.
 	Source string `json:"source,omitempty"`
 	Signer string `json:"signer,omitempty"`
@@ -419,6 +430,25 @@ func (s *Server) handleMarketInstall(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	in.Plugins = plugins
+	// Guardrail packs and MCP servers first: they can be refused (a name already in use) before anything is made.
+	if msg, err := s.libraryConflicts(ctx, in, pkg.MarketPackage); err != nil {
+		s.internalError(w, "reading the policy packs and MCP servers", err)
+		return
+	} else if msg != "" {
+		writeError(w, http.StatusConflict, msg)
+		return
+	}
+	for _, step := range []func(context.Context, *MarketInstall, MarketPackage, string, time.Time) error{s.installPolicyPacks, s.installMCPServers} {
+		if err := step(ctx, &in, pkg.MarketPackage, p.Name, now); err != nil {
+			var refused *installRefusal
+			if errors.As(err, &refused) {
+				writeError(w, http.StatusConflict, refused.msg)
+				return
+			}
+			s.internalError(w, "installing the package", err)
+			return
+		}
+	}
 	note := fmt.Sprintf("Marketplace: %s v%d sha256:%s", pkg.ID, pkg.Version, pkg.SHA256[:12])
 	for _, sk := range pkg.Skills {
 		if err := s.installSkill(ctx, &in, sk, note, p.Name, now); err != nil {
@@ -455,7 +485,19 @@ func (s *Server) handleMarketInstall(w http.ResponseWriter, r *http.Request) {
 	if upgrade {
 		verb = "market.upgrade"
 	}
-	s.auditReq(r, verb, "market/"+pkg.ID, fmt.Sprintf("v%d sha256:%s tier %s", pkg.Version, pkg.SHA256[:12], in.Tier), true)
+	detail := fmt.Sprintf("v%d sha256:%s tier %s", pkg.Version, pkg.SHA256[:12], in.Tier)
+	if len(in.PolicyPacks) > 0 {
+		detail += "; policy packs (off) " + strings.Join(in.PolicyPacks, " ")
+	}
+	if len(in.MCPServers) > 0 {
+		var ids []string
+		for _, id := range in.MCPServers {
+			ids = append(ids, id)
+		}
+		sort.Strings(ids)
+		detail += "; MCP servers (no token, tools off) " + strings.Join(ids, " ")
+	}
+	s.auditReq(r, verb, "market/"+pkg.ID, detail, true)
 	writeJSON(w, http.StatusCreated, in)
 }
 
@@ -692,6 +734,10 @@ func (s *Server) handleMarketUninstall(w http.ResponseWriter, r *http.Request) {
 			s.internalError(w, "removing a template", err)
 			return
 		}
+	}
+	if err := s.uninstallLibrary(ctx, in, principalFrom(ctx).Name); err != nil {
+		s.internalError(w, "removing the policy packs and MCP servers it added", err)
+		return
 	}
 	if err := s.docs.Delete(ctx, kindMarketInstall, in.ID); err != nil {
 		s.internalError(w, "removing the install", err)

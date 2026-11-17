@@ -28,7 +28,7 @@ export const SPACES = [
     { path: '/team', label: 'Team', min: 'developer' },
     { path: '/agents', label: 'Agents', min: 'developer', also: ['/skills/', '/workflows/', '/workflow-runs/'] },
     { path: '/missions', label: 'Missions', min: 'developer' },
-    { path: '/marketplace', label: 'Marketplace', min: 'developer' },
+    { path: '/library', label: 'Library', min: 'developer', also: ['/marketplace'] },
   ] },
   { id: 'watch', label: 'Watch', icon: 'eye', path: '/map', tabs: [
     { path: '/map', label: 'Map', min: 'viewer' },

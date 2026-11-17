@@ -82,7 +82,7 @@ export async function teamPage() {
   const you = h('div', { class: 'flex w-56 items-center gap-2.5 rounded-xl border-2 border-dashed border-brand-500 p-3' },
     h('span', { class: 'flex size-9 items-center justify-center rounded-xl bg-brand-600 text-sm font-bold text-white', 'aria-hidden': 'true' }, (session.name || '?').slice(0, 1).toUpperCase()),
     h('span', {}, h('b', {}, 'You and your team'), h('span', { class: 'muted block text-xs' }, 'approve every change')));
-  const hire = h('a', { href: '#/marketplace', class: 'flex w-60 items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-300 p-6 text-sm text-slate-500 hover:border-brand-400 hover:text-brand-700 dark:border-slate-700 dark:text-slate-400' }, icon('plus', 'size-4'), 'Hire an agent');
+  const hire = h('a', { href: '#/library', class: 'flex w-60 items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-300 p-6 text-sm text-slate-500 hover:border-brand-400 hover:text-brand-700 dark:border-slate-700 dark:text-slate-400' }, icon('plus', 'size-4'), 'Hire an agent');
 
   const tree = buildTree(members);
   const chart = members.length
@@ -90,7 +90,7 @@ export async function teamPage() {
         h('div', { class: 'h-5 w-0.5 bg-slate-300 dark:bg-slate-700', 'aria-hidden': 'true' }),
         h('ul', { class: 'flex flex-wrap justify-center gap-x-4 gap-y-6 border-t-2 border-slate-300 pt-5 dark:border-slate-700' },
           tree.map(m => h('li', { class: 'flex flex-col items-center' }, node(m))), admin && h('li', {}, hire))))
-    : emptyState('sparkle', 'No agents yet', 'An agent is an assistant with one job, its own instructions and tools. Make one, or hire one from the marketplace.',
+    : emptyState('sparkle', 'No agents yet', 'An agent is an assistant with one job, its own instructions and tools. Make one, or hire one from the library.',
         h('div', { class: 'mt-4 flex justify-center gap-2' }, admin && h('a', { class: 'btn-primary', href: '#/agents' }, 'Make an agent'), h('a', { class: 'btn-secondary', href: '#/marketplace' }, 'Browse the marketplace')));
 
   const run = team.mission;

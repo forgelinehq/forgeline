@@ -9,6 +9,7 @@ const VERBS = {
   get_step_log: ['Read a step’s log', 'Reading a step’s log'],
   run_failure: ['Worked out why a run failed', 'Working out why a run failed'],
   list_pipelines: ['Listed your pipelines', 'Listing your pipelines'],
+  blueprints_built: ['Read what the blueprints built', 'Reading what the blueprints built'],
   get_pipeline: ['Read a pipeline', 'Reading a pipeline'],
   aws_accounts: ['Checked which AWS accounts are connected', 'Checking which AWS accounts are connected'],
   aws_resources: ['Listed AWS resources', 'Listing AWS resources'],

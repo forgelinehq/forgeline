@@ -19,7 +19,7 @@ with the number of changes waiting. What you see depends on your role, and old a
 | Home | Today, Approvals |
 | Build | Design, Environments, Blueprints, Built |
 | Ship | Pipelines, GitHub Actions |
-| Team | Team, Agents, Missions, Marketplace |
+| Team | Team, Agents, Missions, Library |
 | Watch | Map, Infrastructure, Kubernetes, Security |
 | Settings | Setup, People and roles, Sign-in (SSO), Connections, Secrets, Models, Memory, AI use and budgets, Audit log, Approval rules, Resource types, Policy packs, API tokens |
 
@@ -217,8 +217,11 @@ it; a claim that names no lookup the agent ran is left out and counted.
 
 ![A finished mission]({{ '/console/97-mission-done.png' | relative_url }})
 
-**Marketplace** offers ready-made agents, skills, teams and environment templates, installed as versions you can review.
-A team is several agents and a workflow that runs them together in one install:
+**Library** offers ready-made agents, skills, teams, tools, guardrail packs and environment templates, installed as
+versions you can review, and lists the reviewed OpenTofu templates the canvas offers. Filter by kind at the top. A
+guardrail pack is installed turned off, and a tool (an MCP server) with no token and none of its tools on, so nothing
+changes until an administrator turns it on. A team is several agents and a workflow that runs them together in one
+install:
 
 | Package | What it gives you |
 | --- | --- |
@@ -227,6 +230,11 @@ A team is several agents and a workflow that runs them together in one install:
 | AgentCore readiness | An advisor that checks an agent against Amazon Bedrock AgentCore's documented rules, region and permissions |
 | Repository to pipeline | Reads an allowed GitHub repository and prepares a pipeline for you to confirm |
 | Architecture review | A light Well-Architected review of an AWS account, citing AWS's documentation |
+| Incident response | Runbooks for the first minutes, a rollback, the handover and the postmortem, and a scribe that keeps the timeline |
+| Drift watch | Compares what each blueprint built with what is in AWS now |
+| Upgrade planner | Runtimes and versions near the end of support, with dates from AWS documentation |
+| Known misconfigurations, Cost guard, Data protection | Guardrail packs (Trivy, and Conftest rules) |
+| GitHub (read only), AWS Knowledge, Terraform Registry | Tools agents can be given |
 | Cost watch, Security review, Failed-run triage, Cluster health | Single agents for those jobs |
 
 Every agent only reads unless its package says it may prepare something for you to confirm; nothing is saved, run or

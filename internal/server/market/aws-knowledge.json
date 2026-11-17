@@ -1,0 +1,24 @@
+{
+  "id": "aws-knowledge",
+  "version": 1,
+  "title": "AWS Knowledge",
+  "description": "AWS's public MCP server for its documentation, API references and regional availability. Needs no token and no AWS account.",
+  "publisher": "Forgeline",
+  "tags": [
+    "tools",
+    "aws"
+  ],
+  "skills": [],
+  "agents": [],
+  "mcp_servers": [
+    {
+      "key": "aws-knowledge",
+      "name": "AWS Knowledge",
+      "description": "AWS documentation, API references and what is available in which region.",
+      "kind": "remote",
+      "url": "https://knowledge-mcp.global.api.aws",
+      "docs": "https://awslabs.github.io/mcp/servers/aws-knowledge-mcp-server"
+    }
+  ],
+  "sha256": "62ac6ab73322828ad29f61e49b29d73d5bf2cda6e3cb2ac3930e8bd055472cc8"
+}

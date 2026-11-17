@@ -62,6 +62,11 @@ section in the pull request that makes the change; a release moves it under its 
 - **After a session ends**, the console stops polling the server (it asked every minute, forever).
 
 ### Added
+- **Team › Library** (note 040, step 8; it was the Marketplace). Packages can now also hold guardrail packs (installed
+  turned off) and MCP servers (installed with no token and no tools on), and say who reviewed them; the page lists the
+  canvas's OpenTofu templates too, with a filter per kind. New packages: Incident response, Drift watch, Upgrade
+  planner, three guardrail packs (Trivy critical, Cost guard, Data protection) and three tools (GitHub read only, AWS
+  Knowledge, Terraform Registry). A new read-only tool, `blueprints_built`, tells an agent what each blueprint built.
 - **A resource block for any allowed AWS resource type** (note 040, step 7). An administrator allows resource types per
   account under Settings › Resource types; a Resource block on the canvas then takes any of them, with a form made
   from the AWS provider's own schema. Every setting is checked against that schema on save and preview; secrets,

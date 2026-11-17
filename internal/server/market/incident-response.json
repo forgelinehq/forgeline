@@ -1,0 +1,65 @@
+{
+  "id": "incident-response",
+  "version": 1,
+  "title": "Incident response",
+  "description": "Runbooks for the first minutes of an incident, rolling back, handing over and writing the postmortem, with a scribe agent that builds the timeline from runs, changes and findings.",
+  "publisher": "Forgeline",
+  "tags": [
+    "incidents",
+    "reliability"
+  ],
+  "skills": [
+    {
+      "key": "first-minutes",
+      "name": "Work the first minutes of an incident",
+      "description": "What to find out, in order, before anyone changes anything.",
+      "body": "1. Say what is broken in one sentence, from the user's side (what fails, for whom, since when). If you do not know when it started, say so.\n2. Check what changed recently: failed and recent runs (list_runs, run_failure), and the platform (morning_check). A change in the hour before is the first suspect.\n3. Check what the cloud says: the resources involved (aws_resources) and open findings (guard_findings).\n4. Write down each fact with the time you learned it. Keep guesses apart and mark them as guesses.\n5. Suggest the smallest safe step that stops the harm (roll back, scale out, turn a feature off). Do not change anything yourself: say what to do and who must approve it.\n6. End with: what we know, what we do not know, the next check, and who should be told."
+    },
+    {
+      "key": "rollback",
+      "name": "Roll back a bad release",
+      "description": "How to decide on a rollback and what to check after it.",
+      "body": "1. Name the release that is suspected and the one before it (from runs and their images or commits).\n2. A rollback is right when the problem started with the release and the earlier version did not have it. Say if that is not clear.\n3. In Forgeline, rolling back is running the earlier image: Build › Design, the app's 'Run a new image…', pick the earlier image, preview, and send for approval. A different administrator approves it.\n4. After it is applied, check the same signal that showed the problem, for at least as long as it took to show it.\n5. Note what the rollback did not undo (data written, messages sent, schema changes)."
+    },
+    {
+      "key": "handover",
+      "name": "Hand over on call",
+      "description": "A short handover the next person can act on.",
+      "body": "Write at most ten lines: what is open (incidents, failed runs, changes waiting for approval), what was done and is being watched, what to check first, and anything promised to someone. Use morning_check and list_runs for the facts. Say plainly if there is nothing open."
+    },
+    {
+      "key": "postmortem",
+      "name": "Write a blameless postmortem",
+      "description": "The structure and tone of a postmortem.",
+      "body": "Sections: Summary (two sentences). Impact (who, what, how long). Timeline (times and facts only). What went well. Where we were lucky. Causes: the conditions that made it possible, not a person. What we will change: each with an owner and a date, preferring changes to the system (a guardrail, an alarm, a test) over 'be careful'. Never name a person as the cause. Mark anything you inferred rather than saw."
+    }
+  ],
+  "agents": [
+    {
+      "key": "scribe",
+      "name": "Incident scribe",
+      "description": "Builds the incident timeline from runs, changes, findings and cloud resources, and drafts the handover and postmortem.",
+      "instructions": "You keep the record during an incident. Use the incident skills. Read runs, the platform check, findings and resources; put every fact on a timeline with its time and source. You never change anything and never propose changes: say what a person should do and who approves it. Say clearly what you could not check.",
+      "skills": [
+        "first-minutes",
+        "rollback",
+        "handover",
+        "postmortem"
+      ],
+      "tools": [
+        "morning_check",
+        "list_runs",
+        "get_run",
+        "run_failure",
+        "get_step_log",
+        "aws_accounts",
+        "aws_resources",
+        "guard_findings",
+        "k8s_clusters",
+        "k8s_resources"
+      ],
+      "tier": "T0"
+    }
+  ],
+  "sha256": "899643338023cbbd144401b46331f58b8ccd827eb7393c9d955f24f43afe8bd0"
+}

@@ -232,7 +232,8 @@ async function boot() {
     route('/design/:id', guard('developer', designPage));
     route('/blueprints', guard('developer', blueprintsPage));
     route('/blueprints/:id', guard('developer', blueprintPage));
-    route('/marketplace', guard('developer', marketplacePage));
+    route('/library', guard('developer', marketplacePage));
+    route('/marketplace', guard('developer', marketplacePage)); // the library's old name; links may still use it
     route('/kubernetes', guard('viewer', kubernetesPage));
     route('/kubernetes/:id', guard('viewer', kubernetesPage));
     route('/guard', guard('viewer', guardPage));

@@ -1,0 +1,27 @@
+{
+  "id": "guardrails-baseline",
+  "version": 1,
+  "title": "Known misconfigurations (Trivy)",
+  "description": "A Trivy guardrail pack that denies critical misconfigurations in every preview and warns about the rest. Off until an administrator turns it on.",
+  "publisher": "Forgeline",
+  "tags": [
+    "guardrails",
+    "security"
+  ],
+  "skills": [],
+  "agents": [],
+  "policy_packs": [
+    {
+      "id": "trivy-critical",
+      "name": "Known misconfigurations",
+      "tool": "trivy",
+      "enabled": false,
+      "deny_at": "critical",
+      "skip": [
+        "AWS-0040",
+        "AWS-0041"
+      ]
+    }
+  ],
+  "sha256": "a9e860696079c7751deb85429288344a30b4101a7d47d0b4e78ad03c58d2ae18"
+}

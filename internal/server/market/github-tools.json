@@ -1,0 +1,27 @@
+{
+  "id": "github-tools",
+  "version": 1,
+  "title": "GitHub (read only)",
+  "description": "GitHub's own MCP server, read-only: agents can read repositories, issues, pull requests and Actions runs with a token you give it.",
+  "publisher": "Forgeline",
+  "tags": [
+    "tools",
+    "github"
+  ],
+  "skills": [],
+  "agents": [],
+  "mcp_servers": [
+    {
+      "key": "github",
+      "name": "GitHub",
+      "description": "GitHub's remote MCP server at its read-only address.",
+      "kind": "remote",
+      "url": "https://api.githubcopilot.com/mcp/readonly",
+      "auth_header": "Authorization",
+      "auth_scheme": "Bearer",
+      "token": "a fine-grained GitHub token with read access to the repositories agents may read",
+      "docs": "https://github.com/github/github-mcp-server"
+    }
+  ],
+  "sha256": "6422ff465f510d310cd0245bad14f5c88d4c3c5c5474e0e281399815690a1375"
+}

@@ -1,0 +1,40 @@
+{
+  "id": "upgrade-planner",
+  "version": 1,
+  "title": "Upgrade planner",
+  "description": "Finds runtimes and versions in an AWS account that are near or past the end of support (Lambda runtimes, EKS, RDS and ElastiCache engines) and orders the upgrades.",
+  "publisher": "Forgeline",
+  "tags": [
+    "aws",
+    "upgrades"
+  ],
+  "skills": [
+    {
+      "key": "upgrade-plan",
+      "name": "Plan upgrades before support ends",
+      "description": "Which versions to look for and how to order the work.",
+      "body": "1. List the account's Lambda functions (runtime), EKS clusters (version), RDS instances and ElastiCache clusters (engine and version) with aws_resources, and call_aws describe commands where the inventory lacks the version.\n2. For each, look up its end of standard support in AWS documentation (aws_search_documentation, aws_read_documentation). Quote the page you used; do not rely on memory for dates.\n3. Order by the date support ends, soonest first. Mark anything already past it, and anything that costs extra once past it (EKS extended support, RDS extended support).\n4. For each item, say what the upgrade involves and what to test, and whether a blueprint or template manages it (then the change is a blueprint preview).\n5. You only read and advise."
+    }
+  ],
+  "agents": [
+    {
+      "key": "upgrades",
+      "name": "Upgrade planner",
+      "description": "Lists what needs upgrading before support ends, with dates from AWS documentation.",
+      "instructions": "You plan upgrades. Use the upgrade skill. Every date must come from an AWS documentation page you read in this conversation, quoted with its address. You only read.",
+      "skills": [
+        "upgrade-plan"
+      ],
+      "tools": [
+        "aws_accounts",
+        "aws_resources",
+        "call_aws",
+        "aws_search_documentation",
+        "aws_read_documentation",
+        "blueprints_built"
+      ],
+      "tier": "T0"
+    }
+  ],
+  "sha256": "e8eeca82a2b5c5b9edfdf0a8ab5e133d561905d9430ad732449937de39df7860"
+}
