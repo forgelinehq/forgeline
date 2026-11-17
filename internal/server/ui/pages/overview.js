@@ -150,7 +150,7 @@ export async function overviewPage() {
     return h('section', { class: 'card card-pad space-y-3', id: 'home-start' }, h('h2', { class: 'font-display text-lg font-bold' }, 'Start something'),
       atLeast(session.role, 'developer') && item(1, 'Build and test a GitHub repository', 'The assistant writes the pipeline; you press Confirm', { onclick: () => openAssistant('Set up a pipeline that builds and tests one of my GitHub repositories.') }),
       atLeast(session.role, 'developer') && item(2, 'Write a pipeline yourself', 'YAML with a live check and a graph', { href: '#/pipelines/new' }),
-      dev && item(3, 'Hire an agent', 'From the marketplace: cost watcher, cluster doctor and more', { href: '#/marketplace' }),
+      dev && item(3, 'Hire an agent', 'From the library: incident scribe, cost watcher, cluster doctor and more', { href: '#/library' }),
       !dev && h('p', { class: 'muted text-sm' }, 'Ask an administrator for the developer role to create pipelines and agents.'));
   }
 

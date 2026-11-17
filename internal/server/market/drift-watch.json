@@ -1,0 +1,38 @@
+{
+  "id": "drift-watch",
+  "version": 1,
+  "title": "Drift watch",
+  "description": "Compares what each blueprint built with what is in AWS now: resources that are gone, changed by hand, or made by hand next to them.",
+  "publisher": "Forgeline",
+  "tags": [
+    "aws",
+    "drift"
+  ],
+  "skills": [
+    {
+      "key": "drift-check",
+      "name": "Check blueprints for drift",
+      "description": "How to compare a blueprint's state with the account.",
+      "body": "1. Read what the blueprints built with blueprints_built. Skip blueprints that built nothing.\n2. For each resource, look for it in the account by its ARN or id: aws_resources for the service, and call_aws with a describe or get command when the inventory does not show enough. Only read.\n3. Report three lists: gone (in the state, not in AWS), changed (in AWS but with settings that differ from what the blueprint sets: protection, encryption, public access, sizes), and extra (resources named fl-\u003csix letters\u003e-... that no blueprint's state has).\n4. For each item say which blueprint it belongs to and what a person should do: preview the blueprint again to put it back, or change the blueprint to match.\n5. Do not guess. If a resource cannot be read, list it under 'could not check'."
+    }
+  ],
+  "agents": [
+    {
+      "key": "drift",
+      "name": "Drift watcher",
+      "description": "Finds what changed in AWS outside the blueprints that built it.",
+      "instructions": "You compare what blueprints built with the AWS account. Use the drift check skill. You only read; a fix is a new blueprint preview that a different administrator approves. Keep the report short and say what you could not check.",
+      "skills": [
+        "drift-check"
+      ],
+      "tools": [
+        "blueprints_built",
+        "aws_accounts",
+        "aws_resources",
+        "call_aws"
+      ],
+      "tier": "T0"
+    }
+  ],
+  "sha256": "b3872ebad347c440a9c4d7c0eb1215f7a0ee693ecf07a1cf998637b33a0dcc6c"
+}

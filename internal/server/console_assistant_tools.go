@@ -45,6 +45,7 @@ func assistantLookups() []lookupTool {
 		{"get_step_log", `{"run_id":"...","step_id":"..."} the end of one step's output`, authn.Viewer, (*Server).lookupStepLog},
 		{"run_failure", `{"id":"run id"} why a failed run failed: the step that failed first, likely causes, steps that did not run and the end of its output`, authn.Viewer, (*Server).lookupRunFailure},
 		{"list_pipelines", `{} saved pipelines with their ids`, authn.Viewer, (*Server).lookupListPipelines},
+		{"blueprints_built", `{"blueprint":"optional blueprint id"} what each blueprint built: every resource's address and AWS arn or id, from its saved state`, authn.Developer, (*Server).lookupBlueprintsBuilt},
 		{"get_pipeline", `{"id":"pipeline id"} one saved pipeline file`, authn.Viewer, (*Server).lookupGetPipeline},
 		{"aws_accounts", `{} the AWS accounts that are connected, with their ids`, authn.Viewer, (*Server).lookupAWSAccounts},
 		{"aws_resources", `{"account":"optional account id","service":"optional, e.g. ecs, ec2, s3, lambda, rds"} everything in the account by service with state and key details: ECS clusters and services, EC2, EBS, Lambda, S3, RDS, DynamoDB, VPCs, load balancers, queues, log groups`, authn.Viewer, (*Server).lookupAWSResources},
@@ -438,6 +439,93 @@ func (s *Server) lookupAudit(ctx context.Context, raw json.RawMessage) (string, 
 	}
 	if n == 0 {
 		return "No audit entries match.", nil
+	}
+	return b.String(), nil
+}
+
+// lookupBlueprintsBuilt says what each blueprint built, from its OpenTofu state: each resource's address and its AWS
+// identifier (arn, or id), nothing else from the state, so a drift check can compare it with what AWS has.
+func (s *Server) lookupBlueprintsBuilt(ctx context.Context, raw json.RawMessage) (string, error) {
+	var a struct {
+		Blueprint string `json:"blueprint"`
+	}
+	if err := decodeArgs(raw, &a); err != nil {
+		return "", err
+	}
+	docs, err := s.docs.List(ctx, kindBlueprint, docstore.ListOptions{})
+	if err != nil {
+		return "", errors.New("could not read the blueprints")
+	}
+	bps, err := docstore.Decode[StoredBlueprint](docs)
+	if err != nil {
+		return "", errors.New("could not read the blueprints")
+	}
+	sort.Slice(bps, func(i, j int) bool { return bps[i].Name < bps[j].Name })
+	var b strings.Builder
+	for _, bp := range bps {
+		if a.Blueprint != "" && bp.ID != a.Blueprint {
+			continue
+		}
+		st, built, err := s.loadBPState(ctx, bp.ID)
+		if err != nil {
+			return "", errors.New("could not read what the blueprints built")
+		}
+		if !built {
+			fmt.Fprintf(&b, "- %s %q: nothing built\n", bp.ID, bp.Name)
+			continue
+		}
+		text, err := s.vault.Open("blueprint-state/"+bp.ID, st.Sealed)
+		if err != nil {
+			fmt.Fprintf(&b, "- %s %q: its state could not be opened\n", bp.ID, bp.Name)
+			continue
+		}
+		var state struct {
+			Resources []struct {
+				Module, Mode, Type, Name string
+				Instances                []struct {
+					IndexKey   any            `json:"index_key"`
+					Attributes map[string]any `json:"attributes"`
+				}
+			}
+		}
+		if json.Unmarshal([]byte(text), &state) != nil {
+			fmt.Fprintf(&b, "- %s %q: its state could not be read\n", bp.ID, bp.Name)
+			continue
+		}
+		fmt.Fprintf(&b, "- %s %q, AWS account %s, %s, state serial %d:\n", bp.ID, bp.Name, st.AWSAccount, st.Region, st.Serial)
+		n := 0
+		for _, r := range state.Resources {
+			if r.Mode != "managed" {
+				continue
+			}
+			addr := r.Type + "." + r.Name
+			if r.Module != "" {
+				addr = r.Module + "." + addr
+			}
+			for _, in := range r.Instances {
+				if n++; n > 200 {
+					break
+				}
+				where := addr
+				if in.IndexKey != nil {
+					where += fmt.Sprintf("[%v]", in.IndexKey)
+				}
+				ident := ""
+				for _, k := range []string{"arn", "id"} {
+					if v, ok := in.Attributes[k].(string); ok && v != "" {
+						ident = v
+						break
+					}
+				}
+				fmt.Fprintf(&b, "  - %s: %s\n", where, ident)
+			}
+		}
+		if n > 200 {
+			fmt.Fprintf(&b, "  (and %d more)\n", n-200)
+		}
+	}
+	if b.Len() == 0 {
+		return "There are no blueprints.", nil
 	}
 	return b.String(), nil
 }

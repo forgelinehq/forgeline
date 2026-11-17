@@ -21,6 +21,7 @@ const TOOLS = {
   get_step_log: ['delivery', 'Read a step’s log'],
   run_failure: ['delivery', 'Explain why a run failed'],
   list_pipelines: ['delivery', 'See saved pipelines'],
+  blueprints_built: ['aws', 'See what blueprints built'],
   get_pipeline: ['delivery', 'Read a pipeline file'],
   prepare_action: ['delivery', 'Prepare a pipeline or a run for you to confirm'],
   aws_accounts: ['aws', 'See connected AWS accounts'],

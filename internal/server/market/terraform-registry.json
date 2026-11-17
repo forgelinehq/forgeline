@@ -1,0 +1,27 @@
+{
+  "id": "terraform-registry",
+  "version": 1,
+  "title": "Terraform Registry",
+  "description": "HashiCorp's MCP server, run here as a locked-down container, so agents can read provider and module documentation from the public registry.",
+  "publisher": "Forgeline",
+  "tags": [
+    "tools",
+    "opentofu"
+  ],
+  "skills": [],
+  "agents": [],
+  "mcp_servers": [
+    {
+      "key": "terraform-registry",
+      "name": "Terraform Registry",
+      "description": "Provider resources, modules and policies from registry.terraform.io.",
+      "kind": "local",
+      "image": "hashicorp/terraform-mcp-server@sha256:11dd418bba6003dd5777e9d0979b68de59929a155b355f338f407947e00e9d80",
+      "hosts": [
+        "registry.terraform.io"
+      ],
+      "docs": "https://developer.hashicorp.com/terraform/mcp-server"
+    }
+  ],
+  "sha256": "a9a7821f089e9a566336033e99396a0186675f0927e20b9a954383eb28ae30de"
+}

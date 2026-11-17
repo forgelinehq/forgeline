@@ -1,0 +1,25 @@
+{
+  "id": "guardrails-data",
+  "version": 1,
+  "title": "Data protection",
+  "description": "Conftest rules that deny making tables without point-in-time recovery, databases with under 7 days of backups, secrets deleted at once and logs kept under 30 days.",
+  "publisher": "Forgeline",
+  "tags": [
+    "guardrails",
+    "data"
+  ],
+  "skills": [],
+  "agents": [],
+  "policy_packs": [
+    {
+      "id": "data-protection",
+      "name": "Data protection",
+      "tool": "conftest",
+      "enabled": false,
+      "rules": {
+        "data.rego": "package main\n\nimport rego.v1\n\n# Data protection: what keeps data recoverable. Only things being made are checked, so removing a blueprint is never\n# stopped by these rules.\n\ncreates(rc) if \"create\" in rc.change.actions\n\ndeny contains {\"msg\": \"a table must keep point-in-time recovery on\", \"address\": rc.address} if {\n\tsome rc in input.resource_changes\n\trc.type == \"aws_dynamodb_table\"\n\tcreates(rc)\n\tnot pitr_on(rc.change.after)\n}\n\npitr_on(after) if {\n\tsome p in after.point_in_time_recovery\n\tp.enabled == true\n}\n\ndeny contains {\"msg\": sprintf(\"a database must keep backups at least 7 days, not %d\", [days]), \"address\": rc.address} if {\n\tsome rc in input.resource_changes\n\trc.type == \"aws_db_instance\"\n\tcreates(rc)\n\tdays := rc.change.after.backup_retention_period\n\tis_number(days)\n\tdays \u003c 7\n}\n\ndeny contains {\"msg\": \"a secret must be recoverable for a while after it is deleted (a recovery window above 0 days)\", \"address\": rc.address} if {\n\tsome rc in input.resource_changes\n\trc.type == \"aws_secretsmanager_secret\"\n\tcreates(rc)\n\trc.change.after.recovery_window_in_days == 0\n}\n\ndeny contains {\"msg\": sprintf(\"logs must be kept at least 30 days, not %d\", [days]), \"address\": rc.address} if {\n\tsome rc in input.resource_changes\n\trc.type == \"aws_cloudwatch_log_group\"\n\tcreates(rc)\n\tdays := rc.change.after.retention_in_days\n\tis_number(days)\n\tdays \u003e 0\n\tdays \u003c 30\n}\n\nwarn contains {\"msg\": \"an encryption key is deleted for good after its waiting period; 30 days gives time to notice\", \"address\": rc.address} if {\n\tsome rc in input.resource_changes\n\trc.type == \"aws_kms_key\"\n\tcreates(rc)\n\tdays := rc.change.after.deletion_window_in_days\n\tis_number(days)\n\tdays \u003c 30\n}\n"
+      }
+    }
+  ],
+  "sha256": "a465d73e57a3537a37a6b0ba2115d8cbee85e7388759902f39896b1d945ca028"
+}

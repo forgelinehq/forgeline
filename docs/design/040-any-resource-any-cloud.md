@@ -358,6 +358,51 @@ Each item is versioned, checksummed, shows who published and who reviewed it, an
 (audited). First-party items live in this repository; third-party ones are pinned to a commit and never auto-update.
 The canvas assistant chooses from installed templates and blocks; it may not write raw OpenTofu.
 
+**The library, as built (step 8).** Team › Library is the marketplace grown: one page lists packages of agents and
+skills, workflows, tools, guardrail packs and environment templates, and the reviewed OpenTofu templates the canvas
+offers (built in, nothing to install), with a filter for each kind. Everything the marketplace already did holds:
+versions, the content hash bound to the install, signed git sources (note 019), tiers that an update cannot raise, and
+audited installs. A package can now also hold:
+
+- **Guardrail packs** (Trivy, Checkov or Conftest, as in step 6), installed **turned off**: an administrator reads what
+  they would deny and turns each on under Settings › Policy packs. An update keeps on or off as the administrator set it.
+- **MCP servers** (remote or a local container image pinned by digest), installed **with no token and none of their
+  tools turned on**; the administrator adds the token, lists the tools and turns on the ones wanted, as for any MCP
+  server (note 042). An update that moves a server (new address or image) forgets its tools, so they are checked again.
+  A package cannot point at this machine or allow private networks.
+- **Who reviewed it** (`reviewed_by`), shown beside the publisher; empty is shown as "nobody named".
+
+A package cannot take over a pack or MCP server someone made by hand (same id), and that is checked before anything is
+written. Uninstalling removes the packs and MCP servers it added, turns off its agents and workflows, and keeps the
+skills and agents with their history.
+
+**What ships, and why.** The content follows what teams report using agents for in operations in 2026: incident
+investigation and triage, runbooks turned into skills, drift detection, reliability and upgrade work, with a person
+approving every write ([Dynatrace](https://cdn.dm.dynatrace.com/assets/documents/reports/bae22697-agentic-ai-report-2026.pdf),
+[DuploCloud](https://duplocloud.com/blog/what-using-ai-agents-in-devops-looks-like-in-2026/),
+[DevOps.com on skills](https://devops.com/claude-introduces-agent-skills-for-custom-ai-workflows/)), and the MCP servers
+that recur in 2026 lists for platform teams: GitHub, the cloud provider and Terraform
+([Claude Market](https://claudemarket.ai/blog/best-devops-mcp-servers), [MCPBundles](https://mcpbundles.com/blog/best-mcp-servers-devops)),
+read-only first. Most of these surveys come from vendors; they agree on the use cases more than on the numbers.
+New first-party packages:
+
+| Package | Kind | What it gives |
+| --- | --- | --- |
+| Incident response | skills, agent | runbooks for the first minutes, a rollback, the on-call handover and a blameless postmortem; an incident scribe that builds the timeline (reads only) |
+| Drift watch | skill, agent | compares what each blueprint built with AWS now, using a new read-only lookup `blueprints_built` (each resource's address and ARN or id from the state, nothing else) |
+| Upgrade planner | skill, agent | Lambda runtimes, EKS, RDS and ElastiCache versions near the end of support, with dates quoted from AWS documentation |
+| Known misconfigurations | guardrail pack | Trivy, denying critical findings (skips AWS-0040 and AWS-0041: the EKS template's API is public and signed in with IAM) |
+| Cost guard | guardrail pack | Conftest warnings: EKS clusters, NAT gateways, two-zone databases, large sizes, provisioned tables, logs kept for ever |
+| Data protection | guardrail pack | Conftest denies on making: tables without point-in-time recovery, under 7 days of database backups, secrets deleted at once, logs kept under 30 days (the EKS template's default of 14 included) |
+| GitHub (read only) | tool | GitHub's remote MCP server at its read-only address, with a token the administrator gives |
+| AWS Knowledge | tool | AWS's public documentation MCP server; no token |
+| Terraform Registry | tool | HashiCorp's MCP server (1.4.1, MPL-2.0) as a local container that may reach only registry.terraform.io |
+
+Checked: the Conftest rules in the real container on a plan that breaks each rule (and a removal, which breaks none);
+discovery against the real AWS Knowledge server (5 read-only tools) and the Terraform Registry container (9 read-only
+tools); the GitHub server answers 401 until a token is added. Not checked: the GitHub server with a token, and agents
+using these tools in a real conversation.
+
 ## Plan
 
 AWS first: steps 1 to 8 are AWS only. In order, each step its own design-note addendum or pull request, tested on the Pi:
@@ -369,9 +414,9 @@ AWS first: steps 1 to 8 are AWS only. In order, each step its own design-note ad
 5. EKS with namespaces (two approved steps) and the data pipeline template (built; the code pipeline is covered by step 4).
 6. Policy packs in containers: Conftest, Checkov or Trivy (layer 4, second part). **Built** (#147) and checked on the Pi
    ([2026-11-17](../testing/2026-11-17-policy-packs.md)); see "Policy packs, as built".
-7. The generic resource block from provider schemas, with the administrator's allow list (layer 5), for AWS. **Built**;
-   see "As built (step 7)".
-8. The library for templates, skills, tools, agents and guardrail packs (layer 7).
+7. The generic resource block from provider schemas, with the administrator's allow list (layer 5), for AWS. **Built**
+   (#149) and checked on the Pi ([2026-11-17](../testing/2026-11-17-resource-block.md)); see "As built (step 7)".
+8. The library for templates, skills, tools, agents and guardrail packs (layer 7). **Built**; see "The library, as built".
 9. **Only after AWS is complete** (maintainer, 2026-11-08): Google Cloud, then Azure, then RunPod and others (layer 6),
    each with its first blocks, templates and guardrails.
 
