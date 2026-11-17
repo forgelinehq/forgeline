@@ -53,3 +53,21 @@ one-node graphs, each run by `claude-agent`:
   it (tested with a stand-in `claude` program).
 
 The test agents and workflows were turned off afterwards.
+
+## Triggers (part 4, #155)
+
+On the Pi, a one-agent graph (a T0 agent set to `claude-haiku-5-5`, reading `trigger`) with `webhook: true` and
+`on_run_failed: ["fl-trigger-check"]`:
+
+- The administrator made the webhook secret. A request signed with the wrong secret got 401 ("the signature does not
+  match", audited as `ai.workflow.hook` by `anonymous`). The correctly signed request, sent on the Pi itself to
+  `/hooks/workflows/<id>`, got 202. The run, started by `workflow:<id>`, ended as done, and the agent said the run was
+  started by the "disk 95% full on build host" alert in the body.
+- A pipeline named `fl-trigger-check` whose only step exits 3 was submitted. When it failed, the graph started on its
+  own with `{"pipeline": "fl-trigger-check", "reason": "pipeline did not succeed: fail (failed)", "run": "…"}` as
+  `trigger`, and the agent described that run.
+- The audit log has the triggered runs and their steps under `workflow:<id>`. The workflow and agent were turned off
+  afterwards.
+
+Not checked: a webhook from outside the Pi (its console is reachable only on the tailnet; a public route there is the
+maintainer's decision), and a GitHub repository webhook (the header is the same one tested above).
