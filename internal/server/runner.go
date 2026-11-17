@@ -64,6 +64,10 @@ func (s *Server) execute(ctx context.Context, run store.Run) {
 			return
 		}
 		s.reportFinished(run, status, reason)
+		if status == store.RunFailed {
+			s.wg.Add(1)
+			go func() { defer s.wg.Done(); s.onPipelineRunFailed(run, reason) }() // workflows that follow failures (note 044)
+		}
 	}
 
 	p, err := pipeline.Load(strings.NewReader(run.PipelineYAML))

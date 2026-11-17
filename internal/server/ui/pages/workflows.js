@@ -1,4 +1,4 @@
-import { h, icon, mount, clear, pageHeader, pill, relTime, absTime, emptyState, spinner, errorBox, notice, toast, modal, confirmDialog, field, duration } from '../lib/dom.js';
+import { h, icon, mount, clear, pageHeader, pill, relTime, absTime, emptyState, spinner, errorBox, notice, toast, modal, confirmDialog, field, duration, copyButton } from '../lib/dom.js';
 import { get, post, atLeast } from '../lib/api.js';
 import { navigate } from '../lib/router.js';
 import { session } from '../app.js';
@@ -79,6 +79,17 @@ export async function workflowPage({ params }) {
       try { const r = await post('/v1/ai/workflows/' + wf.id + '/run', { version: v.n }); navigate('/workflow-runs/' + r.id); } catch (e) { toast(e.message, 'error'); }
     } }, icon('play', 'size-3.5'), 'Run v' + v.n);
     mount(el, pageHeader(wf.name, wf.description, h('a', { class: 'btn-secondary btn-sm', href: '#/agents?tab=workflows' }, 'All workflows'), start,
+      admin && v.webhook && h('button', { class: 'btn-secondary btn-sm', id: 'hook-secret', type: 'button', onclick: async () => {
+        if (!await confirmDialog({ title: 'Make a new webhook secret?', body: 'The secret is shown once. Anything using the old one stops working.', confirmLabel: 'Make a new secret' })) return;
+        try {
+          const r = await post('/v1/ai/workflows/' + wf.id + '/hook-secret');
+          modal('Webhook secret', () => h('div', { class: 'space-y-3 text-sm', id: 'hook-secret-shown' },
+            h('p', {}, 'POST JSON to ', h('code', { class: 'break-all' }, location.origin + r.url), '.'),
+            h('p', {}, r.how),
+            h('div', { class: 'flex items-center gap-2' }, h('code', { class: 'break-all rounded bg-slate-100 px-2 py-1 dark:bg-slate-800' }, r.secret), copyButton(r.secret)),
+            notice('warn', 'This is the only time it is shown. Keep it where the sender keeps secrets.')));
+        } catch (e) { toast(e.message, 'error'); }
+      } }, icon('key', 'size-3.5'), 'Webhook secret'),
       admin && h('a', { class: 'btn-secondary btn-sm', id: 'edit-canvas', href: '#/workflows/' + wf.id + '/canvas' }, icon('edit', 'size-3.5'), 'Edit on the canvas'),
       admin && !v.graph && h('button', { class: 'btn-secondary btn-sm', id: 'new-version', type: 'button', onclick: () => workflowForm(wf, agents, () => load(false), v) }, icon('plus', 'size-3.5'), 'New version'),
       admin && h('button', { class: 'btn-secondary btn-sm', type: 'button', onclick: async () => { try { await post('/v1/ai/workflows/' + wf.id + (wf.disabled ? '/enable' : '/disable')); load(true); } catch (e) { toast(e.message, 'error'); } } }, wf.disabled ? 'Turn on' : 'Turn off')),
@@ -86,7 +97,7 @@ export async function workflowPage({ params }) {
       h('div', { class: 'space-y-4' },
         h('section', { class: 'card card-pad' },
           h('div', { class: 'mb-3 flex flex-wrap items-center justify-between gap-2' }, h('h2', { class: 'h-section' }, 'Version ' + v.n + (v.n === wf.current ? ' (current)' : '')),
-            h('div', { class: 'flex flex-wrap items-center gap-2 text-sm' }, h('span', { class: 'pill-idle' }, scheduleLabel(v.every_minutes || 0)), h('span', { class: 'pill-idle', title: 'The most a run of this workflow may do. Never an administrator.' }, 'runs as ' + v.run_as), shortHash(v.hash))),
+            h('div', { class: 'flex flex-wrap items-center gap-2 text-sm' }, h('span', { class: 'pill-idle' }, scheduleLabel(v.every_minutes || 0)), h('span', { class: 'pill-idle', title: 'The most a run of this workflow may do. Never an administrator.' }, 'runs as ' + v.run_as), v.webhook ? h('span', { class: 'pill-idle' }, 'webhook') : null, (v.on_run_failed || []).length ? h('span', { class: 'pill-idle' }, 'after failed runs of ' + v.on_run_failed.join(', ')) : null, shortHash(v.hash))),
           v.graph ? graphCanvas(autoPlace(v.graph), { agentName }) : workflowGraph(layoutWorkflow(v, agentName)),
           v.graph ? null : h('h3', { class: 'h-section mb-2 mt-4' }, 'Stages in detail'),
           v.graph ? null : h('ol', { class: 'space-y-3', id: 'workflow-stages' }, (v.stages || []).map((st, i) => h('li', { class: 'rounded-lg border border-slate-200 p-3 dark:border-slate-800' },
@@ -99,7 +110,7 @@ export async function workflowPage({ params }) {
           runs.length ? h('div', { class: 'overflow-x-auto' }, h('table', { class: 'tbl', id: 'run-table' }, h('thead', {}, h('tr', {}, ['Started', 'Version', 'By', 'How', 'Status', 'Proposals'].map(x => h('th', {}, x)))),
             h('tbody', {}, runs.slice(0, 15).map(r => h('tr', { class: 'row-link', tabindex: '0', onclick: () => navigate('/workflow-runs/' + r.id), onkeydown: (e) => { if (e.key === 'Enter') navigate('/workflow-runs/' + r.id); } },
               h('td', { class: 'muted whitespace-nowrap text-sm', title: absTime(r.started_at) }, relTime(r.started_at)), h('td', { class: 'text-sm' }, 'v' + r.version), h('td', { class: 'text-sm' }, r.by),
-              h('td', { class: 'text-sm' }, r.trigger === 'schedule' ? 'schedule' : 'by hand'), h('td', {}, statusPill(r.status)), h('td', { class: 'text-sm' }, ((r.proposals || []).length + (r.environments || []).length) || h('span', { class: 'muted' }, '–')))))))
+              h('td', { class: 'text-sm' }, ({ schedule: 'schedule', webhook: 'webhook', 'run-failed': 'a failed run' })[r.trigger] || 'by hand'), h('td', {}, statusPill(r.status)), h('td', { class: 'text-sm' }, ((r.proposals || []).length + (r.environments || []).length) || h('span', { class: 'muted' }, '–')))))))
             : h('p', { class: 'muted p-5 text-sm' }, 'No runs yet.')),
         h('section', { class: 'card' }, h('div', { class: 'border-b border-slate-200 px-5 py-3 dark:border-slate-800' }, h('h2', { class: 'h-section' }, 'Versions')),
           h('div', { class: 'overflow-x-auto' }, h('table', { class: 'tbl', id: 'version-table' }, h('thead', {}, h('tr', {}, ['Version', 'Saved by', 'When', 'Note', 'Fingerprint', ''].map(x => h('th', {}, x)))),
@@ -182,7 +193,7 @@ export async function workflowRunPage({ params }) {
       }
     } catch (e) { return mount(el, errorBox(e.message)); }
     const live = r.status === 'running' || r.status === 'waiting';
-    mount(el, pageHeader(r.workflow_name, `Run of version ${r.version}, ${r.trigger === 'schedule' ? 'by its schedule' : 'started by ' + r.by}, ${relTime(r.started_at)}`,
+    mount(el, pageHeader(r.workflow_name, `Run of version ${r.version}, ${({ schedule: 'by its schedule', webhook: 'from its webhook', 'run-failed': 'after a failed pipeline run' })[r.trigger] || 'started by ' + r.by}, ${relTime(r.started_at)}`,
       h('a', { class: 'btn-secondary btn-sm', href: '#/workflows/' + r.workflow }, 'The workflow'),
       live && h('button', { class: 'btn-secondary btn-sm', id: 'cancel-run', type: 'button', onclick: async () => {
         if (!await confirmDialog({ title: 'Cancel this run?', body: 'Steps already finished keep their results. Nothing further starts.', confirmLabel: 'Cancel the run', cancelLabel: 'Keep running', danger: true })) return;

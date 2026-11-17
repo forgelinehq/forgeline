@@ -71,6 +71,10 @@ type WFVersion struct {
 	Hash         string    `json:"hash"`
 	// Graph is a graph workflow (note 044); a version has either stages or a graph.
 	Graph *WFGraph `json:"graph,omitempty"`
+	// Triggers of a graph workflow (note 044, part 4): a signed webhook, and failed runs of the named pipelines ("*":
+	// any pipeline).
+	Webhook     bool     `json:"webhook,omitempty"`
+	OnRunFailed []string `json:"on_run_failed,omitempty"`
 }
 
 // Workflow is a named sequence with a history.
@@ -95,6 +99,9 @@ func (v WFVersion) computeHash(id string) string {
 	if v.Graph != nil {
 		g, _ := json.Marshal(v.Graph)
 		b.Write(g)
+	}
+	if v.Webhook || len(v.OnRunFailed) > 0 {
+		fmt.Fprintf(&b, "|webhook:%v|on_run_failed:%s", v.Webhook, strings.Join(v.OnRunFailed, ","))
 	}
 	return sha("workflow", id, fmt.Sprint(v.N), b.String(), fmt.Sprint(v.EveryMinutes), v.RunAs)
 }
@@ -183,6 +190,8 @@ type wfRequest struct {
 	Description  string    `json:"description"`
 	Stages       []WFStage `json:"stages"`
 	Graph        *WFGraph  `json:"graph"`
+	Webhook      bool      `json:"webhook"`
+	OnRunFailed  []string  `json:"on_run_failed"`
 	EveryMinutes int       `json:"every_minutes"`
 	RunAs        string    `json:"run_as"`
 	Note         string    `json:"note"`
@@ -208,7 +217,18 @@ func (s *Server) resolveWorkflow(ctx context.Context, req wfRequest) (WFVersion,
 		if msg != "" {
 			return WFVersion{}, msg
 		}
-		return WFVersion{Graph: &g, EveryMinutes: req.EveryMinutes, RunAs: req.RunAs, Note: req.Note}, ""
+		if len(req.OnRunFailed) > 10 {
+			return WFVersion{}, "follow at most 10 pipelines"
+		}
+		for _, p := range req.OnRunFailed {
+			if p != "*" && !pipelineNameRE.MatchString(p) {
+				return WFVersion{}, fmt.Sprintf("on_run_failed: %q is not a pipeline name (or * for any)", p)
+			}
+		}
+		return WFVersion{Graph: &g, Webhook: req.Webhook, OnRunFailed: uniq(req.OnRunFailed), EveryMinutes: req.EveryMinutes, RunAs: req.RunAs, Note: req.Note}, ""
+	}
+	if req.Webhook || len(req.OnRunFailed) > 0 {
+		return WFVersion{}, "only a graph workflow starts from a webhook or a failed run"
 	}
 	switch {
 	case len(req.Stages) == 0:
@@ -488,6 +508,11 @@ var errWFBusy = errors.New("this workflow already has a run in progress")
 
 // startRun records a run and drives it in the background. It refuses a second run of the same workflow.
 func (s *Server) startRun(ctx context.Context, wf Workflow, v WFVersion, trigger string, by Principal) (WFRun, error) {
+	return s.startRunWith(ctx, wf, v, trigger, by, nil)
+}
+
+// startRunWith is startRun with a graph's first state (what triggered it).
+func (s *Server) startRunWith(ctx context.Context, wf Workflow, v WFVersion, trigger string, by Principal, state map[string]string) (WFRun, error) {
 	s.wf.mu.Lock()
 	if _, busy := s.activeRun(ctx, wf.ID); busy {
 		s.wf.mu.Unlock()
@@ -501,6 +526,9 @@ func (s *Server) startRun(ctx context.Context, wf Workflow, v WFVersion, trigger
 		Status: wfRunning, StartedAt: time.Now().UTC()}
 	if v.Graph != nil {
 		run.Graph, run.State, run.Ready = true, map[string]string{}, []string{v.Graph.start()}
+		for k, val := range state {
+			run.State[k] = val
+		}
 	}
 	for _, st := range v.Stages {
 		sr := WFStageRun{Name: st.Name, Gate: st.Gate, Status: wfPending}

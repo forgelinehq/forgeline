@@ -133,7 +133,7 @@ export async function graphEditorPage({ params }) {
   const cur = wf && wf.versions.find(v => v.n === wf.current);
   let g = cur?.graph ? autoPlace(cur.graph) : cur ? stagesToGraph(cur) : emptyGraph();
   let selected = '', problem = '';
-  const meta = { name: wf?.name || '', description: wf?.description || '', every: cur?.every_minutes || 0, runAs: cur?.run_as || 'developer', note: '' };
+  const meta = { name: wf?.name || '', description: wf?.description || '', every: cur?.every_minutes || 0, runAs: cur?.run_as || 'developer', note: '', webhook: !!cur?.webhook, follow: (cur?.on_run_failed || []).join(', ') };
   const canvasBox = h('div', {}), panel = h('aside', { class: 'card card-pad space-y-3 self-start', id: 'graph-panel' }), bar = h('div', {});
 
   const change = (next, redrawPanel = true) => { g = next; problem = ''; draw(); if (redrawPanel) drawPanel(); };
@@ -153,7 +153,8 @@ export async function graphEditorPage({ params }) {
     const save = h('button', { class: 'btn-primary', id: 'graph-save', type: 'button', onclick: async () => {
       save.disabled = true;
       try {
-        const body = { name: meta.name, description: meta.description, every_minutes: Number(meta.every), run_as: meta.runAs, note: meta.note, graph: g };
+        const body = { name: meta.name, description: meta.description, every_minutes: Number(meta.every), run_as: meta.runAs, note: meta.note, graph: g,
+          webhook: meta.webhook, on_run_failed: meta.follow.split(',').map(x => x.trim()).filter(Boolean) };
         const out = await post(wf ? '/v1/ai/workflows/' + wf.id + '/versions' : '/v1/ai/workflows', body);
         toast(wf ? 'Saved v' + out.current : 'Workflow created', 'ok');
         navigate('/workflows/' + out.id);
@@ -163,9 +164,14 @@ export async function graphEditorPage({ params }) {
     const desc = h('input', { id: 'graph-desc', class: 'input', maxlength: '300', value: meta.description, placeholder: 'What it is for', oninput: (e) => { meta.description = e.target.value; } });
     const every = h('select', { id: 'graph-every', class: 'input', onchange: (e) => { meta.every = e.target.value; } }, SCHEDULES.map(([v, l]) => h('option', { value: String(v), selected: Number(meta.every) === v }, l)));
     const runAs = h('select', { id: 'graph-runas', class: 'input', onchange: (e) => { meta.runAs = e.target.value; } }, [['developer', 'Developer: may file change proposals'], ['viewer', 'Viewer: reads only']].map(([v, l]) => h('option', { value: v, selected: meta.runAs === v }, l)));
+    const hook = h('input', { type: 'checkbox', id: 'graph-webhook', checked: meta.webhook, onchange: (e) => { meta.webhook = e.target.checked; } });
+    const follow = h('input', { id: 'graph-follow', class: 'input', value: meta.follow, placeholder: 'pipeline names, or * for any', oninput: (e) => { meta.follow = e.target.value; } });
     const note = h('input', { id: 'graph-note', class: 'input', maxlength: '200', placeholder: wf ? 'What changed and why' : 'First version', oninput: (e) => { meta.note = e.target.value; } });
     mount(bar, h('section', { class: 'card card-pad mb-4 space-y-3' },
       h('div', { class: 'grid gap-3 md:grid-cols-2 xl:grid-cols-4' }, field('Name', name, null, 'graph-name'), field('Description', desc, null, 'graph-desc'), field('Schedule', every, null, 'graph-every'), field('Runs as', runAs, null, 'graph-runas')),
+      h('div', { class: 'grid gap-3 md:grid-cols-2' },
+        h('label', { class: 'flex items-center gap-2 self-end pb-2 text-sm', for: 'graph-webhook' }, hook, 'Also starts from a signed webhook (the secret is made on the workflow\u2019s page)'),
+        field('Also starts after failed runs of', follow, 'What failed reaches the graph as trigger, which agents can read as data.', 'graph-follow')),
       h('div', { class: 'flex flex-wrap items-end gap-3' }, h('div', { class: 'min-w-64 flex-1' }, field('Note', note, null, 'graph-note')), save),
       h('div', { id: 'graph-problem' })));
     drawProblem();

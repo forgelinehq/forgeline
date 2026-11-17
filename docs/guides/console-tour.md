@@ -224,7 +224,8 @@ lays the graph out left to right. A run is drawn on the same canvas: nodes turn 
 and picking a node shows what went in and what came out each time it ran. A question waiting for you is answered at the
 top of the run. Only an agent's own tools at the "Proposes" level can propose changes, and a different administrator
 approves them. Workflows made of stages still run as before; **Edit on the canvas** turns one into a graph as a new
-version.
+version. A graph can also start from a signed webhook (**Webhook secret** on its page shows the secret once) or after a
+pipeline run fails; agents read what started it under `trigger`.
 
 ![Agents]({{ '/console/106-agents.png' | relative_url }})
 ![An agent's page]({{ '/console/83-agent-page.png' | relative_url }})

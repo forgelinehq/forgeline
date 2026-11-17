@@ -88,6 +88,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /v1/ai/workflows/{id}/disable", s.requireRole(authn.Admin, s.handleWorkflowEnable(true)))
 	mux.Handle("POST /v1/ai/workflows/{id}/enable", s.requireRole(authn.Admin, s.handleWorkflowEnable(false)))
 	mux.Handle("POST /v1/ai/workflows/{id}/run", s.requireRole(authn.Developer, s.handleStartWorkflow))
+	mux.Handle("POST /v1/ai/workflows/{id}/hook-secret", s.requireRole(authn.Admin, s.handleWorkflowHookSecret))
 	mux.Handle("GET /v1/ai/workflow-runs", s.requireRole(authn.Developer, s.handleListWorkflowRuns))
 	mux.Handle("GET /v1/ai/workflow-runs/{id}", s.requireRole(authn.Developer, s.handleGetWorkflowRun))
 	mux.Handle("POST /v1/ai/workflow-runs/{id}/release", s.requireRole(authn.Admin, s.handleReleaseGate))
@@ -251,6 +252,7 @@ func (s *Server) Handler() http.Handler {
 	// No bearer token: GitHub cannot send one. The HMAC signature is the authentication. The
 	// route always exists; it answers 404 until the integration is configured.
 	mux.HandleFunc("POST /webhooks/github", s.handleGitHubWebhook)
+	mux.HandleFunc("POST /hooks/workflows/{id}", s.handleWorkflowHook)
 	mux.Handle("GET /v1/integrations/github", s.requireRole(authn.Developer, s.handleGetGitHub))
 	mux.Handle("PUT /v1/integrations/github", s.requireRole(authn.Admin, s.handlePutGitHub))
 	mux.Handle("DELETE /v1/integrations/github", s.requireRole(authn.Admin, s.handleDeleteGitHub))
