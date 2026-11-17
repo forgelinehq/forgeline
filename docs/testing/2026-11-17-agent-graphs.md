@@ -40,3 +40,16 @@ Two read-only T0 agents (a triager and an explainer), and a graph of 12 nodes:
 - The canvas run view against these real runs in a browser on the Pi (checked locally on a saved graph).
 - A graph whose agent files a proposal (a T1 agent); the path is the same as for stage workflows.
 - A scheduled graph run.
+
+## A model per agent (part 3, #153)
+
+On the Pi (its Claude connection is the Claude Code token backend, with Sonnet 5.5 as the assistant's model), three
+one-node graphs, each run by `claude-agent`:
+
+- An agent set to `claude-haiku-5-5` answered "I'm running on Claude Haiku 5.5 (model ID claude-haiku-5-5)".
+- An agent with no model answered as Sonnet 5.5 (claude-sonnet-5-5), the assistant's model.
+- An agent set to a made-up model, `claude-no-such-model-9`, failed rather than falling back to another model. The
+  error was the backend's raw output. It now says the model is not one this Claude connection knows and where to change
+  it (tested with a stand-in `claude` program).
+
+The test agents and workflows were turned off afterwards.

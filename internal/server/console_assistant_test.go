@@ -248,3 +248,17 @@ func TestAssistantClaudeTokenBackendUsesTheVaultTokenAndAScratchHome(t *testing.
 	// Short or malformed tokens are refused.
 	admin.expect(400, "PUT", "/v1/integrations/assistant", map[string]any{"backend": "claude-token", "claude_token": "short"})
 }
+
+// A model the backend does not know is said plainly, not as the backend's raw output (found on the Pi).
+func TestAssistantCLISaysWhenAModelIsUnknown(t *testing.T) {
+	dir := t.TempDir()
+	script := "#!/bin/sh\necho '[claude-code:unrecognized_model] {\"model\":\"claude-no-such-model-9\"}' >&2\nexit 1\n"
+	if err := os.WriteFile(filepath.Join(dir, "claude"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+":"+os.Getenv("PATH"))
+	_, _, err := askCLI(t.Context(), "claude-no-such-model-9", "s", []chatTurn{{Role: "user", Content: "hi"}}, "")
+	if err == nil || !strings.Contains(err.Error(), `the model "claude-no-such-model-9" is not one this Claude connection knows`) {
+		t.Errorf("err = %v", err)
+	}
+}

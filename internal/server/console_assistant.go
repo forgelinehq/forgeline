@@ -625,16 +625,28 @@ func askCLI(ctx context.Context, model, system string, turns []chatTurn, token s
 		if ctx.Err() != nil {
 			return "", modelUsage{}, errors.New("the assistant took too long")
 		}
-		return "", modelUsage{}, fmt.Errorf("claude failed: %s", truncate(firstLine(strings.TrimSpace(errb.b.String()+" "+out.b.String())), 240))
+		text := strings.TrimSpace(errb.b.String() + " " + out.b.String())
+		if strings.Contains(text, "unrecognized_model") {
+			return "", modelUsage{}, unknownModel(model)
+		}
+		return "", modelUsage{}, fmt.Errorf("claude failed: %s", truncate(firstLine(text), 240))
 	}
 	reply, use, failed := readCLIOutput(out.b.Bytes())
 	if failed {
+		if strings.Contains(reply, "unrecognized_model") {
+			return "", use, unknownModel(model)
+		}
 		return "", use, fmt.Errorf("claude failed: %s", truncate(firstLine(reply), 240))
 	}
 	if reply == "" {
 		return "", use, errors.New("the assistant sent an empty reply")
 	}
 	return reply, use, nil
+}
+
+// unknownModel says plainly that the backend does not know a model (found on the Pi with a made-up agent model).
+func unknownModel(model string) error {
+	return fmt.Errorf("the model %q is not one this Claude connection knows; pick another in the agent's settings, or leave it empty for the assistant's model", model)
 }
 
 // readCLIOutput reads `claude -p --output-format json`: the reply, the tokens and the cost it reports. Output
