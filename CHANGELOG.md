@@ -62,6 +62,13 @@ section in the pull request that makes the change; a release moves it under its 
 - **After a session ends**, the console stops polling the server (it asked every minute, forever).
 
 ### Added
+- **Policy packs check every preview** (note 040, step 6). Under Settings › Policy packs an administrator turns on
+  Trivy or Checkov for known misconfigurations, or writes the organization's own rules in Rego for Conftest. Each pack
+  runs in a container with no network, a read-only file system and no capabilities, on a copy of the plan without its
+  sensitive values or the earlier state. A pack's deny stops Send for approval like a built-in guardrail; its warnings
+  go to the approver with the tool's version. Trivy can deny from a severity; any rule can be listed to deny or to
+  skip. A pack that cannot run denies the plan, and a preview checked by other packs than today's must be made again.
+  Needs Docker on the server. No pack is on by default.
 - **An EKS cluster template with namespaces.** A cluster and managed nodes in the default VPC; each namespace gets a quota,
   default container sizes and a network policy allowing traffic only from the same namespace; IAM access entries for an
   administrator and per-namespace editors. Built in two approved steps (namespaces need the cluster to exist). Templates

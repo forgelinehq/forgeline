@@ -1,0 +1,23 @@
+[
+	{
+		"filename": "/in/tfplan.json",
+		"namespace": "main",
+		"successes": 0,
+		"warnings": [
+			{
+				"msg": "module.k8s.aws_eks_node_group.nodes uses on-demand nodes",
+				"metadata": {
+					"query": "data.main.warn"
+				}
+			}
+		],
+		"failures": [
+			{
+				"msg": "module.k8s.aws_cloudwatch_log_group.cluster keeps logs 14 days; the organization asks for at least 30",
+				"metadata": {
+					"query": "data.main.deny"
+				}
+			}
+		]
+	}
+]

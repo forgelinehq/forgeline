@@ -189,7 +189,7 @@ export async function designPage({ params }) {
       ps === 'stale' ? h('div', { class: 'mb-2' }, notice('warn', 'The blueprint changed since this preview, or it is over an hour old. Save and preview again before sending it.')) : null,
       h('p', { class: 'text-sm font-medium', id: 'design-plan-summary' }, planWords(plan)),
       h('p', { class: 'muted mb-2 text-xs' }, 'Planned by ' + plan.by + ' ' + relTime(plan.finished_at) + ' against AWS account ' + plan.aws_account + '.'),
-      guardrailList(plan.guardrails, plan.guardrail_version),
+      guardrailList(plan.guardrails, plan.guardrail_version, plan.packs),
       plan.changes.length ? h('details', {}, h('summary', { class: 'cursor-pointer text-sm' }, 'Every resource'),
         h('ul', { class: 'mt-2 max-h-64 space-y-1 overflow-auto text-xs' }, plan.changes.map(c => h('li', { class: 'flex items-center gap-2' },
           h('span', { class: tone[c.action] }, c.action), h('code', { class: 'break-all' }, c.address))))) : null);

@@ -59,7 +59,8 @@ AgentCore template waits for the account's quota; step 3 built (Fargate Spot on 
 template); step 4 built: repositories linked to blocks, with suggested workflows, which repository fits a block, and
 running a newly pushed image in one step ([2026-11-16](testing/2026-11-16-run-new-image.md)); step 5 built: the data
 pipeline template ([2026-11-16](testing/2026-11-16-data-pipeline.md)) and EKS with namespaces
-([2026-11-16](testing/2026-11-16-eks-namespaces.md)).** Templates for whole solutions (an AgentCore agent, Lambda, Step Functions, ECS clusters, EKS with
+([2026-11-16](testing/2026-11-16-eks-namespaces.md)); step 6 built: policy packs (Trivy, Checkov or your own Conftest rules) check every preview in
+locked-down containers.** Templates for whole solutions (an AgentCore agent, Lambda, Step Functions, ECS clusters, EKS with
 namespaces, data and code pipelines), repositories linked to what runs them, guardrails on every plan (built-in rules,
 then Conftest, Checkov or Trivy packs), a generic block for any resource type an administrator allows, and a library for templates, skills, tools, agents and guardrail packs. Guardrails come
 first, and everything is AWS only until it is complete; then Google Cloud, then Azure, then RunPod and others. See [note 040](design/040-any-resource-any-cloud.md).
