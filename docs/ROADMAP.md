@@ -21,6 +21,13 @@ in [PLAN.md](PLAN.md).
 | M6 | AI agents | Governed agent steps with scoped credentials and cost tracking; failure triage; fix suggestions as pull requests, never auto-applied | In progress: Claude Code agent steps built (note 007); Codex, Copilot, triage and cost tracking open |
 | M7 | Migration and breadth | Importers for Jenkinsfile and GitHub Actions workflows; Bitbucket and GitLab triggers; additional cloud targets | Not started |
 
+## Agent Studio (note 045)
+
+Status: **proposed, waiting for the maintainer's decisions.** Several model providers at once, with each agent naming
+`provider/model`; an agent builder with a playground, test cases and model comparison; agent teams and a test panel in
+workflows; publishing agents as an API, an MCP tool or a headless job; Cloudflare-style code mode in a sandbox. See
+[note 045](design/045-agent-studio.md).
+
 ## Agent graphs (note 044)
 
 Status: **parts 1 to 4 built.** Workflows as graphs of agents, lookups, decisions, questions for people, merges and ends,
