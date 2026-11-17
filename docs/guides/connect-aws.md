@@ -44,6 +44,21 @@ The **AWS account** tab shows the account's resources as a map, grouped by VPC, 
 
 ## Building blueprints
 
+### Any other AWS resource
+
+Forgeline's own blocks and templates cover common needs. For anything else, an administrator allows resource types
+under **Settings → Resource types** (for example `aws_sns_topic` or `aws_route53_record`), per AWS account. On the
+canvas, **Resource** then offers those types, with a form made from the AWS provider's own schema: required settings
+first, the rest folded away. Settings that hold secrets are never offered (use a secret block), nor what AWS sets
+itself. A resource's link fills one of its settings from another block, for example a subscription's `topic_arn` from
+a topic's `arn`, or its `endpoint` from a queue's `arn`.
+
+Forgeline chooses none of a resource's settings, so read its previews: the guardrails and any policy packs check them,
+and a different administrator approves them, as for everything else. The role Forgeline builds with needs permission
+for those types too (`PowerUserAccess` covers most, but not IAM).
+
+### Permissions
+
 Blueprints (Build › Design) are built with OpenTofu, which Forgeline downloads on first use and checks against the
 release's published checksum (set `FORGELINE_TOFU` to use your own). Building needs the AWS permissions for what a
 blueprint makes. Tables, buckets, queues and log groups are covered by `PowerUserAccess`. An app block also makes two

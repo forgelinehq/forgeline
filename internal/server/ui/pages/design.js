@@ -40,6 +40,17 @@ export async function designPage({ params }) {
   // Templates from the library (note 040): one block each, with a form drawn from its inputs.
   const templates = {};
   try { for (const t of (await get('/v1/templates')).templates) templates[t.ref] = t; } catch { /* the canvas works without them */ }
+  // Resource types an administrator allowed (note 040, step 7), and the schemas of those in use, fetched as needed.
+  let allowedTypes = {};
+  try { allowedTypes = (await get('/v1/settings/resource-types')).accounts || {}; } catch { /* the block says none are allowed */ }
+  const schemaOf = {};
+  function needSchema(type) {
+    if (!type || schemaOf[type]) return schemaOf[type];
+    schemaOf[type] = { loading: true };
+    get('/v1/resource-types/' + encodeURIComponent(type)).then(s => { schemaOf[type] = s; drawInspector(); })
+      .catch(e => { schemaOf[type] = { error: e.message }; drawInspector(); });
+    return schemaOf[type];
+  }
   const kindInfo = (b) => KINDS[b.kind] || (b.kind === 'template' ? { label: 'Template', tech: templates[b.template]?.title || b.template, icon: templates[b.template]?.icon || 'layers' } : { label: b.kind, tech: '' });
 
   let revision = saved.revision;
@@ -330,8 +341,8 @@ export async function designPage({ params }) {
   // ---------------------------------------------------------------- the panel
 
   function input(label, value, onChange, attrs = {}) {
-    const id = 'f-' + label.toLowerCase().replace(/[^a-z]+/g, '-');
-    const el = h('input', { id, class: 'input', value: value ?? '', ...attrs });
+    const id = attrs.id || 'f-' + label.toLowerCase().replace(/[^a-z]+/g, '-');
+    const el = h('input', { class: 'input', value: value ?? '', ...attrs, id });
     el.addEventListener('change', () => onChange(attrs.type === 'number' ? (el.value === '' ? '' : Number(el.value)) : el.value.trim()));
     return h('div', {}, h('label', { class: 'label', for: id }, label), el);
   }
@@ -518,6 +529,58 @@ export async function designPage({ params }) {
     return out;
   }
 
+  // A resource block's form, drawn from the provider's schema: required settings first, the rest folded away.
+  // Secrets and what AWS sets are not offered. The server checks every save against the same schema.
+  function resourceFields(b, set) {
+    const allowed = allowedTypes[bp.target.account] || [];
+    const pick = select_('Resource type', b.resource_type || '', [['', allowed.length ? 'Pick one…' : 'None allowed yet'], ...allowed.map(t => [t, t])],
+      v => { set({ resource_type: v || null, attributes: null }); drawInspector(); });
+    if (!b.resource_type) return [pick, h('p', { class: 'hint' }, allowed.length ? 'Any resource type an administrator allowed for this account.' : 'An administrator allows resource types for this account under Settings › Resource types.')];
+    const s = needSchema(b.resource_type);
+    if (s.loading) return [pick, spinner()];
+    if (s.error) return [pick, notice('warn', s.error)];
+    const cur = b.attributes || {};
+    const linked = new Set(bp.links.filter(l => l.from === b.id).map(l => l.attribute));
+    const setAttr = (name, v) => {
+      const next = { ...(bp.blocks.find(x => x.id === b.id)?.attributes || {}) };
+      if (v === '' || v === null || v === undefined || (typeof v === 'number' && Number.isNaN(v))) delete next[name]; else next[name] = v;
+      set({ attributes: Object.keys(next).length ? next : null });
+    };
+    const field = (f) => {
+      const id = 'f-attr-' + f.name, label = f.name + (f.required ? ' *' : '') + (f.deprecated ? ' (deprecated)' : '');
+      if (linked.has(f.name)) return h('p', { class: 'text-sm' }, h('code', {}, f.name), ' comes from a link.');
+      const v = cur[f.name];
+      if (f.kind === 'bool') return select_(label, v === undefined ? '' : String(v), [['', 'not set'], ['true', 'true'], ['false', 'false']], x => setAttr(f.name, x === '' ? null : x === 'true'));
+      if (f.kind === 'number') return input(label, v ?? '', x => setAttr(f.name, x), { type: 'number', step: 'any', id });
+      if (f.kind === 'string') return input(label, v ?? '', x => setAttr(f.name, x), { id });
+      const err = h('p', { class: 'hidden text-xs text-rose-600 dark:text-rose-400' });
+      const text = f.kind === 'list' ? (v || []).join('\n') : f.kind === 'map' ? Object.entries(v || {}).map(([k2, x]) => k2 + '=' + x).join('\n') : v === undefined ? '' : JSON.stringify(v, null, 2);
+      const ta = h('textarea', { id, class: 'input font-mono text-xs', rows: f.kind === 'json' || f.kind === 'block' ? '4' : '3', spellcheck: 'false',
+        placeholder: f.kind === 'list' ? 'one per line' : f.kind === 'map' ? 'NAME=value' : f.kind === 'block' ? (f.nesting === 'list' || f.nesting === 'set' ? '[{ … }]' : '{ … }') : 'JSON' }, text);
+      ta.addEventListener('change', () => {
+        err.classList.add('hidden');
+        const t = ta.value.trim();
+        if (!t) return setAttr(f.name, null);
+        if (f.kind === 'list') return setAttr(f.name, t.split('\n').map(x => x.trim()).filter(Boolean));
+        if (f.kind === 'map') {
+          const m = {};
+          for (const line of t.split('\n')) { const i = line.indexOf('='); if (i > 0) m[line.slice(0, i).trim()] = line.slice(i + 1); }
+          return setAttr(f.name, Object.keys(m).length ? m : null);
+        }
+        try { setAttr(f.name, JSON.parse(t)); } catch { err.textContent = 'Not valid JSON.'; err.classList.remove('hidden'); }
+      });
+      return h('div', {}, h('label', { class: 'label', for: id }, label), ta, err);
+    };
+    const settable = s.fields.filter(f => f.settable);
+    const first = settable.filter(f => f.required || cur[f.name] !== undefined);
+    const more = settable.filter(f => !f.required && cur[f.name] === undefined && !f.deprecated);
+    const hidden = s.fields.filter(f => !f.settable);
+    return [pick, h('p', { class: 'hint' }, s.label + '. Settings come from the AWS provider ' + (s.provider_version || '') + '; Forgeline chooses none of them, so the guardrails and the approver check what you set.'),
+      ...first.map(field),
+      more.length ? h('details', { id: 'f-more-settings' }, h('summary', { class: 'cursor-pointer text-sm' }, 'More settings (' + more.length + ')'), h('div', { class: 'mt-2 space-y-3' }, more.map(field))) : null,
+      hidden.length ? h('p', { class: 'hint' }, 'Not offered: ' + hidden.filter(f => f.why === 'holds a secret').length + ' that hold secrets (keep secrets in a secret block) and ' + hidden.filter(f => f.why !== 'holds a secret').length + ' that AWS sets.') : null];
+  }
+
   function drawInspector() {
     const b = bp.blocks.find(x => x.id === selected);
     if (!b) {
@@ -607,6 +670,9 @@ export async function designPage({ params }) {
       case 'template':
         fields.push(...templateFields(b, set));
         break;
+      case 'resource':
+        fields.push(...resourceFields(b, set));
+        break;
       case 'existing':
         fields.push(select_('What it is', b.existing?.type, Object.entries(EXISTING), v => set({ existing: { ...b.existing, type: v } })),
           input('Its name in AWS', b.existing?.name, v => set({ existing: { ...b.existing, name: v } })),
@@ -618,16 +684,33 @@ export async function designPage({ params }) {
     const mine = bp.links.filter(l => l.from === b.id || l.to === b.id);
     const targets = linkTargets(bp, b.id, templates);
     let linkUI = null;
-    if (targets.length) {
+    const noFill = b.kind === 'resource' && !(needSchema(b.resource_type)?.fields || []).some(f => f.settable && (f.kind === 'string' || f.kind === 'list') && (b.attributes || {})[f.name] === undefined);
+    if (targets.length && !noFill) {
       const to = h('select', { id: 'f-link-to', class: 'input', 'aria-label': 'Link to' }, targets.map(t => h('option', { value: t.id }, t.name)));
       const access = h('select', { id: 'f-link-access', class: 'input w-auto', 'aria-label': 'Access' }, h('option', { value: 'readwrite' }, 'reads and writes'), h('option', { value: 'read' }, 'reads'));
       const path = h('input', { id: 'f-link-path', class: 'input w-28', 'aria-label': 'Path', placeholder: '/api/*' });
-      const sync = () => { const t = targets.find(x => x.id === to.value); access.hidden = !t?.access; path.hidden = !t?.path; };
+      // A resource's link fills one of its settings (text, or a list of text) with an attribute of the other block.
+      const own = b.kind === 'resource' ? needSchema(b.resource_type) : null;
+      const fillable = (own?.fields || []).filter(f => f.settable && (f.kind === 'string' || f.kind === 'list') && (b.attributes || {})[f.name] === undefined);
+      const attr = h('select', { id: 'f-link-attribute', class: 'input w-auto', 'aria-label': 'Setting it fills' }, fillable.map(f => h('option', { value: f.name }, f.name)));
+      const output = h('select', { id: 'f-link-output', class: 'input w-auto', 'aria-label': 'What it reads' });
+      const sync = () => {
+        const t = targets.find(x => x.id === to.value);
+        access.hidden = !t?.access; path.hidden = !t?.path;
+        attr.hidden = output.hidden = b.kind !== 'resource';
+        if (b.kind === 'resource') {
+          const outs = t?.outputs || (t?.type ? needSchema(t.type)?.outputs : null) || [];
+          mount(output, outs.map(o => h('option', { value: o, selected: o === 'arn' }, o)));
+        }
+      };
       to.addEventListener('change', sync); sync();
-      linkUI = h('div', { class: 'mt-2 flex flex-wrap gap-2' }, to, access, path,
+      linkUI = h('div', { class: 'mt-2 flex flex-wrap gap-2' }, b.kind === 'resource' ? h('span', { class: 'self-center text-xs' }, 'Fill') : null, attr, b.kind === 'resource' ? h('span', { class: 'self-center text-xs' }, 'from') : null, to, output, access, path,
         h('button', { class: 'btn-secondary btn-sm', type: 'button', id: 'f-link-add', onclick: () => {
           const t = targets.find(x => x.id === to.value);
-          change(addLink(bp, b.id, to.value, t?.access ? access.value : '', t?.path ? path.value.trim() : ''));
+          const f = fillable.find(x => x.name === attr.value);
+          const fill = b.kind === 'resource' ? (f && output.value ? { attribute: f.name, output: output.value, list: f.kind === 'list' } : null) : null;
+          if (b.kind === 'resource' && !fill) return;
+          change(addLink(bp, b.id, to.value, t?.access ? access.value : '', t?.path ? path.value.trim() : '', fill));
           drawInspector();
         } }, icon('link', 'size-3.5'), 'Link'));
     }
@@ -637,7 +720,7 @@ export async function designPage({ params }) {
       h('div', { class: 'space-y-3' }, fields),
       h('div', { class: 'mt-5 border-t border-slate-200 pt-4 dark:border-slate-800' }, h('h3', { class: 'h-section mb-2' }, 'Links'),
         mine.length ? h('ul', { class: 'space-y-1 text-sm', id: 'f-links' }, mine.map(l => h('li', { class: 'flex items-center justify-between gap-2' }, linkWords(bp, l),
-          h('button', { class: 'btn-ghost btn-sm', type: 'button', 'aria-label': 'Remove the link: ' + linkWords(bp, l), onclick: () => { change(removeLink(bp, l.from, l.to)); drawInspector(); } }, icon('x', 'size-3.5'))))) : h('p', { class: 'muted text-xs' }, 'No links yet.'),
+          h('button', { class: 'btn-ghost btn-sm', type: 'button', 'aria-label': 'Remove the link: ' + linkWords(bp, l), onclick: () => { change(removeLink(bp, l.from, l.to, l.attribute)); drawInspector(); } }, icon('x', 'size-3.5'))))) : h('p', { class: 'muted text-xs' }, 'No links yet.'),
         linkUI),
       h('div', { class: 'mt-5 flex justify-end' }, h('button', { class: 'btn-ghost btn-sm text-rose-600 dark:text-rose-400', type: 'button', id: 'f-remove', onclick: () => { const next = removeBlock(bp, b.id); selected = ''; change(next); drawInspector(); } }, icon('trash', 'size-3.5'), 'Remove block')));
   }

@@ -140,6 +140,10 @@ func (s *Server) handleCheckBlueprint(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"error": err.Error(), "checks": []blueprint.Check{}})
 		return
 	}
+	if e := s.checkResources(r.Context(), d); e != nil {
+		writeJSON(w, http.StatusOK, map[string]any{"error": e.msg, "checks": []blueprint.Check{}})
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"checks": checksOf(d)})
 }
 
@@ -155,6 +159,10 @@ func (s *Server) handleCreateBlueprint(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if e := s.checkTarget(r.Context(), d.Target); e != nil {
+		writeError(w, e.status, e.msg)
+		return
+	}
+	if e := s.checkResources(r.Context(), d); e != nil {
 		writeError(w, e.status, e.msg)
 		return
 	}
@@ -190,6 +198,10 @@ func (s *Server) handleUpdateBlueprint(w http.ResponseWriter, r *http.Request) {
 	d := body.doc(cur.ID)
 	if err := d.Validate(); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if e := s.checkResources(r.Context(), d); e != nil {
+		writeError(w, e.status, e.msg)
 		return
 	}
 	// What was built stays where it was built: its state belongs to that account and region.

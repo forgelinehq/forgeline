@@ -163,6 +163,9 @@ func Check(plan, code []byte) ([]Finding, error) {
 	return out, nil
 }
 
+// HoldsData says whether deleting a resource of this type loses what people stored in it.
+func HoldsData(typ string) bool { return holdsData[typ] }
+
 // holdsData are resource types whose deletion loses what people stored.
 var holdsData = map[string]bool{
 	"aws_db_instance": true, "aws_rds_cluster": true, "aws_dynamodb_table": true, "aws_s3_bucket": true,

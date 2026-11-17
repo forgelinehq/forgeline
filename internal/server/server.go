@@ -114,6 +114,8 @@ type Server struct {
 	tofuBin    tofuState      // the OpenTofu binary, once found
 	tofuRun    tofuRunner     // tests replace OpenTofu
 	packRun    packRunner     // tests replace the policy pack containers
+	schemas    schemaCache    // the AWS provider's resource schemas, once made
+	schemaRun  schemaRunner   // tests replace `tofu providers schema -json`
 	usage      usageState     // serialises updates to the AI use ledger
 	missions   missionState   // missions (note 037)
 	gcpInv     invCache       // Google Cloud inventories, by scope

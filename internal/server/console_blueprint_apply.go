@@ -189,6 +189,11 @@ func (s *Server) handlePlanBlueprint(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, "fix the blueprint first: "+err.Error())
 		return
 	}
+	// A removal is always possible; a build only with resource types still allowed and settings the schema takes.
+	if e := s.checkResources(ctx, b.Blueprint); e != nil && req.Remove == "" {
+		writeError(w, http.StatusConflict, "fix the blueprint first: "+e.msg)
+		return
+	}
 	st, err := s.awsFor(ctx, b.Target.Account)
 	if err != nil || !st.Enabled {
 		writeError(w, http.StatusConflict, "the blueprint's AWS account is not connected")

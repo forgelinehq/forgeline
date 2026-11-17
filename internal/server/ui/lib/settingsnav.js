@@ -24,6 +24,7 @@ export const SETTINGS = [
   { title: 'Security', items: [
     { path: '/audit', label: 'Audit log', note: 'Who did what, including refusals and failed sign-ins', min: 'admin' },
     { path: '/approval-rules', label: 'Approval rules', note: 'Which changes need two approvals, and who may approve them', min: 'developer' },
+    { path: '/resource-types', label: 'Resource types', note: 'Which AWS resource types the resource block may make, per account', min: 'developer' },
     { path: '/policy-packs', label: 'Policy packs', note: 'Rule sets that check every blueprint preview, on top of the built-in guardrails', min: 'developer' },
   ] },
   { title: 'Developer', items: [

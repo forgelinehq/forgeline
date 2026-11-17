@@ -324,7 +324,7 @@ Design: [docs/design/006-console.md](design/006-console.md). Pictures: [docs/con
 > 2. **Any resource, any cloud** (note 040), in this order: ~~guardrails on every plan~~ (built); a template format and an AgentCore
 >    agent template (format built; AgentCore waits for quota); ~~Lambda, Step Functions and ECS cluster templates~~ (built);
 >    ~~repositories linked to blocks with suggested pipelines~~ (built); ~~EKS with namespaces and data pipeline templates~~ (built; the code pipeline is covered by repositories linked to blocks); ~~policy packs (Conftest, Checkov or Trivy)
->    in containers~~ (built); a generic resource block from provider schemas behind an administrator's allow list; a library for
+>    in containers~~ (built); ~~a generic resource block from provider schemas behind an administrator's allow list~~ (built); a library for
 >    templates, skills, tools, agents and guardrail packs. **AWS only until all of that is done**; then Google Cloud, then
 >    Azure, then RunPod and others.
 > 3. **Not started (to do):** **A very light helper model** (note 038, step 2, revised by the maintainer: no llama.cpp or Ollama, well under

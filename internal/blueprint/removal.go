@@ -55,7 +55,7 @@ func (b Blueprint) RemovalTofuFrom(stage string, finalSnapshot bool, state []byt
 	case RemoveKeepData, RemoveUnprotect:
 		ids := map[string]bool{}
 		for _, bl := range b.Blocks {
-			if HoldsData(bl.Kind) {
+			if bl.holdsData() {
 				kept.Blocks = append(kept.Blocks, bl)
 				ids[bl.ID] = true
 			}
