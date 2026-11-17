@@ -121,7 +121,7 @@ For Forgeline:
 | What the model sees | A TypeScript declaration of the agent's own tools (`tools.runs.get`, `tools.github.search_issues`…), made from their input schemas | Only granted tools exist |
 | How tools are called | Each `tools.x()` in the script is a request back to Forgeline. Forgeline runs the same checks as a direct call: the grant, the tier, argument checks, size and time limits, and the audit. Each call counts toward the agent's tool-call limit | The sandbox never holds a credential and cannot get around a check |
 | Local sandbox (first) | A container like the policy packs': JavaScript with every permission denied, `--network none`, a read-only root, all capabilities dropped, memory, CPU and time limits. Tool calls go over standard input and output | Principle 3 (containers, not in-process code) and local first |
-| Cloudflare sandbox (second, optional) | A small Forgeline Worker in the administrator's Cloudflare account, deployed through a proposal. It runs each script with the Worker Loader. Forgeline opens the connection to it, so a server that cannot be reached from the internet (the Pi) still works | Lets the maintainer try Cloudflare's way without opening the server |
+| No Cloudflare account | **Decided by the maintainer (2026-11-17): local only.** Code mode is the technique (typed tools, one script, a sandbox), not Cloudflare's service. The runtime in the container is a choice to evaluate: Deno with every permission denied, or `workerd`, Cloudflare's open-source Workers runtime | The maintainer wants the technique, not a paid plan |
 | Who may turn it on | An agent setting. Off by default; shown on the agent's card | Visible, reviewable |
 
 ### 6. The experience
@@ -135,6 +135,27 @@ models, the workflow studio with its test panel, and Publish. The rules behind t
 - **Every run has a trace**: steps, tool calls, model, tokens, cost and time.
 - **Plain words**: "Make v5 live", not "promote"; "Reads only", not "T0". Tier names stay in the details.
 - **One look**: neutral background, one blue accent, status shown by both colour and text.
+- **Pickers in a side panel** (version 2 of the mock-ups, asked for by the maintainer). The agent screen shows what the
+  agent is made of as parts: instructions, skills, MCP servers, tools, guardrails. **Add** on any part, or the model chip
+  in the header, opens one side panel with tabs for Models, Skills, MCP servers, Tools and Guardrails. Each tab has search,
+  filters, and items grouped by provider or server with their logo, what each one does, and whether it reads or changes
+  things. "Connect a new MCP server" opens a popup: pick from the catalog or bring your own, sign in, choose the tools,
+  and add them to the agent in one go. The side panel closes back to the playground.
+- **Logos** for providers and MCP servers, taken from each company's published brand assets where its guidelines allow,
+  and a monogram otherwise. The mock-ups use monograms.
+- **Providers as cards** with status, models on, spend against the limit and median speed, and a live **log of model
+  calls** (who called, which model, tokens, cost, time, failures).
+
+### 7. Guardrails for agents
+
+A Guardrails part on every agent and workflow, in the side panel:
+
+- **Always on, shown locked:** changes need a different administrator; tool results are data, never instructions.
+- **Input and output:** hide secrets and personal data in answers; screen inputs for prompt injection; check the answer
+  against declared fields.
+- **Limits:** tool calls per run, spend per run and per month, and the web addresses MCP servers and code mode may use.
+
+The library's guardrail packs (note 040, step 8) can add more.
 
 ## Order of work
 
@@ -152,8 +173,7 @@ Each step is checked on the Pi with real models before the next one.
 
 1. **Which providers come first?** The proposal is Anthropic, OpenAI-compatible (which covers Ollama on the Pi and
    OpenRouter), Bedrock and Gemini, then Azure OpenAI.
-2. **The code-mode sandbox:** local container first, then Cloudflare (proposed), or Cloudflare first? Cloudflare needs
-   an account on a paid Workers plan for the Worker Loader.
+2. ~~The code-mode sandbox~~: **local only** (maintainer, 2026-11-17).
 3. **Headless:** only through the server (proposed), or also a standalone export that runs without Forgeline?
 4. **A public route on the Pi:** published APIs, like webhooks, need one. Which address, if any?
 5. **Playground spending:** should playground runs count against the agent's monthly budget (proposed), or have a
