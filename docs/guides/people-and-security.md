@@ -99,7 +99,8 @@ administrator can add more rules:
   ```
 
 Trivy and Checkov flag some choices Forgeline's blocks make on purpose, such as a load balancer open to the internet.
-Read the first previews, then list what your organization accepts under **Rules to skip** (the preview counts what was
+Trivy rates a load balancer open to the internet (`AWS-0053`) as high, so with **Deny from: High** skip that rule or no
+front door can be built. Read the first previews, then list what your organization accepts under **Rules to skip** (the preview counts what was
 skipped) and what it never accepts under **Rules that always deny**.
 
 Each pack runs in a container with no network, a read-only file system and no capabilities, on a copy of the plan

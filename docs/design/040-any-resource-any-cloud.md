@@ -337,7 +337,8 @@ AWS first: steps 1 to 8 are AWS only. In order, each step its own design-note ad
 3. Lambda, Step Functions and ECS cluster templates.
 4. Repositories linked to blocks, with suggested pipelines (layer 3).
 5. EKS with namespaces (two approved steps) and the data pipeline template (built; the code pipeline is covered by step 4).
-6. Policy packs in containers: Conftest, Checkov or Trivy (layer 4, second part). **Built**; see "Policy packs, as built".
+6. Policy packs in containers: Conftest, Checkov or Trivy (layer 4, second part). **Built** (#147) and checked on the Pi
+   ([2026-11-17](../testing/2026-11-17-policy-packs.md)); see "Policy packs, as built".
 7. The generic resource block from provider schemas, with the administrator's allow list (layer 5), for AWS.
 8. The library for templates, skills, tools, agents and guardrail packs (layer 7).
 9. **Only after AWS is complete** (maintainer, 2026-11-08): Google Cloud, then Azure, then RunPod and others (layer 6),
