@@ -690,7 +690,13 @@ func (s *Server) runNode(ctx context.Context, run WFRun, g WFGraph, n WFNode, vi
 		_ = s.audit(cctx, p, "", "assistant.lookup", "workflow/"+run.Workflow, n.Tool, err == nil)
 		res.visit.Input, res.visit.Lookups = n.Tool+" "+string(n.Args), []string{n.Tool}
 		if err != nil {
-			return fail(n.Tool + ": " + err.Error())
+			msg := n.Tool + ": " + err.Error()
+			for _, t := range assistantLookups() {
+				if t.name == n.Tool && strings.Contains(err.Error(), "not valid JSON") {
+					msg += ". It takes " + t.help
+				}
+			}
+			return fail(msg)
 		}
 		res.visit.Output = truncate(out, maxStateValue)
 		res.state = map[string]string{n.ID: res.visit.Output}
