@@ -91,6 +91,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /v1/ai/workflow-runs", s.requireRole(authn.Developer, s.handleListWorkflowRuns))
 	mux.Handle("GET /v1/ai/workflow-runs/{id}", s.requireRole(authn.Developer, s.handleGetWorkflowRun))
 	mux.Handle("POST /v1/ai/workflow-runs/{id}/release", s.requireRole(authn.Admin, s.handleReleaseGate))
+	mux.Handle("POST /v1/ai/workflow-runs/{id}/answer", s.requireRole(authn.Developer, s.handleAnswerWorkflow))
 	mux.Handle("POST /v1/ai/workflow-runs/{id}/cancel", s.requireRole(authn.Developer, s.handleCancelWorkflowRun))
 	mux.Handle("GET /v1/envs", s.requireRole(authn.Developer, s.handleListEnvs))
 	mux.Handle("GET /v1/envs/templates", s.requireRole(authn.Developer, s.handleEnvTemplates))

@@ -21,6 +21,13 @@ in [PLAN.md](PLAN.md).
 | M6 | AI agents | Governed agent steps with scoped credentials and cost tracking; failure triage; fix suggestions as pull requests, never auto-applied | In progress: Claude Code agent steps built (note 007); Codex, Copilot, triage and cost tracking open |
 | M7 | Migration and breadth | Importers for Jenkinsfile and GitHub Actions workflows; Bitbucket and GitLab triggers; additional cloud targets | Not started |
 
+## Agent graphs (note 044)
+
+Status: **parts 1 and 2 built: the graph engine and the canvas.** Workflows as graphs of agents, lookups, decisions,
+questions for people, merges and ends, with shared state, bounded loops and every run drawn node by node. Next: checked
+with the real model on the Pi, then different models per agent and decisions by agent (part 3), then webhook and
+Watch triggers (part 4). See [note 044](design/044-agent-graphs.md).
+
 ## Native image builds (note 043)
 
 Status: **slice 1 built (2026-11-13).** A `build` step builds with BuildKit and pushes to ECR only for runs GitHub

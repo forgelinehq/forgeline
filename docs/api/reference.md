@@ -129,7 +129,7 @@ A run's `status` is one of `queued`, `running`, `succeeded`, `failed`, `canceled
 | `DELETE /v1/integrations/aws/sso` | admin | Sign out and delete the stored token. |
 | `GET /v1/ai/workflows` | developer | Workflows: stages, steps, schedule, run-as role. |
 | `GET /v1/ai/workflows/{id}` | developer | One workflow with every version. |
-| `POST /v1/ai/workflows` | admin | Create a workflow (version 1): stages of agent steps, optional gate per stage, optional schedule, run-as viewer or developer. |
+| `POST /v1/ai/workflows` | admin | Create a workflow (version 1): stages of agent steps, optional gate per stage, optional schedule, run-as viewer or developer. Or, instead of `stages`, a `graph` (design note 044): `nodes` (`id`, `kind` `start`/`agent`/`lookup`/`decide`/`ask`/`merge`/`end`, `x`, `y`, `max_visits`, and per kind `agent`, `agent_n`, `task`, `reads`, `fields`; `tool`, `args`; `by` `rule`/`agent` and `rules` (`key`, `op` `equals`/`contains`/`gt`/`lt`/`empty`, `value`, `when`); `question`, `choices`, `answerers`; `outcome`, `summary`) and `edges` (`from`, `to`, `when` for a branch). At most 40 nodes and 80 wires; exactly one start; every node reachable; a decision needs an `else` wire. A graph run has `state`, `visits` (each node visit's `status`, `input`, `output`, `branch`, `answered_by`), `waiting` and `steps` (at most 50). |
 | `POST /v1/ai/workflows/{id}/versions` | admin | Save a new version; agent versions are pinned. |
 | `POST /v1/ai/workflows/{id}/rollback` | admin | Copy an old version forward as the current one. |
 | `POST /v1/ai/workflows/{id}/disable` | admin | Stop it running, including its schedule. |
@@ -138,6 +138,7 @@ A run's `status` is one of `queued`, `running`, `succeeded`, `failed`, `canceled
 | `GET /v1/ai/workflow-runs` | developer | Recent runs (`?workflow=`). |
 | `GET /v1/ai/workflow-runs/{id}` | developer | One run with each step's output. |
 | `POST /v1/ai/workflow-runs/{id}/release` | admin | Let a run waiting at a gate start its next stage. |
+| `POST /v1/ai/workflow-runs/{id}/answer` | developer | Body: `answer`. Answers the question a graph run waits at: any administrator, or only the people the node names; with choices, one of them (it picks the wire). Audited as `ai.workflow.answer`. |
 | `POST /v1/ai/workflow-runs/{id}/cancel` | developer | Cancel a run (its starter, or an administrator). |
 | `GET /v1/envs` | developer | Environments (temporary stacks) with owner, status, expiry and cost estimate. |
 | `GET /v1/envs/templates` | developer | The environment templates (developer box, QA sandbox, Lambda sandbox, event pipeline, workflow sandbox) with the options a person can set. |
