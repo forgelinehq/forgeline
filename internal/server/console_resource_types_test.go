@@ -41,9 +41,9 @@ func TestResourceTypeSettings(t *testing.T) {
 	m.srv.schemaRun = fakeSchema(t, &calls)
 	m.dev.expect(403, "PUT", "/v1/settings/resource-types", map[string]any{"accounts": map[string]any{"primary": []string{"aws_sns_topic"}}})
 	for want, accts := range map[string]map[string]any{
-		"accounts.staging: no such AWS account":             {"staging": []string{"aws_sns_topic"}},
-		"accounts.primary[1]: aws_iam_access_key is never":  {"primary": []string{"aws_sns_topic", "aws_iam_access_key"}},
-		"accounts.primary[0]: aws_iam_user_policy is never": {"primary": []string{"aws_iam_user_policy"}},
+		"accounts.staging: no such AWS account":                 {"staging": []string{"aws_sns_topic"}},
+		"accounts.primary[1]: aws_iam_access_key is never":      {"primary": []string{"aws_sns_topic", "aws_iam_access_key"}},
+		"accounts.primary[0]: aws_iam_user_policy is never":     {"primary": []string{"aws_iam_user_policy"}},
 		`accounts.primary[0]: the AWS provider has no resource`: {"primary": []string{"aws_sns_topicz"}},
 	} {
 		if out := string(m.admin.expect(400, "PUT", "/v1/settings/resource-types", map[string]any{"accounts": accts})); !strings.Contains(out, want) {
