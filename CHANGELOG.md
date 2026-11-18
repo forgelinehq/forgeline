@@ -62,6 +62,9 @@ section in the pull request that makes the change; a release moves it under its 
 - **After a session ends**, the console stops polling the server (it asked every minute, forever).
 
 ### Added
+- **Deleting an agent.** An agent page has Delete: the agent is turned off, moved to an archive (Agents › Archived) and
+  can be restored for 30 days, then deleted for good. It is refused, naming them, while an enabled workflow or an
+  unfinished mission uses the agent; agents that reported to it report to people again.
 - **Gemini, Azure OpenAI and AWS Bedrock providers** (note 045, step 1). Gemini takes an API key; Azure OpenAI its
   resource address and key, with deployment names as models; Bedrock uses an AWS account the console is already
   connected to (no key), in the region you choose, through the Converse API. Not yet tried against the real services.

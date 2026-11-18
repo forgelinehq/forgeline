@@ -288,6 +288,9 @@ func (s *Server) startAuditPruner(ctx context.Context) {
 			if _, err := s.pruneAudit(ctx, time.Now().UTC()); err != nil && ctx.Err() == nil {
 				s.log.Error("pruning the audit log", "err", err)
 			}
+			if _, err := s.purgeArchivedAgents(ctx, time.Now().UTC()); err != nil && ctx.Err() == nil {
+				s.log.Error("deleting archived agents", "err", err)
+			}
 		}
 		prune()
 		t := time.NewTicker(auditPruneEvery)
