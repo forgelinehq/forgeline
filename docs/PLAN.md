@@ -322,7 +322,7 @@ Design: [docs/design/006-console.md](design/006-console.md). Pictures: [docs/con
 > 1. ~~More blueprint blocks~~ **built** (note 039): databases (RDS MySQL or Postgres, password kept by AWS), Redis, secrets (value
 >    never seen by Forgeline), service-to-service calls, autoscaling, and several paths behind one front door.
 > 2. **Any resource, any cloud** (note 040), in this order: ~~guardrails on every plan~~ (built); a template format and an AgentCore
->    agent template (format built; AgentCore waits for quota); ~~Lambda, Step Functions and ECS cluster templates~~ (built);
+>    agent template (format built; AgentCore set aside for now by the maintainer, 2026-11-18); ~~Lambda, Step Functions and ECS cluster templates~~ (built);
 >    ~~repositories linked to blocks with suggested pipelines~~ (built); ~~EKS with namespaces and data pipeline templates~~ (built; the code pipeline is covered by repositories linked to blocks); ~~policy packs (Conftest, Checkov or Trivy)
 >    in containers~~ (built); ~~a generic resource block from provider schemas behind an administrator's allow list~~ (built); ~~a library for
 >    templates, skills, tools, agents and guardrail packs~~ (built). **AWS only until all of that is done**; then Google Cloud, then

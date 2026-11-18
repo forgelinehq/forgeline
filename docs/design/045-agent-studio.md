@@ -1,7 +1,7 @@
 # 045: Agent Studio: any model, a playground, agent teams, publishing, code mode
 
-Status: **accepted 2026-11-18; step 1 under way: the Anthropic, OpenAI and OpenAI-compatible providers are built.** Decisions 1 and 2 are made (end of
-this note); 3 to 5 are still open. Builds on agents and skills
+Status: **accepted 2026-11-18; step 1 under way: the Anthropic, OpenAI and OpenAI-compatible providers are built.** All five decisions are made (end of
+this note). The Anthropic provider was checked on the Pi with the real API on 2026-11-18. Builds on agents and skills
 (note 024), MCP servers (042), budgets (036), the library (040, step 8) and agent graphs (044). Screen mock-ups were
 drawn for the maintainer's review alongside this note.
 
@@ -105,8 +105,8 @@ audited.
   every other credential.
 - **Headless**: `forgeline agent run <name> --input file.json` and a small runner image use the API with a runner
   token. Model calls and tool calls still go through the server, so keys, checks and the audit stay in one place.
-- **Exporting** an agent to run with no Forgeline server at all is **not proposed**. It would carry its own keys and
-  skip the audit. See the decisions below.
+- **Exporting** an agent to run with no Forgeline server at all is **not planned** (decision 3). It would carry its own
+  keys and skip the audit.
 
 ### 5. Code mode
 
@@ -177,9 +177,12 @@ Each step is checked on the Pi with real models before the next one.
    vault, the MCP address rules, prices, a monthly limit with a fallback, and a log of recent model calls. Then OpenAI
    and OpenAI-compatible servers (Ollama, vLLM, LiteLLM, OpenRouter, Groq), through the Chat Completions API; a
    compatible server needs its address, may have no key, and its models are added by name. Bedrock, Gemini and Azure
-   OpenAI are next.
+   OpenAI are next. Checked on the Pi with the real Anthropic API (2026-11-18): the providers page test, and an agent on
+   `anthropic/claude-haiku-5-5` answering while the assistant itself used a Claude Code token, its call priced in the
+   log.
 2. ~~The code-mode sandbox~~: **local only** (maintainer, 2026-11-17).
-3. **Headless:** only through the server (proposed), or also a standalone export that runs without Forgeline?
-4. **A public route on the Pi:** published APIs, like webhooks, need one. Which address, if any?
-5. **Playground spending:** should playground runs count against the agent's monthly budget (proposed), or have a
-   separate playground budget?
+3. ~~Headless~~: **only through the server, as proposed** (maintainer, 2026-11-18). No standalone export.
+4. ~~A public route on the Pi~~: **yes** (maintainer, 2026-11-18). The exact address and the firewall or tunnel change
+   are proposed separately and made only after the maintainer approves that exact change.
+5. ~~Playground spending~~: **playground runs count against the agent's monthly budget, as proposed** (maintainer,
+   2026-11-18).
