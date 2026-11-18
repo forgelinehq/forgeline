@@ -91,7 +91,6 @@ var providerCatalog = map[string]struct {
 // keyOptional says whether a kind of provider may have no key: a local Ollama or vLLM usually needs none.
 func keyOptional(kind string) bool { return kind == provOpenAICompat || kind == provBedrock }
 
-
 // builtKind says whether a kind of provider can be added.
 func builtKind(kind string) bool {
 	for _, k := range providerKinds {

@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/forgelinehq/forgeline/internal/authn"
 	"github.com/forgelinehq/forgeline/internal/docstore"
 	"github.com/forgelinehq/forgeline/internal/store"
 )
@@ -111,6 +112,31 @@ func (s *Server) hostLine(ctx context.Context) string {
 // assistantContextFor builds the context for a page. The kinds that need cloud or cluster data go through the
 // same lookups the assistant would use, so the person's role and the access policy apply to them too.
 func (s *Server) assistantContextFor(ctx context.Context, p Principal, c chatContext) (text, note string, err error) {
+	// Where the person is comes first, whatever the page holds.
+	c.Path, c.Label = truncate(strings.TrimSpace(c.Path), 200), truncate(strings.TrimSpace(c.Label), 80)
+	where := ""
+	if c.Label != "" {
+		where = fmt.Sprintf("The person is on the page %s (%s).\n\n", c.Label, c.Path)
+	}
+	text, note, err = s.pageContextFor(ctx, p, c)
+	if err != nil || c.Kind == "page" {
+		return text, note, err
+	}
+	return truncate(where+text, maxAssistContext), note, nil
+}
+
+func (s *Server) pageContextFor(ctx context.Context, p Principal, c chatContext) (text, note string, err error) {
+	dev := p.Role.AtLeast(authn.Developer)
+	from := func(summary func(context.Context, string) (string, error), label string) (string, string, error) {
+		if !dev {
+			return "This page is for developers.\n", label, nil
+		}
+		out, e := summary(ctx, c.ID)
+		if e != nil {
+			return "", "", e
+		}
+		return out, label, nil
+	}
 	via := func(tool string, args any, label string) (string, string, error) {
 		raw, _ := json.Marshal(args)
 		out, lerr := s.runLookup(ctx, p, lookupCall{Tool: tool, Args: raw})
@@ -120,6 +146,19 @@ func (s *Server) assistantContextFor(ctx context.Context, p Principal, c chatCon
 		return truncate(out, maxAssistContext), label, nil
 	}
 	switch c.Kind {
+	case "page":
+		if c.Label == "" {
+			break
+		}
+		return truncate(pageSummary(c.Label, c.Path), maxAssistContext), c.Label, nil
+	case "team":
+		return from(s.teamSummary, "team "+c.ID)
+	case "mission":
+		return from(s.missionSummary, "mission "+c.ID)
+	case "workflow":
+		return from(s.workflowSummary, "workflow "+c.ID)
+	case "workflow_run":
+		return from(s.workflowRunSummary, "workflow run "+c.ID)
 	case "k8s":
 		if c.ID == "" {
 			return via("k8s_clusters", map[string]string{}, "Kubernetes clusters")

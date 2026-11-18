@@ -62,6 +62,10 @@ section in the pull request that makes the change; a release moves it under its 
 - **After a session ends**, the console stops polling the server (it asked every minute, forever).
 
 ### Added
+- **The assistant knows Forgeline.** It is told the page and tab you are on (a mission, a team, a workflow, an agent, a
+  run, or any page by its name, such as Team › Missions) with what that page shows, and it has Forgeline's guides
+  built in: `search_docs` finds the sections that answer a question, and its instructions say to look there before
+  answering about a feature and never to invent one. New lookups read teams, workflows, missions and the models set up.
 - **Teams** (note 045). Team › Teams lists teams of agents: a lead and up to eight members, and an agent can be in
   several. Give a team a goal: the lead plans one task per member, the members work at the same time with their own
   model, tools and budget, and the lead writes one answer from what they found (handed to it as data). Each run shows

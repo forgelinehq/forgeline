@@ -1,0 +1,133 @@
+---
+title: People and security
+parent: Guides
+nav_order: 7
+---
+
+# People and security
+
+## Roles
+
+| | viewer | developer | admin |
+| --- | :-: | :-: | :-: |
+| See runs, pipelines, infrastructure | ✓ | ✓ | ✓ |
+| Run, cancel, edit pipelines | | ✓ | ✓ |
+| Propose cloud changes, ask the assistant | | ✓ | ✓ |
+| List secret names | | ✓ | ✓ |
+| Create or delete secrets, connect GitHub and AWS, manage users, approve changes, read the audit log | | | ✓ |
+
+The bearer token counts as an admin named `token`. Whoever proposes a cloud change cannot approve it.
+
+![People]({{ '/console/11-people.png' | relative_url }})
+
+## Single sign-on
+
+People can sign in with your company login instead of a Forgeline password: Google Workspace, Microsoft Entra ID,
+Okta, Keycloak or any provider that speaks OpenID Connect. An administrator sets it up under
+**Settings → Sign-in (SSO)** in four steps:
+
+1. **Register Forgeline with your provider.** Create a web application (an "OIDC client") there with the redirect
+   address the page shows (`https://<your Forgeline>/v1/auth/oidc/callback`), and copy its client ID and secret.
+2. **Connect.** Enter the provider's issuer URL (for example `https://accounts.google.com`, or
+   `https://login.microsoftonline.com/<tenant>/v2.0` for Entra ID) and press **Test**: it reads the provider's
+   settings and says whether sign-in can work. Enter the client ID and secret; the secret is stored encrypted and
+   never shown again.
+3. **Decide who may come in.** **Let new people in** makes an account at a person's first sign-in. **Roles from
+   groups** maps your company groups to Forgeline roles (the highest match wins); **When no group matches** gives a
+   default role or refuses them. **Allowed email domains** optionally narrows it to verified addresses in your
+   domains.
+4. **Turn it on.** The sign-in page then shows **Sign in with …** above the password form.
+
+What to know:
+
+- Forgeline knows a person by the provider's own id for them, never by email alone, so changing an email at the
+  provider cannot take over someone else's account.
+- Roles are applied at every sign-in: take someone out of a group and their role changes next time they sign in.
+  The last administrator is never demoted this way.
+- Someone who leaves cannot sign in again. A session they already have ends when it expires (12 hours) or when an
+  administrator disables the account under **People**, which ends it at once.
+- Password sign-in keeps working for Forgeline accounts, so a broken provider never locks you out. Accounts made by
+  single sign-on have no password and show an **SSO** badge under People.
+- If a sign-in fails, the sign-in page says why in plain words, and the audit log has the details
+  (`login.sso.failed`).
+- To try it on a laptop without a real provider, run the stand-in in `scripts/dev/fakeoidc` (see its README).
+
+![Single sign-on settings]({{ '/console/84-sso-settings.png' | relative_url }})
+![The sign-in page with single sign-on]({{ '/console/85-sso-sign-in.png' | relative_url }})
+
+## Approval rules
+
+Every change to your cloud already needs an administrator who did not propose it. Under
+**Settings → Approval rules** you can ask for more where it matters:
+
+- **Needs two approvals**: the first approval is recorded and the change keeps waiting ("Approve (1 of 2)"); it
+  runs only when a second, different administrator approves the same exact change.
+- **Who may approve**: tick the administrators who may approve; everyone else's approval is refused.
+- A rule matches by **account** (for example Primary), by **who made the change** (the assistant, or people in the
+  console) and optionally **only high-risk changes** (such as deleting a stack). Nothing ticked means every change.
+
+When several rules match, the strictest wins: the most approvals any rule asks for, and only people allowed by every
+rule that names approvers. With no rules, nothing changes. The Approvals page shows on each waiting change how many
+approvals it needs, who already approved, and who may approve next. Developers can read the rules, so they know who
+will review their changes; only administrators change them, and every change is in the audit log.
+
+![Approval rules]({{ '/console/86-approval-rules.png' | relative_url }})
+
+## Policy packs
+
+Every blueprint preview is checked by Forgeline's built-in guardrails. Under **Settings → Policy packs** an
+administrator can add more rules:
+
+- **Trivy**: known misconfigurations, each rated low to critical. Choose **Deny from** (for example Critical) and a
+  plan with such a finding cannot be sent for approval; everything below is a warning the approver reads.
+- **Checkov**: a wider set. It does not rate its findings when it runs without a network, so each is a warning unless
+  you list the rule under **Rules that always deny**.
+- **Conftest**: your own rules in Rego. A `deny` rule stops the plan; a `warn` rule is a warning. The plan is the
+  input, as OpenTofu prints it. A rule can return `{"msg": ..., "address": ...}` to name the resource:
+
+  ```rego
+  package main
+
+  import rego.v1
+
+  deny contains {"msg": msg, "address": rc.address} if {
+  	some rc in input.resource_changes
+  	rc.type == "aws_cloudwatch_log_group"
+  	rc.change.after.retention_in_days < 30
+  	msg := "logs must be kept at least 30 days"
+  }
+  ```
+
+Trivy and Checkov flag some choices Forgeline's blocks make on purpose, such as a load balancer open to the internet.
+Trivy rates a load balancer open to the internet (`AWS-0053`) as high, so with **Deny from: High** skip that rule or no
+front door can be built. Read the first previews, then list what your organization accepts under **Rules to skip** (the preview counts what was
+skipped) and what it never accepts under **Rules that always deny**.
+
+Each pack runs in a container with no network, a read-only file system and no capabilities, on a copy of the plan
+without its sensitive values. The server needs Docker. A pack that cannot run stops the plan; it never counts as a
+pass. After the packs change, a preview made earlier must be made again before it can be sent. The preview and the
+approval say which pack and tool version checked the plan, and every change to the packs is in the audit log.
+
+## Downloading the audit log, and how long it is kept
+
+Under **Settings → Audit log**, filter by person, action or dates and choose **Download CSV** (for a spreadsheet or
+an auditor) or **JSON Lines** (for a SIEM or a script). The download has every event that matches, oldest first,
+not only the 200 shown. Each download is itself recorded in the log, with what was taken. In the CSV, a cell that
+would start a spreadsheet formula gets a leading `'`, so opening the file never runs one.
+
+**How long to keep it**, at the bottom of the same page, is **Forever** unless you choose 90 days, 180 days, 1, 2 or
+7 years (the API takes any period from 30 to 3650 days). Older events are deleted once an hour and cannot be
+brought back, so the console asks you to confirm and suggests downloading first. Each deletion and each change of
+the period is recorded. Nobody can edit or delete a single event.
+
+![Audit log with download buttons]({{ '/console/87-audit-export.png' | relative_url }})
+
+## What protects you
+
+- Passwords use PBKDF2-SHA256, at least 12 characters, with login throttling per account and per address.
+- Cookies are `HttpOnly` and `SameSite=Strict`. Requests that change something must send `X-Forgeline-Request: 1`.
+- Secrets are encrypted with AES-256-GCM, cannot be read back, and are masked in logs.
+- Steps get only the secrets and network they ask for. Runs started by GitHub get no secrets.
+- Every change, refusal and failed login goes to the audit log.
+
+See [design note 006](https://github.com/forgelinehq/forgeline/blob/main/docs/design/006-console.md) for the rules and the known limits.

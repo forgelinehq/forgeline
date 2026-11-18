@@ -87,8 +87,8 @@ type AIAgent struct {
 	Description string         `json:"description"`
 	Current     int            `json:"current"`
 	Disabled    bool           `json:"disabled,omitempty"`
-	ReportsTo   string         `json:"reports_to,omitempty"` // another agent; empty reports to people (frame 5)
-	Budget      *AgentBudget   `json:"budget,omitempty"`     // a monthly limit (note 036); kept on the agent, not in its versions
+	ReportsTo   string         `json:"reports_to,omitempty"`  // another agent; empty reports to people (frame 5)
+	Budget      *AgentBudget   `json:"budget,omitempty"`      // a monthly limit (note 036); kept on the agent, not in its versions
 	ArchivedAt  *time.Time     `json:"archived_at,omitempty"` // deleted: hidden, restorable until the sweep removes it
 	ArchivedBy  string         `json:"archived_by,omitempty"`
 	Versions    []AgentVersion `json:"versions"`

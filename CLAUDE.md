@@ -23,6 +23,8 @@ what to do next**. The project is pre-alpha and maintained by one person.
   copies them in at build time (titles from front matter or the first heading, `relative_url` paths, callouts, `.md`
   links). Preview with `cd site && npm ci && npm run dev`; `node --test site/scripts/sync.test.mjs` runs in CI. Add a new
   guide to the sidebar in `site/astro.config.mjs`; design notes appear on their own. The home page is `site/src/home.mdx`.
+- The assistant has the guides built in (`internal/server/knowledge/`). After editing `docs/guides/`, `docs/get-started.md`
+  or `docs/status.md`, run `FORGELINE_UPDATE_KNOWLEDGE=1 go test ./internal/server -run TestKnowledgeMatchesTheDocs`.
 - Regenerate the JSON Schema after changing types in `internal/pipeline`:
   `go test ./internal/pipeline -run TestSchemaMatchesCommittedFile -update`
 

@@ -3,6 +3,7 @@
 import { h, icon, mount, errorBox, notice, copyButton, toast, pill, relTime } from './dom.js';
 import { get, post, del, atLeast, streamPost } from './api.js';
 import { currentPath, navigate } from './router.js';
+import { pageContext as contextOf } from './pagectx.js';
 import { renderReply } from './mdview.js';
 import { newRun, applyEvent, progressLabel } from './runstate.js';
 import { dockWidth, wideDockWidth, floatRect, readPrefs } from './panelgeom.js';
@@ -13,22 +14,19 @@ const DETAIL_LABEL = { save_skill: 'Show the steps', save_agent: 'Show the instr
 
 const DRAFT_KEY = 'forgeline-draft';
 
-/** What the page is about, so the server can attach the right data to the question. */
-function pageContext() {
-  const p = currentPath().split('?')[0];
-  let m = p.match(/^\/runs\/([^/]+)$/);
-  if (m) return { kind: 'run', id: decodeURIComponent(m[1]), label: 'this run' };
-  m = p.match(/^\/pipelines\/([^/]+)$/);
-  if (m && m[1] !== 'new') return { kind: 'pipeline', id: decodeURIComponent(m[1]), label: 'this pipeline' };
-  if (p === '/infrastructure') return { kind: 'infra', id: '', label: 'your infrastructure' };
-  return { kind: 'none', id: '', label: 'Home' };
-}
+const pageContext = () => contextOf(currentPath());
 
 const SUGGESTIONS = {
   run: ['Why did this run fail?', 'Summarise what happened in this run.'],
   pipeline: ['Review this pipeline for problems.', 'How could this run faster?'],
   infra: ['Summarise what is running in AWS.', 'Is anything here worth cleaning up?'],
   none: ['Give me the morning check: what needs me first?', 'Set up a pipeline that builds and tests one of my GitHub repositories.'],
+  agent: ['What does this agent do, and what can it reach?', 'How could its instructions be clearer?'],
+  team: ['Summarise what this team found last time.', 'Who in this team does what?'],
+  mission: ['What is this mission, and what did it find?', 'What should I do about its findings?'],
+  workflow: ['Explain this workflow step by step.', 'What could go wrong when it runs?'],
+  workflow_run: ['What happened in this run?', 'Why did this run stop where it did?'],
+  page: ['What is this page for?', 'What can I do here?'],
 };
 
 const PREF_KEY = 'forgeline-assistant';
@@ -281,7 +279,7 @@ function build(close, role) {
     draw(); list.scrollTop = list.scrollHeight;
     const c = pageContext();
     try {
-      await streamPost('/v1/assistant/runs', { message: q, history, conversationId: conversation, context: { kind: c.kind, id: c.id } }, (ev) => { applyEvent(run, ev); draw(); }, ctl.signal);
+      await streamPost('/v1/assistant/runs', { message: q, history, conversationId: conversation, context: { kind: c.kind, id: c.id, path: c.path, label: c.where } }, (ev) => { applyEvent(run, ev); draw(); }, ctl.signal);
       if (run.status === 'running') { run.status = 'error'; run.error = 'The connection closed before the assistant finished.'; }
     } catch (e) {
       if (e && e.name === 'AbortError') run.status = 'stopped';
