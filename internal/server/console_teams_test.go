@@ -206,6 +206,30 @@ func TestInstallingATeamPackageMakesTheTeam(t *testing.T) {
 	if len(list.Teams) != 1 || list.Teams[0].Name != "Incident triage" || list.Teams[0].Lead != "triage-lead" || strings.Join(list.Teams[0].Members, ",") != "run-analyst,platform-checker" {
 		t.Fatalf("teams = %+v", list.Teams)
 	}
+	// Installing again over the install brings back its agents that were archived or turned off since.
+	m.admin.expect(204, "DELETE", "/v1/ai/teams/"+list.Teams[0].ID, nil)
+	var wfs struct {
+		Workflows []Workflow `json:"workflows"`
+	}
+	json.Unmarshal(m.admin.expect(200, "GET", "/v1/ai/workflows", nil), &wfs)
+	m.admin.expect(200, "POST", "/v1/ai/workflows/"+wfs.Workflows[0].ID+"/disable", map[string]any{})
+	m.admin.expect(200, "DELETE", "/v1/ai/agents/run-analyst", nil)
+	m.admin.expect(200, "POST", "/v1/ai/agents/platform-checker/disable", nil)
+	in, _ := m.srv.loadInstall(t.Context(), "incident-triage-team") // as if version 1 were installed: this is an upgrade
+	in.Version = 1
+	m.srv.docs.Put(t.Context(), kindMarketInstall, in.ID, in)
+	if resp, out := m.admin.do("POST", "/v1/market/install", map[string]any{"id": "incident-triage-team", "hash": hash}); resp.StatusCode/100 != 2 {
+		t.Fatalf("install again = %d %s", resp.StatusCode, out)
+	}
+	for _, id := range []string{"run-analyst", "platform-checker", "triage-lead"} {
+		if a, _ := m.srv.loadAgent(t.Context(), id); a.archived() || a.Disabled {
+			t.Errorf("%s after reinstall: archived %v, off %v", id, a.archived(), a.Disabled)
+		}
+	}
+	json.Unmarshal(m.dev.expect(200, "GET", "/v1/ai/teams", nil), &list)
+	if len(list.Teams) != 1 {
+		t.Fatalf("after reinstall, teams = %+v", list.Teams)
+	}
 	m.admin.expect(200, "DELETE", "/v1/market/install/incident-triage-team", nil)
 	json.Unmarshal(m.dev.expect(200, "GET", "/v1/ai/teams", nil), &list)
 	if len(list.Teams) != 0 {
