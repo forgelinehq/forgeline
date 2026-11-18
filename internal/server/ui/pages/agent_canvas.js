@@ -295,7 +295,7 @@ export async function graphEditorPage({ params }) {
   }
 
   mount(el, pageHeader(wf ? 'Edit ' + wf.name : 'New workflow', 'Nodes share one state: each writes what it found under its id. Decisions take one wire; loops are allowed, each node runs at most its limit, and a run at most 50 steps. Only an agent’s own tools may propose changes, and a different administrator approves them.',
-    h('a', { class: 'btn-secondary btn-sm', href: wf ? '#/workflows/' + wf.id : '#/agents?tab=workflows' }, 'Back')),
+    h('a', { class: 'btn-secondary btn-sm', href: wf ? '#/workflows/' + wf.id : '#/workflows' }, 'Back')),
     !live.length ? h('div', { class: 'mb-4' }, notice('info', 'Create an agent first: agent and decision nodes need one.')) : null,
     cur && !cur.graph ? h('div', { class: 'mb-4' }, notice('info', 'This workflow had stages. They are drawn here as a graph; saving makes a new version as a graph.')) : null,
     bar, h('div', { class: 'grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]' }, canvasBox, panel));

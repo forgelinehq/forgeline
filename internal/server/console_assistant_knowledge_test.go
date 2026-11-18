@@ -92,9 +92,10 @@ eq('missions list', pick(pageContext('/missions')), ['page', '', 'Team › Missi
 eq('one mission', pick(pageContext('/missions/m-42')), ['mission', 'm-42', 'Team › Missions']);
 eq('a team', pick(pageContext('/teams/platform-health')), ['team', 'platform-health', 'Team › Teams']);
 eq('workflows tab', pick(pageContext('/agents?tab=workflows')), ['page', '', 'Team › Agents › Workflows']);
-eq('a workflow canvas', pick(pageContext('/workflows/triage/canvas')), ['workflow', 'triage', 'Team › Agents']);
+eq('a workflow canvas', pick(pageContext('/workflows/triage/canvas')), ['workflow', 'triage', 'Team › Workflows']);
+eq('workflows', pick(pageContext('/workflows?tab=runs')), ['page', '', 'Team › Workflows › Runs']);
 eq('new workflow', pick(pageContext('/workflows/new/canvas'))[0], 'page');
-eq('a workflow run', pick(pageContext('/workflow-runs/r1')), ['workflow_run', 'r1', 'Team › Agents']);
+eq('a workflow run', pick(pageContext('/workflow-runs/r1')), ['workflow_run', 'r1', 'Team › Workflows']);
 eq('providers', pick(pageContext('/providers')), ['page', '', 'Settings › Models and providers']);
 eq('home', pick(pageContext('/')), ['none', '', 'Home › Today']);
 eq('a run', pick(pageContext('/runs/abc')), ['run', 'abc', 'Ship › Pipelines']);

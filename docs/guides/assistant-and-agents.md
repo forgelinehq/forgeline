@@ -113,8 +113,9 @@ is in the audit log. Cloud spend an agent causes is not counted here yet.
 
 ## Workflows
 
-A workflow runs agents in an order you draw. **New workflow on the canvas** (Team › Agents › Workflows) opens an
-n8n-style canvas: add nodes from the palette, drag from a node's port to the next to wire them, and pick a node to set it.
+A workflow runs agents in an order you draw. **Team › Workflows** lists them as cards (what each is made of, how it
+starts, its last run), with a **Runs** tab for every run of every workflow and an **Archived** tab. **New workflow** opens
+an n8n-style canvas: add nodes from the palette, drag from a node's port to the next to wire them, and pick a node to set it.
 
 | Node | What it does |
 | --- | --- |
@@ -129,7 +130,8 @@ Loops are allowed: each node runs at most its limit (3 unless you say up to 10),
 drawn on the same canvas: nodes turn green or red, the wires taken are bold, and picking a node shows what went in and
 what came out each time it ran. A workflow starts by hand, on a schedule, from a signed webhook, or after a pipeline run
 fails; agents read what started it under `trigger`. Workflows made of stages still run, and **Edit on the canvas** turns
-one into a graph.
+one into a graph. **Delete** on a workflow's page archives it: it can be restored for 30 days, then it is deleted for
+good; its past runs stay.
 
 ![A workflow as a graph]({{ '/console/134-workflow-graph.png' | relative_url }})
 ![A run on the graph]({{ '/console/135-workflow-run-graph.png' | relative_url }})

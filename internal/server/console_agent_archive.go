@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/forgelinehq/forgeline/internal/docstore"
 )
 
 // Deleting an agent archives it first. An archived agent is turned off, hidden from the team and the agent list, and
@@ -139,6 +141,92 @@ func (s *Server) purgeArchivedAgents(ctx context.Context, now time.Time) (int, e
 			return n, err
 		}
 		s.audit(ctx, Principal{Name: "forgeline"}, "", "ai.agent.purge", "agent/"+a.ID, fmt.Sprintf("%s, archived by %s on %s", a.Name, a.ArchivedBy, a.ArchivedAt.Format("2006-01-02")), true)
+		n++
+	}
+	return n, nil
+}
+
+// --- workflows are archived the same way ---
+
+// lastWorkflowRuns is the newest run of each workflow.
+func (s *Server) lastWorkflowRuns(ctx context.Context) map[string]WFRun {
+	out := map[string]WFRun{}
+	docs, err := s.docs.List(ctx, kindWorkflowRun, docstore.ListOptions{Desc: true, Limit: maxWFRuns})
+	if err != nil {
+		return out
+	}
+	runs, _ := docstore.Decode[WFRun](docs)
+	newestFirst(runs)
+	for _, r := range runs {
+		if _, ok := out[r.Workflow]; !ok {
+			out[r.Workflow] = r
+		}
+	}
+	return out
+}
+
+// handleArchiveWorkflow is DELETE /v1/ai/workflows/{id}: off, hidden, restorable for agentCoolingOff, then removed.
+// A workflow with a run that is going or waiting for a person cannot be archived.
+func (s *Server) handleArchiveWorkflow(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	wf, err := s.loadWorkflow(ctx, r.PathValue("id"))
+	if err != nil {
+		s.defError(w, "workflow", err)
+		return
+	}
+	if wf.ArchivedAt != nil {
+		writeError(w, http.StatusConflict, wf.Name+" is already archived")
+		return
+	}
+	if lr, ok := s.lastWorkflowRuns(ctx)[wf.ID]; ok && (lr.Status == wfRunning || lr.Status == wfWaiting) {
+		writeError(w, http.StatusConflict, wf.Name+" has a run that is "+lr.Status+"; let it finish or cancel it first")
+		return
+	}
+	now := time.Now().UTC()
+	wf.ArchivedAt, wf.ArchivedBy, wf.Disabled = &now, principalFrom(ctx).Name, true
+	if err := s.docs.Put(ctx, kindWorkflow, wf.ID, wf); err != nil {
+		s.internalError(w, "archiving the workflow", err)
+		return
+	}
+	s.auditReq(r, "ai.workflow.archive", "workflow/"+wf.ID, fmt.Sprintf("%s; deleted for good after %s unless restored", wf.Name, now.Add(agentCoolingOff).Format("2006-01-02")), true)
+	writeJSON(w, http.StatusOK, wf)
+}
+
+func (s *Server) handleRestoreWorkflow(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	wf, err := s.loadWorkflow(ctx, r.PathValue("id"))
+	if err != nil {
+		s.defError(w, "workflow", err)
+		return
+	}
+	if wf.ArchivedAt == nil {
+		writeError(w, http.StatusConflict, wf.Name+" is not archived")
+		return
+	}
+	wf.ArchivedAt, wf.ArchivedBy = nil, ""
+	if err := s.docs.Put(ctx, kindWorkflow, wf.ID, wf); err != nil {
+		s.internalError(w, "restoring the workflow", err)
+		return
+	}
+	s.auditReq(r, "ai.workflow.restore", "workflow/"+wf.ID, wf.Name+" (still turned off)", true)
+	writeJSON(w, http.StatusOK, wf)
+}
+
+// purgeArchivedWorkflows deletes workflows archived longer than the cooling-off period. Their past runs stay.
+func (s *Server) purgeArchivedWorkflows(ctx context.Context, now time.Time) (int, error) {
+	all, err := s.listWorkflows(ctx)
+	if err != nil {
+		return 0, err
+	}
+	n := 0
+	for _, wf := range all {
+		if wf.ArchivedAt == nil || now.Sub(*wf.ArchivedAt) < agentCoolingOff {
+			continue
+		}
+		if err := s.docs.Delete(ctx, kindWorkflow, wf.ID); err != nil {
+			return n, err
+		}
+		s.audit(ctx, Principal{Name: "forgeline"}, "", "ai.workflow.purge", "workflow/"+wf.ID, fmt.Sprintf("%s, archived by %s on %s", wf.Name, wf.ArchivedBy, wf.ArchivedAt.Format("2006-01-02")), true)
 		n++
 	}
 	return n, nil

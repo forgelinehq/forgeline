@@ -74,3 +74,43 @@ func TestDeletingAnAgentArchivesItThenTheSweepRemovesIt(t *testing.T) {
 		t.Error("the sweep left no audit entry")
 	}
 }
+
+func TestDeletingAWorkflowArchivesItThenTheSweepRemovesIt(t *testing.T) {
+	h := newHarness(t, &executor.Fake{})
+	admin := h.adminBrowser("ada")
+	a := newAgent(t, admin, agentBody("Worker", nil, nil, "T0"))
+	g := map[string]any{"nodes": []map[string]any{{"id": "start", "kind": "start"}, {"id": "ask", "kind": "agent", "agent": a.ID, "task": "go"}, {"id": "end", "kind": "end"}},
+		"edges": []map[string]any{{"from": "start", "to": "ask"}, {"from": "ask", "to": "end"}}}
+	var wf Workflow
+	json.Unmarshal(admin.expect(201, "POST", "/v1/ai/workflows", map[string]any{"name": "Old check", "description": "d", "run_as": "viewer", "graph": g}), &wf)
+	var list struct {
+		Workflows []map[string]any `json:"workflows"`
+	}
+	json.Unmarshal(admin.expect(200, "GET", "/v1/ai/workflows", nil), &list)
+	if len(list.Workflows) != 1 || list.Workflows[0]["graph"] != true || list.Workflows[0]["agents"] != 1.0 {
+		t.Fatalf("list = %+v", list.Workflows)
+	}
+
+	admin.expect(200, "DELETE", "/v1/ai/workflows/"+wf.ID, nil)
+	admin.expect(409, "DELETE", "/v1/ai/workflows/"+wf.ID, nil)
+	admin.expect(409, "POST", "/v1/ai/workflows/"+wf.ID+"/enable", map[string]any{})
+	admin.expect(409, "POST", "/v1/ai/workflows/"+wf.ID+"/run", map[string]any{})
+	json.Unmarshal(admin.expect(200, "GET", "/v1/ai/workflows", nil), &list)
+	if len(list.Workflows) != 0 {
+		t.Fatalf("archived still listed: %+v", list.Workflows)
+	}
+	json.Unmarshal(admin.expect(200, "GET", "/v1/ai/workflows?archived=1", nil), &list)
+	if len(list.Workflows) != 1 {
+		t.Fatalf("archived list = %+v", list.Workflows)
+	}
+	// Archived, it no longer keeps its agent from being archived.
+	admin.expect(200, "POST", "/v1/ai/workflows/"+wf.ID+"/restore", map[string]any{})
+	admin.expect(200, "DELETE", "/v1/ai/workflows/"+wf.ID, nil)
+	if n, _ := h.srv.purgeArchivedWorkflows(t.Context(), time.Now().Add(agentCoolingOff-time.Hour)); n != 0 {
+		t.Fatal("the sweep removed a workflow too early")
+	}
+	if n, _ := h.srv.purgeArchivedWorkflows(t.Context(), time.Now().Add(agentCoolingOff+time.Hour)); n != 1 {
+		t.Fatal("the sweep did not remove the workflow")
+	}
+	admin.expect(404, "GET", "/v1/ai/workflows/"+wf.ID, nil)
+}
