@@ -11,35 +11,45 @@ import (
 	"strings"
 )
 
-// openAIChat asks a model through the OpenAI Chat Completions API, which OpenAI and most self-hosted servers
-// (Ollama, vLLM, LiteLLM) and routers (OpenRouter, Groq) speak. base ends in the API's version, such as
-// https://api.openai.com/v1. OpenAI's own API takes max_completion_tokens; compatible servers mostly know only
-// max_tokens. An empty key sends no Authorization header, for a local server that needs none.
-func openAIChat(ctx context.Context, client *http.Client, base, key, model, system string, turns []chatTurn, maxTokens int, openAI bool) (string, modelUsage, int, error) {
+// openAIStyle is how one kind of provider speaks the Chat Completions API.
+type openAIStyle struct {
+	who       string // for error messages: "the OpenAI API"
+	maxParam  string // max_completion_tokens (OpenAI, Azure) or max_tokens (most other servers, Gemini)
+	apiKeyHdr bool   // send the key as api-key (Azure) instead of Authorization: Bearer
+}
+
+var openAIStyles = map[string]openAIStyle{
+	provOpenAI:       {who: "the OpenAI API", maxParam: "max_completion_tokens"},
+	provOpenAICompat: {who: "the provider", maxParam: "max_tokens"},
+	provGemini:       {who: "the Gemini API", maxParam: "max_tokens"},
+	provAzureOpenAI:  {who: "Azure OpenAI", maxParam: "max_completion_tokens", apiKeyHdr: true},
+}
+
+// openAIChat asks a model through the OpenAI Chat Completions API, which OpenAI, Azure OpenAI (its v1 API), Gemini
+// (its OpenAI-compatible endpoint), most self-hosted servers (Ollama, vLLM, LiteLLM) and routers (OpenRouter, Groq)
+// speak. base ends in the API's version path, such as https://api.openai.com/v1. An empty key sends no key at all,
+// for a local server that needs none.
+func openAIChat(ctx context.Context, client *http.Client, base, key, model, system string, turns []chatTurn, maxTokens int, style openAIStyle) (string, modelUsage, int, error) {
 	msgs := make([]chatTurn, 0, len(turns)+1)
 	if system != "" {
 		msgs = append(msgs, chatTurn{Role: "system", Content: system})
 	}
 	msgs = append(msgs, turns...)
-	body := map[string]any{"model": model, "messages": msgs}
-	if openAI {
-		body["max_completion_tokens"] = maxTokens
-	} else {
-		body["max_tokens"] = maxTokens
-	}
+	body := map[string]any{"model": model, "messages": msgs, style.maxParam: maxTokens}
 	raw, _ := json.Marshal(body)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(base, "/")+"/chat/completions", bytes.NewReader(raw))
 	if err != nil {
 		return "", modelUsage{}, 0, err
 	}
 	req.Header.Set("content-type", "application/json")
-	if key != "" {
+	switch {
+	case key == "":
+	case style.apiKeyHdr:
+		req.Header.Set("api-key", key)
+	default:
 		req.Header.Set("authorization", "Bearer "+key)
 	}
-	who := "the provider"
-	if openAI {
-		who = "the OpenAI API"
-	}
+	who := style.who
 	resp, err := client.Do(req)
 	if err != nil {
 		if strings.Contains(err.Error(), "refused") {

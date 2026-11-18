@@ -26,6 +26,7 @@ type fakeOpenAI struct {
 
 type openAIReq struct {
 	Path, Auth string
+	Header     http.Header
 	Body       map[string]any
 }
 
@@ -35,7 +36,7 @@ func newFakeOpenAI(t *testing.T, reply string) *fakeOpenAI {
 		var b map[string]any
 		json.NewDecoder(r.Body).Decode(&b)
 		f.mu.Lock()
-		f.reqs = append(f.reqs, openAIReq{Path: r.URL.Path, Auth: r.Header.Get("authorization"), Body: b})
+		f.reqs = append(f.reqs, openAIReq{Path: r.URL.Path, Auth: r.Header.Get("authorization"), Header: r.Header.Clone(), Body: b})
 		code, body := f.code, f.body
 		f.mu.Unlock()
 		if code != 0 {
@@ -56,6 +57,8 @@ func (f *fakeOpenAI) last() openAIReq {
 	defer f.mu.Unlock()
 	return f.reqs[len(f.reqs)-1]
 }
+
+func (f *fakeOpenAI) lastHeader(name string) string { return f.last().Header.Get(name) }
 
 func (f *fakeOpenAI) fail(code int, body string) {
 	f.mu.Lock()
@@ -151,5 +154,29 @@ func TestOpenAICompatibleServerWithoutAKey(t *testing.T) {
 	admin.expect(200, "POST", "/v1/providers/local/test", nil)
 	if r := llm.last(); r.Auth != "Bearer local-key" {
 		t.Fatalf("auth = %q", r.Auth)
+	}
+}
+
+func TestGeminiAndAzureOpenAI(t *testing.T) {
+	h := newConsoleHarness(t)
+	admin := h.adminBrowser("ada")
+	llm := newFakeOpenAI(t, "OK")
+	flash := map[string]any{"id": "gemini-3.8-flash", "on": true, "input_usd_per_mtok": 1.5, "output_usd_per_mtok": 7.5}
+	admin.expect(201, "POST", "/v1/providers", openAIProvider("gemini", provGemini, llm.srv.URL+"/v1beta/openai", openAIKey, flash))
+	admin.expect(200, "POST", "/v1/providers/gemini/test", nil)
+	if r := llm.last(); r.Path != "/v1beta/openai/chat/completions" || r.Auth != "Bearer "+openAIKey || r.Body["max_tokens"] == nil {
+		t.Fatalf("gemini request = %+v", r)
+	}
+
+	dep := map[string]any{"id": "prod-gpt", "on": true, "input_usd_per_mtok": 1, "output_usd_per_mtok": 5}
+	admin.expect(400, "POST", "/v1/providers", openAIProvider("azure", provAzureOpenAI, "", openAIKey, dep)) // no resource address
+	admin.expect(201, "POST", "/v1/providers", openAIProvider("azure", provAzureOpenAI, llm.srv.URL+"/openai/v1", openAIKey, dep))
+	admin.expect(200, "POST", "/v1/providers/azure/test", nil)
+	if r := llm.last(); r.Path != "/openai/v1/chat/completions" || r.Auth != "" || r.Body["model"] != "prod-gpt" || r.Body["max_completion_tokens"] == nil {
+		t.Fatalf("azure request = %+v", r)
+	}
+	// Azure takes its key in the api-key header, never as a bearer token.
+	if got := llm.lastHeader("api-key"); got != openAIKey {
+		t.Fatalf("api-key header = %q", got)
 	}
 }

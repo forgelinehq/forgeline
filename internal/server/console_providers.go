@@ -23,7 +23,8 @@ import (
 // and workflows no longer depend on that single setting. A bare model name keeps using the assistant's backend, so
 // agent versions made before providers keep their fingerprints and their behaviour.
 //
-// Anthropic, OpenAI and OpenAI-compatible servers (Ollama, vLLM, LiteLLM, OpenRouter, Groq…) are built. Keys go into the vault and are never shown again. A provider's address gets the
+// Anthropic, OpenAI, OpenAI-compatible servers (Ollama, vLLM, LiteLLM, OpenRouter, Groq…), Gemini, Azure OpenAI and
+// AWS Bedrock (through an AWS account the console is connected to, with no key of its own) are built. Keys go into the vault and are never shown again. A provider's address gets the
 // MCP server rules (note 042): https only, no redirects, and no private or reserved address unless an administrator
 // says the provider is on a private network. Every call is priced from the model's prices, counted per provider per
 // month, and kept in a short log of recent calls. A provider can have a monthly limit and a fallback model, used when
@@ -44,6 +45,10 @@ const (
 	provOpenAI       = "openai"
 	provOpenAICompat = "openai-compatible"
 	defaultOpenAI    = "https://api.openai.com/v1"
+	provGemini       = "gemini"
+	defaultGemini    = "https://generativelanguage.googleapis.com/v1beta/openai"
+	provAzureOpenAI  = "azure-openai"
+	provBedrock      = "bedrock"
 	assistProvider   = "provider" // the assistant's backend when its model comes from a provider
 )
 
@@ -72,11 +77,20 @@ var providerCatalog = map[string]struct {
 		{ID: "gpt-6.1-terra", Label: "GPT-6.1 Terra", InUSD: 1, OutUSD: 5},
 		{ID: "gpt-6.1-sol", Label: "GPT-6.1 Sol", InUSD: 2, OutUSD: 10},
 	}},
-	// An OpenAI-compatible server has no known models: the administrator adds them by name, usually at no charge.
+	// From Google's Gemini API price list, November 2026 (prompts up to 200K tokens; Flash at its list price, not the
+	// introductory one that ends on 2026-12-31).
+	provGemini: {Label: "Google Gemini", Models: []ProviderModel{
+		{ID: "gemini-3.1-flash-lite", Label: "Gemini 3.1 Flash-Lite", InUSD: 0.25, OutUSD: 1.50},
+		{ID: "gemini-3.8-flash", Label: "Gemini 3.8 Flash", InUSD: 1.50, OutUSD: 7.50},
+		{ID: "gemini-3.1-pro-preview", Label: "Gemini 3.1 Pro (preview)", InUSD: 2, OutUSD: 12},
+	}},
+	// An OpenAI-compatible server, Azure OpenAI (models are the administrator's deployment names) and Bedrock (model
+	// ids and inference profiles vary by account and region) have no known models: the administrator adds them by name.
 }
 
 // keyOptional says whether a kind of provider may have no key: a local Ollama or vLLM usually needs none.
-func keyOptional(kind string) bool { return kind == provOpenAICompat }
+func keyOptional(kind string) bool { return kind == provOpenAICompat || kind == provBedrock }
+
 
 // builtKind says whether a kind of provider can be added.
 func builtKind(kind string) bool {
@@ -92,9 +106,9 @@ func builtKind(kind string) bool {
 var providerKinds = []ProviderKindJSON{
 	{Kind: provAnthropic, Label: "Anthropic", How: "API key", Built: true},
 	{Kind: provOpenAI, Label: "OpenAI", How: "API key", Built: true},
-	{Kind: "bedrock", Label: "AWS Bedrock", How: "an AWS connection"},
-	{Kind: "gemini", Label: "Google Gemini", How: "API key"},
-	{Kind: "azure-openai", Label: "Azure OpenAI", How: "endpoint and key"},
+	{Kind: provBedrock, Label: "AWS Bedrock", How: "an AWS account the console is connected to", Built: true},
+	{Kind: provGemini, Label: "Google Gemini", How: "API key", Built: true},
+	{Kind: provAzureOpenAI, Label: "Azure OpenAI", How: "endpoint and key", Built: true},
 	{Kind: provOpenAICompat, Label: "OpenAI-compatible", How: "Ollama, vLLM, LiteLLM, OpenRouter, Groq…", Built: true},
 }
 
@@ -123,6 +137,8 @@ type Provider struct {
 	Name         string          `json:"name"`
 	BaseURL      string          `json:"base_url,omitempty"`
 	AllowPrivate bool            `json:"allow_private,omitempty"`
+	AWSAccount   string          `json:"aws_account,omitempty"` // Bedrock: an added account's id; empty is the primary
+	Region       string          `json:"region,omitempty"`      // Bedrock: the region, when not the account's own
 	Models       []ProviderModel `json:"models"`
 	MonthlyUSD   float64         `json:"monthly_usd,omitempty"` // zero means no limit
 	Fallback     string          `json:"fallback,omitempty"`    // provider/model
@@ -275,12 +291,16 @@ func (s *Server) callProviderOnce(ctx context.Context, ref, system string, turns
 		status int
 	)
 	switch p.Kind {
-	case provOpenAI, provOpenAICompat:
+	case provBedrock:
+		reply, use, status, err = s.bedrockConverse(ctx, p, model, system, turns, providerMaxToken)
+	case provOpenAI, provOpenAICompat, provGemini, provAzureOpenAI:
 		base := p.BaseURL
-		if base == "" {
+		if base == "" && p.Kind == provGemini {
+			base = defaultGemini
+		} else if base == "" {
 			base = defaultOpenAI
 		}
-		reply, use, status, err = openAIChat(ctx, providerHTTPClient(p), base, key, model, system, turns, providerMaxToken, p.Kind == provOpenAI)
+		reply, use, status, err = openAIChat(ctx, providerHTTPClient(p), base, key, model, system, turns, providerMaxToken, openAIStyles[p.Kind])
 	default:
 		base := p.BaseURL
 		if base == "" {
@@ -523,6 +543,8 @@ type providerRequest struct {
 	Name         string          `json:"name"`
 	BaseURL      string          `json:"base_url"`
 	AllowPrivate bool            `json:"allow_private"`
+	AWSAccount   string          `json:"aws_account"`
+	Region       string          `json:"region"`
 	APIKey       string          `json:"api_key"` // write-only; empty keeps the stored key
 	Models       []ProviderModel `json:"models"`
 	MonthlyUSD   float64         `json:"monthly_usd"`
@@ -538,9 +560,17 @@ func (s *Server) checkProvider(ctx context.Context, req providerRequest) (Provid
 	case req.Name == "" || len(req.Name) > 60:
 		return Provider{}, "name: give a name of at most 60 characters"
 	case !builtKind(req.Kind):
-		return Provider{}, `kind: one of "anthropic", "openai" or "openai-compatible"`
+		return Provider{}, `kind: one of "anthropic", "openai", "openai-compatible", "gemini", "azure-openai" or "bedrock"`
 	case req.Kind == provOpenAICompat && req.BaseURL == "":
 		return Provider{}, "base_url: an OpenAI-compatible provider needs its address, such as http://localhost:11434/v1 for Ollama"
+	case req.Kind == provAzureOpenAI && req.BaseURL == "":
+		return Provider{}, "base_url: give the resource's address, such as https://my-resource.openai.azure.com/openai/v1"
+	case req.Kind == provBedrock && (req.BaseURL != "" || req.APIKey != "" || req.AllowPrivate):
+		return Provider{}, "bedrock: it uses an AWS account the console is connected to; give no address or key"
+	case req.Kind != provBedrock && (req.AWSAccount != "" || req.Region != ""):
+		return Provider{}, "aws_account and region are only for a Bedrock provider"
+	case req.Region != "" && !awsRegionRE.MatchString(req.Region):
+		return Provider{}, "region: an AWS region such as us-east-1"
 	case len(req.Models) > maxProviderModel:
 		return Provider{}, fmt.Sprintf("models: at most %d", maxProviderModel)
 	case req.MonthlyUSD < 0 || req.MonthlyUSD > maxMonthlyUSD || math.IsNaN(req.MonthlyUSD):
@@ -553,7 +583,12 @@ func (s *Server) checkProvider(ctx context.Context, req providerRequest) (Provid
 			return Provider{}, "base_url: " + err.Error()
 		}
 	}
-	p := Provider{ID: req.ID, Kind: req.Kind, Name: req.Name, BaseURL: req.BaseURL, AllowPrivate: req.AllowPrivate, MonthlyUSD: req.MonthlyUSD, Models: []ProviderModel{}}
+	if req.Kind == provBedrock {
+		if _, err := s.awsFor(ctx, req.AWSAccount); err != nil {
+			return Provider{}, "aws_account: " + err.Error()
+		}
+	}
+	p := Provider{ID: req.ID, Kind: req.Kind, Name: req.Name, BaseURL: req.BaseURL, AllowPrivate: req.AllowPrivate, AWSAccount: req.AWSAccount, Region: req.Region, MonthlyUSD: req.MonthlyUSD, Models: []ProviderModel{}}
 	seen := map[string]bool{}
 	for i, m := range req.Models {
 		switch {
@@ -640,6 +675,16 @@ func (s *Server) saveProvider(w http.ResponseWriter, r *http.Request, req provid
 	}
 	if p.AllowPrivate {
 		detail += ", private network"
+	}
+	if p.Kind == provBedrock {
+		acct := p.AWSAccount
+		if acct == "" {
+			acct = primaryAccount
+		}
+		detail += ", AWS account " + acct
+		if p.Region != "" {
+			detail += " in " + p.Region
+		}
 	}
 	if key != "" {
 		detail += ", key replaced"

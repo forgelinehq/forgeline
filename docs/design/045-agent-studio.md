@@ -1,6 +1,6 @@
 # 045: Agent Studio: any model, a playground, agent teams, publishing, code mode
 
-Status: **accepted 2026-11-18; step 1 under way: the Anthropic, OpenAI and OpenAI-compatible providers are built.** All five decisions are made (end of
+Status: **accepted 2026-11-18; step 1 under way: all six kinds of provider are built.** All five decisions are made (end of
 this note). The Anthropic provider was checked on the Pi with the real API on 2026-11-18. Builds on agents and skills
 (note 024), MCP servers (042), budgets (036), the library (040, step 8) and agent graphs (044). Screen mock-ups were
 drawn for the maintainer's review alongside this note.
@@ -176,8 +176,10 @@ Each step is checked on the Pi with real models before the next one.
    providers page (Settings › Models and providers), `provider/model` names for agents and the assistant, keys in the
    vault, the MCP address rules, prices, a monthly limit with a fallback, and a log of recent model calls. Then OpenAI
    and OpenAI-compatible servers (Ollama, vLLM, LiteLLM, OpenRouter, Groq), through the Chat Completions API; a
-   compatible server needs its address, may have no key, and its models are added by name. Bedrock, Gemini and Azure
-   OpenAI are next. Checked on the Pi with the real Anthropic API (2026-11-18): the providers page test, and an agent on
+   compatible server needs its address, may have no key, and its models are added by name. Then Gemini (Google's
+   OpenAI-compatible endpoint), Azure OpenAI (the v1 API, deployment names as models) and AWS Bedrock (the Converse
+   API through the AWS CLI and a connected account, prompts passed in private files); these three are tested against
+   stand-ins only, not yet against the real services. Checked on the Pi with the real Anthropic API (2026-11-18): the providers page test, and an agent on
    `anthropic/claude-haiku-5-5` answering while the assistant itself used a Claude Code token, its call priced in the
    log.
 2. ~~The code-mode sandbox~~: **local only** (maintainer, 2026-11-17).

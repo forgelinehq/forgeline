@@ -1,7 +1,7 @@
 // Settings › Models and providers (design note 045, part 1). Providers as cards with their mark, status, models,
 // spend against the monthly limit and speed; a live log of recent model calls beside them. Adding or changing a
-// provider happens in a side panel, so the cards and the log stay in view. Anthropic, OpenAI and OpenAI-compatible
-// servers (Ollama, vLLM, OpenRouter…) are built; the other kinds are shown as coming.
+// provider happens in a side panel, so the cards and the log stay in view. Anthropic, OpenAI, OpenAI-compatible servers
+// (Ollama, vLLM, OpenRouter…), Gemini, Azure OpenAI and AWS Bedrock (through a connected AWS account) are built.
 import { h, icon, mount, pageHeader, spinner, errorBox, notice, toast, field, relTime, absTime, confirmDialog, drawer, brandMark } from '../lib/dom.js';
 import { get, post, put, del, atLeast } from '../lib/api.js';
 import { session } from '../app.js';
@@ -13,6 +13,10 @@ const KIND = {
   openai: { host: 'https://api.openai.com/v1', key: 'sk-…' },
   'openai-compatible': { host: '', key: 'Only if the server asks for one', needsAddress: true, keyOptional: true,
     example: 'http://localhost:11434/v1 (Ollama), https://openrouter.ai/api/v1, https://api.groq.com/openai/v1' },
+  gemini: { host: 'https://generativelanguage.googleapis.com/v1beta/openai', key: 'AIza…' },
+  'azure-openai': { host: '', key: 'The resource’s key', needsAddress: true, addModel: 'A deployment name, such as prod-gpt',
+    example: 'https://my-resource.openai.azure.com/openai/v1. Models are your deployment names' },
+  bedrock: { host: '', aws: true, addModel: 'A model id or inference profile, such as us.anthropic.claude-haiku-5-5-v1:0' },
 };
 
 const STATUS = {
@@ -70,7 +74,7 @@ export async function providersPage() {
     const limit = p.monthly_usd || 0;
     const spent = p.month.cost_usd || 0;
     const pct = limit ? Math.min(100, Math.round(spent / limit * 100)) : 0;
-    const where = hostOf(p.base_url || (KIND[p.kind] || {}).host || '');
+    const where = p.kind === 'bedrock' ? `AWS ${p.aws_account || 'primary account'}${p.region ? ' · ' + p.region : ''}` : hostOf(p.base_url || (KIND[p.kind] || {}).host || '');
     return h('article', { class: 'card card-pad flex flex-col gap-4 ' + (p.status === 'failing' ? 'ring-1 ring-rose-300 dark:ring-rose-800' : ''), 'data-provider': p.id },
       h('div', { class: 'flex items-center gap-3' }, brandMark(p.kind),
         h('div', { class: 'min-w-0 flex-1' },
@@ -129,9 +133,14 @@ export async function providersPage() {
     const name = v('provider-name', p ? p.name : k.label);
     const key = h('input', { id: 'provider-key', class: 'input font-mono', type: 'password', autocomplete: 'new-password', placeholder: p?.has_key ? 'A key is saved. Type to replace it.' : kk.key });
     const base = v('provider-base', p?.base_url, { placeholder: kk.host || 'http://localhost:11434/v1' });
-    const newModel = v('provider-new-model', '', { class: 'input font-mono text-sm', placeholder: k.kind === 'openai-compatible' ? 'llama3.2:3b or meta-llama/llama-3.3-70b-instruct' : 'Another model by its exact name',
+    const newModel = v('provider-new-model', '', { class: 'input font-mono text-sm', placeholder: kk.addModel || (k.kind === 'openai-compatible' ? 'llama3.2:3b or meta-llama/llama-3.3-70b-instruct' : 'Another model by its exact name'),
       onkeydown: (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); addModel(); } } });
     const priv = h('input', { id: 'provider-private', type: 'checkbox', class: 'size-4', checked: !!p?.allow_private });
+    // Bedrock: which connected AWS account signs the calls, and the region when not the account's own.
+    const account = h('select', { id: 'provider-account', class: 'input' }, h('option', { value: p?.aws_account || '' }, 'Loading…'));
+    const region = v('provider-region', p?.region, { placeholder: 'The account’s own region', class: 'input font-mono' });
+    if (kk.aws) get('/v1/aws/accounts').then(r => mount(account, r.accounts.length ? r.accounts.map(a => h('option', { value: a.primary ? '' : a.id, selected: (p?.aws_account || '') === (a.primary ? '' : a.id) },
+      `${a.name}${a.region ? ' · ' + a.region : ''}`)) : h('option', { value: '' }, 'No AWS account is connected yet'))).catch(e => mount(account, h('option', { value: '' }, e.message)));
     const limit = v('provider-limit', p?.monthly_usd || '', { type: 'number', min: '0', step: '1', placeholder: 'No limit' });
     const fallback = h('select', { id: 'provider-fallback', class: 'input' });
     const modelList = h('ul', { class: 'divide-y divide-slate-100 rounded-xl border border-slate-200 dark:divide-slate-800 dark:border-slate-700', id: 'provider-models' });
@@ -156,7 +165,7 @@ export async function providersPage() {
           h('span', { class: 'min-w-0' }, h('span', { class: 'block text-sm font-medium' }, m.label || m.id), h('code', { class: 'muted block font-mono text-xs' }, m.id))),
         h('span', { class: 'flex items-center gap-1 text-xs' }, '$', pin, h('span', { class: 'muted' }, 'in'), '$', pout, h('span', { class: 'muted' }, 'out')),
         known.has(m.id) ? null : h('button', { class: 'btn-ghost btn-sm', type: 'button', 'aria-label': 'Take ' + m.id + ' off the list', onclick: () => { rows.splice(rows.indexOf(m), 1); drawModels(); drawFallback(); } }, icon('x', 'size-3.5')));
-    }) : h('li', { class: 'muted px-3 py-4 text-sm' }, 'Add the models this server offers by their exact names.'));
+    }) : h('li', { class: 'muted px-3 py-4 text-sm' }, 'Add the models you want by their exact names.'));
     const drawFallback = () => {
       const mine = rows.filter(m => m.on).map(m => (p ? p.id : id.value.trim()) + '/' + m.id);
       const others = data.providers.filter(x => !p || x.id !== p.id).flatMap(x => x.models.filter(m => m.on).map(m => x.id + '/' + m.id));
@@ -165,22 +174,24 @@ export async function providersPage() {
     };
     drawModels(); drawFallback();
 
-    const body = () => ({ id: id.value.trim(), kind: k.kind, name: name.value.trim(), api_key: key.value.trim(), base_url: base.value.trim(), allow_private: priv.checked,
+    const body = () => ({ id: id.value.trim(), kind: k.kind, name: name.value.trim(), ...(kk.aws ? { aws_account: account.value, region: region.value.trim() }
+      : { api_key: key.value.trim(), base_url: base.value.trim(), allow_private: priv.checked }),
       monthly_usd: Number(limit.value) || 0, fallback: fallback.value,
       models: rows.map(m => ({ id: m.id, label: m.label || '', on: !!m.on, input_usd_per_mtok: Number(m.input_usd_per_mtok) || 0, output_usd_per_mtok: Number(m.output_usd_per_mtok) || 0 })) });
 
     drawer(p ? p.name : 'Connect ' + k.label, (close) => h('div', { class: 'space-y-5' },
       h('div', { class: 'flex items-center gap-3' }, brandMark(k.kind), h('div', {}, h('div', { class: 'font-semibold' }, k.label), h('div', { class: 'muted text-xs' }, k.how))),
       h('div', { class: 'grid grid-cols-2 gap-3' }, field('Id', id, 'Used in model names: id/model'), field('Name', name)),
+      kk.aws ? h('div', { class: 'grid grid-cols-2 gap-3' }, field('AWS account', account, 'Calls are signed with its credentials and billed to it. Its role needs bedrock:InvokeModel.'), field('Region', region, 'Where the models are turned on')) : null,
       kk.needsAddress ? field('API address', base, 'Where the server answers OpenAI-style requests, ending in its version path. For example ' + kk.example + '. HTTPS, or plain HTTP only for this machine.') : null,
-      field(kk.keyOptional ? 'API key (optional)' : 'API key', key, kk.keyOptional ? 'A local server usually needs none. A key you give is kept encrypted and never shown again.' : 'Kept encrypted in the vault and never shown again. Calls are billed to this key.'),
+      kk.aws ? null : field(kk.keyOptional ? 'API key (optional)' : 'API key', key, kk.keyOptional ? 'A local server usually needs none. A key you give is kept encrypted and never shown again.' : 'Kept encrypted in the vault and never shown again. Calls are billed to this key.'),
       h('section', { class: 'space-y-2' },
         h('div', { class: 'flex items-baseline justify-between' }, h('h3', { class: 'text-sm font-semibold' }, 'Models'), h('span', { class: 'muted text-xs' }, 'Prices in dollars per million tokens')),
         modelList,
         h('div', { class: 'flex gap-2' }, newModel, h('button', { class: 'btn-secondary btn-sm flex-none', type: 'button', id: 'provider-add-model', onclick: addModel }, icon('plus', 'size-3.5'), 'Add')),
-        h('p', { class: 'muted text-xs' }, 'Agents and the assistant can only pick models that are turned on.' + (kk.keyOptional ? ' A model on your own server costs nothing here unless you give it a price.' : ''))),
+        h('p', { class: 'muted text-xs' }, 'Agents and the assistant can only pick models that are turned on.' + (k.kind === 'openai-compatible' ? ' A model on your own server costs nothing here unless you give it a price.' : kk.addModel ? ' Give each model its price from the price list, so its spend is counted.' : ''))),
       h('div', { class: 'grid grid-cols-2 gap-3' }, field('Monthly limit ($)', limit, 'At the limit, calls go to the fallback or stop'), field('Fallback', fallback, 'Also used when the provider is down or busy')),
-      h('details', { class: 'rounded-xl border border-slate-200 p-3 dark:border-slate-700', open: !!(kk.needsAddress || p?.allow_private) },
+      kk.aws ? null : h('details', { class: 'rounded-xl border border-slate-200 p-3 dark:border-slate-700', open: !!(kk.needsAddress || p?.allow_private) },
         h('summary', { class: 'cursor-pointer text-sm font-medium' }, kk.needsAddress ? 'Network' : 'Address'),
         h('div', { class: 'mt-3 space-y-3' }, kk.needsAddress ? null : field('API address', base, `Leave empty for ${hostOf(kk.host)}. HTTPS only; plain HTTP only for this machine.`),
           h('label', { class: 'flex items-center gap-2 text-sm', for: 'provider-private' }, priv, 'It is on a private network (otherwise private and cloud-internal addresses are refused)'))),
