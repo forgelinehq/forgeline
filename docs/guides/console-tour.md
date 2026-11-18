@@ -19,9 +19,9 @@ with the number of changes waiting. What you see depends on your role, and old a
 | Home | Today, Approvals |
 | Build | Design, Environments, Blueprints, Built |
 | Ship | Pipelines, GitHub Actions |
-| Team | Team, Agents, Missions, Library |
-| Watch | Map, Infrastructure, Kubernetes, Security |
-| Settings | Setup, People and roles, Sign-in (SSO), Connections, Secrets, Models, Memory, AI use and budgets, Audit log, Approval rules, Resource types, Policy packs, API tokens |
+| Team | Teams, Agents, Missions, Library |
+| Watch | Map, Services, Infrastructure, Kubernetes, Security |
+| Settings | Setup, People and roles, Sign-in (SSO), Connections, Secrets, MCP servers, Image builds, Models and providers, Assistant model, Memory, AI use and budgets, Audit log, Approval rules, Resource types, Policy packs, API tokens |
 
 ## Home
 
@@ -197,17 +197,18 @@ failing step and its exit code, shows the end of its output, and offers **Ask th
 
 ## Team
 
-**Team** draws your agents as an org chart: you at the top, then the agents that report to you. Each card says what the
-agent is doing in words (working on a workflow, waiting for your OK, asleep until its next run, waiting to be asked, or
-off), whether it **advises** or **proposes**, and its budget for the month. The mission in progress is drawn below.
-
-![Your AI team]({{ '/console/105-team.png' | relative_url }})
+**Teams** shows your teams of agents as cards: a lead, its members, and the last goal it was given. Open one and give it
+a goal: the lead splits the work, the members look into it at the same time with their own tools, and the lead writes
+one answer; the run is drawn live, with each member's task and findings. Below the teams, every agent is listed with
+what it is doing (working on a workflow, waiting for your OK, asleep until its next run, waiting to be asked, or off),
+the teams it is in and what it used this month. See [Teams]({{ '/guides/assistant-and-agents/' | relative_url }}#teams).
 
 **Agents** lists your agents, skills and workflows. An agent has instructions (Markdown, with a live preview and advisory
 checks), skills it follows, and a short list of tools, shown in plain words. **Advises** means it reads and explains;
 **Proposes** means it can also draft changes, which a person approves. An agent can ask its own **model** (a quick one
 for routing, a stronger one for analysis); by default it uses the assistant's. Every save is a version you can roll back, and you
-can talk to an agent beside its page.
+can talk to an agent beside its page. **Delete** archives an agent: it can be restored for 30 days from Agents ›
+Archived, then it is deleted for good.
 
 A **workflow** runs agents together. Draw one on the canvas (**New workflow on the canvas**), as in n8n: add nodes from
 the palette, drag from a node's blue port to the next to wire them, and pick a node to set it.
@@ -239,8 +240,8 @@ it; a claim that names no lookup the agent ran is left out and counted.
 **Library** offers ready-made agents, skills, teams, tools, guardrail packs and environment templates, installed as
 versions you can review, and lists the reviewed OpenTofu templates the canvas offers. Filter by kind at the top. A
 guardrail pack is installed turned off, and a tool (an MCP server) with no token and none of its tools on, so nothing
-changes until an administrator turns it on. A team is several agents and a workflow that runs them together in one
-install:
+changes until an administrator turns it on. A team package installs its agents, a workflow and a team (a lead and members) in one
+go:
 
 | Package | What it gives you |
 | --- | --- |
@@ -315,6 +316,10 @@ an administrator) and your **conversations** (private to you, kept up to 90 days
 never as orders; a note it took from logs or cloud data waits for you to press Keep; passwords and keys are refused.
 
 ![Memory]({{ '/console/112-memory.png' | relative_url }})
+
+**Models and providers** connects model providers (Anthropic, OpenAI, Gemini, Azure OpenAI, AWS Bedrock, and
+OpenAI-compatible servers such as Ollama), turns their models on with prices, a monthly limit and a fallback, and shows a
+live log of every model call. See [Models and providers]({{ '/guides/models-and-providers/' | relative_url }}).
 
 **AI use and budgets** shows what each agent used this month (tokens, model time, calls, and the cost where the claude
 program reports it). An administrator can set a monthly budget per agent; at 80% the console warns, and when it is used

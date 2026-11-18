@@ -5,7 +5,7 @@ nav_order: 5
 
 # Status
 
-**Pre-alpha**, maintained by one person. Built to be tried on a laptop or a small server. Updated 2026-11-08.
+**Pre-alpha**, maintained by one person. Built to be tried on a laptop or a small server. Updated 2026-11-18.
 
 ## What works
 
@@ -13,10 +13,15 @@ Everything below is built and tested with the race detector, and the console in 
 
 | Area | What is there |
 | --- | --- |
-| Pipelines | Typed YAML, steps in Docker, parallel steps, a cache, versions, live logs, a failure explained, GitHub triggers and commit statuses, GitHub Actions |
-| Cloud | AWS sign-in (IAM Identity Center, profiles, IAM Roles Anywhere), several accounts, an explorer and the Watch map, Google Cloud and Azure read-only, Kubernetes read-only |
-| Changes | Every change is a proposal a different administrator approves: stacks, environments, the AWS calls an agent drafted, and blueprints (OpenTofu, with exactly the previewed plan applied) |
-| AI | The assistant (Claude by API key, the claude program, or a Claude Code token), agents with skills and tools, workflows with gates, missions, the canvas assistant, memory, per-service switches for the AI, an access policy per tool, budgets per agent |
+| Pipelines | Typed YAML, steps in Docker, parallel steps, a cache, versions, live logs, a failure explained, GitHub triggers and commit statuses, GitHub Actions, a source repository for console runs, image builds with BuildKit that push to ECR only for trusted pushes |
+| Blueprints | A canvas of blocks (front door, apps on ECS or Fargate Spot, tables, buckets, queues, logs, MySQL and Postgres, Redis, secrets, an agent on Bedrock AgentCore, things that already exist), OpenTofu previews, exactly the previewed plan applied after approval, removal through the same approval, a block's GitHub repository suggested from its Dockerfiles, running a newly pushed image in one step |
+| Templates | Reviewed, versioned OpenTofu modules added like blocks: Lambda function, Step Functions workflow, data pipeline (Firehose to S3 with Athena), EKS cluster with namespaces; a Resource block for any AWS resource type an administrator allows |
+| Guardrails | Every preview is checked before it can be sent: built-in deny and warn rules, plus policy packs (Trivy, Checkov, your own Conftest rules) |
+| Cloud | AWS sign-in (IAM Identity Center, profiles, IAM Roles Anywhere), several accounts, the Watch map, a page per AWS service, Google Cloud and Azure read-only, Kubernetes read-only, what Forgeline built checked against AWS |
+| Changes | Every change is a proposal a different administrator approves: stacks, environments, blueprints and the AWS calls an agent drafted, with approval rules (two approvals, named approvers) |
+| Models | Providers: Anthropic, OpenAI, Gemini, Azure OpenAI, AWS Bedrock and OpenAI-compatible servers (Ollama, vLLM, OpenRouter…), with keys in the vault, prices, a monthly limit and a fallback per provider, and a live call log. Each agent can have its own `provider/model` |
+| AI | The assistant (with lookups, memory, and cards that write skills, agents and workflows for you to confirm), agents with skills, tools and versions, teams with a lead that splits the work, workflows drawn on a canvas (agents, lookups, decisions, questions for people, merges and loops), missions, MCP servers, per-service switches for the AI, an access policy per tool, budgets per agent, deleted agents kept 30 days |
+| Library | Ready-made agents, skills, teams, tools (MCP servers), guardrail packs and environment templates, installed as versions you can review |
 | People and security | Roles, single sign-on with OpenID Connect, approval rules, an audit log with export and retention, secrets that are write-only and masked |
 | Docs | This site, with search, a Markdown copy of each page and `llms.txt` |
 
@@ -24,26 +29,32 @@ Everything below is built and tested with the race detector, and the console in 
 
 - AWS sign-in, and an approved deploy and delete of a stack, on a real account.
 - A GitHub App created and installed on github.com.
-- The assistant on a real Claude Code login token, and (2026-11-08) its use counted from the real claude program's report.
-- AI-proposed changes in two real AWS accounts (2026-11-07): one proposal per account, approved by a different
-  administrator, applied exactly as approved.
-- The Watch map on two real accounts (2026-11-08): stacks, their parts and what they kept after a rollback.
-- A blueprint previewed with real OpenTofu 1.13.9 on a Raspberry Pi and, after a different administrator approved it,
-  built in a real account (2026-11-08).
+- The assistant on a real Claude Code login token, and its use counted from the real claude program's report.
+- AI-proposed changes in two real AWS accounts (2026-11-07), each approved by a different administrator and applied
+  exactly as approved.
+- The Watch map on two real accounts (2026-11-08).
+- Blueprints with real OpenTofu on a Raspberry Pi and a real account: a queue, a table and a bucket built and removed
+  (keeping the data, then everything); an app behind a front door; GitHub Actions building and pushing with the role the
+  blueprint made (2026-11-08 to 2026-11-12).
+- Templates on a real account (2026-11-15 to 2026-11-17): a Lambda function, a Step Functions workflow, a data pipeline
+  queried with Athena, and an EKS cluster with namespaces, each built after approval and removed.
+- Policy packs (Trivy, Checkov, Conftest) on real previews on the Pi (2026-11-17).
 - A mission with the real Claude model on the Pi (2026-11-08): it reported correctly, citing the lookup it ran.
+- Agent workflows drawn on the canvas, run with the real model on the Pi, including a model per agent and starting from
+  a signed webhook and from a failed pipeline run (2026-11-17).
+- The Anthropic provider with the real API on the Pi (2026-11-18): the Test button, and an agent answering through it.
 
 ## Not checked against the real service yet
 
+- The OpenAI, Gemini, Azure OpenAI, AWS Bedrock and OpenAI-compatible providers (tested against stand-ins).
 - A real GitHub webhook delivery and commit status.
-- The assistant's API-key mode against the real Anthropic API.
 - Single sign-on against a real provider (Google, Entra ID, Okta); built and tested against a stand-in.
-- A blueprint with an app (ECS) built on AWS: it needs a scoped IAM permission ([note 035](https://github.com/forgelinehq/forgeline/blob/main/docs/design/035-blueprints.md)).
-- A mission that files a proposal, with the real model.
+- The Agent block on Bedrock AgentCore: the test account's AgentCore quota is zero.
 - TLS behind a real proxy, and more than one server sharing a database.
 
 ## Not built yet
 
-See the [roadmap]({{ '/roadmap/' | relative_url }}). The next items are: a local small-model option for the assistant (and onboarding by
-conversation if it proves reliable), removing what a blueprint built,
-forwarding the audit log to a SIEM, and a lead agent that hands out work. Coding engines other than Claude Code (Codex,
-Copilot) come later.
+See the [roadmap]({{ '/roadmap/' | relative_url }}). Next: the agent builder with side-panel pickers and a playground,
+exporting an agent (an agent file with its skills, a Docker Agent file, a package in a container registry), a
+Workflows section of its own, the assistant knowing every page and feature, and code mode in a local sandbox. Google
+Cloud and Azure blocks come after the AWS work is done.

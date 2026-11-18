@@ -22,7 +22,11 @@ Click **Assistant** in the top bar. It sees the page you are on (a run, a pipeli
 
 Set it up under **Settings → Connections**: open **Claude** (under Add a connection until it is set up) and choose **Connect** (or **Open settings**). A **Test connection** button in the same popup sends one short question to check it.
 
-The settings offer four ways to sign in:
+The settings offer five ways to sign in:
+
+- **A model from Models and providers**: any model an administrator turned on under Settings › Models and providers
+  (Anthropic, OpenAI, Gemini, Azure OpenAI, AWS Bedrock, or a local server such as Ollama). See
+  [Models and providers]({{ '/guides/models-and-providers/' | relative_url }}).
 
 - **Anthropic API key**: stored in the vault. Billed to that key. Best for teams.
 - **Claude Code login token**: paste the output of `claude setup-token` once. It is stored as the secret `CLAUDE_CODE_OAUTH_TOKEN`, the same one agent steps use. The `claude` program runs in a scratch home directory with only that token, so the server user's own login is not touched.
@@ -48,21 +52,34 @@ the card, as in the console.
 
 ![The assistant writes an agent]({{ '/console/134-assistant-writes-agent.png' | relative_url }})
 
-## Your AI team
+## Teams
 
-**Team → Team** draws your agents as an org chart: you at the top, then the agents that report to you, then
-theirs. Each card says what the agent is doing in plain words: working on a workflow, waiting for your OK at a
-workflow's gate, asleep until its next scheduled run (and how often it runs), waiting to be asked, or off. It
-also shows whether it only advises or may propose changes, and how many tasks it did this week. Below the chart,
-the mission strip shows the workflow run in progress (or the last one) stage by stage, with the stage that waits
-for you marked **waiting for you**.
+**Team › Teams** holds teams of agents. A team is a **lead** and up to eight **members**, and an agent can be in several
+teams. An administrator makes one with **New team**: a side panel asks for a name, a purpose (the lead reads it), the
+lead, and the members, picked from a searchable list of agents.
 
-Administrators choose who each agent reports to from the menu on its card. A line that would make a loop is
-refused. A reporting line describes how your team is organised: a lead does not hand out work yet, and it gives no
-agent any power over another. Every change of a line is in the audit log. Each card also shows the agent's budget
-for the month (see Budgets below).
+Open a team and **give it a goal** in your own words ("why did the last deploys fail, and is anything wrong
+underneath?"). Then:
 
-![Your AI team]({{ '/console/88-team.png' | relative_url }})
+1. **The lead plans.** It gives each member who can help one task, and says in a sentence how it split the work. It may
+   only hand work to its own members, once each; anything else in its plan is dropped.
+2. **The members work at the same time** (three at once), each with its own model, skills, tools and monthly budget, and
+   as the person who gave the goal, so no agent can do more than you could.
+3. **The lead writes the answer** from what the members found. Their answers reach it as data, never as instructions,
+   so a member that read something hostile in a log cannot steer the lead.
+
+The run's page shows the plan, a card per member with its task, what it looked up and what it found, and the team's
+answer, live. A change a member proposes goes to Approvals like any other. A run fails before anything is spent when a
+member is turned off. Every agent call is audited and appears in the model call log as *agent in team*. Teams are kept
+with their last 50 runs; removing a team keeps its agents.
+
+The library's **Incident triage** and **Platform review** packages install as teams. Below the teams, every agent is
+listed with what it is doing now (working, waiting for your OK, asleep until its next run, waiting to be asked, or off),
+which teams it is in, and what it used this month.
+
+**Deleting an agent** (Delete on its page) archives it: it is turned off and listed under Agents › Archived, and can be
+restored for 30 days, after which it is deleted for good. An agent that a team, an enabled workflow or an unfinished
+mission still uses cannot be deleted; the message says which.
 
 ### Missions
 
@@ -94,13 +111,25 @@ is in the audit log. Cloud spend an agent causes is not counted here yet.
 
 ![AI use and budgets]({{ '/console/95-ai-use.png' | relative_url }})
 
-## Workflows as a graph
+## Workflows
 
-A workflow's page draws it left to right, like n8n: what starts it (by hand or its schedule), each stage as a column of
-the agents that run together, and an **Approval** node before a stage that waits for an administrator. A run's page draws
-the same graph with each node's state: done, working, waiting for approval, failed or skipped, with moving dots on the
-edges into what is working now. The stages are still listed in full below the graph. Workflows are edited with the form
-(**New version**) for now; editing on the graph comes later.
+A workflow runs agents in an order you draw. **New workflow on the canvas** (Team › Agents › Workflows) opens an
+n8n-style canvas: add nodes from the palette, drag from a node's port to the next to wire them, and pick a node to set it.
+
+| Node | What it does |
+| --- | --- |
+| **Agent** | An agent does a task; it can write named fields (such as `severity`) into the run's shared state |
+| **Lookup** | One read-only lookup, with no model |
+| **Decide** | Takes one wire, by a rule on what earlier nodes wrote or by an agent choosing |
+| **Ask a person** | Waits for an answer or an approval |
+| **Merge** | Waits for parallel branches |
+| **End** | Finishes the run |
+
+Loops are allowed: each node runs at most its limit (3 unless you say up to 10), and a run at most 50 steps. A run is
+drawn on the same canvas: nodes turn green or red, the wires taken are bold, and picking a node shows what went in and
+what came out each time it ran. A workflow starts by hand, on a schedule, from a signed webhook, or after a pipeline run
+fails; agents read what started it under `trigger`. Workflows made of stages still run, and **Edit on the canvas** turns
+one into a graph.
 
 ![A workflow as a graph]({{ '/console/134-workflow-graph.png' | relative_url }})
 ![A run on the graph]({{ '/console/135-workflow-run-graph.png' | relative_url }})
