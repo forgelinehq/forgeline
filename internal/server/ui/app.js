@@ -10,7 +10,7 @@ import { pipelineEditorPage } from './pages/editor.js';
 import { actionsPage } from './pages/actions.js';
 import { proposalsPage } from './pages/proposals.js';
 import { agentsPage, agentPage, skillPage } from './pages/agents.js';
-import { workflowPage, workflowRunPage } from './pages/workflows.js';
+import { workflowPage, workflowRunPage, workflowsHomePage } from './pages/workflows.js';
 import { guardPage } from './pages/guard.js';
 import { kubernetesPage } from './pages/kubernetes.js';
 import { environmentsPage } from './pages/environments.js';
@@ -244,6 +244,7 @@ async function boot() {
     route('/agents', guard('developer', agentsPage));
     route('/agents/:id', guard('developer', agentPage));
     route('/skills/:id', guard('developer', skillPage));
+    route('/workflows', guard('developer', workflowsHomePage));
     route('/workflows/:id/canvas', guard('admin', graphEditorPage));
     route('/workflows/:id', guard('developer', workflowPage));
     route('/workflow-runs/:id', guard('developer', workflowRunPage));

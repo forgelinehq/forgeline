@@ -62,6 +62,9 @@ section in the pull request that makes the change; a release moves it under its 
 - **After a session ends**, the console stops polling the server (it asked every minute, forever).
 
 ### Added
+- **Team › Workflows.** Workflows have a tab of their own instead of hiding under Agents: cards that say what each is
+  made of, how it starts (by hand, schedule, webhook, a failed run) and how its last run went, with Run and the canvas
+  one click away; every run of every workflow under Runs; and Delete, which archives a workflow for 30 days like an agent.
 - **The assistant knows Forgeline.** It is told the page and tab you are on (a mission, a team, a workflow, an agent, a
   run, or any page by its name, such as Team › Missions) with what that page shows, and it has Forgeline's guides
   built in: `search_docs` finds the sections that answer a question, and its instructions say to look there before

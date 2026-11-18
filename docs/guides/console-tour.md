@@ -19,7 +19,7 @@ with the number of changes waiting. What you see depends on your role, and old a
 | Home | Today, Approvals |
 | Build | Design, Environments, Blueprints, Built |
 | Ship | Pipelines, GitHub Actions |
-| Team | Teams, Agents, Missions, Library |
+| Team | Teams, Agents, Workflows, Missions, Library |
 | Watch | Map, Services, Infrastructure, Kubernetes, Security |
 | Settings | Setup, People and roles, Sign-in (SSO), Connections, Secrets, MCP servers, Image builds, Models and providers, Assistant model, Memory, AI use and budgets, Audit log, Approval rules, Resource types, Policy packs, API tokens |
 
@@ -210,7 +210,9 @@ for routing, a stronger one for analysis); by default it uses the assistant's. E
 can talk to an agent beside its page. **Delete** archives an agent: it can be restored for 30 days from Agents ›
 Archived, then it is deleted for good.
 
-A **workflow** runs agents together. Draw one on the canvas (**New workflow on the canvas**), as in n8n: add nodes from
+**Workflows** runs agents together; the tab lists them as cards with how each starts and its last run, every run of every
+workflow under **Runs**, and deleted ones under **Archived** for 30 days. Draw one on the canvas (**New workflow**), as in
+n8n: add nodes from
 the palette, drag from a node's blue port to the next to wire them, and pick a node to set it.
 
 - **Agent**: an agent does a task; it may also write named fields, such as `severity`.

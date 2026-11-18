@@ -2,7 +2,7 @@ import { h, icon, mount, clear, pageHeader, relTime, absTime, emptyState, spinne
 import { get, post, del, atLeast } from '../lib/api.js';
 import { navigate } from '../lib/router.js';
 import { session } from '../app.js';
-import { workflowList, workflowForm } from './workflows.js';
+
 import { mdEditor } from '../lib/mdeditor.js';
 import { markdownBox } from '../lib/mdview.js';
 import { checkInstructions } from '../lib/markdown.js';
@@ -70,7 +70,8 @@ function versionTable(versions, current, selected, onPick, onRollback) {
 // ------------------------------------------------------------------ list
 
 export async function agentsPage({ query }) {
-  const tab = query.tab === 'skills' ? 'skills' : query.tab === 'workflows' ? 'workflows' : 'agents';
+  if (query.tab === 'workflows') { navigate('/workflows'); return h('div', {}); } // workflows have their own tab now
+  const tab = query.tab === 'skills' ? 'skills' : 'agents';
   const admin = atLeast(session.role, 'admin');
   const el = h('div', {});
   let agents, skills, tools, workflows;
@@ -97,9 +98,9 @@ export async function agentsPage({ query }) {
   mount(el, pageHeader('Agents', 'Your AI team. Each agent has instructions, skills it follows and a short list of tools, and works as the person who asks it. Every save is a version you can roll back.',
     admin && (tab === 'agents' ? h('button', { class: 'btn-primary', id: 'new-agent', type: 'button', onclick: () => agentForm(null, skills.skills, tools.tools) }, icon('plus', 'size-4'), 'New agent')
       : tab === 'skills' ? h('button', { class: 'btn-primary', id: 'new-skill', type: 'button', onclick: () => skillForm(null) }, icon('plus', 'size-4'), 'New skill')
-      : h('div', { class: 'flex gap-2' }, h('a', { class: 'btn-primary', id: 'new-graph', href: '#/workflows/new/canvas' }, icon('plus', 'size-4'), 'New workflow on the canvas'), h('button', { class: 'btn-secondary', id: 'new-workflow', type: 'button', onclick: () => workflowForm(null, agents.agents) }, icon('plus', 'size-4'), 'New workflow in stages')))),
-    h('div', { class: 'mb-4 flex gap-1', role: 'tablist' }, tabBtn('agents', 'Agents (' + agents.agents.length + ')'), tabBtn('skills', 'Skills (' + skills.skills.length + ')'), tabBtn('workflows', 'Workflows (' + workflows.workflows.length + ')')),
-    tab === 'agents' ? agentCards : tab === 'skills' ? skillRows : workflowList(workflows.workflows, admin),
+      : null)),
+    h('div', { class: 'mb-4 flex gap-1', role: 'tablist' }, tabBtn('agents', 'Agents (' + agents.agents.length + ')'), tabBtn('skills', 'Skills (' + skills.skills.length + ')'), h('a', { href: '#/workflows', class: 'muted rounded-lg px-3 py-1.5 text-sm font-medium hover:bg-slate-100 dark:hover:bg-slate-800' }, 'Workflows (' + workflows.workflows.length + ') →')),
+    tab === 'agents' ? agentCards : skillRows,
     tab === 'agents' && archived.agents.length ? h('details', { class: 'mt-6', id: 'archived-agents' },
       h('summary', { class: 'muted cursor-pointer text-sm' }, `Archived (${archived.agents.length}): restorable for 30 days, then deleted`),
       h('ul', { class: 'card mt-2 divide-y divide-slate-100 dark:divide-slate-800' }, archived.agents.map(a => h('li', { class: 'flex items-center gap-3 px-4 py-2 text-sm' },

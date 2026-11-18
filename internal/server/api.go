@@ -87,6 +87,8 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /v1/ai/workflows/{id}/rollback", s.requireRole(authn.Admin, s.handleWorkflowRollback))
 	mux.Handle("POST /v1/ai/workflows/{id}/disable", s.requireRole(authn.Admin, s.handleWorkflowEnable(true)))
 	mux.Handle("POST /v1/ai/workflows/{id}/enable", s.requireRole(authn.Admin, s.handleWorkflowEnable(false)))
+	mux.Handle("DELETE /v1/ai/workflows/{id}", s.requireRole(authn.Admin, s.handleArchiveWorkflow))
+	mux.Handle("POST /v1/ai/workflows/{id}/restore", s.requireRole(authn.Admin, s.handleRestoreWorkflow))
 	mux.Handle("POST /v1/ai/workflows/{id}/run", s.requireRole(authn.Developer, s.handleStartWorkflow))
 	mux.Handle("POST /v1/ai/workflows/{id}/hook-secret", s.requireRole(authn.Admin, s.handleWorkflowHookSecret))
 	mux.Handle("GET /v1/ai/workflow-runs", s.requireRole(authn.Developer, s.handleListWorkflowRuns))

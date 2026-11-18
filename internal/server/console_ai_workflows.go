@@ -84,6 +84,8 @@ type Workflow struct {
 	Description string      `json:"description"`
 	Current     int         `json:"current"`
 	Disabled    bool        `json:"disabled,omitempty"`
+	ArchivedAt  *time.Time  `json:"archived_at,omitempty"` // deleted: hidden, restorable until the sweep removes it
+	ArchivedBy  string      `json:"archived_by,omitempty"`
 	Versions    []WFVersion `json:"versions"`
 }
 
@@ -310,17 +312,38 @@ func (s *Server) handleListWorkflows(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	out := make([]map[string]any, 0, len(all))
+	showArchived := r.URL.Query().Get("archived") == "1"
+	last := s.lastWorkflowRuns(r.Context())
 	for _, wf := range all {
+		if (wf.ArchivedAt != nil) != showArchived {
+			continue
+		}
 		cur, _ := wf.version(wf.Current)
 		steps, nodes := 0, 0
+		kinds := map[string]int{}
+		agents := map[string]bool{}
 		for _, st := range cur.Stages {
 			steps += len(st.Steps)
+			for _, sp := range st.Steps {
+				agents[sp.Agent] = true
+			}
 		}
 		if cur.Graph != nil {
 			nodes = len(cur.Graph.Nodes)
+			for _, n := range cur.Graph.Nodes {
+				kinds[n.Kind]++
+				if n.Agent != "" {
+					agents[n.Agent] = true
+				}
+			}
 		}
-		out = append(out, map[string]any{"id": wf.ID, "name": wf.Name, "description": wf.Description, "current": wf.Current, "disabled": wf.Disabled,
-			"stages": len(cur.Stages), "steps": steps, "nodes": nodes, "every_minutes": cur.EveryMinutes, "run_as": cur.RunAs, "versions": len(wf.Versions)})
+		item := map[string]any{"id": wf.ID, "name": wf.Name, "description": wf.Description, "current": wf.Current, "disabled": wf.Disabled,
+			"stages": len(cur.Stages), "steps": steps, "nodes": nodes, "every_minutes": cur.EveryMinutes, "run_as": cur.RunAs, "versions": len(wf.Versions),
+			"graph": cur.Graph != nil, "kinds": kinds, "agents": len(agents), "webhook": cur.Webhook, "on_run_failed": cur.OnRunFailed, "archived_at": wf.ArchivedAt}
+		if lr, ok := last[wf.ID]; ok {
+			item["last_run"] = map[string]any{"id": lr.ID, "status": lr.Status, "started_at": lr.StartedAt, "finished_at": lr.FinishedAt, "trigger": lr.Trigger}
+		}
+		out = append(out, item)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"workflows": out})
 }
@@ -461,6 +484,10 @@ func (s *Server) handleWorkflowEnable(disabled bool) http.HandlerFunc {
 		wf, err := s.loadWorkflow(r.Context(), r.PathValue("id"))
 		if err != nil {
 			s.defError(w, "workflow", err)
+			return
+		}
+		if wf.ArchivedAt != nil && !disabled {
+			writeError(w, http.StatusConflict, wf.Name+" is archived; restore it first")
 			return
 		}
 		wf.Disabled = disabled
