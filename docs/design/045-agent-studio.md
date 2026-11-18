@@ -1,6 +1,6 @@
 # 045: Agent Studio: any model, a playground, agent teams, publishing, code mode
 
-Status: **accepted 2026-11-18; step 1 under way: the Anthropic provider is built.** Decisions 1 and 2 are made (end of
+Status: **accepted 2026-11-18; step 1 under way: the Anthropic, OpenAI and OpenAI-compatible providers are built.** Decisions 1 and 2 are made (end of
 this note); 3 to 5 are still open. Builds on agents and skills
 (note 024), MCP servers (042), budgets (036), the library (040, step 8) and agent graphs (044). Screen mock-ups were
 drawn for the maintainer's review alongside this note.
@@ -174,7 +174,10 @@ Each step is checked on the Pi with real models before the next one.
 
 1. ~~Which providers come first?~~ **Anthropic first; the others after it** (maintainer, 2026-11-18). Built: the
    providers page (Settings › Models and providers), `provider/model` names for agents and the assistant, keys in the
-   vault, the MCP address rules, prices, a monthly limit with a fallback, and a log of recent model calls.
+   vault, the MCP address rules, prices, a monthly limit with a fallback, and a log of recent model calls. Then OpenAI
+   and OpenAI-compatible servers (Ollama, vLLM, LiteLLM, OpenRouter, Groq), through the Chat Completions API; a
+   compatible server needs its address, may have no key, and its models are added by name. Bedrock, Gemini and Azure
+   OpenAI are next.
 2. ~~The code-mode sandbox~~: **local only** (maintainer, 2026-11-17).
 3. **Headless:** only through the server (proposed), or also a standalone export that runs without Forgeline?
 4. **A public route on the Pi:** published APIs, like webhooks, need one. Which address, if any?

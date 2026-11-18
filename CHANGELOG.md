@@ -62,6 +62,10 @@ section in the pull request that makes the change; a release moves it under its 
 - **After a session ends**, the console stops polling the server (it asked every minute, forever).
 
 ### Added
+- **OpenAI and OpenAI-compatible providers** (note 045, step 1). Settings › Models and providers can now connect
+  OpenAI, and any server that speaks the OpenAI Chat Completions API: Ollama, vLLM, LiteLLM, OpenRouter, Groq. A
+  compatible server needs its address (plain HTTP only on this machine), may have no key, and its models are added by
+  name in the side panel, free unless given a price. Agents can use, for example, `ollama/llama3.2:3b`.
 - **Models and providers** (note 045, step 1). Settings › Models and providers: add an Anthropic provider (more kinds
   follow), turn its models on, set prices, a monthly limit and a fallback. Agents and the assistant can use
   `provider/model`, which works whatever the assistant is set to, so agents and workflows run with the assistant off.

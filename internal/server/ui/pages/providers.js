@@ -1,11 +1,19 @@
 // Settings › Models and providers (design note 045, part 1). Providers as cards with their mark, status, models,
 // spend against the monthly limit and speed; a live log of recent model calls beside them. Adding or changing a
-// provider happens in a side panel, so the cards and the log stay in view. Only Anthropic is built so far; the
-// other kinds are shown as coming.
+// provider happens in a side panel, so the cards and the log stay in view. Anthropic, OpenAI and OpenAI-compatible
+// servers (Ollama, vLLM, OpenRouter…) are built; the other kinds are shown as coming.
 import { h, icon, mount, pageHeader, spinner, errorBox, notice, toast, field, relTime, absTime, confirmDialog, drawer, brandMark } from '../lib/dom.js';
 import { get, post, put, del, atLeast } from '../lib/api.js';
 import { session } from '../app.js';
 import { budgetBar } from './ai_use.js';
+
+// What each built kind needs in the side panel.
+const KIND = {
+  anthropic: { host: 'https://api.anthropic.com', key: 'sk-ant-…' },
+  openai: { host: 'https://api.openai.com/v1', key: 'sk-…' },
+  'openai-compatible': { host: '', key: 'Only if the server asks for one', needsAddress: true, keyOptional: true,
+    example: 'http://localhost:11434/v1 (Ollama), https://openrouter.ai/api/v1, https://api.groq.com/openai/v1' },
+};
 
 const STATUS = {
   working: ['bg-emerald-500', 'Working'],
@@ -62,7 +70,7 @@ export async function providersPage() {
     const limit = p.monthly_usd || 0;
     const spent = p.month.cost_usd || 0;
     const pct = limit ? Math.min(100, Math.round(spent / limit * 100)) : 0;
-    const where = p.base_url ? hostOf(p.base_url) : 'api.anthropic.com';
+    const where = hostOf(p.base_url || (KIND[p.kind] || {}).host || '');
     return h('article', { class: 'card card-pad flex flex-col gap-4 ' + (p.status === 'failing' ? 'ring-1 ring-rose-300 dark:ring-rose-800' : ''), 'data-provider': p.id },
       h('div', { class: 'flex items-center gap-3' }, brandMark(p.kind),
         h('div', { class: 'min-w-0 flex-1' },
@@ -113,12 +121,16 @@ export async function providersPage() {
     const known = new Map((k.models || []).map(m => [m.id, m]));
     // Every known model, with the provider's own settings where it has them, plus any it added by name.
     const rows = (p ? p.models : []).map(m => ({ ...known.get(m.id), ...m }));
-    for (const m of known.values()) if (!rows.some(r => r.id === m.id)) rows.push({ ...m, on: !p && (m.id === 'claude-haiku-5-5' || m.id === 'claude-sonnet-5-5') });
+    // A new provider starts with its two cheapest known models on.
+    [...known.values()].forEach((m, i) => { if (!rows.some(r => r.id === m.id)) rows.push({ ...m, on: !p && i < 2 }); });
+    const kk = KIND[k.kind] || KIND.anthropic;
     const v = (id, val, attrs = {}) => h('input', { id, class: 'input', value: val ?? '', ...attrs });
     const id = v('provider-id', p ? p.id : uniqueID(k.kind), { disabled: !!p });
     const name = v('provider-name', p ? p.name : k.label);
-    const key = h('input', { id: 'provider-key', class: 'input font-mono', type: 'password', autocomplete: 'new-password', placeholder: p?.has_key ? 'A key is saved. Type to replace it.' : 'sk-ant-…' });
-    const base = v('provider-base', p?.base_url, { placeholder: 'https://api.anthropic.com' });
+    const key = h('input', { id: 'provider-key', class: 'input font-mono', type: 'password', autocomplete: 'new-password', placeholder: p?.has_key ? 'A key is saved. Type to replace it.' : kk.key });
+    const base = v('provider-base', p?.base_url, { placeholder: kk.host || 'http://localhost:11434/v1' });
+    const newModel = v('provider-new-model', '', { class: 'input font-mono text-sm', placeholder: k.kind === 'openai-compatible' ? 'llama3.2:3b or meta-llama/llama-3.3-70b-instruct' : 'Another model by its exact name',
+      onkeydown: (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); addModel(); } } });
     const priv = h('input', { id: 'provider-private', type: 'checkbox', class: 'size-4', checked: !!p?.allow_private });
     const limit = v('provider-limit', p?.monthly_usd || '', { type: 'number', min: '0', step: '1', placeholder: 'No limit' });
     const fallback = h('select', { id: 'provider-fallback', class: 'input' });
@@ -126,15 +138,25 @@ export async function providersPage() {
     const err = h('div', {});
     const out = h('div', {});
 
-    const drawModels = () => mount(modelList, rows.map(m => {
+    function addModel() {
+      const name = newModel.value.trim();
+      mount(err);
+      if (!name) return;
+      if (rows.some(r => r.id === name)) { mount(err, errorBox(`${name} is already in the list.`)); return; }
+      rows.push({ id: name, on: true, input_usd_per_mtok: 0, output_usd_per_mtok: 0, added: true });
+      newModel.value = ''; drawModels(); drawFallback();
+    }
+
+    const drawModels = () => mount(modelList, rows.length ? rows.map(m => {
       const cb = h('input', { type: 'checkbox', class: 'size-4', checked: !!m.on, 'aria-label': 'Turn on ' + m.id, onchange: () => { m.on = cb.checked; drawFallback(); } });
       const pin = h('input', { class: 'input w-20 py-1 text-xs', type: 'number', min: '0', step: '0.01', value: m.input_usd_per_mtok, 'aria-label': m.id + ' input price', onchange: () => { m.input_usd_per_mtok = Number(pin.value) || 0; } });
       const pout = h('input', { class: 'input w-20 py-1 text-xs', type: 'number', min: '0', step: '0.01', value: m.output_usd_per_mtok, 'aria-label': m.id + ' output price', onchange: () => { m.output_usd_per_mtok = Number(pout.value) || 0; } });
       return h('li', { class: 'flex flex-wrap items-center gap-3 px-3 py-2.5', 'data-model': m.id },
         h('label', { class: 'flex min-w-0 flex-1 items-center gap-3' }, cb,
           h('span', { class: 'min-w-0' }, h('span', { class: 'block text-sm font-medium' }, m.label || m.id), h('code', { class: 'muted block font-mono text-xs' }, m.id))),
-        h('span', { class: 'flex items-center gap-1 text-xs' }, '$', pin, h('span', { class: 'muted' }, 'in'), '$', pout, h('span', { class: 'muted' }, 'out')));
-    }));
+        h('span', { class: 'flex items-center gap-1 text-xs' }, '$', pin, h('span', { class: 'muted' }, 'in'), '$', pout, h('span', { class: 'muted' }, 'out')),
+        known.has(m.id) ? null : h('button', { class: 'btn-ghost btn-sm', type: 'button', 'aria-label': 'Take ' + m.id + ' off the list', onclick: () => { rows.splice(rows.indexOf(m), 1); drawModels(); drawFallback(); } }, icon('x', 'size-3.5')));
+    }) : h('li', { class: 'muted px-3 py-4 text-sm' }, 'Add the models this server offers by their exact names.'));
     const drawFallback = () => {
       const mine = rows.filter(m => m.on).map(m => (p ? p.id : id.value.trim()) + '/' + m.id);
       const others = data.providers.filter(x => !p || x.id !== p.id).flatMap(x => x.models.filter(m => m.on).map(m => x.id + '/' + m.id));
@@ -150,15 +172,17 @@ export async function providersPage() {
     drawer(p ? p.name : 'Connect ' + k.label, (close) => h('div', { class: 'space-y-5' },
       h('div', { class: 'flex items-center gap-3' }, brandMark(k.kind), h('div', {}, h('div', { class: 'font-semibold' }, k.label), h('div', { class: 'muted text-xs' }, k.how))),
       h('div', { class: 'grid grid-cols-2 gap-3' }, field('Id', id, 'Used in model names: id/model'), field('Name', name)),
-      field('API key', key, 'Kept encrypted in the vault and never shown again. Calls are billed to this key.'),
+      kk.needsAddress ? field('API address', base, 'Where the server answers OpenAI-style requests, ending in its version path. For example ' + kk.example + '. HTTPS, or plain HTTP only for this machine.') : null,
+      field(kk.keyOptional ? 'API key (optional)' : 'API key', key, kk.keyOptional ? 'A local server usually needs none. A key you give is kept encrypted and never shown again.' : 'Kept encrypted in the vault and never shown again. Calls are billed to this key.'),
       h('section', { class: 'space-y-2' },
         h('div', { class: 'flex items-baseline justify-between' }, h('h3', { class: 'text-sm font-semibold' }, 'Models'), h('span', { class: 'muted text-xs' }, 'Prices in dollars per million tokens')),
         modelList,
-        h('p', { class: 'muted text-xs' }, 'Agents and the assistant can only pick models that are turned on.')),
+        h('div', { class: 'flex gap-2' }, newModel, h('button', { class: 'btn-secondary btn-sm flex-none', type: 'button', id: 'provider-add-model', onclick: addModel }, icon('plus', 'size-3.5'), 'Add')),
+        h('p', { class: 'muted text-xs' }, 'Agents and the assistant can only pick models that are turned on.' + (kk.keyOptional ? ' A model on your own server costs nothing here unless you give it a price.' : ''))),
       h('div', { class: 'grid grid-cols-2 gap-3' }, field('Monthly limit ($)', limit, 'At the limit, calls go to the fallback or stop'), field('Fallback', fallback, 'Also used when the provider is down or busy')),
-      h('details', { class: 'rounded-xl border border-slate-200 p-3 dark:border-slate-700' },
-        h('summary', { class: 'cursor-pointer text-sm font-medium' }, 'Address'),
-        h('div', { class: 'mt-3 space-y-3' }, field('API address', base, 'Leave empty for api.anthropic.com. HTTPS only; plain HTTP only for this machine.'),
+      h('details', { class: 'rounded-xl border border-slate-200 p-3 dark:border-slate-700', open: !!(kk.needsAddress || p?.allow_private) },
+        h('summary', { class: 'cursor-pointer text-sm font-medium' }, kk.needsAddress ? 'Network' : 'Address'),
+        h('div', { class: 'mt-3 space-y-3' }, kk.needsAddress ? null : field('API address', base, `Leave empty for ${hostOf(kk.host)}. HTTPS only; plain HTTP only for this machine.`),
           h('label', { class: 'flex items-center gap-2 text-sm', for: 'provider-private' }, priv, 'It is on a private network (otherwise private and cloud-internal addresses are refused)'))),
       err, out), {
       subtitle: p ? `${kindLabel(p.kind)} · changed by ${p.updated_by} ${relTime(p.updated_at)}` : 'Add a provider; its models can then be given to agents and the assistant.',
