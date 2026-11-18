@@ -293,7 +293,11 @@ Only repositories on the GitHub allow list. A workflow can only be started on a 
 
 Design note 045, part 1. A model from a provider is written `provider/model` (for example `anthropic/claude-haiku-5-5`)
 wherever an agent or the assistant is given one, and works whatever the assistant's own backend is. The `anthropic`,
-`openai` and `openai-compatible` kinds are built. An `openai-compatible` provider (Ollama, vLLM, LiteLLM, OpenRouter,
+`openai`, `openai-compatible`, `gemini` (through Google's OpenAI-compatible endpoint), `azure-openai` (the v1 API; a
+`base_url` such as `https://my-resource.openai.azure.com/openai/v1` is required, the key goes in the `api-key` header,
+and models are deployment names) and `bedrock` kinds are built. A `bedrock` provider has no key or address: it takes
+`aws_account` (an added account's id; empty for the primary) and an optional `region`, and calls the Converse API with
+that account's credentials, whose role needs `bedrock:InvokeModel`. An `openai-compatible` provider (Ollama, vLLM, LiteLLM, OpenRouter,
 Groq…) needs a `base_url` ending in its version path, such as `http://localhost:11434/v1`; its `api_key` is optional and
 its models are added by name (which may contain `/`, as in `local/meta-llama/Llama-3.3-70B`).
 

@@ -62,6 +62,9 @@ section in the pull request that makes the change; a release moves it under its 
 - **After a session ends**, the console stops polling the server (it asked every minute, forever).
 
 ### Added
+- **Gemini, Azure OpenAI and AWS Bedrock providers** (note 045, step 1). Gemini takes an API key; Azure OpenAI its
+  resource address and key, with deployment names as models; Bedrock uses an AWS account the console is already
+  connected to (no key), in the region you choose, through the Converse API. Not yet tried against the real services.
 - **OpenAI and OpenAI-compatible providers** (note 045, step 1). Settings › Models and providers can now connect
   OpenAI, and any server that speaks the OpenAI Chat Completions API: Ollama, vLLM, LiteLLM, OpenRouter, Groq. A
   compatible server needs its address (plain HTTP only on this machine), may have no key, and its models are added by

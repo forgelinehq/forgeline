@@ -80,7 +80,7 @@ func TestProvidersAreForAdministratorsAndNeverShowTheKey(t *testing.T) {
 	dev.expect(403, "POST", "/v1/providers", body)
 	for name, change := range map[string]func(map[string]any){
 		"bad id":           func(b map[string]any) { b["id"] = "Not An Id" },
-		"kind not built":   func(b map[string]any) { b["kind"] = "bedrock" },
+		"unknown kind":     func(b map[string]any) { b["kind"] = "mistral" },
 		"no key":           func(b map[string]any) { b["api_key"] = "" },
 		"plain http":       func(b map[string]any) { b["base_url"] = "http://llm.example.com" },
 		"address path":     func(b map[string]any) { b["base_url"] = "https://llm.example.com/v1?x=1" },
@@ -111,7 +111,7 @@ func TestProvidersAreForAdministratorsAndNeverShowTheKey(t *testing.T) {
 		Kinds     []ProviderKindJSON `json:"kinds"`
 	}
 	json.Unmarshal(list, &got)
-	if len(got.Providers) != 1 || !got.Providers[0].HasKey || got.Providers[0].Status != "untested" || len(got.Kinds) < 2 || !got.Kinds[0].Built || builtKind("bedrock") {
+	if len(got.Providers) != 1 || !got.Providers[0].HasKey || got.Providers[0].Status != "untested" || len(got.Kinds) < 2 || !got.Kinds[0].Built || builtKind("mistral") {
 		t.Fatalf("list = %+v", got)
 	}
 	// The key is an internal secret: not in the vault listing, not usable by steps.

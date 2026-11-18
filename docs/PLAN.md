@@ -329,7 +329,7 @@ Design: [docs/design/006-console.md](design/006-console.md). Pictures: [docs/con
 >    Azure, then RunPod and others.
 > 3. **Agent graphs** (note 044, the maintainer's next area after note 040): ~~the engine and the canvas~~ (built);
 >    ~~the real-model check on the Pi, models per agent, webhook and failed-run triggers~~ (built).
->    Then **Agent Studio** (note 045): ~~the Anthropic, OpenAI and OpenAI-compatible providers~~ (built), then Bedrock, Gemini and Azure OpenAI, agent playground, workflow test panel and agent teams,
+>    Then **Agent Studio** (note 045): ~~the providers: Anthropic, OpenAI, OpenAI-compatible, Gemini, Azure OpenAI, Bedrock~~ (built), agent playground, workflow test panel and agent teams,
 >    publishing, code mode, the new sidebar.
 > 4. **Not started (to do):** **A very light helper model** (note 038, step 2, revised by the maintainer: no llama.cpp or Ollama, well under
 >    500 MB): a 25 MB embedding model in the browser to match answers and find pages, then FunctionGemma 270M (fine-tuned
