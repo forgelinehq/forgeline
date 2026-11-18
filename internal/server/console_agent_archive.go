@@ -47,6 +47,7 @@ func (s *Server) agentUsers(ctx context.Context, id string) ([]string, error) {
 			out = append(out, "workflow "+w.Name)
 		}
 	}
+	out = append(out, s.teamUsers(ctx, id)...)
 	ms, err := s.listMissions(ctx)
 	if err != nil {
 		return nil, err

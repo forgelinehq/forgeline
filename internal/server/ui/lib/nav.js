@@ -25,7 +25,7 @@ export const SPACES = [
     { path: '/actions', label: 'GitHub Actions', min: 'developer' },
   ] },
   { id: 'team', label: 'Team', icon: 'sparkle', path: '/team', tabs: [
-    { path: '/team', label: 'Team', min: 'developer' },
+    { path: '/team', label: 'Teams', min: 'developer', also: ['/teams/'] },
     { path: '/agents', label: 'Agents', min: 'developer', also: ['/skills/', '/workflows/', '/workflow-runs/'] },
     { path: '/missions', label: 'Missions', min: 'developer' },
     { path: '/library', label: 'Library', min: 'developer', also: ['/marketplace'] },
