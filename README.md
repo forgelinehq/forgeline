@@ -43,8 +43,9 @@ for each AWS service (S3, ECS, ECR and so on), whether the assistant and agents 
 or propose changes that someone else approves. People can sign in with
 your company login (OpenID Connect: Google, Entra ID, Okta, Keycloak) with roles from their groups, and
 approval rules can ask for two approvals, or named approvers, for the changes that matter. Administrators can
-download the audit log as CSV or JSON Lines and choose how long it is kept. Team shows your agents as an
-org chart with what each is doing, when it wakes next and how much of its monthly budget it has used (a deleted agent
+download the audit log as CSV or JSON Lines and choose how long it is kept. Team › Teams holds teams of agents: give one a goal and its lead
+splits the work, the members look into it at the same time with their own tools, and the lead writes one answer. Below
+the teams, every agent is listed with what each is doing, when it wakes next and how much of its monthly budget it has used (a deleted agent
 is archived and can be restored for 30 days); an
 agent that uses up its budget stops before its next model call. A new server shows **Set up Forgeline** on Home (and `forgeline onboard` in a terminal) until it is set up.
 The assistant can write skills, agents and workflows for you to confirm. Pipelines can build container images and push them to ECR, without GitHub Actions; only pushes to branches an administrator allows publish an image. Administrators can connect model providers (Anthropic, OpenAI, Gemini, Azure OpenAI, AWS Bedrock through a connected AWS account, and OpenAI-compatible servers such as Ollama, vLLM or OpenRouter) with prices, monthly limits and a fallback, and give each agent its own `provider/model`, with every model call in a live log. Administrators can add MCP servers, remote or as containers, and turn on their read-only tools one by one for agents and the assistant. The Marketplace installs ready-made agents and whole teams (an incident triage team, a weekly platform review,

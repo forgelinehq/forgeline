@@ -31,7 +31,7 @@ import { ssoPage } from './pages/sso.js';
 import { approvalRulesPage } from './pages/approval_rules.js';
 import { policyPacksPage } from './pages/policy_packs.js';
 import { resourceTypesPage } from './pages/resource_types.js';
-import { teamPage } from './pages/team.js';
+import { teamPage, teamDetailPage } from './pages/team.js';
 import { mcpServersPage } from './pages/mcp_servers.js';
 import { providersPage } from './pages/providers.js';
 import { buildRulesPage } from './pages/build_rules.js';
@@ -240,6 +240,7 @@ async function boot() {
     route('/kubernetes/:id', guard('viewer', kubernetesPage));
     route('/guard', guard('viewer', guardPage));
     route('/team', guard('developer', teamPage));
+    route('/teams/:id', guard('developer', teamDetailPage));
     route('/agents', guard('developer', agentsPage));
     route('/agents/:id', guard('developer', agentPage));
     route('/skills/:id', guard('developer', skillPage));

@@ -1,6 +1,6 @@
 {
   "id": "platform-review-team",
-  "version": 1,
+  "version": 2,
   "title": "Weekly platform review",
   "description": "A team that reviews security findings, cost and recent changes each week, then a lead writes the review; anything to change is left for a person.",
   "publisher": "Forgeline",
@@ -103,5 +103,17 @@
       "run_as": "viewer"
     }
   ],
-  "sha256": "88522734a47ec52f35477714c1945658809d6b36da4ca1acc5ffcaea82b31c66"
+  "sha256": "d32f6bd118cccc6d44a2df052b69995705084ec4be1f34a979279df7dc8de9f5",
+  "teams": [
+    {
+      "key": "review",
+      "name": "Platform review",
+      "purpose": "A look at security findings and spend, then one prioritised list of what to fix first.",
+      "lead": "review-lead",
+      "members": [
+        "security-checker",
+        "spend-checker"
+      ]
+    }
+  ]
 }

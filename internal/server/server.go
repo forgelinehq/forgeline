@@ -118,6 +118,7 @@ type Server struct {
 	schemaRun  schemaRunner   // tests replace `tofu providers schema -json`
 	usage      usageState     // serialises updates to the AI use ledger
 	calls      callLog        // serialises updates to the model call log and provider spend
+	teams      teamRuns       // which teams are working on a goal
 	missions   missionState   // missions (note 037)
 	gcpInv     invCache       // Google Cloud inventories, by scope
 	approvals  approvalBook   // read calls waiting for the person who asked to approve them
@@ -269,6 +270,7 @@ func (s *Server) Start(ctx context.Context) error {
 	s.startWorkflows(ctx)
 	s.startMissions(ctx)
 	s.startAuditPruner(ctx)
+	s.failStaleTeamRuns(ctx)
 	s.startMarketGit(ctx)
 	for i := 0; i < s.cfg.MaxRuns; i++ {
 		s.wg.Add(1)

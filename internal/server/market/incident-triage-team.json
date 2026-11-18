@@ -1,6 +1,6 @@
 {
   "id": "incident-triage-team",
-  "version": 1,
+  "version": 2,
   "title": "Incident triage team",
   "description": "Three agents that work a problem together: one reads the failed runs, one checks the platform and the cloud, and a lead writes one short report with the next steps.",
   "publisher": "Forgeline",
@@ -108,5 +108,17 @@
       "run_as": "viewer"
     }
   ],
-  "sha256": "efe53e9f43fb7ac4b3ef23f6f5d2d995090bdd12883b4477b94e2baa3d9b81e3"
+  "sha256": "aefe372537f982ffae826c02f5ab8f071eba2d025b5cdca696fa86ea6fb06208",
+  "teams": [
+    {
+      "key": "triage",
+      "name": "Incident triage",
+      "purpose": "When something is failing: find why runs fail and what is wrong underneath, then one short report with next steps.",
+      "lead": "triage-lead",
+      "members": [
+        "run-analyst",
+        "platform-checker"
+      ]
+    }
+  ]
 }

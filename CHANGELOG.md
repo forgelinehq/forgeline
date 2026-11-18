@@ -62,6 +62,11 @@ section in the pull request that makes the change; a release moves it under its 
 - **After a session ends**, the console stops polling the server (it asked every minute, forever).
 
 ### Added
+- **Teams** (note 045). Team › Teams lists teams of agents: a lead and up to eight members, and an agent can be in
+  several. Give a team a goal: the lead plans one task per member, the members work at the same time with their own
+  model, tools and budget, and the lead writes one answer from what they found (handed to it as data). Each run shows
+  the plan, every member's work and the answer, live. Teams are made in a side panel; the Incident triage and Platform
+  review packages in the library now install as teams. The org chart is replaced by a list of every agent.
 - **Deleting an agent.** An agent page has Delete: the agent is turned off, moved to an archive (Agents › Archived) and
   can be restored for 30 days, then deleted for good. It is refused, naming them, while an enabled workflow or an
   unfinished mission uses the agent; agents that reported to it report to people again.

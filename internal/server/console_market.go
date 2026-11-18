@@ -67,6 +67,15 @@ type MarketWorkflow struct {
 	RunAs       string    `json:"run_as"`
 }
 
+// MarketTeam is a team inside a package (note 045): a lead and members, named by agent keys of the same package.
+type MarketTeam struct {
+	Key     string   `json:"key"`
+	Name    string   `json:"name"`
+	Purpose string   `json:"purpose"`
+	Lead    string   `json:"lead"`
+	Members []string `json:"members"`
+}
+
 // MarketPackage is one entry in the catalogue.
 type MarketPackage struct {
 	ID           string              `json:"id"`
@@ -79,6 +88,7 @@ type MarketPackage struct {
 	Agents       []MarketAgent       `json:"agents"`
 	Plugins      []MarketPlugin      `json:"plugins,omitempty"`
 	Workflows    []MarketWorkflow    `json:"workflows,omitempty"`
+	Teams        []MarketTeam        `json:"teams,omitempty"`
 	EnvTemplates []MarketEnvTemplate `json:"env_templates,omitempty"`
 	// The library (note 040, step 8): who reviewed it, guardrail packs, and MCP servers (tools).
 	ReviewedBy  string            `json:"reviewed_by,omitempty"`
@@ -151,6 +161,26 @@ func (p MarketPackage) check() error {
 			return err
 		}
 		keys["w:"+w.Key] = true
+	}
+	for _, t := range p.Teams {
+		switch {
+		case t.Key == "" || keys["m:"+t.Key]:
+			return fmt.Errorf("team %q: its key is empty or repeated", t.Key)
+		case strings.TrimSpace(t.Name) == "" || len(t.Name) > 60 || len(t.Purpose) > 300:
+			return fmt.Errorf("team %q: a name of up to 60 characters and a purpose of up to 300", t.Key)
+		case !keys["a:"+t.Lead]:
+			return fmt.Errorf("team %q: its lead %q is not an agent of the package", t.Key, t.Lead)
+		case len(t.Members) == 0 || len(t.Members) > maxTeamMembers:
+			return fmt.Errorf("team %q: 1 to %d members besides the lead", t.Key, maxTeamMembers)
+		}
+		seen := map[string]bool{t.Lead: true}
+		for _, m := range t.Members {
+			if !keys["a:"+m] || seen[m] {
+				return fmt.Errorf("team %q: member %q is not an agent of the package, is the lead or is repeated", t.Key, m)
+			}
+			seen[m] = true
+		}
+		keys["m:"+t.Key] = true
 	}
 	for _, t := range p.EnvTemplates {
 		if keys["t:"+t.Key] {
@@ -228,6 +258,7 @@ type MarketInstall struct {
 	// Workflows maps a package workflow key to the workflow it made; Templates lists packaged
 	// environment template ids.
 	Workflows map[string]string `json:"workflows,omitempty"`
+	Teams     map[string]string `json:"teams,omitempty"` // package team key to the team it made
 	Templates []string          `json:"templates,omitempty"`
 	// PolicyPacks are the guardrail pack ids it added; MCPServers maps a package key to the MCP server it made.
 	PolicyPacks []string          `json:"policy_packs,omitempty"`
@@ -471,6 +502,10 @@ func (s *Server) handleMarketInstall(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if err := s.installTeams(ctx, &in, pkg.Teams, p.Name, now); err != nil {
+		s.internalError(w, "installing the teams", err)
+		return
+	}
 	if err := s.installEnvTemplates(ctx, &in, pkg.MarketPackage); err != nil {
 		s.internalError(w, "installing the environment templates", err)
 		return
@@ -665,6 +700,38 @@ func (s *Server) installWorkflow(ctx context.Context, in *MarketInstall, m Marke
 	return nil
 }
 
+// installTeams makes or updates the package's teams from the agents it installed.
+func (s *Server) installTeams(ctx context.Context, in *MarketInstall, teams []MarketTeam, by string, now time.Time) error {
+	if in.Teams == nil {
+		in.Teams = map[string]string{}
+	}
+	for _, m := range teams {
+		members := make([]string, 0, len(m.Members))
+		for _, k := range m.Members {
+			members = append(members, in.Agents[k])
+		}
+		id, ok := in.Teams[m.Key]
+		if ok {
+			if _, err := s.loadTeam(ctx, id); errors.Is(err, docstore.ErrNotFound) {
+				ok = false
+			}
+		}
+		if !ok {
+			id = s.uniqueTeamID(ctx, m.Name)
+		}
+		t, msg := s.checkTeam(ctx, teamRequest{ID: id, Name: m.Name, Purpose: m.Purpose, Lead: in.Agents[m.Lead], Members: members})
+		if msg != "" {
+			return errors.New("team " + m.Name + ": " + msg)
+		}
+		t.UpdatedBy, t.UpdatedAt = by, now
+		if err := s.docs.Put(ctx, kindTeam, t.ID, t); err != nil {
+			return err
+		}
+		in.Teams[m.Key] = t.ID
+	}
+	return nil
+}
+
 // installEnvTemplates makes the package's templates available to environment requests, replacing the
 // earlier version's. Removed ones go away.
 func (s *Server) installEnvTemplates(ctx context.Context, in *MarketInstall, pkg MarketPackage) error {
@@ -712,6 +779,12 @@ func (s *Server) handleMarketUninstall(w http.ResponseWriter, r *http.Request) {
 		a.Disabled = true
 		if err := s.docs.Put(ctx, kindAIAgent, a.ID, a); err != nil {
 			s.internalError(w, "disabling an agent", err)
+			return
+		}
+	}
+	for _, id := range in.Teams { // the teams go; their agents stay, turned off
+		if err := s.docs.Delete(ctx, kindTeam, id); err != nil && !errors.Is(err, docstore.ErrNotFound) {
+			s.internalError(w, "removing a team", err)
 			return
 		}
 	}
