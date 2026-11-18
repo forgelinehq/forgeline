@@ -17,7 +17,8 @@ export const SETTINGS = [
     { path: '/image-builds', label: 'Image builds', note: 'Which repositories and branches may push built images, and where', min: 'admin' },
   ] },
   { title: 'AI', items: [
-    { path: '/integrations/claude/settings', label: 'Models', note: 'Which model answers the assistant and agents', min: 'developer' },
+    { path: '/providers', label: 'Models and providers', note: 'Providers whose models agents, workflows and the assistant use, with spend, limits and a log of calls', min: 'developer' },
+    { path: '/integrations/claude/settings', label: 'Assistant model', note: 'Which model answers the assistant, and agents that have no model of their own', min: 'developer' },
     { path: '/memory', label: 'Memory', note: 'What the assistant remembers about you and this system, and your conversations', min: 'developer' },
     { path: '/ai-use', label: 'AI use and budgets', note: 'What each agent used this month, and how much it may use', min: 'developer' },
   ] },

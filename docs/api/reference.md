@@ -265,7 +265,7 @@ Only repositories on the GitHub allow list. A workflow can only be started on a 
 | Method and path | Role | Purpose |
 | --- | --- | --- |
 | `GET /v1/assistant` | developer | Whether it is on, and which backend. |
-| `PUT /v1/integrations/assistant` | admin | Body: `backend` (`off`, `api`, `claude-token`, `cli`), `model`, `api_base`, `api_key` and `claude_token` (both write-only; the token is stored as the secret `CLAUDE_CODE_OAUTH_TOKEN`). |
+| `PUT /v1/integrations/assistant` | admin | Body: `backend` (`off`, `api`, `claude-token`, `cli`, `copilot`, or `provider` with a `model` written `provider/model`), `model`, `api_base`, `api_key` and `claude_token` (both write-only; the token is stored as the secret `CLAUDE_CODE_OAUTH_TOKEN`). |
 | `POST /v1/integrations/assistant/test` | admin | Ask it something small to check the setup. |
 | `GET /v1/ai/proposals` | viewer | Changes the assistant drafted, newest first, with their status. |
 | `GET /v1/ai/proposals/{id}` | viewer | One proposal: the exact script, the AWS calls it makes, risk, and (after approval) what ran. |
@@ -288,6 +288,22 @@ Only repositories on the GitHub allow list. A workflow can only be started on a 
 | `DELETE /v1/assistant/memory/{id}` | developer | Delete your own note; an administrator deletes system notes; you can withdraw a system note you suggested while it is pending. |
 | `DELETE /v1/assistant/memory` | developer | Forget every note about you. Audited as `memory.me.forget_all`. |
 | `PUT /v1/assistant/memory/settings` | admin | Turn memory on or off, body `{"enabled":false}`. Audited as `memory.settings`. |
+
+## Models and providers
+
+Design note 045, part 1. A model from a provider is written `provider/model` (for example `anthropic/claude-haiku-5-5`)
+wherever an agent or the assistant is given one, and works whatever the assistant's own backend is. Only the `anthropic`
+kind is built so far.
+
+| Method and path | Role | Purpose |
+| --- | --- | --- |
+| `GET /v1/providers` | developer | `providers`: each with `id`, `kind`, `name`, `base_url`, `allow_private`, `models` (`id`, `label`, `on`, `input_usd_per_mtok`, `output_usd_per_mtok`), `monthly_usd`, `fallback`, `has_key` (never the key), `month` (calls, failed calls, tokens and cost this month), `median_millis`, `status` (`working`, `failing`, `untested`, `no-key`) and `last_error`. `kinds`: every planned kind with `built` and the known models and list prices. |
+| `POST /v1/providers` | admin | Adds a provider: `id`, `kind`, `name`, `api_key` (write-only, kept in the vault), optional `base_url` (https; http only for loopback; private and reserved addresses refused unless `allow_private`), `models`, `monthly_usd` (0 for no limit) and `fallback` (`provider/model`, used when the limit is reached or the provider is unreachable, rate limited or overloaded; once per call). Audited. |
+| `PUT /v1/providers/{id}` | admin | Changes a provider; the same body without `id` and `kind`. An empty `api_key` keeps the stored key. Audited. |
+| `DELETE /v1/providers/{id}` | admin | Removes a provider and its key. Agents that use its models fail with a clear error until they are given another. Audited. |
+| `POST /v1/providers/{id}/test` | admin | Asks a model (body `model`, or the first one turned on) to reply with one word. Returns `reply`, `model`, `millis`, `cost_usd`, or 502 with the provider's error. |
+| `GET /v1/models` | developer | The models turned on, for pickers: `ref` (`provider/model`), `provider`, `provider_name`, `kind`, `model`, `label` and prices. |
+| `GET /v1/model-calls` | developer | The last 200 model calls, newest first: `at`, `provider` (a provider's id, or the assistant's backend), `model`, `who`, tokens, `cost_usd`, `millis` and `error`. `?provider=` keeps one provider's calls. |
 
 ## The pipeline schema
 

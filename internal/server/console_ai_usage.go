@@ -50,6 +50,9 @@ type modelUsage struct {
 	Costed  int64   `json:"costed_calls"` // calls whose cost the backend reported
 	Unknown bool    `json:"-"`            // this call's tokens were not reported
 	Blind   int64   `json:"blind_calls"`  // calls whose tokens were not reported
+
+	Provider string `json:"-"` // who answered: a provider's id, or the assistant's backend
+	Model    string `json:"-"`
 }
 
 func (u modelUsage) tokens() int64 { return u.Input + u.Output }

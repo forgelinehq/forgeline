@@ -33,6 +33,7 @@ import { policyPacksPage } from './pages/policy_packs.js';
 import { resourceTypesPage } from './pages/resource_types.js';
 import { teamPage } from './pages/team.js';
 import { mcpServersPage } from './pages/mcp_servers.js';
+import { providersPage } from './pages/providers.js';
 import { buildRulesPage } from './pages/build_rules.js';
 import { watchMapPage } from './pages/watch_map.js';
 import { servicesPage, servicePage } from './pages/services.js';
@@ -259,6 +260,7 @@ async function boot() {
     route('/settings', guard('developer', settingsPage));
     route('/integrations', guard('developer', inSettings(integrationsHubPage)));
     route('/mcp-servers', guard('admin', inSettings(mcpServersPage)));
+    route('/providers', guard('developer', inSettings(providersPage)));
     route('/image-builds', guard('admin', inSettings(buildRulesPage)));
     route('/integrations/github/settings', guard('developer', inSettings(githubSettingsPage)));
     route('/integrations/claude/settings', guard('developer', inSettings(claudeSettingsPage)));

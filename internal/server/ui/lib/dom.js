@@ -207,6 +207,50 @@ export function modal(title, build, { wide = false, xl = false } = {}) {
   });
 }
 
+/** Opens a panel from the right side (design note 045): the pickers and editors that keep the page in view.
+ *  build(close) returns the body; footer(close), when given, returns buttons that stay at the bottom. Resolves when closed. */
+export function drawer(title, build, { subtitle = '', footer = null } = {}) {
+  return new Promise(resolve => {
+    const prev = document.activeElement;
+    const close = (value) => { overlay.remove(); document.removeEventListener('keydown', onKey); removeEventListener('hashchange', onLeave); prev && prev.focus && prev.focus(); resolve(value); };
+    const onKey = (e) => { if (e.key === 'Escape') close(undefined); };
+    const onLeave = () => close(undefined);
+    const panel = h('aside', { class: 'flex h-full w-full max-w-xl flex-col border-l border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900', role: 'dialog', 'aria-modal': 'true', 'aria-label': title },
+      h('div', { class: 'flex items-start justify-between gap-3 border-b border-slate-200 px-5 py-4 dark:border-slate-800' },
+        h('div', { class: 'min-w-0' }, h('h2', { class: 'font-display text-lg font-bold' }, title), subtitle ? h('p', { class: 'muted mt-0.5 text-sm' }, subtitle) : null),
+        h('button', { class: 'btn-ghost btn-sm', type: 'button', 'aria-label': 'Close', onclick: () => close(undefined) }, icon('x'))),
+      h('div', { class: 'min-h-0 flex-1 overflow-y-auto p-5' }, build(close)),
+      footer ? h('div', { class: 'flex flex-wrap items-center justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-3 dark:border-slate-800 dark:bg-slate-950' }, footer(close)) : null);
+    const overlay = h('div', { class: 'fixed inset-0 z-50 flex justify-end bg-slate-900/40 backdrop-blur-[1px]', onmousedown: (e) => { if (e.target === overlay) close(undefined); } }, panel);
+    document.body.append(overlay);
+    document.addEventListener('keydown', onKey);
+    addEventListener('hashchange', onLeave);
+    const first = panel.querySelector('input,textarea,select');
+    first && first.focus();
+  });
+}
+
+/** A provider's or server's mark: its initials on its colours, until official logos are added where their rules allow. */
+export function brandMark(kind, size = 'md') {
+  const m = BRANDS[kind] || BRANDS.other;
+  const sz = size === 'sm' ? 'size-7 rounded-md text-[10px]' : 'size-11 rounded-xl text-sm';
+  return h('span', { class: 'inline-flex flex-none items-center justify-center font-bold ' + sz + ' ' + m[1], 'aria-hidden': 'true' }, m[0]);
+}
+
+const BRANDS = {
+  anthropic: ['A', 'bg-orange-100 text-orange-900 dark:bg-orange-950 dark:text-orange-200'],
+  openai: ['O', 'bg-slate-200 text-slate-900 dark:bg-slate-700 dark:text-slate-100'],
+  bedrock: ['aws', 'bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200'],
+  gemini: ['G', 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-200'],
+  'azure-openai': ['Az', 'bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-200'],
+  'openai-compatible': ['{ }', 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200'],
+  'claude-token': ['CC', 'bg-orange-100 text-orange-900 dark:bg-orange-950 dark:text-orange-200'],
+  cli: ['CC', 'bg-orange-100 text-orange-900 dark:bg-orange-950 dark:text-orange-200'],
+  api: ['A', 'bg-orange-100 text-orange-900 dark:bg-orange-950 dark:text-orange-200'],
+  copilot: ['Co', 'bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900'],
+  other: ['?', 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200'],
+};
+
 /** Asks for confirmation. If typeToConfirm is set the person must type it. Resolves true or false. */
 export function confirmDialog({ title, body, confirmLabel = 'Confirm', cancelLabel = 'Cancel', danger = false, typeToConfirm = null }) {
   return modal(title, (close) => {

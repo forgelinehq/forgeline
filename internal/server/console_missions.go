@@ -238,8 +238,8 @@ func (s *Server) handleStartMission(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "account: no connected AWS account "+req.Account)
 		return
 	}
-	if s.loadAssistant(ctx).Backend == assistOff {
-		writeError(w, http.StatusConflict, "the assistant is not set up, so no agent can work. An administrator can turn it on under Connections")
+	if !s.aiReady(ctx) {
+		writeError(w, http.StatusConflict, noModelSetUp)
 		return
 	}
 	a, err := s.loadAgent(ctx, req.Agent)

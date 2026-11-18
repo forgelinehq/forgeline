@@ -781,8 +781,8 @@ func (s *Server) handleStartWorkflow(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, "this workflow is turned off")
 		return
 	}
-	if s.loadAssistant(ctx).Backend == assistOff {
-		writeError(w, http.StatusConflict, "the assistant is not set up. An administrator can turn it on under Settings › Connections")
+	if !s.aiReady(ctx) {
+		writeError(w, http.StatusConflict, noModelSetUp)
 		return
 	}
 	n := req.Version
@@ -951,7 +951,7 @@ func (s *Server) startWorkflows(ctx context.Context) {
 // and the clock only moves when a run really started.
 func (s *Server) scheduleTick(ctx context.Context, now time.Time) {
 	all, err := s.listWorkflows(ctx)
-	if err != nil || s.loadAssistant(ctx).Backend == assistOff {
+	if err != nil || !s.aiReady(ctx) {
 		return
 	}
 	for _, wf := range all {

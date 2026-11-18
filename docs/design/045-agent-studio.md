@@ -1,6 +1,7 @@
 # 045: Agent Studio: any model, a playground, agent teams, publishing, code mode
 
-Status: **proposed 2026-11-17, waiting for the maintainer's decisions (end of this note).** Builds on agents and skills
+Status: **accepted 2026-11-18; step 1 under way: the Anthropic provider is built.** Decisions 1 and 2 are made (end of
+this note); 3 to 5 are still open. Builds on agents and skills
 (note 024), MCP servers (042), budgets (036), the library (040, step 8) and agent graphs (044). Screen mock-ups were
 drawn for the maintainer's review alongside this note.
 
@@ -164,15 +165,16 @@ The library's guardrail packs (note 040, step 8) can add more.
 3. **The workflow studio**: the test panel, re-running from a step, workflow settings, agent teams, workflows calling
    workflows, and the Watch alarm trigger left over from note 044.
 4. **Publishing**: live versions, agent keys, the API, the MCP tool, the CLI and the runner image.
-5. **Code mode**: the local container sandbox, then Cloudflare.
+5. **Code mode**: the local container sandbox.
 6. **Moving the rest of the console** to the new sidebar and look.
 
 Each step is checked on the Pi with real models before the next one.
 
 ## Decisions for the maintainer
 
-1. **Which providers come first?** The proposal is Anthropic, OpenAI-compatible (which covers Ollama on the Pi and
-   OpenRouter), Bedrock and Gemini, then Azure OpenAI.
+1. ~~Which providers come first?~~ **Anthropic first; the others after it** (maintainer, 2026-11-18). Built: the
+   providers page (Settings › Models and providers), `provider/model` names for agents and the assistant, keys in the
+   vault, the MCP address rules, prices, a monthly limit with a fallback, and a log of recent model calls.
 2. ~~The code-mode sandbox~~: **local only** (maintainer, 2026-11-17).
 3. **Headless:** only through the server (proposed), or also a standalone export that runs without Forgeline?
 4. **A public route on the Pi:** published APIs, like webhooks, need one. Which address, if any?
