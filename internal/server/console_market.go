@@ -616,7 +616,14 @@ func (s *Server) installAgent(ctx context.Context, in *MarketInstall, m MarketAg
 			return err
 		} else {
 			last := a.Versions[len(a.Versions)-1]
+			// Installing again brings the package's agents back: out of the archive and turned on, as its
+			// workflows are.
+			back := a.archived() || a.Disabled
+			a.ArchivedAt, a.ArchivedBy, a.Disabled = nil, "", false
 			if sameVersionContent(last, v) && a.Name == m.Name && a.Description == m.Description {
+				if back {
+					return s.docs.Put(ctx, kindAIAgent, a.ID, a)
+				}
 				return nil
 			}
 			if len(a.Versions) >= maxVersions {
