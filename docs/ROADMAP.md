@@ -23,7 +23,7 @@ in [PLAN.md](PLAN.md).
 
 ## Agent Studio (note 045)
 
-Status: **step 1 started: the Anthropic provider is built** (Settings › Models and providers: keys in the vault, prices,
+Status: **step 1 started: the Anthropic, OpenAI and OpenAI-compatible (Ollama, vLLM, OpenRouter…) providers are built** (Settings › Models and providers: keys in the vault, prices,
 monthly limits with a fallback, a live log of model calls; agents with a `provider/model` work while the assistant is
 off). Other providers follow. Planned: several model providers at once, with each agent naming `provider/model`; an agent builder with a playground, test cases and model comparison; agent teams and a test panel in
 workflows; publishing agents as an API, an MCP tool or a headless job; Cloudflare-style code mode in a sandbox. See

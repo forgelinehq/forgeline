@@ -80,15 +80,15 @@ func TestProvidersAreForAdministratorsAndNeverShowTheKey(t *testing.T) {
 	dev.expect(403, "POST", "/v1/providers", body)
 	for name, change := range map[string]func(map[string]any){
 		"bad id":           func(b map[string]any) { b["id"] = "Not An Id" },
-		"kind not built":   func(b map[string]any) { b["kind"] = "openai" },
+		"kind not built":   func(b map[string]any) { b["kind"] = "bedrock" },
 		"no key":           func(b map[string]any) { b["api_key"] = "" },
 		"plain http":       func(b map[string]any) { b["base_url"] = "http://llm.example.com" },
 		"address path":     func(b map[string]any) { b["base_url"] = "https://llm.example.com/v1?x=1" },
 		"negative limit":   func(b map[string]any) { b["monthly_usd"] = -1 },
 		"unknown fallback": func(b map[string]any) { b["fallback"] = "nowhere/claude-haiku-5-5" },
 		"fallback off":     func(b map[string]any) { b["fallback"] = "anthropic/claude-opus-5-5" },
-		"model with slash": func(b map[string]any) {
-			b["models"] = []map[string]any{{"id": "a/b", "on": true}}
+		"model like a flag": func(b map[string]any) {
+			b["models"] = []map[string]any{{"id": "-rf", "on": true}}
 		},
 	} {
 		b := anthropicProvider("anthropic", llm.srv.URL, "claude-haiku-5-5")
@@ -111,7 +111,7 @@ func TestProvidersAreForAdministratorsAndNeverShowTheKey(t *testing.T) {
 		Kinds     []ProviderKindJSON `json:"kinds"`
 	}
 	json.Unmarshal(list, &got)
-	if len(got.Providers) != 1 || !got.Providers[0].HasKey || got.Providers[0].Status != "untested" || len(got.Kinds) < 2 || !got.Kinds[0].Built || got.Kinds[1].Built {
+	if len(got.Providers) != 1 || !got.Providers[0].HasKey || got.Providers[0].Status != "untested" || len(got.Kinds) < 2 || !got.Kinds[0].Built || builtKind("bedrock") {
 		t.Fatalf("list = %+v", got)
 	}
 	// The key is an internal secret: not in the vault listing, not usable by steps.

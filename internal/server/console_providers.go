@@ -23,7 +23,7 @@ import (
 // and workflows no longer depend on that single setting. A bare model name keeps using the assistant's backend, so
 // agent versions made before providers keep their fingerprints and their behaviour.
 //
-// Only Anthropic is built so far. Keys go into the vault and are never shown again. A provider's address gets the
+// Anthropic, OpenAI and OpenAI-compatible servers (Ollama, vLLM, LiteLLM, OpenRouter, Groq…) are built. Keys go into the vault and are never shown again. A provider's address gets the
 // MCP server rules (note 042): https only, no redirects, and no private or reserved address unless an administrator
 // says the provider is on a private network. Every call is priced from the model's prices, counted per provider per
 // month, and kept in a short log of recent calls. A provider can have a monthly limit and a fallback model, used when
@@ -41,13 +41,17 @@ const (
 	maxModelPrice    = 1000 // dollars per million tokens
 	providerMaxToken = 8000
 	provAnthropic    = "anthropic"
+	provOpenAI       = "openai"
+	provOpenAICompat = "openai-compatible"
+	defaultOpenAI    = "https://api.openai.com/v1"
 	assistProvider   = "provider" // the assistant's backend when its model comes from a provider
 )
 
 var (
 	providerIDRE = regexp.MustCompile(`^[a-z][a-z0-9-]{0,29}$`)
-	// providerModelRE is a model's name inside its provider: never a flag, never a path.
-	providerModelRE = regexp.MustCompile(`^[a-z0-9][a-z0-9.:\-]{0,79}$`)
+	// providerModelRE is a model's name inside its provider. It is only ever sent in a JSON body, never put in a path
+	// or on a command line. Slashes and capitals are allowed for servers that name models like meta-llama/Llama-3.3-70B.
+	providerModelRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:/\-]{0,99}$`)
 )
 
 // providerCatalog is what Forgeline knows about each kind: its models and their list prices in dollars per million
@@ -62,16 +66,36 @@ var providerCatalog = map[string]struct {
 		{ID: "claude-opus-5-5", Label: "Claude Opus 5.5", InUSD: 4, OutUSD: 20},
 		{ID: "claude-fable-5-2", Label: "Claude Fable 5.2", InUSD: 8, OutUSD: 40},
 	}},
+	// From OpenAI's model pages, November 2026.
+	provOpenAI: {Label: "OpenAI", Models: []ProviderModel{
+		{ID: "gpt-6-luna", Label: "GPT-6 Luna", InUSD: 0.10, OutUSD: 0.50},
+		{ID: "gpt-6.1-terra", Label: "GPT-6.1 Terra", InUSD: 1, OutUSD: 5},
+		{ID: "gpt-6.1-sol", Label: "GPT-6.1 Sol", InUSD: 2, OutUSD: 10},
+	}},
+	// An OpenAI-compatible server has no known models: the administrator adds them by name, usually at no charge.
+}
+
+// keyOptional says whether a kind of provider may have no key: a local Ollama or vLLM usually needs none.
+func keyOptional(kind string) bool { return kind == provOpenAICompat }
+
+// builtKind says whether a kind of provider can be added.
+func builtKind(kind string) bool {
+	for _, k := range providerKinds {
+		if k.Kind == kind {
+			return k.Built
+		}
+	}
+	return false
 }
 
 // providerKinds lists every kind note 045 plans, in the order the console shows them. Only the built ones can be added.
 var providerKinds = []ProviderKindJSON{
 	{Kind: provAnthropic, Label: "Anthropic", How: "API key", Built: true},
-	{Kind: "openai", Label: "OpenAI", How: "API key"},
+	{Kind: provOpenAI, Label: "OpenAI", How: "API key", Built: true},
 	{Kind: "bedrock", Label: "AWS Bedrock", How: "an AWS connection"},
 	{Kind: "gemini", Label: "Google Gemini", How: "API key"},
 	{Kind: "azure-openai", Label: "Azure OpenAI", How: "endpoint and key"},
-	{Kind: "openai-compatible", Label: "OpenAI-compatible", How: "Ollama, vLLM, LiteLLM, OpenRouter, Groq…"},
+	{Kind: provOpenAICompat, Label: "OpenAI-compatible", How: "Ollama, vLLM, LiteLLM, OpenRouter, Groq…", Built: true},
 }
 
 // ProviderKindJSON is one kind of provider.
@@ -168,7 +192,7 @@ func (s *Server) aiReady(ctx context.Context) bool {
 	}
 	ps, _ := s.listProviders(ctx)
 	for _, p := range ps {
-		if _, ok := s.internalSecretValue(ctx, providerKeyName(p.ID)); !ok {
+		if _, ok := s.internalSecretValue(ctx, providerKeyName(p.ID)); !ok && !keyOptional(p.Kind) {
 			continue
 		}
 		for _, m := range p.Models {
@@ -239,17 +263,31 @@ func (s *Server) callProviderOnce(ctx context.Context, ref, system string, turns
 		}
 	}
 	key, ok := s.internalSecretValue(ctx, providerKeyName(p.ID))
-	if !ok {
+	if !ok && !keyOptional(p.Kind) {
 		return "", modelUsage{}, fmt.Errorf("provider %q has no API key", p.ID)
-	}
-	base := p.BaseURL
-	if base == "" {
-		base = defaultAnthropic
 	}
 	ctx, cancel := context.WithTimeout(ctx, assistTimeout)
 	defer cancel()
 	start := time.Now()
-	reply, use, status, err := anthropicMessages(ctx, providerHTTPClient(p), base, key, model, system, turns, providerMaxToken)
+	var (
+		reply  string
+		use    modelUsage
+		status int
+	)
+	switch p.Kind {
+	case provOpenAI, provOpenAICompat:
+		base := p.BaseURL
+		if base == "" {
+			base = defaultOpenAI
+		}
+		reply, use, status, err = openAIChat(ctx, providerHTTPClient(p), base, key, model, system, turns, providerMaxToken, p.Kind == provOpenAI)
+	default:
+		base := p.BaseURL
+		if base == "" {
+			base = defaultAnthropic
+		}
+		reply, use, status, err = anthropicMessages(ctx, providerHTTPClient(p), base, key, model, system, turns, providerMaxToken)
+	}
 	ms := time.Since(start).Milliseconds()
 	use.Provider, use.Model, use.Millis = p.ID, model, ms
 	if err == nil {
@@ -403,7 +441,7 @@ func (s *Server) providerView(ctx context.Context, p Provider, calls []ModelCall
 		sort.Slice(ms, func(i, j int) bool { return ms[i] < ms[j] })
 		v.MedianMillis = ms[len(ms)/2]
 	}
-	if !hasKey {
+	if !hasKey && !keyOptional(p.Kind) {
 		v.Status = "no-key"
 	}
 	return v
@@ -499,17 +537,19 @@ func (s *Server) checkProvider(ctx context.Context, req providerRequest) (Provid
 		return Provider{}, "id: lower-case letters, digits and dashes, starting with a letter, at most 30"
 	case req.Name == "" || len(req.Name) > 60:
 		return Provider{}, "name: give a name of at most 60 characters"
-	case req.Kind != provAnthropic:
-		return Provider{}, `kind: only "anthropic" is built so far`
+	case !builtKind(req.Kind):
+		return Provider{}, `kind: one of "anthropic", "openai" or "openai-compatible"`
+	case req.Kind == provOpenAICompat && req.BaseURL == "":
+		return Provider{}, "base_url: an OpenAI-compatible provider needs its address, such as http://localhost:11434/v1 for Ollama"
 	case len(req.Models) > maxProviderModel:
 		return Provider{}, fmt.Sprintf("models: at most %d", maxProviderModel)
 	case req.MonthlyUSD < 0 || req.MonthlyUSD > maxMonthlyUSD || math.IsNaN(req.MonthlyUSD):
 		return Provider{}, "monthly_usd: a limit in dollars, or 0 for none"
-	case req.APIKey != "" && (len(req.APIKey) < 20 || len(req.APIKey) > 400 || strings.ContainsAny(req.APIKey, " \t\r\n")):
+	case req.APIKey != "" && ((len(req.APIKey) < 20 && !keyOptional(req.Kind)) || len(req.APIKey) > 400 || strings.ContainsAny(req.APIKey, " \t\r\n")):
 		return Provider{}, "api_key: that does not look like an API key"
 	}
 	if req.BaseURL != "" {
-		if err := checkBaseURL(req.BaseURL); err != nil {
+		if err := checkProviderURL(req.Kind, req.BaseURL); err != nil {
 			return Provider{}, "base_url: " + err.Error()
 		}
 	}
@@ -556,7 +596,7 @@ func (s *Server) saveProvider(w http.ResponseWriter, r *http.Request, req provid
 		return
 	}
 	key := strings.TrimSpace(req.APIKey)
-	if _, ok := s.internalSecretValue(ctx, providerKeyName(p.ID)); !ok && key == "" {
+	if _, ok := s.internalSecretValue(ctx, providerKeyName(p.ID)); !ok && key == "" && !keyOptional(p.Kind) {
 		writeError(w, http.StatusBadRequest, "api_key: the provider needs an API key")
 		return
 	}
@@ -686,4 +726,17 @@ func (s *Server) handleTestProvider(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"reply": truncate(reply, 200), "model": model, "millis": use.Millis, "cost_usd": use.CostUSD})
+}
+
+// checkProviderURL checks a provider's address. Anthropic's is a plain address; OpenAI-style addresses end in a path
+// such as /v1 or /api/v1, which is kept.
+func checkProviderURL(kind, raw string) error {
+	if kind == provAnthropic {
+		return checkBaseURL(raw)
+	}
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || strings.Contains(u.Path, "..") {
+		return errors.New("the API address must be a plain address such as https://api.openai.com/v1")
+	}
+	return checkBaseURL(u.Scheme + "://" + u.Host)
 }

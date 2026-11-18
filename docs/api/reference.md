@@ -292,8 +292,10 @@ Only repositories on the GitHub allow list. A workflow can only be started on a 
 ## Models and providers
 
 Design note 045, part 1. A model from a provider is written `provider/model` (for example `anthropic/claude-haiku-5-5`)
-wherever an agent or the assistant is given one, and works whatever the assistant's own backend is. Only the `anthropic`
-kind is built so far.
+wherever an agent or the assistant is given one, and works whatever the assistant's own backend is. The `anthropic`,
+`openai` and `openai-compatible` kinds are built. An `openai-compatible` provider (Ollama, vLLM, LiteLLM, OpenRouter,
+Groq…) needs a `base_url` ending in its version path, such as `http://localhost:11434/v1`; its `api_key` is optional and
+its models are added by name (which may contain `/`, as in `local/meta-llama/Llama-3.3-70B`).
 
 | Method and path | Role | Purpose |
 | --- | --- | --- |
