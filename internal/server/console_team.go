@@ -72,6 +72,9 @@ func (s *Server) team(ctx context.Context, now time.Time) (TeamJSON, error) {
 
 	byID := map[string]*TeamMember{}
 	for _, a := range agents {
+		if a.archived() {
+			continue
+		}
 		m := TeamMember{ID: a.ID, Name: a.Name, Description: a.Description, ReportsTo: a.ReportsTo, Mode: "advises", State: teamStateIdle}
 		if v, ok := a.version(a.Current); ok && v.Tier == tierReview {
 			m.Mode = "proposes"

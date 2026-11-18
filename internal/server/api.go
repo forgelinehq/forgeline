@@ -127,6 +127,8 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /v1/ai/agents/{id}/rollback", s.requireRole(authn.Admin, s.handleAgentRollback))
 	mux.Handle("POST /v1/ai/agents/{id}/disable", s.requireRole(authn.Admin, s.handleAgentEnable(true)))
 	mux.Handle("POST /v1/ai/agents/{id}/enable", s.requireRole(authn.Admin, s.handleAgentEnable(false)))
+	mux.Handle("DELETE /v1/ai/agents/{id}", s.requireRole(authn.Admin, s.handleArchiveAgent))
+	mux.Handle("POST /v1/ai/agents/{id}/restore", s.requireRole(authn.Admin, s.handleRestoreAgent))
 	mux.Handle("PUT /v1/ai/agents/{id}/reports-to", s.requireRole(authn.Admin, s.handleAgentReportsTo))
 	mux.Handle("GET /v1/ai/team", s.requireRole(authn.Developer, s.handleTeam))
 	mux.Handle("GET /v1/ai/usage", s.requireRole(authn.Developer, s.handleAIUsage))

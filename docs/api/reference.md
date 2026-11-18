@@ -168,13 +168,15 @@ A run's `status` is one of `queued`, `running`, `succeeded`, `failed`, `canceled
 | `POST /v1/ai/skills/{id}/versions` | admin | Save a new version; history is append-only and an unchanged save is refused. |
 | `POST /v1/ai/skills/{id}/rollback` | admin | Make an old version current by copying it forward as a new version. |
 | `DELETE /v1/ai/skills/{id}` | admin | Remove a skill no agent version uses. |
-| `GET /v1/ai/agents` | developer | Agents with current version, tier and tools. |
+| `GET /v1/ai/agents` | developer | Agents with current version, tier and tools. Archived agents are left out; `?archived=1` lists only them, with `archived_at`. |
 | `GET /v1/ai/agents/{id}` | developer | One agent with every version. |
 | `POST /v1/ai/agents` | admin | Create an agent (version 1): instructions, pinned skills, tool allowlist, tier T0 or T1, and optionally `model` (the model it asks, such as `claude-haiku-5-5`; empty uses the assistant's). |
 | `POST /v1/ai/agents/{id}/versions` | admin | Save a new version; skill pins are made exact. |
 | `POST /v1/ai/agents/{id}/rollback` | admin | Copy an old version forward as the current one. |
 | `POST /v1/ai/agents/{id}/disable` | admin | Turn an agent off (it cannot run or be listed). |
 | `POST /v1/ai/agents/{id}/enable` | admin | Turn it back on. |
+| `DELETE /v1/ai/agents/{id}` | admin | Deletes an agent by archiving it: turned off, hidden, its reporting line cut and agents that reported to it report to people. 409 naming them while an enabled workflow or an unfinished mission uses it. Deleted for good 30 days later by the hourly sweep (audited as `ai.agent.purge`). Audited as `ai.agent.archive`. |
+| `POST /v1/ai/agents/{id}/restore` | admin | Brings an archived agent back before the sweep, still turned off. Audited. |
 | `PUT /v1/ai/agents/{id}/reports-to` | admin | Body: `reports_to`, another agent's id, or empty to report to people. A line that would make a loop is refused. Describes the team; it gives no agent power over another. Audited as `ai.agent.team`. |
 | `GET /v1/ai/team` | developer | The team for the org chart: each agent with `reports_to`, `mode` (`advises` or `proposes`), `state` (`working`, `waiting` at a workflow gate, `scheduled` with `next_at` and `every_minutes`, `idle`, `off`), `doing` and `run_id`, `workflows`, `steps_week`, `failed_week`, `last_at`; `mission` (the workflow run in progress, else the latest, with its stages); `schedules_stopped` when the assistant is off. |
 | `GET /v1/ai/usage` | developer | What the AI used in a month (`?month=YYYY-MM`, default this one, UTC; note 036): per agent (`who` is its id) and `_people`, with `calls`, `input_tokens`, `output_tokens`, `millis`, `cost_usd` and `costed_calls` (cost is only known where the claude program reports it), and `blind_calls` (calls whose tokens were not reported). |

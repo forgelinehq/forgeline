@@ -89,6 +89,8 @@ type AIAgent struct {
 	Disabled    bool           `json:"disabled,omitempty"`
 	ReportsTo   string         `json:"reports_to,omitempty"` // another agent; empty reports to people (frame 5)
 	Budget      *AgentBudget   `json:"budget,omitempty"`     // a monthly limit (note 036); kept on the agent, not in its versions
+	ArchivedAt  *time.Time     `json:"archived_at,omitempty"` // deleted: hidden, restorable until the sweep removes it
+	ArchivedBy  string         `json:"archived_by,omitempty"`
 	Versions    []AgentVersion `json:"versions"`
 }
 
@@ -556,9 +558,13 @@ func (s *Server) handleListAgents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	out := make([]map[string]any, 0, len(all))
+	showArchived := r.URL.Query().Get("archived") == "1"
 	for _, a := range all {
+		if a.archived() != showArchived {
+			continue
+		}
 		cur, _ := a.version(a.Current)
-		out = append(out, map[string]any{"id": a.ID, "name": a.Name, "description": a.Description, "current": a.Current, "disabled": a.Disabled,
+		out = append(out, map[string]any{"id": a.ID, "name": a.Name, "description": a.Description, "current": a.Current, "disabled": a.Disabled, "archived_at": a.ArchivedAt,
 			"tier": cur.Tier, "tools": cur.Tools, "skills": cur.Skills, "versions": len(a.Versions)})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"agents": out})
@@ -709,6 +715,10 @@ func (s *Server) handleAgentEnable(disabled bool) http.HandlerFunc {
 		a, err := s.loadAgent(r.Context(), r.PathValue("id"))
 		if err != nil {
 			s.defError(w, "agent", err)
+			return
+		}
+		if a.archived() && !disabled {
+			writeError(w, http.StatusConflict, a.Name+" is archived; restore it first")
 			return
 		}
 		a.Disabled = disabled

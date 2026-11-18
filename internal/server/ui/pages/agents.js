@@ -74,7 +74,8 @@ export async function agentsPage({ query }) {
   const admin = atLeast(session.role, 'admin');
   const el = h('div', {});
   let agents, skills, tools, workflows;
-  try { [agents, skills, tools, workflows] = await Promise.all([get('/v1/ai/agents'), get('/v1/ai/skills'), get('/v1/ai/tools'), get('/v1/ai/workflows')]); } catch (e) { return mount(el, errorBox(e.message)); }
+  let archived = { agents: [] };
+  try { [agents, skills, tools, workflows, archived] = await Promise.all([get('/v1/ai/agents'), get('/v1/ai/skills'), get('/v1/ai/tools'), get('/v1/ai/workflows'), get('/v1/ai/agents?archived=1')]); } catch (e) { return mount(el, errorBox(e.message)); }
 
   const tabBtn = (id, label) => h('a', { href: '#/agents' + (id === 'agents' ? '' : '?tab=' + id), role: 'tab', 'aria-selected': String(tab === id), id: 'tab-' + id,
     class: 'rounded-lg px-3 py-1.5 text-sm font-medium ' + (tab === id ? 'bg-brand-50 text-brand-700 dark:bg-brand-950/40 dark:text-brand-200' : 'muted hover:bg-slate-100 dark:hover:bg-slate-800') }, label);
@@ -98,7 +99,11 @@ export async function agentsPage({ query }) {
       : tab === 'skills' ? h('button', { class: 'btn-primary', id: 'new-skill', type: 'button', onclick: () => skillForm(null) }, icon('plus', 'size-4'), 'New skill')
       : h('div', { class: 'flex gap-2' }, h('a', { class: 'btn-primary', id: 'new-graph', href: '#/workflows/new/canvas' }, icon('plus', 'size-4'), 'New workflow on the canvas'), h('button', { class: 'btn-secondary', id: 'new-workflow', type: 'button', onclick: () => workflowForm(null, agents.agents) }, icon('plus', 'size-4'), 'New workflow in stages')))),
     h('div', { class: 'mb-4 flex gap-1', role: 'tablist' }, tabBtn('agents', 'Agents (' + agents.agents.length + ')'), tabBtn('skills', 'Skills (' + skills.skills.length + ')'), tabBtn('workflows', 'Workflows (' + workflows.workflows.length + ')')),
-    tab === 'agents' ? agentCards : tab === 'skills' ? skillRows : workflowList(workflows.workflows, admin));
+    tab === 'agents' ? agentCards : tab === 'skills' ? skillRows : workflowList(workflows.workflows, admin),
+    tab === 'agents' && archived.agents.length ? h('details', { class: 'mt-6', id: 'archived-agents' },
+      h('summary', { class: 'muted cursor-pointer text-sm' }, `Archived (${archived.agents.length}): restorable for 30 days, then deleted`),
+      h('ul', { class: 'card mt-2 divide-y divide-slate-100 dark:divide-slate-800' }, archived.agents.map(a => h('li', { class: 'flex items-center gap-3 px-4 py-2 text-sm' },
+        h('a', { href: '#/agents/' + a.id, class: 'font-medium hover:underline' }, a.name), h('span', { class: 'muted text-xs' }, 'archived ' + relTime(a.archived_at)))))) : null);
   return el;
 }
 
@@ -189,12 +194,21 @@ export async function agentPage({ params }) {
           h('p', { class: 'muted mt-1 text-sm' }, ag.description || 'No description.'),
           h('div', { class: 'mt-2 flex flex-wrap items-center gap-2 text-xs' }, ag.disabled ? h('span', { class: 'pill-idle' }, 'Off') : h('span', { class: 'pill-ok' }, 'On'), tierPill(v.tier), v.model ? h('span', { class: 'pill-idle', id: 'agent-model-pill' }, v.model) : null,
             h('span', { class: 'muted' }, 'Version ' + v.n + (v.n === ag.current ? ' (current)' : ' (older)')), shortHash(v.hash))),
-        admin && h('div', { class: 'flex w-full flex-wrap gap-2 sm:w-auto' },
+        admin && ag.archived_at && h('div', { class: 'flex w-full flex-wrap gap-2 sm:w-auto' },
+          h('button', { class: 'btn-primary btn-sm', type: 'button', id: 'restore-agent', onclick: async () => {
+            try { await post('/v1/ai/agents/' + ag.id + '/restore'); toast('Restored. It is still turned off.', 'ok'); load(true); } catch (e) { toast(e.message, 'error'); }
+          } }, icon('history', 'size-3.5'), 'Restore')),
+        admin && !ag.archived_at && h('div', { class: 'flex w-full flex-wrap gap-2 sm:w-auto' },
+          h('button', { class: 'btn-ghost btn-sm text-rose-600 dark:text-rose-400', type: 'button', id: 'delete-agent', onclick: async () => {
+            if (!await confirmDialog({ title: 'Delete ' + ag.name + '?', body: 'It is turned off and moved to the archive. You can restore it for 30 days; after that it is deleted for good. Past runs and missions keep its name.', confirmLabel: 'Delete', danger: true })) return;
+            try { await del('/v1/ai/agents/' + ag.id); toast(ag.name + ' moved to the archive', 'ok'); navigate('/agents'); } catch (e) { toast(e.message, 'error'); }
+          } }, icon('trash', 'size-3.5'), 'Delete'),
           h('button', { class: 'btn-secondary btn-sm', type: 'button', id: 'toggle-agent', onclick: async () => {
             try { await post('/v1/ai/agents/' + ag.id + (ag.disabled ? '/enable' : '/disable')); load(true); } catch (e) { toast(e.message, 'error'); }
           } }, ag.disabled ? 'Turn on' : 'Turn off'),
           h('button', { class: 'btn-primary btn-sm', id: 'new-version', type: 'button', onclick: () => agentForm(ag, skills, tools, () => load(false), v) }, icon('edit', 'size-3.5'), 'Edit'))),
-      ag.disabled && h('div', { class: 'mb-4' }, notice('warn', 'This agent is off. It cannot run and the assistant cannot hand it work.')),
+      ag.archived_at ? h('div', { class: 'mb-4' }, notice('warn', `Archived ${relTime(ag.archived_at)} by ${ag.archived_by}. It is deleted for good 30 days after that unless you restore it.`))
+        : ag.disabled && h('div', { class: 'mb-4' }, notice('warn', 'This agent is off. It cannot run and the assistant cannot hand it work.')),
       h('div', { class: 'grid gap-4 lg:grid-cols-5' },
         h('div', { class: 'min-w-0 space-y-4 lg:col-span-3' },
           section('Instructions', markdownBox(v.instructions, 'agent-instructions')),
