@@ -504,8 +504,13 @@ func (s *Server) resolveAgent(ctx context.Context, req agentRequest) (AgentVersi
 		return AgentVersion{}, fmt.Sprintf("an agent can use at most %d skills", maxAgentSkills)
 	case !validTier(req.Tier):
 		return AgentVersion{}, "the tier must be T0 (advisory) or T1 (may file proposals)"
-	case req.Model != "" && !agentModelRE.MatchString(req.Model):
-		return AgentVersion{}, "the model is a name such as claude-haiku-5-5, or empty for the assistant's model"
+	case req.Model != "" && !strings.Contains(req.Model, "/") && !agentModelRE.MatchString(req.Model):
+		return AgentVersion{}, "the model is a name such as anthropic/claude-haiku-5-5 or claude-haiku-5-5, or empty for the assistant's model"
+	}
+	if strings.Contains(req.Model, "/") {
+		if msg := s.checkModelRef(ctx, req.Model); msg != "" {
+			return AgentVersion{}, "model: " + msg
+		}
 	}
 	if err := validTools(req.Tools, req.Tier, append(s.pluginToolNames(ctx), s.extMCPToolNames(ctx)...)...); err != nil {
 		return AgentVersion{}, err.Error()
@@ -747,8 +752,8 @@ func (s *Server) handleAgentChat(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, fmt.Sprintf("the question is longer than %d characters", maxAssistMessage))
 		return
 	}
-	if s.loadAssistant(r.Context()).Backend == assistOff {
-		writeError(w, http.StatusConflict, "the assistant is not set up. An administrator can turn it on under Settings › Connections")
+	if !s.aiReady(r.Context()) {
+		writeError(w, http.StatusConflict, noModelSetUp)
 		return
 	}
 	a, err := s.loadAgent(r.Context(), r.PathValue("id"))

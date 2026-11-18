@@ -293,10 +293,24 @@ function agentForm(ag, skills, tools, after, base) {
         h('div', { class: 'grid gap-2 sm:grid-cols-2' }, boxes));
     }));
     const note = h('input', { id: 'agent-note', class: 'input', maxlength: '200', placeholder: ag ? 'What changed and why' : 'First version' });
-    // Which model it asks (note 044, part 3): a quick one for routing, a stronger one for analysis.
-    const MODELS = [['', 'The assistant\u2019s model'], ['claude-haiku-5-5', 'Claude Haiku 5.5 (quick, cheap)'], ['claude-sonnet-5-5', 'Claude Sonnet 5.5'], ['claude-opus-5-5', 'Claude Opus 5.5'], ['claude-fable-5-2', 'Claude Fable 5.2 (most capable)']];
+    // Which model it asks (note 044, part 3): a quick one for routing, a stronger one for analysis. Models from
+    // Settings \u203a Models and providers (note 045) come first and work whatever the assistant is set to; the bare names
+    // go through the assistant's own connection.
+    const MODELS = [['claude-haiku-5-5', 'Claude Haiku 5.5 (quick, cheap)'], ['claude-sonnet-5-5', 'Claude Sonnet 5.5'], ['claude-opus-5-5', 'Claude Opus 5.5'], ['claude-fable-5-2', 'Claude Fable 5.2 (most capable)']];
     const curModel = cur?.model || '';
-    const model = h('select', { id: 'agent-model', class: 'input' }, [...MODELS, ...(curModel && !MODELS.some(m => m[0] === curModel) ? [[curModel, curModel]] : [])].map(([v, l]) => h('option', { value: v, selected: v === curModel }, l)));
+    const opt = (v, l) => h('option', { value: v, selected: v === curModel }, l);
+    const viaAssistant = h('optgroup', { label: 'Through the assistant\u2019s connection' }, MODELS.map(([v, l]) => opt(v, l)));
+    const unlisted = curModel && !MODELS.some(m => m[0] === curModel) ? opt(curModel, curModel) : null;
+    const model = h('select', { id: 'agent-model', class: 'input' }, opt('', 'The assistant\u2019s model'), viaAssistant, unlisted);
+    get('/v1/models').then(r => {
+      const groups = new Map();
+      for (const m of r.models) { if (!groups.has(m.provider)) groups.set(m.provider, []); groups.get(m.provider).push(m); }
+      if (unlisted && r.models.some(m => m.ref === curModel)) unlisted.hidden = true;
+      for (const ms of groups.values()) {
+        model.insertBefore(h('optgroup', { label: ms[0].provider_name }, ms.map(m => opt(m.ref, `${m.label} \u00b7 $${m.input_usd_per_mtok} / $${m.output_usd_per_mtok} per M tokens`))), viaAssistant);
+      }
+      model.value = curModel;
+    }).catch(() => {});
     const err = h('div', { class: 'hidden' });
     const form = h('div', {});
     const go = h('button', { class: 'btn-primary', type: 'button', id: 'agent-save', onclick: async () => {
@@ -317,7 +331,7 @@ function agentForm(ag, skills, tools, after, base) {
     form.append(h('div', { class: 'space-y-6' },
       step('Who it is', null, h('div', { class: 'grid gap-4 sm:grid-cols-2' }, field('Name', name, null, 'agent-name'), field('What it is for', desc, null, 'agent-desc'))),
       step('How much it may do', 'Either way it works as the person who asks, and can never do more than they could.', tierBox, tier),
-      step('Model', 'Which model it asks. Agents in one workflow can differ: a quick model to route, a stronger one to analyse. Its use counts against its budget either way.', field('Model', model, null, 'agent-model')),
+      step('Model', 'Which model it asks. Agents in one workflow can differ: a quick model to route, a stronger one to analyse. Models from Settings › Models and providers work even when the assistant is off. Its use counts against its budget either way.', field('Model', model, null, 'agent-model')),
       step('Instructions', 'What it should do and how. Write in Markdown; the model receives exactly this text.', ins.el),
       step('Skills it follows', ag ? 'Skills stay on the version they were pinned to. Untick and tick one to take its latest version.' : 'Step-by-step procedures it can follow.', skillBoxes),
       step('What it can use', 'Pick the fewest it needs. Administrators can turn services off for every agent in Settings › Connections.', toolBoxes),

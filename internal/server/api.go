@@ -163,6 +163,13 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("PUT /v1/build-push-rules/{id}", s.requireRole(authn.Admin, s.handlePutPushRule))
 	mux.Handle("DELETE /v1/build-push-rules/{id}", s.requireRole(authn.Admin, s.handleDeletePushRule))
 	// MCP servers an administrator adds, remote or local (note 042).
+	mux.Handle("GET /v1/providers", s.requireRole(authn.Developer, s.handleListProviders))
+	mux.Handle("POST /v1/providers", s.requireRole(authn.Admin, s.handleCreateProvider))
+	mux.Handle("PUT /v1/providers/{id}", s.requireRole(authn.Admin, s.handleUpdateProvider))
+	mux.Handle("DELETE /v1/providers/{id}", s.requireRole(authn.Admin, s.handleDeleteProvider))
+	mux.Handle("POST /v1/providers/{id}/test", s.requireRole(authn.Admin, s.handleTestProvider))
+	mux.Handle("GET /v1/models", s.requireRole(authn.Developer, s.handleListModels))
+	mux.Handle("GET /v1/model-calls", s.requireRole(authn.Developer, s.handleListModelCalls))
 	mux.Handle("GET /v1/mcp-servers", s.requireRole(authn.Admin, s.handleListMCPServers))
 	mux.Handle("POST /v1/mcp-servers", s.requireRole(authn.Admin, s.handleCreateMCPServer))
 	mux.Handle("PUT /v1/mcp-servers/{id}", s.requireRole(authn.Admin, s.handleUpdateMCPServer))

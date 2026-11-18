@@ -20,8 +20,8 @@ const eq = (name, got, want) => {
 const links = (role) => visibleGroups(role).flatMap(g => g.items.filter(i => !i.planned).map(i => i.path));
 
 // Who sees what.
-eq('an administrator sees every page', links('admin'), ['/setup', '/people', '/sso', '/integrations', '/secrets', '/mcp-servers', '/image-builds', '/integrations/claude/settings', '/memory', '/ai-use', '/audit', '/approval-rules', '/resource-types', '/policy-packs', '/account']);
-eq('a developer does not see People or the audit log', links('developer'), ['/setup', '/integrations', '/secrets', '/integrations/claude/settings', '/memory', '/ai-use', '/approval-rules', '/resource-types', '/policy-packs', '/account']);
+eq('an administrator sees every page', links('admin'), ['/setup', '/people', '/sso', '/integrations', '/secrets', '/mcp-servers', '/image-builds', '/providers', '/integrations/claude/settings', '/memory', '/ai-use', '/audit', '/approval-rules', '/resource-types', '/policy-packs', '/account']);
+eq('a developer does not see People or the audit log', links('developer'), ['/setup', '/integrations', '/secrets', '/providers', '/integrations/claude/settings', '/memory', '/ai-use', '/approval-rules', '/resource-types', '/policy-packs', '/account']);
 eq('a viewer sees only their own tokens', links('viewer'), ['/account']);
 eq('an unknown role sees nothing', links('nobody'), []);
 eq('a group with no pages for the role is left out', visibleGroups('developer').map(g => g.title), ['Workspace', 'Connections', 'AI', 'Security', 'Developer']);
@@ -43,7 +43,7 @@ eq('a path that only starts like a settings page is not one', isSettingsPath('/p
 eq('the personal account page does not make the gear active', isSettingsPath('/account'), false);
 
 // The menu entry highlighted for a path: the most specific one.
-eq('claude settings beats integrations', activeItem('/integrations/claude/settings').label, 'Models');
+eq('claude settings beats integrations', activeItem('/integrations/claude/settings').label, 'Assistant model');
 eq('memory is a settings page', activeItem('/memory').label, 'Memory');
 eq('memory counts as settings', isSettingsPath('/memory'), true);
 eq('a connection address is Connections', activeItem('/integrations/aws').label, 'Connections');

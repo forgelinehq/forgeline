@@ -94,7 +94,7 @@ func (s *Server) assistantView(ctx context.Context) AssistantJSON {
 	if v.Model == "" {
 		v.Model = defaultAssistModel
 	}
-	v.Ready = st.Backend == assistCLI || st.Backend == assistCopilot || (st.Backend == assistAPI && hasKey) || (st.Backend == assistToken && hasToken)
+	v.Ready = (st.Backend == assistProvider && s.checkModelRef(ctx, st.Model) == "") || st.Backend == assistCLI || st.Backend == assistCopilot || (st.Backend == assistAPI && hasKey) || (st.Backend == assistToken && hasToken)
 	if !st.UpdatedAt.IsZero() {
 		v.UpdatedBy, v.UpdatedAt = st.UpdatedBy, st.UpdatedAt.Format(time.RFC3339)
 	}
@@ -124,13 +124,23 @@ func (s *Server) handlePutAssistant(w http.ResponseWriter, r *http.Request) {
 	req.Model, req.APIBase, req.APIKey = strings.TrimSpace(req.Model), strings.TrimSpace(req.APIBase), strings.TrimSpace(req.APIKey)
 	req.ClaudeToken = strings.TrimSpace(req.ClaudeToken)
 	switch req.Backend {
-	case assistOff, assistAPI, assistCLI, assistToken, assistCopilot:
+	case assistOff, assistAPI, assistCLI, assistToken, assistCopilot, assistProvider:
 	default:
-		writeError(w, http.StatusBadRequest, `backend must be "off", "api", "claude-token", "cli" or "copilot"`)
+		writeError(w, http.StatusBadRequest, `backend must be "off", "api", "claude-token", "cli", "copilot" or "provider"`)
 		return
 	}
-	if len(req.Model) > 80 || strings.ContainsAny(req.Model, " \t\r\n") {
-		writeError(w, http.StatusBadRequest, "the model name must be a single token of at most 80 characters")
+	if _, _, ref := splitModelRef(req.Model); ref != (req.Backend == assistProvider) {
+		writeError(w, http.StatusBadRequest, "a model written provider/model goes with the backend \"provider\", and only with it")
+		return
+	}
+	if req.Backend == assistProvider {
+		if msg := s.checkModelRef(r.Context(), req.Model); msg != "" {
+			writeError(w, http.StatusBadRequest, "model: "+msg)
+			return
+		}
+	}
+	if len(req.Model) > 120 || strings.ContainsAny(req.Model, " \t\r\n") {
+		writeError(w, http.StatusBadRequest, "the model name must be a single token of at most 120 characters")
 		return
 	}
 	if req.APIBase != "" {
@@ -471,6 +481,13 @@ func (s *Server) askModel(ctx context.Context, system string, turns []chatTurn) 
 	start := time.Now()
 	reply, use, err := s.callModel(ctx, system, turns)
 	use.Millis = time.Since(start).Milliseconds()
+	if backendNames[use.Provider] { // provider calls are logged where they are made, attempt by attempt
+		c := ModelCall{Provider: use.Provider, Model: use.Model, Input: use.Input, Output: use.Output, CostUSD: use.CostUSD, Millis: use.Millis}
+		if err != nil {
+			c.Error = truncate(err.Error(), 240)
+		}
+		s.noteCall(ctx, c)
+	}
 	s.recordUsage(ctx, use)
 	if mission != nil {
 		mission.add(use)
@@ -488,6 +505,20 @@ func (s *Server) callModel(ctx context.Context, system string, turns []chatTurn)
 	if sc := scopeFrom(ctx); sc != nil && sc.model != "" {
 		model, st.Model = sc.model, sc.model // an agent with its own model (note 044, part 3)
 	}
+	if _, _, ok := splitModelRef(model); ok {
+		// A model from a provider (note 045) works whatever the assistant's backend is.
+		return s.callProvider(ctx, model, system, turns)
+	}
+	if st.Backend == assistProvider {
+		return "", modelUsage{}, errors.New("the assistant's model must come from a provider, written provider/model")
+	}
+	reply, use, err := s.callBackend(ctx, st, model, system, turns)
+	use.Provider, use.Model = st.Backend, model
+	return reply, use, err
+}
+
+// callBackend asks the assistant's own backend.
+func (s *Server) callBackend(ctx context.Context, st assistantSettings, model, system string, turns []chatTurn) (string, modelUsage, error) {
 	ctx, cancel := context.WithTimeout(ctx, assistTimeout)
 	defer cancel()
 	switch st.Backend {
@@ -516,18 +547,28 @@ func (s *Server) askAPI(ctx context.Context, st assistantSettings, model, key, s
 	if base == "" {
 		base = defaultAnthropic
 	}
-	body, _ := json.Marshal(map[string]any{"model": model, "max_tokens": 2000, "system": system, "messages": turns})
+	client := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	reply, use, _, err := anthropicMessages(ctx, client, base, key, model, system, turns, 2000)
+	return reply, use, err
+}
+
+// anthropicMessages sends one request to the Anthropic Messages API. status is the HTTP status, or 0 when the API
+// could not be reached.
+func anthropicMessages(ctx context.Context, client *http.Client, base, key, model, system string, turns []chatTurn, maxTokens int) (string, modelUsage, int, error) {
+	body, _ := json.Marshal(map[string]any{"model": model, "max_tokens": maxTokens, "system": system, "messages": turns})
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(base, "/")+"/v1/messages", bytes.NewReader(body))
 	if err != nil {
-		return "", modelUsage{}, err
+		return "", modelUsage{}, 0, err
 	}
 	req.Header.Set("content-type", "application/json")
 	req.Header.Set("x-api-key", key)
 	req.Header.Set("anthropic-version", "2023-06-01")
-	client := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", modelUsage{}, errors.New("could not reach the Anthropic API")
+		if strings.Contains(err.Error(), "refused") {
+			return "", modelUsage{}, 0, errors.New("could not reach the Anthropic API: " + truncate(err.Error(), 200))
+		}
+		return "", modelUsage{}, 0, errors.New("could not reach the Anthropic API")
 	}
 	defer resp.Body.Close()
 	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
@@ -540,14 +581,17 @@ func (s *Server) askAPI(ctx context.Context, st assistantSettings, model, key, s
 		if msg == "" {
 			msg = resp.Status
 		}
-		return "", modelUsage{}, fmt.Errorf("the Anthropic API refused the request (%d): %s", resp.StatusCode, truncate(msg, 200))
+		if resp.StatusCode == http.StatusNotFound && strings.Contains(msg, "model") {
+			return "", modelUsage{}, resp.StatusCode, unknownModel(model)
+		}
+		return "", modelUsage{}, resp.StatusCode, fmt.Errorf("the Anthropic API refused the request (%d): %s", resp.StatusCode, truncate(msg, 200))
 	}
 	var out struct {
 		Content []struct{ Type, Text string } `json:"content"`
 		Usage   tokenCounts                   `json:"usage"`
 	}
 	if err := json.Unmarshal(raw, &out); err != nil {
-		return "", modelUsage{}, errors.New("the Anthropic API sent a reply that could not be read")
+		return "", modelUsage{}, resp.StatusCode, errors.New("the Anthropic API sent a reply that could not be read")
 	}
 	var sb strings.Builder
 	for _, c := range out.Content {
@@ -556,9 +600,9 @@ func (s *Server) askAPI(ctx context.Context, st assistantSettings, model, key, s
 		}
 	}
 	if strings.TrimSpace(sb.String()) == "" {
-		return "", modelUsage{}, errors.New("the assistant sent an empty reply")
+		return "", modelUsage{}, resp.StatusCode, errors.New("the model sent an empty reply")
 	}
-	return sb.String(), modelUsage{Calls: 1, Input: out.Usage.input(), Output: out.Usage.OutputTokens}, nil
+	return sb.String(), modelUsage{Calls: 1, Input: out.Usage.input(), Output: out.Usage.OutputTokens}, resp.StatusCode, nil
 }
 
 // askCLI runs the claude program on the server, as the server's user, with no tools, in an empty

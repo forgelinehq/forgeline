@@ -62,6 +62,12 @@ section in the pull request that makes the change; a release moves it under its 
 - **After a session ends**, the console stops polling the server (it asked every minute, forever).
 
 ### Added
+- **Models and providers** (note 045, step 1). Settings › Models and providers: add an Anthropic provider (more kinds
+  follow), turn its models on, set prices, a monthly limit and a fallback. Agents and the assistant can use
+  `provider/model`, which works whatever the assistant is set to, so agents and workflows run with the assistant off.
+  Keys are kept in the vault and never shown again; addresses follow the MCP server rules (https, no private or
+  cloud-internal address unless allowed). Every model call is priced and shown in a live log beside the provider cards.
+  Changing a provider opens a side panel instead of a popup.
 - **Graph workflows start from a signed webhook or a failed pipeline run** (note 044, part 4). An administrator makes the
   webhook secret (shown once); GitHub's signature header works too. What started the run reaches agents as data.
 - **A model per agent** (note 044, part 3). An agent can name the model it asks (for example Claude Haiku to route and
