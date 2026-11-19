@@ -96,7 +96,9 @@ export async function agentsPage({ query }) {
     : emptyState('list', 'No skills yet', admin ? 'A skill is a procedure, such as how to right-size an ECS service, that agents follow.' : 'An administrator can create skills.');
 
   mount(el, pageHeader('Agents', 'Your AI team. Each agent has instructions, skills it follows and a short list of tools, and works as the person who asks it. Every save is a version you can roll back.',
-    admin && (tab === 'agents' ? h('button', { class: 'btn-primary', id: 'new-agent', type: 'button', onclick: () => navigate('/agents/new/build') }, icon('plus', 'size-4'), 'New agent')
+    admin && (tab === 'agents' ? h('div', { class: 'flex gap-2' },
+      h('button', { class: 'btn-secondary', id: 'import-agent', type: 'button', onclick: () => importDialog() }, icon('upload', 'size-4'), 'Import'),
+      h('button', { class: 'btn-primary', id: 'new-agent', type: 'button', onclick: () => navigate('/agents/new/build') }, icon('plus', 'size-4'), 'New agent'))
       : tab === 'skills' ? h('button', { class: 'btn-primary', id: 'new-skill', type: 'button', onclick: () => skillForm(null) }, icon('plus', 'size-4'), 'New skill')
       : null)),
     h('div', { class: 'mb-4 flex gap-1', role: 'tablist' }, tabBtn('agents', 'Agents (' + agents.agents.length + ')'), tabBtn('skills', 'Skills (' + skills.skills.length + ')'), h('a', { href: '#/workflows', class: 'muted rounded-lg px-3 py-1.5 text-sm font-medium hover:bg-slate-100 dark:hover:bg-slate-800' }, 'Workflows (' + workflows.workflows.length + ') →')),
@@ -106,6 +108,58 @@ export async function agentsPage({ query }) {
       h('ul', { class: 'card mt-2 divide-y divide-slate-100 dark:divide-slate-800' }, archived.agents.map(a => h('li', { class: 'flex items-center gap-3 px-4 py-2 text-sm' },
         h('a', { href: '#/agents/' + a.id, class: 'font-medium hover:underline' }, a.name), h('span', { class: 'muted text-xs' }, 'archived ' + relTime(a.archived_at)))))) : null);
   return el;
+}
+
+// Import a bundle (design note 046, step 2): pick the zip, see what will happen (a dry run saves nothing), then import.
+const IMPORT_ACTION = { create: 'A new agent', version: 'A new version of the agent with this name', unchanged: 'Already here: the agent with this name has the same content, so nothing is saved' };
+function importDialog() {
+  modal('Import an agent', (close) => {
+    let bundle = null;
+    const input = h('input', { type: 'file', accept: '.zip,application/zip', id: 'import-file', class: 'input', 'aria-label': 'Forgeline bundle (.zip)' });
+    const out = h('div', { id: 'import-plan' });
+    const go = h('button', { class: 'btn-primary', type: 'button', id: 'import-go', disabled: true, onclick: async () => {
+      go.disabled = true;
+      try {
+        const done = await post('/v1/ai/agents/import', { bundle });
+        toast(done.action === 'create' ? 'Agent imported' : 'Imported as v' + done.agent.current, 'ok'); close();
+        navigate('/agents/' + done.agent.id);
+      } catch (e) { mount(out, errorBox(e.message)); }
+    } }, 'Import');
+    const show = (p) => {
+      const row = (label, ...kids) => h('div', { class: 'grid grid-cols-[7rem_1fr] gap-3 py-1.5 text-sm' }, h('div', { class: 'muted' }, label), h('div', { class: 'min-w-0' }, ...kids));
+      mount(out, h('div', { class: 'card card-pad space-y-1' },
+        row('Agent', h('span', { class: 'font-medium' }, p.name), h('span', { class: 'muted block text-xs' }, IMPORT_ACTION[p.action])),
+        row('From', h('span', { class: 'font-mono text-xs' }, p.from)),
+        row('Tier', tierPill(p.tier)),
+        row('Model', p.model || h('span', { class: 'muted' }, 'the assistant\'s model')),
+        row('Skills', p.skills.length ? h('ul', { class: 'space-y-1' }, p.skills.map(s => h('li', { 'data-import-skill': s.action },
+          h('span', { class: 'font-medium' }, s.title), ' ', h('span', { class: s.action === 'use' ? 'pill-ok' : 'pill-wait' }, s.action === 'use' ? 'already here, v' + s.version : 'will be created'),
+          s.edited ? h('span', { class: 'pill-idle ml-1' }, 'edited after export') : null))) : h('span', { class: 'muted' }, 'none')),
+        row('Tools', p.tools.length ? toolChips(p.tools) : h('span', { class: 'muted' }, 'none')),
+        p.dropped.length ? row('Left out', h('ul', { class: 'space-y-1' }, p.dropped.map(d => h('li', { 'data-import-dropped': d.tool }, h('code', { class: 'text-xs' }, d.tool), h('span', { class: 'muted block text-xs' }, d.why))))) : null,
+        p.notes.length ? h('div', { class: 'pt-2' }, p.notes.map(n => notice('info', n))) : null));
+      go.disabled = p.action === 'unchanged';
+    };
+    input.addEventListener('change', async () => {
+      go.disabled = true; bundle = null;
+      const f = input.files[0];
+      if (!f) { clear(out); return; }
+      if (f.size > 512 * 1024) { mount(out, errorBox('The file is larger than 512 KiB; a bundle is a few small text files.')); return; }
+      mount(out, spinner('Reading the bundle…'));
+      try {
+        const bytes = new Uint8Array(await f.arrayBuffer());
+        let bin = '';
+        for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+        const b64 = btoa(bin);
+        show(await post('/v1/ai/agents/import', { bundle: b64, dry_run: true }));
+        bundle = b64;
+      } catch (e) { mount(out, errorBox(e.message)); }
+    });
+    return h('div', { class: 'space-y-4' },
+      h('p', { class: 'muted text-sm' }, 'A Forgeline bundle is the .zip from an agent\'s Download menu. Its skills are matched by their text and created when this server has none like them; tools this server does not have are left out. You see what will happen before anything is saved.'),
+      field('Bundle', input, null, 'import-file'), out,
+      h('div', { class: 'flex justify-end gap-2' }, h('button', { class: 'btn-secondary', type: 'button', onclick: () => close() }, 'Cancel'), go));
+  }, { wide: true });
 }
 
 // ------------------------------------------------------------------ skill detail

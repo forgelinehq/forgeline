@@ -187,3 +187,85 @@ func TestDockerYAMLForEveryProvider(t *testing.T) {
 		t.Errorf("assistant's model, no MCP:\n%s", s)
 	}
 }
+
+func TestReadBundleReadsWhatBundleWrote(t *testing.T) {
+	a := sample()
+	data, err := Bundle(a, "# readme\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f, skills, err := ReadBundle(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f.Name != a.Name || len(skills) != 2 || skills[0].Body != "## Severity\n- low\n- high\n" || skills[0].Description != "The low, medium, high scale" || skills[1].Description != "Runbook reading" {
+		t.Errorf("read %+v %+v", f, skills)
+	}
+	for _, s := range skills {
+		if s.Edited {
+			t.Errorf("%s reads as edited", s.Name)
+		}
+	}
+}
+
+// rezip rebuilds a bundle with one file changed (or removed, when the text is empty).
+func rezip(t *testing.T, data []byte, name, text string) []byte {
+	t.Helper()
+	z, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var buf bytes.Buffer
+	w := zip.NewWriter(&buf)
+	seen := false
+	for _, f := range z.File {
+		body := ""
+		if f.Name == name {
+			seen = true
+			if text == "" {
+				continue
+			}
+			body = text
+		} else {
+			r, _ := f.Open()
+			b, _ := io.ReadAll(r)
+			body = string(b)
+		}
+		fw, _ := w.Create(f.Name)
+		fw.Write([]byte(body))
+	}
+	if !seen && text != "" {
+		fw, _ := w.Create(name)
+		fw.Write([]byte(text))
+	}
+	w.Close()
+	return buf.Bytes()
+}
+
+func TestReadBundleRefusesWhatIsWrong(t *testing.T) {
+	good, _ := Bundle(sample(), "# readme\n")
+	md := "skills/severity-scale/SKILL.md"
+	for name, c := range map[string]struct {
+		data []byte
+		want string
+	}{
+		"not a zip":     {[]byte("hello"), "not a zip"},
+		"too big":       {make([]byte, MaxBundle+1), "larger than"},
+		"no agent.yaml": {rezip(t, good, "agent.yaml", ""), "agent.yaml: not in the bundle"},
+		"bad yaml":      {rezip(t, good, "agent.yaml", "version: v1alpha1\nsecret: 1\n"), "agent.yaml"},
+		"no skill":      {rezip(t, good, md, ""), md + ": not in the bundle"},
+		"no front":      {rezip(t, good, md, "just text\n"), "no front matter"},
+		"other name":    {rezip(t, good, md, "---\nname: other\ndescription: x\n---\n\nText\n"), `"other", but agent.yaml says "severity-scale"`},
+		"no text":       {rezip(t, good, md, "---\nname: severity-scale\ndescription: x\n---\n\n"), "no text"},
+		"huge file":     {rezip(t, good, md, "---\nname: severity-scale\ndescription: x\n---\n"+strings.Repeat("a", 70<<10)), "larger than 64 KiB"},
+	} {
+		if _, _, err := ReadBundle(c.data); err == nil || !strings.Contains(err.Error(), c.want) {
+			t.Errorf("%s: got %v, want %q", name, err, c.want)
+		}
+	}
+	edited := rezip(t, good, md, "---\nname: severity-scale\ndescription: Scale\n---\n\n## Severity\n- low\n- medium\n- high\n")
+	_, skills, err := ReadBundle(edited)
+	if err != nil || !skills[0].Edited || skills[1].Edited || skills[0].Description != "Scale" {
+		t.Errorf("an edited skill: %v %+v", err, skills)
+	}
+}

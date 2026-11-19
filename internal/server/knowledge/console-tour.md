@@ -233,6 +233,14 @@ or asks a person to approve. Talking to it beside the builder uses the saved ver
 Neither file holds a key or a secret: they name the environment variables to set (`ANTHROPIC_API_KEY`, or
 `${env.GITHUB_TOKEN}` for an MCP server's sign-in). Every download is in the audit log.
 
+**Import** on the Agents page brings a bundle in, from this server or another one. Pick the .zip and the dialog shows
+what will happen before anything is saved: a new agent, or a new version of the agent with the same name; each skill
+found by its text or created; and the tools left out, with why (an MCP server or plugin this server does not have, or a
+proposal tool on a T0 agent). A model this server does not have becomes the assistant's model. Importing the same
+bundle twice changes nothing. Every import is in the audit log.
+
+![Importing a bundle]({{ '/console/143-agent-import.png' | relative_url }})
+
 **Workflows** runs agents together; the tab lists them as cards with how each starts and its last run, every run of every
 workflow under **Runs**, and deleted ones under **Archived** for 30 days. Draw one on the canvas (**New workflow**), as in
 n8n: the canvas fills the page; a node's **+** (or **Add node**) opens a side panel to search your agents, the logic
