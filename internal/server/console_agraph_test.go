@@ -14,6 +14,7 @@ const agraphCases = `
 import { emptyGraph, addNode, updateNode, removeNode, addWire, removeWire, wireProblem, nextLabel, branchLabels, stateKeys,
   autoPlace, tidy, wirePath, graphRunStatus, stagesToGraph, nodeSummary, fitView, zoomAt, toWorld, pickerItems, addPicked,
   triggerSummary, readOptions } from './agraph.mjs';
+import { toSpec, fromSpec, describe } from './schedule.js';
 let failed = 0;
 const eq = (name, got, want) => { const g = JSON.stringify(got), w = JSON.stringify(want); if (g !== w) { failed++; console.error('FAIL ' + name + '\n  got  ' + g + '\n  want ' + w); } };
 
@@ -112,6 +113,15 @@ eq('an end after a wired node goes beside it', endAfter.graph.edges, [{ from: 's
   const rg = { nodes: [{ id: 'start', kind: 'start' }, { id: 's1-1', kind: 'agent', name: 'Security check', fields: ['severity'] }, { id: 'look', kind: 'lookup' }, { id: 'mine', kind: 'agent' }], edges: [] };
   eq('reads are named for people', readOptions(rg, 'mine'), [{ key: 'look', label: 'Lookup', sub: 'its answer' }, { key: 's1-1', label: 'Security check', sub: 'its answer' }, { key: 'severity', label: 'severity', sub: 'a field from Security check' }]);
 }
+{
+  const forms = [{ preset: 'weekdays', time: '07:30', tz: 'Europe/Berlin' }, { preset: 'weekly', time: '18:05', day: 0, tz: 'UTC' }, { preset: 'monthly', time: '09:00', dom: 31, tz: 'Asia/Kolkata' }, { preset: 'every', every: 360 }, { preset: 'off' }];
+  eq('schedule forms to specs', forms.map(toSpec), [{ cron: '30 7 * * 1-5', tz: 'Europe/Berlin' }, { cron: '5 18 * * 0', tz: 'UTC' }, { cron: '0 9 28 * *', tz: 'Asia/Kolkata' }, { every_minutes: 360 }, {}]);
+  eq('specs back to forms', forms.slice(0, 2).map(f => fromSpec(toSpec(f))).map(f => [f.preset, f.time, f.day]), [['weekdays', '07:30', 1], ['weekly', '18:05', 0]]);
+  eq('other cron is custom', fromSpec({ cron: '0 9,17 * * *', tz: 'UTC' }).preset, 'custom');
+  eq('schedules in words', [describe({ cron: '30 7 * * 1-5', tz: 'Europe/Berlin' }), describe({ every_minutes: 60 }), describe({ cron: '0 9 * * 0' }), describe({})],
+    ['weekdays at 07:30 (Europe/Berlin)', 'every hour', 'Sundays at 09:00 UTC', 'only by hand']);
+  eq('cron in the start node', triggerSummary({ cron: '0 9 * * *', tz: 'UTC', webhook: true }), 'by hand · daily at 09:00 UTC · webhook');
+}
 eq('triggers', [triggerSummary({}), triggerSummary({ every: 15, webhook: true, follow: 'deploy' }), triggerSummary({ every: 1440 })], ['by hand', 'by hand · every 15 min · webhook · failed runs', 'by hand · daily']);
 if (failed) process.exit(1);
 console.log(JSON.stringify(conv));
@@ -128,6 +138,11 @@ func TestConsoleAgentGraph(t *testing.T) {
 		t.Fatal(err)
 	}
 	os.WriteFile(filepath.Join(tmp, "agraph.mjs"), src, 0o600)
+	sched, err := uiFiles.ReadFile("ui/lib/schedule.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.WriteFile(filepath.Join(tmp, "schedule.js"), sched, 0o600)
 	os.WriteFile(filepath.Join(tmp, "cases.mjs"), []byte(agraphCases), 0o600)
 	out, err := exec.Command(node, filepath.Join(tmp, "cases.mjs")).CombinedOutput()
 	if err != nil {

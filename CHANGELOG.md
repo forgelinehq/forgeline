@@ -63,6 +63,10 @@ section in the pull request that makes the change; a release moves it under its 
 - **After a session ends**, the console stops polling the server (it asked every minute, forever).
 
 ### Added
+- **Schedules for workflows and teams** (design note 047). Every few hours, daily, weekdays, weekly or monthly at a
+  time, or a cron expression, in your time zone, with the next runs shown before saving. Teams can get a goal at set
+  times, as a viewer or a developer. Team › Schedules lists everything that runs by itself, with pause, resume and run
+  now. Missed times are skipped rather than run late.
 - **Clearer workflow nodes.** A node's panel is in sections (who does it, input, output, next, limits) with names
   instead of ids, the agent as a card with its model, skills and tools, and **Try it**: a playground chat with the
   node's task filled in. Leaving the canvas or the agent builder with unsaved changes asks to save, discard or stay.

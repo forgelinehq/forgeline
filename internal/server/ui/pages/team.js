@@ -10,6 +10,8 @@ import { stateLine, factsLine } from '../lib/team.js';
 import { budgetLine, tokens } from '../lib/usage.js';
 import { budgetBar } from './ai_use.js';
 import { renderReply } from '../lib/mdview.js';
+import { teamScheduleDrawer, nextLine } from './schedules.js';
+import { describe } from '../lib/schedule.js';
 
 const TONE = {
   work: 'text-sky-700 dark:text-sky-300', wait: 'text-amber-700 dark:text-amber-300',
@@ -136,9 +138,9 @@ export function teamDrawer(t, agents, after) {
 export async function teamDetailPage({ params }) {
   const el = h('div', {});
   const admin = atLeast(session.role, 'admin');
-  let data, agents, selected = null, timer = null;
+  let data, agents, scheds = [], selected = null, timer = null;
   async function load() {
-    try { [data, agents] = await Promise.all([get('/v1/ai/teams/' + encodeURIComponent(params.id)), get('/v1/ai/agents').then(r => r.agents)]); }
+    try { [data, agents, scheds] = await Promise.all([get('/v1/ai/teams/' + encodeURIComponent(params.id)), get('/v1/ai/agents').then(r => r.agents), get('/v1/ai/schedules').then(r => r.schedules.filter(x => x.target === '/teams/' + params.id)).catch(() => [])]); }
     catch (e) { mount(el, errorBox(e.message)); return; }
     if (!selected || !data.runs.some(r => r.id === selected)) selected = data.runs[0]?.id || null;
     draw();
@@ -165,6 +167,15 @@ export async function teamDetailPage({ params }) {
       h('div', { class: 'mb-6 flex flex-wrap gap-2', id: 'team-people' }, person(t.lead, 'Lead'), t.members.map(m => person(m, 'Member'))),
       h('section', { class: 'card card-pad mb-6' }, h('h2', { class: 'h-section mb-2' }, 'Give the team a goal'), goal,
         h('div', { class: 'mt-3 flex flex-wrap items-center gap-3' }, go, h('span', { class: 'muted text-xs' }, 'Every agent works as you, with its own tools and budget. Each model call is in the call log.'))),
+      h('section', { class: 'card card-pad mb-6', id: 'team-schedules' },
+        h('div', { class: 'mb-2 flex flex-wrap items-center justify-between gap-2' }, h('div', {}, h('h2', { class: 'h-section' }, 'On a schedule'), h('p', { class: 'muted text-xs' }, 'Goals the team gets by itself, at set times.')),
+          admin && h('button', { class: 'btn-secondary btn-sm', type: 'button', id: 'team-schedule-add', onclick: () => teamScheduleDrawer(t, null, load) }, icon('clock', 'size-3.5'), 'Schedule a goal')),
+        scheds.length ? h('ul', { class: 'divide-y divide-slate-100 dark:divide-slate-800' }, scheds.map(it => h('li', { class: 'flex flex-wrap items-center gap-x-4 gap-y-1 py-2 text-sm', 'data-schedule': it.id },
+          h('span', { class: 'min-w-0 flex-1 truncate font-medium', title: it.goal }, it.goal),
+          h('span', { class: 'muted' }, describe({ every_minutes: it.every_minutes, cron: it.cron, tz: it.tz }) + ', as ' + it.run_as),
+          h('span', { class: 'text-xs' }, 'next: ', nextLine(it)),
+          admin && h('button', { class: 'btn-ghost btn-sm', type: 'button', onclick: () => teamScheduleDrawer(t, it, load) }, 'Change'))))
+          : h('p', { class: 'muted text-sm' }, admin ? 'None yet. Schedule a goal to have the team work on it every morning, every week or by a cron expression.' : 'None.')),
       h('div', { class: 'grid gap-6 lg:grid-cols-[18rem_minmax(0,1fr)]' },
         h('nav', { 'aria-label': 'Runs' }, h('h2', { class: 'h-section mb-2' }, 'Runs'),
           data.runs.length ? h('ul', { class: 'space-y-1', id: 'team-runs' }, data.runs.map(r => h('li', {}, h('button', { type: 'button', 'data-run': r.id,
@@ -181,7 +192,7 @@ export async function teamDetailPage({ params }) {
 function runView(r, nm) {
   return h('section', { class: 'min-w-0 space-y-4', id: 'team-run', 'data-status': r.status },
     h('div', { class: 'card card-pad' },
-      h('div', { class: 'flex flex-wrap items-center gap-2' }, h('span', { class: RUN[r.status]?.[0] }, RUN[r.status]?.[1]), h('span', { class: 'muted text-xs' }, `given by ${r.by} ${relTime(r.started)}`)),
+      h('div', { class: 'flex flex-wrap items-center gap-2' }, h('span', { class: RUN[r.status]?.[0] }, RUN[r.status]?.[1]), h('span', { class: 'muted text-xs' }, r.trigger === 'schedule' ? `given by its schedule ${relTime(r.started)}, as ${r.run_as}` : `given by ${r.by} ${relTime(r.started)}`)),
       h('p', { class: 'mt-2 font-medium' }, r.goal),
       r.plan_note && h('p', { class: 'muted mt-2 text-sm' }, h('b', {}, r.lead_name + ' planned: '), r.plan_note),
       r.error && h('div', { class: 'mt-3' }, errorBox(r.error))),

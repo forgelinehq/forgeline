@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/forgelinehq/forgeline/internal/schedule"
 	"net/http"
 	"strings"
 	"sync"
@@ -341,8 +342,8 @@ func (s *Server) checkDefinition(ctx context.Context, kind string, spec json.Raw
 		}
 		name = strings.TrimSpace(req.Name)
 		when := "only when someone starts it"
-		if v.EveryMinutes > 0 {
-			when = fmt.Sprintf("by itself every %d minutes, and when someone starts it", v.EveryMinutes)
+		if v.spec().On() {
+			when = fmt.Sprintf("by itself %s, and when someone starts it", schedule.Describe(v.spec()))
 		}
 		effects = []string{fmt.Sprintf("Creates a new workflow %q, version 1, that runs %s, as a %s.", name, when, v.RunAs)}
 		var b strings.Builder

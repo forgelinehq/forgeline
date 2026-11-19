@@ -28,7 +28,7 @@ monthly limits with a fallback, a live log of model calls; agents with a `provid
 off). Anthropic checked on the Pi with the real API; the others only against stand-ins. Planned: several model providers at once, with each agent naming `provider/model`; an agent builder with a playground, test cases and model comparison; agent teams and a test panel in
 workflows; publishing agents as an API, an MCP tool or a headless job; Cloudflare-style code mode in a sandbox. Step 2 has begun: the agent builder with its side panel is built. Exporting
 agents (a bundle with Agent Skills, Docker Agent YAML, an OCI artifact, an A2A card) is accepted in
-[note 046]; downloading a bundle or a Docker Agent file and importing a bundle are built(design/046-agent-export.md). See [note 045](design/045-agent-studio.md).
+[note 046](design/046-agent-export.md); downloading a bundle or a Docker Agent file and importing a bundle are built. Schedules for workflows and teams (presets, cron in a time zone, one list with pause and run now) are built: [note 047](design/047-schedules.md). See [note 045](design/045-agent-studio.md).
 
 ## Agent graphs (note 044)
 

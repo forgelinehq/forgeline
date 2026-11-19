@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/forgelinehq/forgeline/internal/schedule"
 	"net/http"
 	"sort"
 	"strings"
@@ -64,7 +65,9 @@ type WFVersion struct {
 	N            int       `json:"n"`
 	Stages       []WFStage `json:"stages"`
 	EveryMinutes int       `json:"every_minutes,omitempty"` // 0: only when started by hand
-	RunAs        string    `json:"run_as"`                  // viewer or developer
+	Cron         string    `json:"cron,omitempty"`          // or a cron expression in TZ (note 047)
+	TZ           string    `json:"tz,omitempty"`
+	RunAs        string    `json:"run_as"` // viewer or developer
 	Note         string    `json:"note,omitempty"`
 	By           string    `json:"by"`
 	At           time.Time `json:"at"`
@@ -105,7 +108,15 @@ func (v WFVersion) computeHash(id string) string {
 	if v.Webhook || len(v.OnRunFailed) > 0 {
 		fmt.Fprintf(&b, "|webhook:%v|on_run_failed:%s", v.Webhook, strings.Join(v.OnRunFailed, ","))
 	}
+	if v.Cron != "" {
+		fmt.Fprintf(&b, "|cron:%s|tz:%s", v.Cron, v.TZ)
+	}
 	return sha("workflow", id, fmt.Sprint(v.N), b.String(), fmt.Sprint(v.EveryMinutes), v.RunAs)
+}
+
+// spec is when the version runs by itself.
+func (v WFVersion) spec() schedule.Spec {
+	return schedule.Spec{Every: v.EveryMinutes, Cron: v.Cron, TZ: v.TZ}
 }
 
 func (w Workflow) version(n int) (WFVersion, bool) {
@@ -177,7 +188,10 @@ func (r WFRun) final() bool {
 
 // wfState is the engine's bookkeeping, kept apart from the workflow so an edit and a tick never race.
 type wfState struct {
-	LastScheduledAt time.Time `json:"last_scheduled_at"`
+	LastScheduledAt time.Time  `json:"last_scheduled_at"`
+	Paused          bool       `json:"paused,omitempty"` // its schedule is paused (note 047); it still runs by hand
+	PausedBy        string     `json:"paused_by,omitempty"`
+	PausedAt        *time.Time `json:"paused_at,omitempty"`
 }
 
 type wfEngine struct {
@@ -195,6 +209,8 @@ type wfRequest struct {
 	Webhook      bool      `json:"webhook"`
 	OnRunFailed  []string  `json:"on_run_failed"`
 	EveryMinutes int       `json:"every_minutes"`
+	Cron         string    `json:"cron"`
+	TZ           string    `json:"tz"`
 	RunAs        string    `json:"run_as"`
 	Note         string    `json:"note"`
 }
@@ -203,6 +219,10 @@ func (s *Server) resolveWorkflow(ctx context.Context, req wfRequest) (WFVersion,
 	if m := checkNameDesc(req.Name, req.Description); m != "" {
 		return WFVersion{}, m
 	}
+	req.Cron = strings.Join(strings.Fields(req.Cron), " ")
+	if _, err := schedule.Check(schedule.Spec{Every: req.EveryMinutes, Cron: req.Cron, TZ: req.TZ}); err != nil {
+		return WFVersion{}, err.Error()
+	}
 	if req.Graph != nil {
 		if len(req.Stages) > 0 {
 			return WFVersion{}, "a workflow has stages or a graph, not both"
@@ -210,8 +230,6 @@ func (s *Server) resolveWorkflow(ctx context.Context, req wfRequest) (WFVersion,
 		switch {
 		case req.RunAs != "viewer" && req.RunAs != "developer":
 			return WFVersion{}, "run it as viewer or developer: nobody is watching an unattended run, so it never runs as an administrator"
-		case req.EveryMinutes != 0 && (req.EveryMinutes < minEveryMinutes || req.EveryMinutes > maxEveryMinutes):
-			return WFVersion{}, fmt.Sprintf("a schedule is every %d to %d minutes", minEveryMinutes, maxEveryMinutes)
 		case len(req.Note) > maxNote:
 			return WFVersion{}, fmt.Sprintf("the note is longer than %d characters", maxNote)
 		}
@@ -227,7 +245,7 @@ func (s *Server) resolveWorkflow(ctx context.Context, req wfRequest) (WFVersion,
 				return WFVersion{}, fmt.Sprintf("on_run_failed: %q is not a pipeline name (or * for any)", p)
 			}
 		}
-		return WFVersion{Graph: &g, Webhook: req.Webhook, OnRunFailed: uniq(req.OnRunFailed), EveryMinutes: req.EveryMinutes, RunAs: req.RunAs, Note: req.Note}, ""
+		return WFVersion{Graph: &g, Webhook: req.Webhook, OnRunFailed: uniq(req.OnRunFailed), EveryMinutes: req.EveryMinutes, Cron: req.Cron, TZ: req.TZ, RunAs: req.RunAs, Note: req.Note}, ""
 	}
 	if req.Webhook || len(req.OnRunFailed) > 0 {
 		return WFVersion{}, "only a graph workflow starts from a webhook or a failed run"
@@ -239,8 +257,6 @@ func (s *Server) resolveWorkflow(ctx context.Context, req wfRequest) (WFVersion,
 		return WFVersion{}, fmt.Sprintf("a workflow has at most %d stages", maxWFStages)
 	case req.RunAs != "viewer" && req.RunAs != "developer":
 		return WFVersion{}, "run it as viewer or developer: nobody is watching an unattended run, so it never runs as an administrator"
-	case req.EveryMinutes != 0 && (req.EveryMinutes < minEveryMinutes || req.EveryMinutes > maxEveryMinutes):
-		return WFVersion{}, fmt.Sprintf("a schedule is every %d to %d minutes", minEveryMinutes, maxEveryMinutes)
 	case len(req.Note) > maxNote:
 		return WFVersion{}, fmt.Sprintf("the note is longer than %d characters", maxNote)
 	}
@@ -286,7 +302,7 @@ func (s *Server) resolveWorkflow(ctx context.Context, req wfRequest) (WFVersion,
 		st.Steps = steps
 		stages = append(stages, st)
 	}
-	return WFVersion{Stages: stages, EveryMinutes: req.EveryMinutes, RunAs: req.RunAs, Note: req.Note}, ""
+	return WFVersion{Stages: stages, EveryMinutes: req.EveryMinutes, Cron: req.Cron, TZ: req.TZ, RunAs: req.RunAs, Note: req.Note}, ""
 }
 
 func (s *Server) loadWorkflow(ctx context.Context, id string) (Workflow, error) {
@@ -338,7 +354,7 @@ func (s *Server) handleListWorkflows(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		item := map[string]any{"id": wf.ID, "name": wf.Name, "description": wf.Description, "current": wf.Current, "disabled": wf.Disabled,
-			"stages": len(cur.Stages), "steps": steps, "nodes": nodes, "every_minutes": cur.EveryMinutes, "run_as": cur.RunAs, "versions": len(wf.Versions),
+			"stages": len(cur.Stages), "steps": steps, "nodes": nodes, "every_minutes": cur.EveryMinutes, "cron": cur.Cron, "tz": cur.TZ, "run_as": cur.RunAs, "versions": len(wf.Versions),
 			"graph": cur.Graph != nil, "kinds": kinds, "agents": len(agents), "webhook": cur.Webhook, "on_run_failed": cur.OnRunFailed, "archived_at": wf.ArchivedAt}
 		if lr, ok := last[wf.ID]; ok {
 			item["last_run"] = map[string]any{"id": lr.ID, "status": lr.Status, "started_at": lr.StartedAt, "finished_at": lr.FinishedAt, "trigger": lr.Trigger}
@@ -968,6 +984,7 @@ func (s *Server) startWorkflows(ctx context.Context) {
 				return
 			case now := <-t.C:
 				s.scheduleTick(ctx, now)
+				s.teamScheduleTick(ctx, now)
 				s.guardTick(ctx, now)
 			}
 		}
@@ -983,12 +1000,12 @@ func (s *Server) scheduleTick(ctx context.Context, now time.Time) {
 	}
 	for _, wf := range all {
 		v, ok := wf.version(wf.Current)
-		if wf.Disabled || !ok || v.EveryMinutes == 0 {
+		if wf.Disabled || !ok || !v.spec().On() {
 			continue
 		}
 		var st wfState
 		_ = s.docs.Get(ctx, kindWFState, wf.ID, &st)
-		if now.Sub(st.LastScheduledAt) < time.Duration(v.EveryMinutes)*time.Minute {
+		if st.Paused || !schedule.Due(v.spec(), st.LastScheduledAt, now) {
 			continue
 		}
 		if _, err := s.startRun(ctx, wf, v, "schedule", Principal{Name: "workflow:" + wf.ID, Role: authn.Role(v.RunAs)}); err != nil {

@@ -33,6 +33,7 @@ import { approvalRulesPage } from './pages/approval_rules.js';
 import { policyPacksPage } from './pages/policy_packs.js';
 import { resourceTypesPage } from './pages/resource_types.js';
 import { teamPage, teamDetailPage } from './pages/team.js';
+import { schedulesPage } from './pages/schedules.js';
 import { mcpServersPage } from './pages/mcp_servers.js';
 import { providersPage } from './pages/providers.js';
 import { buildRulesPage } from './pages/build_rules.js';
@@ -257,6 +258,7 @@ async function boot() {
     route('/services/:id', guard('viewer', servicePage));
     route('/ai-use', guard('developer', aiUsePage));
     route('/missions', guard('developer', missionsPage));
+    route('/schedules', guard('developer', schedulesPage));
     route('/built', guard('developer', builtPage));
     route('/setup', guard('developer', setupStepsPage));
     route('/missions/:id', guard('developer', missionPage));
