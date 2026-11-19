@@ -4,7 +4,7 @@ import { navigate } from '../lib/router.js';
 import { session } from '../app.js';
 
 import { mdEditor } from '../lib/mdeditor.js';
-import { markdownBox } from '../lib/mdview.js';
+import { markdownBox, renderReply } from '../lib/mdview.js';
 import { checkInstructions } from '../lib/markdown.js';
 import { groupTools, toolInfo, TIERS, tierTitle } from '../lib/tools.js';
 
@@ -314,7 +314,7 @@ export function chatPanel(ag, v) {
     try {
       const r = await post('/v1/ai/agents/' + ag.id + '/chat', { message: msg, history, version: v.n });
       history.push({ role: 'user', content: msg }, { role: 'assistant', content: r.reply });
-      wait.replaceWith(bubble('agent', h('div', { class: 'whitespace-pre-wrap', 'data-reply': '' }, r.reply),
+      wait.replaceWith(bubble('agent', h('div', { class: 'break-words', 'data-reply': '' }, renderReply(r.reply)),
         r.lookups?.length ? h('div', { class: 'muted mt-2 flex flex-wrap gap-1 text-xs' }, icon('search', 'size-3.5'), 'Looked at: ' + r.lookups.map(n => toolInfo(n).title.toLowerCase()).join(', ')) : null,
         r.proposals?.length ? h('div', { class: 'mt-2 text-xs' }, 'Filed: ', r.proposals.map(id => h('a', { class: 'underline', href: '#/proposals/' + id }, id))) : null,
         r.environments?.length ? h('div', { class: 'mt-2 text-xs' }, 'Environment requested: ', h('a', { class: 'underline', href: '#/environments' }, 'see Environments')) : null));

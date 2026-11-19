@@ -1,6 +1,6 @@
 // The agent builder (design note 045, decision 6): what an agent is made of, as parts, with one side panel to pick
 // models, skills, MCP servers, tools and guardrails, and the agent to talk to beside it. Every save is a new version.
-import { h, icon, mount, spinner, errorBox, notice, toast, field, drawer, brandMark } from '../lib/dom.js';
+import { h, icon, mount, spinner, errorBox, notice, toast, field, drawer, brandMark, leaveDialog } from '../lib/dom.js';
 import { get, post, atLeast } from '../lib/api.js';
 import { navigate } from '../lib/router.js';
 import { session } from '../app.js';
@@ -109,14 +109,17 @@ export async function agentBuilderPage({ params }) {
     }, { subtitle: d.name || 'A new agent', footer: (close) => [foot, h('button', { type: 'button', class: 'btn-primary btn-sm', id: 'picker-done', onclick: () => close() }, 'Done')] });
   }
 
-  async function save(btn) {
+  let saved = false;
+  async function save(btn, stay = false) {
     btn.disabled = true;
     d = { ...d, instructions: ins.input.value };
     try {
       const out = await post(ag ? '/v1/ai/agents/' + ag.id + '/versions' : '/v1/ai/agents', draftBody(d));
       toast(ag ? 'Saved v' + out.current : 'Agent created', 'ok');
-      navigate('/agents/' + out.id);
-    } catch (e) { problem = e.message; mount(problemBox, h('div', { class: 'mb-3' }, errorBox(problem))); btn.disabled = false; }
+      saved = true;
+      if (!stay) navigate('/agents/' + out.id);
+      return true;
+    } catch (e) { problem = e.message; mount(problemBox, h('div', { class: 'mb-3' }, errorBox(problem))); btn.disabled = false; if (stay) throw e; return false; }
   }
 
   const name = h('input', { id: 'agent-name', class: 'input w-56 max-w-full font-semibold', maxlength: '60', value: d.name, placeholder: 'Name the agent', 'aria-label': 'Name', oninput: (e) => { d = { ...d, name: e.target.value }; drawStatus(); } });
@@ -138,6 +141,8 @@ export async function agentBuilderPage({ params }) {
     h('div', { class: 'grid gap-4 lg:grid-cols-5' },
       h('div', { class: 'min-w-0 lg:col-span-3' }, h('p', { class: 'muted mb-2 text-sm' }, 'What this agent is made of. Add or Change on a part opens the side panel.'), parts),
       h('div', { class: 'min-w-0 lg:col-span-2 lg:sticky lg:top-20 lg:self-start' }, tryIt)));
+  // Leaving with a draft that differs from what was opened asks first (an untouched new agent does not).
+  el.leaveGuard = () => ({ dirty: !saved && changed({ ...d, instructions: ins.input.value }, base), ask: () => leaveDialog({ what: 'this agent', save: () => save({}, true) }) });
   return el;
 }
 

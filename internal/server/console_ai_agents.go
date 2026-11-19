@@ -570,7 +570,7 @@ func (s *Server) handleListAgents(w http.ResponseWriter, r *http.Request) {
 		}
 		cur, _ := a.version(a.Current)
 		out = append(out, map[string]any{"id": a.ID, "name": a.Name, "description": a.Description, "current": a.Current, "disabled": a.Disabled, "archived_at": a.ArchivedAt,
-			"tier": cur.Tier, "tools": cur.Tools, "skills": cur.Skills, "versions": len(a.Versions)})
+			"tier": cur.Tier, "tools": cur.Tools, "skills": cur.Skills, "model": cur.Model, "versions": len(a.Versions)})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"agents": out})
 }

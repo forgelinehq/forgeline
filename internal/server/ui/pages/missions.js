@@ -1,6 +1,7 @@
 // Team › Missions (design note 037, part 2): the board of missions by where they stand, and one mission live, stage
 // by stage, with what it found, what it proposed, what it checked afterwards and the report Forgeline wrote.
 import { h, icon, mount, pageHeader, relTime, spinner, errorBox, notice, toast, modal, field, confirmDialog, emptyState } from '../lib/dom.js';
+import { renderMarkdown } from '../lib/mdview.js';
 import { get, post, atLeast } from '../lib/api.js';
 import { navigate } from '../lib/router.js';
 import { session } from '../app.js';
@@ -117,7 +118,7 @@ export async function missionPage({ params }) {
       h('section', { class: 'card card-pad mb-4' }, graph,
         h('p', { class: 'muted mt-3 text-xs', id: 'mission-used' }, `Used ${tokens(m.used.input_tokens + m.used.output_tokens)} of ${tokens(m.budget_tokens)} tokens in ${m.used.calls} model calls.`)),
       waiting || null,
-      m.report && h('section', { class: 'card card-pad mb-4', id: 'mission-report' }, h('h2', { class: 'h-section mb-2' }, 'Report'), h('p', { class: 'text-sm' }, m.report),
+      m.report && h('section', { class: 'card card-pad mb-4', id: 'mission-report' }, h('h2', { class: 'h-section mb-2' }, 'Report'), renderMarkdown(m.report),
         h('p', { class: 'hint mt-2' }, 'Written by Forgeline from the record, not by the model.')),
       h('div', { class: 'grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]' },
         h('section', { class: 'card card-pad' }, h('h2', { class: 'h-section mb-1' }, 'Findings'),
@@ -128,7 +129,7 @@ export async function missionPage({ params }) {
             h('div', { class: 'flex items-center justify-between gap-2' }, h('b', {}, STAGES.find(x => x.key === s.stage)?.label || s.stage), h('span', { class: STATUS[s.status === 'running' ? 'running' : s.status === 'failed' ? 'failed' : 'done'] }, s.status)),
             s.lookups?.length ? h('p', { class: 'muted text-xs' }, 'Looked at: ' + s.lookups.join(', ')) : h('p', { class: 'muted text-xs' }, 'No lookups'),
             s.error && h('p', { class: 'text-xs text-rose-700 dark:text-rose-300' }, s.error),
-            s.output && h('details', { class: 'mt-1' }, h('summary', { class: 'cursor-pointer text-xs' }, 'What it said'), h('p', { class: 'mt-1 whitespace-pre-wrap text-xs' }, s.output))))) : h('p', { class: 'muted text-sm' }, 'Starting…'),
+            s.output && h('details', { class: 'mt-1' }, h('summary', { class: 'cursor-pointer text-xs' }, 'What it said'), h('div', { class: 'mt-1 break-words' }, renderMarkdown(s.output)))))) : h('p', { class: 'muted text-sm' }, 'Starting…'),
           m.error && m.status !== 'cancelled' ? h('div', { class: 'mt-3' }, errorBox(m.error)) : null)));
   }
   mount(el, spinner());
