@@ -212,8 +212,10 @@ Archived, then it is deleted for good.
 
 **Workflows** runs agents together; the tab lists them as cards with how each starts and its last run, every run of every
 workflow under **Runs**, and deleted ones under **Archived** for 30 days. Draw one on the canvas (**New workflow**), as in
-n8n: add nodes from
-the palette, drag from a node's blue port to the next to wire them, and pick a node to set it.
+n8n: the canvas fills the page; a node's **+** (or **Add node**) opens a side panel to search your agents, the logic
+nodes and the lookups, and wires the new node in after the one you came from. Drag from a node's port to another node to
+wire them, pick a node to set it, drag the background to move, Ctrl + scroll to zoom, and **Settings** holds how the
+workflow starts and what it may do.
 
 - **Agent**: an agent does a task; it may also write named fields, such as `severity`.
 - **Lookup**: one read-only lookup, without a model.
@@ -222,8 +224,8 @@ the palette, drag from a node's blue port to the next to wire them, and pick a n
 - **Merge**: waits for parallel branches.
 - **End**: finishes the run.
 
-Loops are allowed. Each node runs at most its limit (3 unless you say up to 10), and a run at most 50 steps. **Tidy up**
-lays the graph out left to right. A run is drawn on the same canvas: nodes turn green or red, the wires taken are bold,
+Loops are allowed. Each node runs at most its limit (3 unless you say up to 10), and a run at most 50 steps. The grid
+button lays the graph out left to right. A run is drawn on the same canvas: nodes turn green or red, the wires taken are bold,
 and picking a node shows what went in and what came out each time it ran. A question waiting for you is answered at the
 top of the run. Only an agent's own tools at the "Proposes" level can propose changes, and a different administrator
 approves them. Workflows made of stages still run as before; **Edit on the canvas** turns one into a graph as a new
