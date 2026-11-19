@@ -6,6 +6,7 @@ import (
 	"flag"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -267,5 +268,35 @@ func TestReadBundleRefusesWhatIsWrong(t *testing.T) {
 	_, skills, err := ReadBundle(edited)
 	if err != nil || !skills[0].Edited || skills[1].Edited || skills[0].Description != "Scale" {
 		t.Errorf("an edited skill: %v %+v", err, skills)
+	}
+}
+
+// TestDockerYAMLLoadsInDockerAgent runs each exported file through the real CLI: docker agent run --dry-run loads the
+// configuration (models, providers, MCP servers, skills) without asking a model. It runs only when
+// FORGELINE_DOCKER_AGENT names the docker-agent binary.
+func TestDockerYAMLLoadsInDockerAgent(t *testing.T) {
+	bin := os.Getenv("FORGELINE_DOCKER_AGENT")
+	if bin == "" {
+		t.Skip("set FORGELINE_DOCKER_AGENT to the docker-agent binary")
+	}
+	mcp := []RemoteMCP{{ID: "gh", URL: "https://mcp.example.com/mcp", AuthHeader: "Authorization", AuthScheme: "Bearer", AuthSecret: "github-token", Tools: []string{"search_issues"}}}
+	for _, kind := range []string{"anthropic", "openai", "gemini", "bedrock", "azure-openai", "openai-compatible", ""} {
+		t.Run("kind="+kind, func(t *testing.T) {
+			y, err := DockerYAML(sample(), ModelSource{ProviderID: "pi-ollama", Kind: kind, BaseURL: "https://res.example.com/v1", Model: "claude-haiku-5-5"}, append([]RemoteMCP(nil), mcp...), []LeftOut{{Tool: "list_runs", Why: "a Forgeline lookup"}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			dir := t.TempDir()
+			file := filepath.Join(dir, "agent.yaml")
+			os.WriteFile(file, y, 0o644)
+			cmd := exec.Command(bin, "run", file, "--dry-run")
+			cmd.Dir = dir
+			cmd.Env = append(os.Environ(), "HOME="+dir, "TELEMETRY_ENABLED=false", "ANTHROPIC_API_KEY=x", "OPENAI_API_KEY=x", "GOOGLE_API_KEY=x", "AZURE_API_KEY=x", "PI_OLLAMA_API_KEY=x", "GITHUB_TOKEN=x", "AWS_BEARER_TOKEN_BEDROCK=x", "AWS_REGION=us-east-1")
+			out, err := cmd.CombinedOutput()
+			if err != nil {
+				t.Fatalf("docker agent run --dry-run: %v\n%s\n--- file ---\n%s", err, out, y)
+			}
+			t.Logf("%s", out)
+		})
 	}
 }
