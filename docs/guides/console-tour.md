@@ -210,6 +210,17 @@ for routing, a stronger one for analysis); by default it uses the assistant's. E
 can talk to an agent beside its page. **Delete** archives an agent: it can be restored for 30 days from Agents ›
 Archived, then it is deleted for good.
 
+**New agent** and **Edit** open the builder: what the agent is made of, as parts (instructions, skills, MCP servers,
+tools and guardrails), with the agent to talk to beside it. **Add** or **Change** on a part, or the model in the header,
+opens one side panel with a tab for each: models grouped by provider, skills with the version each is pinned to, the
+tools an administrator turned on for each MCP server, Forgeline's own tools in plain words, and the guardrails (how much
+it may do, and the rules every agent has, shown locked). Each tab has search and filters, and says whether a tool reads
+or asks a person to approve. Talking to it beside the builder uses the saved version; save to try your changes.
+
+![The agent builder]({{ '/console/141-agent-builder.png' | relative_url }})
+
+![Its side panel]({{ '/console/142-agent-builder-panel.png' | relative_url }})
+
 **Workflows** runs agents together; the tab lists them as cards with how each starts and its last run, every run of every
 workflow under **Runs**, and deleted ones under **Archived** for 30 days. Draw one on the canvas (**New workflow**), as in
 n8n: the canvas fills the page; a node's **+** (or **Add node**) opens a side panel to search your agents, the logic

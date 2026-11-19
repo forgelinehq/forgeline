@@ -294,3 +294,14 @@ func TestAIToolsListHidesAskAgentAndMarksMCPTools(t *testing.T) {
 	}
 	m.v.expect(403, "GET", "/v1/ai/tools", nil)
 }
+
+// "new" is the console's address for making an agent or a workflow, so nothing gets it as its id.
+func TestNothingIsGivenTheIDNew(t *testing.T) {
+	m := newMCPHarness(t)
+	if a := newAgent(t, m.admin, agentBody("New", nil, nil, "T0")); a.ID == "new" || !strings.HasPrefix(a.ID, "new-") {
+		t.Errorf("an agent named New got id %q", a.ID)
+	}
+	if a := newAgent(t, m.admin, agentBody("Newer", nil, nil, "T0")); a.ID != "newer" {
+		t.Errorf("an agent named Newer got id %q", a.ID)
+	}
+}

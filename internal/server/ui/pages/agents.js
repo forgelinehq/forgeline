@@ -6,7 +6,7 @@ import { session } from '../app.js';
 import { mdEditor } from '../lib/mdeditor.js';
 import { markdownBox } from '../lib/mdview.js';
 import { checkInstructions } from '../lib/markdown.js';
-import { groupTools, toolInfo, plainHelp, TIERS, tierTitle } from '../lib/tools.js';
+import { groupTools, toolInfo, TIERS, tierTitle } from '../lib/tools.js';
 
 // Agents and skills. Every save is a new version; old versions are never edited, and a rollback is
 // a copy of an old version saved as the newest one.
@@ -96,7 +96,7 @@ export async function agentsPage({ query }) {
     : emptyState('list', 'No skills yet', admin ? 'A skill is a procedure, such as how to right-size an ECS service, that agents follow.' : 'An administrator can create skills.');
 
   mount(el, pageHeader('Agents', 'Your AI team. Each agent has instructions, skills it follows and a short list of tools, and works as the person who asks it. Every save is a version you can roll back.',
-    admin && (tab === 'agents' ? h('button', { class: 'btn-primary', id: 'new-agent', type: 'button', onclick: () => agentForm(null, skills.skills, tools.tools) }, icon('plus', 'size-4'), 'New agent')
+    admin && (tab === 'agents' ? h('button', { class: 'btn-primary', id: 'new-agent', type: 'button', onclick: () => navigate('/agents/new/build') }, icon('plus', 'size-4'), 'New agent')
       : tab === 'skills' ? h('button', { class: 'btn-primary', id: 'new-skill', type: 'button', onclick: () => skillForm(null) }, icon('plus', 'size-4'), 'New skill')
       : null)),
     h('div', { class: 'mb-4 flex gap-1', role: 'tablist' }, tabBtn('agents', 'Agents (' + agents.agents.length + ')'), tabBtn('skills', 'Skills (' + skills.skills.length + ')'), h('a', { href: '#/workflows', class: 'muted rounded-lg px-3 py-1.5 text-sm font-medium hover:bg-slate-100 dark:hover:bg-slate-800' }, 'Workflows (' + workflows.workflows.length + ') →')),
@@ -207,7 +207,7 @@ export async function agentPage({ params }) {
           h('button', { class: 'btn-secondary btn-sm', type: 'button', id: 'toggle-agent', onclick: async () => {
             try { await post('/v1/ai/agents/' + ag.id + (ag.disabled ? '/enable' : '/disable')); load(true); } catch (e) { toast(e.message, 'error'); }
           } }, ag.disabled ? 'Turn on' : 'Turn off'),
-          h('button', { class: 'btn-primary btn-sm', id: 'new-version', type: 'button', onclick: () => agentForm(ag, skills, tools, () => load(false), v) }, icon('edit', 'size-3.5'), 'Edit'))),
+          h('a', { class: 'btn-primary btn-sm', id: 'new-version', href: '#/agents/' + ag.id + '/build' }, icon('edit', 'size-3.5'), 'Edit'))),
       ag.archived_at ? h('div', { class: 'mb-4' }, notice('warn', `Archived ${relTime(ag.archived_at)} by ${ag.archived_by}. It is deleted for good 30 days after that unless you restore it.`))
         : ag.disabled && h('div', { class: 'mb-4' }, notice('warn', 'This agent is off. It cannot run and the assistant cannot hand it work.')),
       h('div', { class: 'grid gap-4 lg:grid-cols-5' },
@@ -237,7 +237,7 @@ export async function agentPage({ params }) {
   return el;
 }
 
-function chatPanel(ag, v) {
+export function chatPanel(ag, v) {
   const history = [];
   const list = h('div', { class: 'max-h-[28rem] min-h-40 space-y-3 overflow-y-auto text-sm', id: 'agent-chat-log', 'aria-live': 'polite' },
     h('p', { class: 'muted' }, `Ask ${ag.name} something. It answers with version ${v.n}, using only its own tools, as you.`));
@@ -267,91 +267,4 @@ function chatPanel(ag, v) {
     send.disabled = false; list.scrollTop = list.scrollHeight;
   } }, input, send);
   return h('aside', { class: 'card card-pad h-fit lg:sticky lg:top-20' }, h('h2', { class: 'h-section mb-3' }, 'Talk to ' + ag.name), list, form);
-}
-
-function agentForm(ag, skills, tools, after, base) {
-  modal(ag ? 'Edit ' + ag.name : 'New agent', (close) => {
-    const cur = base || (ag && ag.versions.find(v => v.n === ag.current));
-    const name = h('input', { id: 'agent-name', class: 'input', maxlength: '60', value: ag ? ag.name : '', placeholder: 'Cost watcher' });
-    const desc = h('input', { id: 'agent-desc', class: 'input', maxlength: '300', value: ag ? ag.description : '', placeholder: 'Finds idle or oversized resources and suggests the smallest safe change' });
-    // The tier is a hidden select so the rest of the code (and its checks) read it as before; people pick a card.
-    const tier = h('select', { id: 'agent-tier', class: 'sr-only', tabindex: '-1', 'aria-hidden': 'true', onchange: () => { ins.refresh(); drawTiers(); } }, TIERS.map(t => h('option', { value: t.id, selected: (cur?.tier || 'T0') === t.id }, t.title)));
-    const tierBox = h('div', { class: 'grid gap-3 sm:grid-cols-2', role: 'radiogroup', 'aria-label': 'How much it may do' });
-    function drawTiers() {
-      mount(tierBox, TIERS.map(t => {
-        const on = tier.value === t.id;
-        return h('button', { type: 'button', role: 'radio', 'aria-checked': String(on), 'data-tier': t.id,
-          class: 'rounded-xl border p-3.5 text-left transition-colors ' + (on ? 'border-brand-500 bg-brand-50 ring-1 ring-brand-500 dark:bg-brand-500/10' : 'border-slate-200 hover:border-slate-300 dark:border-slate-700 dark:hover:border-slate-600'),
-          onclick: () => { tier.value = t.id; tier.dispatchEvent(new Event('change')); } },
-          h('div', { class: 'flex items-center gap-2 font-medium' }, h('span', { class: 'flex size-4 items-center justify-center rounded-full border ' + (on ? 'border-brand-600 bg-brand-600' : 'border-slate-400') }, on ? h('span', { class: 'size-1.5 rounded-full bg-white' }) : null), t.title),
-          h('p', { class: 'muted mt-1 text-xs' }, t.text));
-      }));
-    }
-    const ins = mdEditor({ id: 'agent-ins', value: cur ? cur.instructions : '', maxlength: 4096, placeholder: '## Goal\nFind idle or oversized resources and propose the smallest safe change.\n\n## Rules\n- Look before you suggest anything.\n- Ask before assuming a resource is unused.', check: (t) => checkInstructions(t, { tier: tier.value, max: 4096 }) });
-    const picked = new Set((cur?.skills || []).map(p => p.id));
-    const pins = Object.fromEntries((cur?.skills || []).map(p => [p.id, p.n]));
-    const checkCard = (attrs, checked, title, sub, extra) => h('label', { class: 'flex cursor-pointer items-start gap-2.5 rounded-lg border border-slate-200 p-2.5 text-sm transition-colors hover:border-slate-300 has-[:checked]:border-brand-400 has-[:checked]:bg-brand-50/60 dark:border-slate-700 dark:has-[:checked]:border-brand-500/60 dark:has-[:checked]:bg-brand-500/10' },
-      h('input', { type: 'checkbox', class: 'mt-0.5 size-4 accent-brand-600', checked, ...attrs }),
-      h('span', { class: 'min-w-0 flex-1' }, h('span', { class: 'block font-medium' }, title), sub ? h('span', { class: 'muted block text-xs' }, sub) : null, extra || null));
-    const skillBoxes = skills.length ? h('div', { class: 'grid gap-2 sm:grid-cols-2' }, skills.map(s => checkCard({ 'data-skill': s.id, onchange: (e) => { if (!e.target.checked) delete pins[s.id]; } }, picked.has(s.id), s.name,
-      s.description || '', h('span', { class: 'muted block text-[11px]' }, picked.has(s.id) ? `Pinned at v${pins[s.id]} · latest v${s.current}` : `Latest v${s.current}`))))
-      : h('p', { class: 'muted text-sm' }, 'No skills yet. Create one under Agents › Skills, then add it here.');
-    const toolSet = new Set(cur?.tools || []);
-    const groups = groupTools(tools);
-    const toolBoxes = h('div', { class: 'space-y-4' }, groups.map(g => {
-      const boxes = g.tools.map(t => checkCard({ 'data-tool': t.name }, toolSet.has(t.name), t.title, plainHelp(t.help),
-        h('span', { class: 'mt-1 flex flex-wrap gap-1' }, h('code', { class: 'rounded bg-slate-100 px-1 text-[10px] text-slate-500 dark:bg-slate-800' }, t.name),
-          t.asks ? h('span', { class: 'pill-wait px-1.5 py-0 text-[10px]' }, 'a person approves') : null,
-          t.needs === 'mcp' ? h('span', { class: 'pill-idle px-1.5 py-0 text-[10px]' }, 'needs the AWS MCP Server') : null,
-          t.min && t.min !== 'viewer' ? h('span', { class: 'pill-idle px-1.5 py-0 text-[10px]' }, t.min + ' and up') : null)));
-      return h('fieldset', {}, h('legend', { class: 'mb-1.5 flex w-full items-baseline justify-between gap-2' }, h('span', { class: 'text-sm font-semibold' }, g.title), h('span', { class: 'muted text-xs' }, g.note)),
-        h('div', { class: 'grid gap-2 sm:grid-cols-2' }, boxes));
-    }));
-    const note = h('input', { id: 'agent-note', class: 'input', maxlength: '200', placeholder: ag ? 'What changed and why' : 'First version' });
-    // Which model it asks (note 044, part 3): a quick one for routing, a stronger one for analysis. Models from
-    // Settings \u203a Models and providers (note 045) come first and work whatever the assistant is set to; the bare names
-    // go through the assistant's own connection.
-    const MODELS = [['claude-haiku-5-5', 'Claude Haiku 5.5 (quick, cheap)'], ['claude-sonnet-5-5', 'Claude Sonnet 5.5'], ['claude-opus-5-5', 'Claude Opus 5.5'], ['claude-fable-5-2', 'Claude Fable 5.2 (most capable)']];
-    const curModel = cur?.model || '';
-    const opt = (v, l) => h('option', { value: v, selected: v === curModel }, l);
-    const viaAssistant = h('optgroup', { label: 'Through the assistant\u2019s connection' }, MODELS.map(([v, l]) => opt(v, l)));
-    const unlisted = curModel && !MODELS.some(m => m[0] === curModel) ? opt(curModel, curModel) : null;
-    const model = h('select', { id: 'agent-model', class: 'input' }, opt('', 'The assistant\u2019s model'), viaAssistant, unlisted);
-    get('/v1/models').then(r => {
-      const groups = new Map();
-      for (const m of r.models) { if (!groups.has(m.provider)) groups.set(m.provider, []); groups.get(m.provider).push(m); }
-      if (unlisted && r.models.some(m => m.ref === curModel)) unlisted.hidden = true;
-      for (const ms of groups.values()) {
-        model.insertBefore(h('optgroup', { label: ms[0].provider_name }, ms.map(m => opt(m.ref, `${m.label} \u00b7 $${m.input_usd_per_mtok} / $${m.output_usd_per_mtok} per M tokens`))), viaAssistant);
-      }
-      model.value = curModel;
-    }).catch(() => {});
-    const err = h('div', { class: 'hidden' });
-    const form = h('div', {});
-    const go = h('button', { class: 'btn-primary', type: 'button', id: 'agent-save', onclick: async () => {
-      err.classList.add('hidden'); go.disabled = true;
-      const body = { name: name.value, description: desc.value, instructions: ins.input.value, tier: tier.value, model: model.value, note: note.value,
-        // A skill already pinned stays at its pinned version; a newly ticked one takes the latest.
-        skills: [...form.querySelectorAll('[data-skill]:checked')].map(b => ({ id: b.dataset.skill, n: pins[b.dataset.skill] || 0 })),
-        tools: [...form.querySelectorAll('[data-tool]:checked')].map(b => b.dataset.tool) };
-      try {
-        const out = await post(ag ? '/v1/ai/agents/' + ag.id + '/versions' : '/v1/ai/agents', body);
-        toast(ag ? 'Saved version ' + out.current : 'Agent created', 'ok'); close();
-        if (ag) after(); else navigate('/agents/' + out.id);
-      } catch (e) { mount(err, errorBox(e.message)); err.classList.remove('hidden'); go.disabled = false; }
-    } }, ag ? 'Save as a new version' : 'Create agent');
-    const step = (title, text, ...kids) => h('section', { class: 'space-y-3 border-t border-slate-200 pt-5 first:border-t-0 first:pt-0 dark:border-slate-800' },
-      h('div', {}, h('h3', { class: 'font-display text-base font-bold' }, title), text ? h('p', { class: 'muted text-xs' }, text) : null), ...kids);
-    drawTiers();
-    form.append(h('div', { class: 'space-y-6' },
-      step('Who it is', null, h('div', { class: 'grid gap-4 sm:grid-cols-2' }, field('Name', name, null, 'agent-name'), field('What it is for', desc, null, 'agent-desc'))),
-      step('How much it may do', 'Either way it works as the person who asks, and can never do more than they could.', tierBox, tier),
-      step('Model', 'Which model it asks. Agents in one workflow can differ: a quick model to route, a stronger one to analyse. Models from Settings › Models and providers work even when the assistant is off. Its use counts against its budget either way.', field('Model', model, null, 'agent-model')),
-      step('Instructions', 'What it should do and how. Write in Markdown; the model receives exactly this text.', ins.el),
-      step('Skills it follows', ag ? 'Skills stay on the version they were pinned to. Untick and tick one to take its latest version.' : 'Step-by-step procedures it can follow.', skillBoxes),
-      step('What it can use', 'Pick the fewest it needs. Administrators can turn services off for every agent in Settings › Connections.', toolBoxes),
-      step('Save', null, field('Note for the history', note, null, 'agent-note'), err,
-        h('div', { class: 'flex justify-end gap-2' }, h('button', { class: 'btn-secondary', type: 'button', onclick: () => close() }, 'Cancel'), go))));
-    return form;
-  }, { xl: true });
 }

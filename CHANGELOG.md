@@ -62,6 +62,12 @@ section in the pull request that makes the change; a release moves it under its 
 - **After a session ends**, the console stops polling the server (it asked every minute, forever).
 
 ### Added
+- **The agent builder.** New agent and Edit open a page instead of a long form: the agent's parts (instructions,
+  skills, MCP servers, tools, guardrails) with chips for what is in each, and the agent to talk to beside them. Add or
+  Change on a part, or the model in the header, opens one side panel with tabs for Models (grouped by provider),
+  Skills (pinned versions), MCP servers (each server's tools that an administrator turned on), Tools and Guardrails, with
+  search and filters. The list of tools an agent can be given now says which MCP server or plugin a tool comes from.
+  Nothing new is given the id `new`, which the console uses for making one.
 - **The workflow canvas fills the page, as in n8n.** It pans (drag the background or scroll) and zooms (Ctrl + scroll,
   or the controls, with Fit); nodes carry their kind's icon, and the Start node says what starts the workflow. A node's
   **+**, or **Add node**, opens a searchable side panel of your agents by name, the logic nodes and the lookups; the new

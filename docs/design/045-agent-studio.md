@@ -161,7 +161,9 @@ The library's guardrail packs (note 040, step 8) can add more.
 ## Order of work
 
 1. **Providers**: the page, the six adapters, `provider/model` names, the assistant's own setting, prices and limits.
-2. **The agent builder and playground**: the new screen, test cases, Compare.
+2. **The agent builder and playground**: the new screen, test cases, Compare. *Built so far (2026-11-19): the builder
+   screen with its parts and the one side panel (Models, Skills, MCP servers, Tools, Guardrails); talking to it uses the
+   saved version. Still to do: running an unsaved draft, test cases, Compare.*
 3. **The workflow studio**: the test panel, re-running from a step, workflow settings, agent teams, workflows calling
    workflows, and the Watch alarm trigger left over from note 044.
 4. **Publishing**: live versions, agent keys, the API, the MCP tool, the CLI and the runner image.

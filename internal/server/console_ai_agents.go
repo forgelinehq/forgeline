@@ -255,6 +255,11 @@ func (s *Server) newDefID(ctx context.Context, kind, name string) (string, error
 	base := accountSlug(name)
 	id := base
 	for i := 0; i < 20; i++ {
+		// "new" is the console's address for making one (#/agents/new/build, #/workflows/new/canvas).
+		if id == "new" {
+			id = base + "-" + randomID()[:4]
+			continue
+		}
 		var tmp json.RawMessage
 		err := s.docs.Get(ctx, kind, id, &tmp)
 		if errors.Is(err, docstore.ErrNotFound) {
@@ -890,6 +895,12 @@ func (s *Server) handleListAITools(w http.ResponseWriter, r *http.Request) {
 		Help  string `json:"help"`
 		Min   string `json:"min"`             // the lowest role that can run it, whoever the agent is
 		Needs string `json:"needs,omitempty"` // "mcp" when it exists only with the AWS MCP Server on
+		// Where a tool from outside Forgeline comes from, so the builder can group them: the MCP server (id and name)
+		// or the plugin package, and the tool's own name there.
+		Server     string `json:"server,omitempty"`
+		ServerName string `json:"server_name,omitempty"`
+		Plugin     string `json:"plugin,omitempty"`
+		Tool       string `json:"tool,omitempty"`
 	}
 	out := []tool{}
 	for _, t := range assistantLookups() {
@@ -903,10 +914,10 @@ func (s *Server) handleListAITools(w http.ResponseWriter, r *http.Request) {
 		out = append(out, x)
 	}
 	for _, t := range s.pluginTools(r.Context()) {
-		out = append(out, tool{Name: t.name, Help: t.help, Min: string(authn.Developer), Needs: "plugins"})
+		out = append(out, tool{Name: t.name, Help: t.help, Min: string(authn.Developer), Needs: "plugins", Plugin: t.pkg, Tool: t.tool})
 	}
 	for _, t := range s.extMCPTools(r.Context()) {
-		out = append(out, tool{Name: t.name, Help: t.help, Min: string(authn.Developer), Needs: "mcp-server"})
+		out = append(out, tool{Name: t.name, Help: t.help, Min: string(authn.Developer), Needs: "mcp-server", Server: t.server.ID, ServerName: t.server.Name, Tool: t.tool})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"tools": out})
 }

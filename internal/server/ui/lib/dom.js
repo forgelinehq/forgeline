@@ -257,6 +257,10 @@ const BRANDS = {
   cli: ['CC', 'bg-orange-100 text-orange-900 dark:bg-orange-950 dark:text-orange-200'],
   api: ['A', 'bg-orange-100 text-orange-900 dark:bg-orange-950 dark:text-orange-200'],
   copilot: ['Co', 'bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900'],
+  mcp: ['MCP', 'bg-violet-100 text-violet-800 dark:bg-violet-950 dark:text-violet-200'],
+  library: ['Lb', 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200'],
+  forgeline: ['F', 'bg-slate-900 text-white dark:bg-slate-200 dark:text-slate-900'],
+  guard: ['✓', 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200'],
   other: ['?', 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200'],
 };
 
