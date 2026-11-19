@@ -1,6 +1,7 @@
 # 046: Exporting agents: a bundle, Docker Agent YAML, an OCI artifact, an A2A card
 
-Status: **proposed 2026-11-19, waiting for the maintainer's decisions** (end of this note). Revises note 045, decision 3,
+Status: **accepted 2026-11-19: every decision as proposed** (end of this note). **Step 1 is built**: both downloads, with
+their schema, tests, and an audit entry. Not yet checked with the real `docker agent run`. Revises note 045, decision 3,
 which said an agent is not exported. On 2026-11-18 the maintainer asked for agents to be exportable too, in open formats.
 
 ## Question
@@ -20,8 +21,13 @@ administrator approves, nothing above the starter's role, everything audited)?
 | **A2A agent card** ([spec 1.0](https://a2a-protocol.org/latest/specification/)) | JSON at `/.well-known/agent-card.json`: `name`, `description`, `version`, `supportedInterfaces` (each `url`, `protocolBinding` such as `JSONRPC`, `protocolVersion` `1.0`), `capabilities`, `defaultInputModes`, `defaultOutputModes`, `skills` (`id`, `name`, `description`, `tags`), and `securitySchemes`. Optional signed cards (JWS) and an extended card for signed-in callers | Other agents finding and calling a published Forgeline agent |
 | A portable "agent.yaml" | No single standard: Open Agent Specification, IETF drafts (ADL, AAIF, FAFA), and tools that use the file name. None is settled | Not chosen; Forgeline's own file instead (below) |
 
-Not checked yet, and to be checked when it is built: whether Docker Agent reads `SKILL.md` folders (its `skills:` section
-exists, but the pages read do not say what it loads), and the A2A 1.0 field tables in full.
+Checked since (Docker Agent's skills and providers pages): Docker Agent reads `SKILL.md` folders from `.agents/skills/`
+and other standard folders, and also takes **inline skills** in the YAML (`name`, `description`, `instructions`). Its
+providers include `anthropic`, `openai`, `google`, `amazon-bedrock` and `azure`; an OpenAI-compatible server is a
+`providers:` entry with `base_url` and `token_key` (the name of the environment variable that holds its key). Remote MCP
+servers take `remote.url`, `remote.transport_type` (`streamable` or `sse`) and `remote.headers`, whose values may be
+`${env.NAME}`. `docker agent run <file> --dry-run` loads a file without running it. Still to check: the A2A 1.0 field
+tables in full (step 4).
 
 ## Decisions (proposed)
 
@@ -47,11 +53,12 @@ exists, but the pages read do not say what it loads), and the A2A 1.0 field tabl
      `metadata: {forgeline-version: "3"}`. Any tool that reads Agent Skills can use them on their own.
    - `README.md`: what is in it, what was left out and why (decision 3).
    This is the format for moving an agent between Forgeline servers (decision 6) and for keeping it in Git.
-2. **Docker Agent YAML** (`agent.yaml`, `version: 16`): one `root` agent with the instructions (the skills' text
-   appended under their names, since loading skill folders is unconfirmed), `model` as `provider/model` mapped from the
-   Forgeline provider's kind (Anthropic, OpenAI, Gemini as `google`, Bedrock as `amazon-bedrock`, OpenAI-compatible as
-   a `providers:` entry with its `base_url`), and each remote MCP server as an `mcps:` entry with its URL. `metadata`
-   carries the description, the version and the fingerprint.
+2. **Docker Agent YAML** (`agent.yaml`, `version: 16`): one `root` agent with the instructions, the skills inline (so
+   the one file is the whole agent, which is all an OCI push carries), `model` as `provider/model` mapped from the
+   Forgeline provider's kind (Anthropic, OpenAI, Gemini as `google`, Bedrock as `amazon-bedrock`, Azure OpenAI as
+   `azure` with its `base_url`, OpenAI-compatible as a `providers:` entry with `base_url` and `token_key`), and each
+   remote MCP server as an `mcps:` entry with its URL, only the tools the agent has, and its sign-in header as
+   `${env.NAME}`. `metadata` carries the description, the version and the fingerprint.
 
 ### 3. Forgeline's own tools outside Forgeline
 
@@ -108,10 +115,10 @@ a skill folder read by Claude Code, and the card fetched by an A2A client.
 
 ## Decisions for the maintainer
 
-1. **Formats first:** the Forgeline bundle and Docker Agent YAML as downloads, as proposed? Or only one of them?
-2. **Forgeline's tools in a copy:** left out by default, and later through Forgeline's MCP server with an agent key, as
-   proposed?
-3. **Push:** a proposal that a different administrator approves, as proposed? Or an administrator alone, audited?
-4. **A2A:** only for published agents, one card per agent under `/a2a/agents/<id>/`, JSON-RPC only at first, as
-   proposed?
-5. **Import:** wanted now (step 2), or later?
+All five were made **as proposed** (maintainer, 2026-11-19):
+
+1. ~~Formats first~~: **the Forgeline bundle and Docker Agent YAML**, both as downloads.
+2. ~~Forgeline's tools in a copy~~: **left out by default**; later through Forgeline's MCP server with an agent key.
+3. ~~Push~~: **a proposal that a different administrator approves.**
+4. ~~A2A~~: **only for published agents**, one card per agent under `/a2a/agents/<id>/`, JSON-RPC first.
+5. ~~Import~~: **now**, as step 2.

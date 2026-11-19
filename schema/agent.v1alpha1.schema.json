@@ -1,0 +1,134 @@
+{
+  "$defs": {
+    "Skill": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "description": "The Agent Skills name, the same as its folder.",
+          "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+          "type": "string"
+        },
+        "path": {
+          "pattern": "^skills/[a-z0-9-]+/SKILL\\.md$",
+          "type": "string"
+        },
+        "sha256": {
+          "description": "Of the skill's text, without the front matter.",
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "title": {
+          "description": "Its name in Forgeline.",
+          "type": "string"
+        },
+        "version": {
+          "description": "The skill's version in Forgeline.",
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "name",
+        "version",
+        "path",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "Source": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "description": "The agent's id in Forgeline.",
+          "type": "string"
+        },
+        "exported_at": {
+          "description": "RFC 3339.",
+          "type": "string"
+        },
+        "fingerprint": {
+          "description": "The version's hash in Forgeline.",
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "version": {
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "agent",
+        "version",
+        "fingerprint",
+        "exported_at"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "One version of a Forgeline agent, agent file version v1alpha1 (design note 046).",
+  "properties": {
+    "description": {
+      "description": "What it is for.",
+      "type": "string"
+    },
+    "instructions": {
+      "description": "What the model receives, exactly.",
+      "minLength": 1,
+      "type": "string"
+    },
+    "model": {
+      "description": "provider/model, or a bare model name for the assistant's connection; empty uses the assistant's model.",
+      "type": "string"
+    },
+    "name": {
+      "description": "The agent's name.",
+      "minLength": 1,
+      "type": "string"
+    },
+    "skills": {
+      "description": "Pinned skills, each an Agent Skills folder in this bundle.",
+      "items": {
+        "$ref": "#/$defs/Skill"
+      },
+      "type": "array"
+    },
+    "source": {
+      "$ref": "#/$defs/Source",
+      "description": "Where this copy came from."
+    },
+    "tier": {
+      "description": "T0 reads and explains; T1 may also propose changes, which a different administrator approves.",
+      "enum": [
+        "T0",
+        "T1"
+      ],
+      "type": "string"
+    },
+    "tools": {
+      "description": "Forgeline tool names. Outside Forgeline only remote MCP server tools work; see README.md.",
+      "items": {
+        "pattern": "^[A-Za-z0-9_.-]{1,96}$",
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "version": {
+      "description": "The agent file's version.",
+      "enum": [
+        "v1alpha1"
+      ],
+      "type": "string"
+    }
+  },
+  "required": [
+    "version",
+    "name",
+    "tier",
+    "instructions",
+    "source"
+  ],
+  "title": "Forgeline agent",
+  "type": "object"
+}
