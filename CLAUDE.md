@@ -19,6 +19,9 @@ what to do next**. The project is pre-alpha and maintained by one person.
   whenever you touch `internal/store` or `internal/docstore`.
 - `scripts/dev/` has a fake AWS CLI and a fake GitHub API for trying the console without real
   accounts. See its README.
+- The Docker Agent export is checked against the real CLI only when `FORGELINE_DOCKER_AGENT` names a
+  `docker-agent` binary (`go test ./internal/agentfile -run TestDockerYAMLLoadsInDockerAgent`). Run it after changing
+  `internal/agentfile/docker.go`.
 - The documentation site (GitHub Pages) is Starlight in `site/`. Write pages in `docs/` as Markdown; `site/scripts/sync.mjs`
   copies them in at build time (titles from front matter or the first heading, `relative_url` paths, callouts, `.md`
   links). Preview with `cd site && npm ci && npm run dev`; `node --test site/scripts/sync.test.mjs` runs in CI. Add a new
