@@ -105,8 +105,8 @@ audited.
   every other credential.
 - **Headless**: `forgeline agent run <name> --input file.json` and a small runner image use the API with a runner
   token. Model calls and tool calls still go through the server, so keys, checks and the audit stay in one place.
-- **Exporting** an agent to run with no Forgeline server at all is **not planned** (decision 3). It would carry its own
-  keys and skip the audit.
+- **Exporting** an agent to run with no Forgeline server at all was first not planned (decision 3); the maintainer has
+  since asked for it. [Note 046](046-agent-export.md) proposes how, without carrying keys out or skipping approval.
 
 ### 5. Code mode
 
@@ -185,7 +185,8 @@ Each step is checked on the Pi with real models before the next one.
    `anthropic/claude-haiku-5-5` answering while the assistant itself used a Claude Code token, its call priced in the
    log.
 2. ~~The code-mode sandbox~~: **local only** (maintainer, 2026-11-17).
-3. ~~Headless~~: **only through the server, as proposed** (maintainer, 2026-11-18). No standalone export.
+3. ~~Headless~~: **only through the server, as proposed** (maintainer, 2026-11-18). No standalone export. *Revised the
+   same day: the maintainer wants agents exportable too, in open formats; see [note 046](046-agent-export.md).*
 4. ~~A public route on the Pi~~: **yes** (maintainer, 2026-11-18). The exact address and the firewall or tunnel change
    are proposed separately and made only after the maintainer approves that exact change.
 5. ~~Playground spending~~: **playground runs count against the agent's monthly budget, as proposed** (maintainer,
