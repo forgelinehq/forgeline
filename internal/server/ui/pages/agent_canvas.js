@@ -1,7 +1,8 @@
 // Agent graphs on a canvas (design note 044, part 2), like n8n: nodes as cards, wires from the right port of one to
 // the left of the next, a palette to add nodes, a panel to set the selected one. The same canvas shows a run: each
 // node's status and visits, the wires taken, and a question waiting for an answer. The server checks every save.
-import { h, icon, iconAt, mount, spinner, errorBox, notice, toast, field, pill, drawer } from '../lib/dom.js';
+import { h, icon, iconAt, mount, spinner, errorBox, notice, toast, field, pill, drawer, leaveDialog } from '../lib/dom.js';
+import { renderMarkdown } from '../lib/mdview.js';
 import { get, post, atLeast } from '../lib/api.js';
 import { navigate } from '../lib/router.js';
 import { session } from '../app.js';
@@ -10,8 +11,10 @@ import { flowPath } from '../lib/flow.js';
 import {
   GNODE_W, GNODE_H, NODE_KINDS, branches, branchLabels, emptyGraph, updateNode, moveNode, removeNode, tidy,
   addWire, removeWire, wireProblem, nextLabel, stateKeys, autoPlace, wirePath, labelPoint, nodeSummary,
-  graphRunStatus, stagesToGraph, fitView, zoomAt, toWorld, pickerItems, addPicked, triggerSummary,
+  graphRunStatus, stagesToGraph, fitView, zoomAt, toWorld, pickerItems, addPicked, triggerSummary, readOptions,
 } from '../lib/agraph.js';
+import { avatar, chatPanel } from './agents.js';
+import { toolInfo, tierTitle } from '../lib/tools.js';
 
 const SCHEDULES = [[0, 'Only when started by hand'], [15, 'Every 15 minutes'], [60, 'Every hour'], [360, 'Every 6 hours'], [1440, 'Every day'], [10080, 'Every week']];
 const TONE = {
@@ -226,9 +229,9 @@ export async function graphEditorPage({ params }) {
   const admin = atLeast(session.role, 'admin');
   const el = h('div', {});
   mount(el, spinner());
-  let wf = null, agents = [], tools = [];
+  let wf = null, agents = [], tools = [], skills = [];
   try {
-    [agents, tools] = await Promise.all([get('/v1/ai/agents').then(r => r.agents), get('/v1/ai/tools').then(r => r.tools)]);
+    [agents, tools, skills] = await Promise.all([get('/v1/ai/agents').then(r => r.agents), get('/v1/ai/tools').then(r => r.tools), get('/v1/ai/skills').then(r => r.skills).catch(() => [])]);
     if (params.id !== 'new') wf = await get('/v1/ai/workflows/' + encodeURIComponent(params.id));
   } catch (e) { mount(el, errorBox(e.message)); return el; }
   if (!admin) { mount(el, notice('info', 'Only administrators change workflows.')); return el; }
@@ -237,7 +240,7 @@ export async function graphEditorPage({ params }) {
   const lookups = tools.filter(t => !t.needs && !NO_LOOKUP.has(t.name) && !t.name.startsWith('propose_')).map(t => t.name);
   const cur = wf && wf.versions.find(v => v.n === wf.current);
   let g = cur?.graph ? autoPlace(cur.graph) : cur ? stagesToGraph(cur) : emptyGraph();
-  let selected = '', problem = '', dirty = !wf;
+  let selected = '', problem = '', dirty = !wf, edited = false; // edited: changed since it was opened, so leaving asks
   const view = newView();
   const meta = { name: wf?.name || '', description: wf?.description || '', every: cur?.every_minutes || 0, runAs: cur?.run_as || 'developer', note: '', webhook: !!cur?.webhook, follow: (cur?.on_run_failed || []).join(', ') };
   const canvasBox = h('div', { class: 'relative' }), bar = h('div', {}), state = h('span', { class: 'text-xs', id: 'graph-dirty' });
@@ -245,7 +248,7 @@ export async function graphEditorPage({ params }) {
   const drawState = () => mount(state, dirty ? h('span', { class: 'pill-wait' }, wf ? 'Unsaved changes' : 'Not saved yet') : h('span', { class: 'muted' }, 'Saved as v' + wf.current));
   // A change redraws the canvas; the side panel is rebuilt only when its shape changes, so typing in one field and
   // clicking the next does not lose the click to a rebuilt panel.
-  const change = (next, panel = true) => { g = next; problem = ''; dirty = true; drawProblem(); drawState(); draw(panel); };
+  const change = (next, panel = true) => { g = next; problem = ''; dirty = edited = true; drawProblem(); drawState(); draw(panel); };
   // Keep a node that was just picked clear of the side panel (22rem and its margin) and of the left edge.
   const reveal = (id) => {
     const n = g.nodes.find(x => x.id === id), w = canvasBox.clientWidth;
@@ -285,24 +288,26 @@ export async function graphEditorPage({ params }) {
     if (panel) mount(panelSlot, n ? h('aside', { class: 'card card-pad absolute bottom-3 right-3 top-14 w-[22rem] max-w-[calc(100%-1.5rem)] space-y-3 overflow-y-auto shadow-lg', id: 'graph-panel' }, nodePanel(n)) : null);
   }
 
-  async function save(btn) {
+  async function save(btn, stay = false) {
     btn.disabled = true;
     try {
       const body = { name: meta.name, description: meta.description, every_minutes: Number(meta.every), run_as: meta.runAs, note: meta.note, graph: g,
         webhook: meta.webhook, on_run_failed: meta.follow.split(',').map(x => x.trim()).filter(Boolean) };
       const out = await post(wf ? '/v1/ai/workflows/' + wf.id + '/versions' : '/v1/ai/workflows', body);
       toast(wf ? 'Saved v' + out.current : 'Workflow created', 'ok');
-      navigate('/workflows/' + out.id);
-    } catch (e) { problem = e.message; drawProblem(); btn.disabled = false; }
+      edited = false;
+      if (!stay) navigate('/workflows/' + out.id);
+      return true;
+    } catch (e) { problem = e.message; drawProblem(); btn.disabled = false; if (stay) throw e; return false; }
   }
 
   // The workflow's settings, in a side panel so the canvas keeps the page.
   const openSettings = () => drawer('Workflow settings', () => {
-    const desc = h('input', { id: 'graph-desc', class: 'input', maxlength: '300', value: meta.description, placeholder: 'What it is for', oninput: (e) => { meta.description = e.target.value; dirty = true; } });
-    const every = h('select', { id: 'graph-every', class: 'input', onchange: (e) => { meta.every = e.target.value; dirty = true; } }, SCHEDULES.map(([v, l]) => h('option', { value: String(v), selected: Number(meta.every) === v }, l)));
-    const runAs = h('select', { id: 'graph-runas', class: 'input', onchange: (e) => { meta.runAs = e.target.value; dirty = true; } }, [['developer', 'Developer: may file change proposals'], ['viewer', 'Viewer: reads only']].map(([v, l]) => h('option', { value: v, selected: meta.runAs === v }, l)));
-    const hook = h('input', { type: 'checkbox', id: 'graph-webhook', checked: meta.webhook, onchange: (e) => { meta.webhook = e.target.checked; dirty = true; } });
-    const follow = h('input', { id: 'graph-follow', class: 'input', value: meta.follow, placeholder: 'pipeline names, or * for any', oninput: (e) => { meta.follow = e.target.value; dirty = true; } });
+    const desc = h('input', { id: 'graph-desc', class: 'input', maxlength: '300', value: meta.description, placeholder: 'What it is for', oninput: (e) => { meta.description = e.target.value; dirty = edited = true; } });
+    const every = h('select', { id: 'graph-every', class: 'input', onchange: (e) => { meta.every = e.target.value; dirty = edited = true; } }, SCHEDULES.map(([v, l]) => h('option', { value: String(v), selected: Number(meta.every) === v }, l)));
+    const runAs = h('select', { id: 'graph-runas', class: 'input', onchange: (e) => { meta.runAs = e.target.value; dirty = edited = true; } }, [['developer', 'Developer: may file change proposals'], ['viewer', 'Viewer: reads only']].map(([v, l]) => h('option', { value: v, selected: meta.runAs === v }, l)));
+    const hook = h('input', { type: 'checkbox', id: 'graph-webhook', checked: meta.webhook, onchange: (e) => { meta.webhook = e.target.checked; dirty = edited = true; } });
+    const follow = h('input', { id: 'graph-follow', class: 'input', value: meta.follow, placeholder: 'pipeline names, or * for any', oninput: (e) => { meta.follow = e.target.value; dirty = edited = true; } });
     return h('div', { class: 'space-y-4' }, field('Description', desc, null, 'graph-desc'),
       h('h3', { class: 'h-section pt-2' }, 'What starts it'),
       field('Schedule', every, 'Every run can also be started by hand.', 'graph-every'),
@@ -316,7 +321,7 @@ export async function graphEditorPage({ params }) {
 
   function drawBar() {
     const saveBtn = h('button', { class: 'btn-primary', id: 'graph-save', type: 'button', onclick: () => save(saveBtn) }, icon('check', 'size-4'), wf ? 'Save version' : 'Create workflow');
-    const name = h('input', { id: 'graph-name', class: 'input w-64 max-w-full font-semibold', maxlength: '60', value: meta.name, placeholder: 'Name the workflow', 'aria-label': 'Name', oninput: (e) => { meta.name = e.target.value; dirty = true; drawState(); } });
+    const name = h('input', { id: 'graph-name', class: 'input w-64 max-w-full font-semibold', maxlength: '60', value: meta.name, placeholder: 'Name the workflow', 'aria-label': 'Name', oninput: (e) => { meta.name = e.target.value; dirty = edited = true; drawState(); } });
     const note = h('input', { id: 'graph-note', class: 'input w-56 max-w-full', maxlength: '200', placeholder: wf ? 'What changed and why' : 'First version', 'aria-label': 'Note for this version', oninput: (e) => { meta.note = e.target.value; } });
     mount(bar, h('div', { class: 'mb-3 flex flex-wrap items-center gap-2' },
       h('a', { class: 'btn-ghost btn-sm', href: wf ? '#/workflows/' + wf.id : '#/workflows', 'aria-label': 'Back' }, icon('chevron', 'size-4 rotate-180'), 'Workflows'),
@@ -346,14 +351,60 @@ export async function graphEditorPage({ params }) {
   };
   const list = (s) => s.split(',').map(x => x.trim()).filter(Boolean);
 
+  // The panel reads top to bottom like a Langflow component: what the node is, who does the work, what goes in, what
+  // comes out, where it goes next. Ids stay out of the way; names are what people see.
+  const section = (title, hint, ...kids) => h('section', { class: 'space-y-2 border-t border-slate-200 pt-3 dark:border-slate-800', 'data-section': title },
+    h('div', {}, h('h3', { class: 'text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400' }, title), hint ? h('p', { class: 'muted text-xs' }, hint) : null), ...kids);
+  const skillName = (id) => skills.find(x => x.id === id)?.name || id;
+
+  // Try an agent with this node's task: its own chat, beside the canvas, answering with the version the node uses.
+  async function tryAgent(n) {
+    let ag;
+    try { ag = await get('/v1/ai/agents/' + encodeURIComponent(n.agent)); } catch (e) { return toast(e.message, 'error'); }
+    const v = { n: n.agent_n || ag.current };
+    drawer('Try ' + ag.name, () => {
+      const box = chatPanel(ag, v);
+      const ta = box.querySelector('#agent-input');
+      if (ta && n.task) ta.value = n.task;
+      return h('div', { class: 'space-y-3' }, h('p', { class: 'muted text-xs' }, 'A chat with version ' + v.n + ', as you, with only its own tools. The node\'s task is filled in; send it as it is or change it. Nothing here changes the workflow.'), box);
+    }, { subtitle: 'Playground' });
+  }
+
+  function agentCard(n, set) {
+    const a = agents.find(x => x.id === n.agent);
+    const pick = select_(a ? 'Use another agent' : 'Agent', n.agent || '', [['', 'Pick one of your agents'], ...live.map(x => [x.id, x.name])], v => set({ agent: v, agent_n: 0 }), 'g-agent');
+    const create = h('a', { class: 'text-xs underline', href: '#/agents/new/build', target: '_blank', rel: 'noopener', id: 'g-new-agent' }, 'Build a new agent');
+    if (!a) return [pick, h('p', { class: 'hint -mt-1' }, 'An agent brings its model, instructions, skills and tools. ', create, ' (opens beside this one), then pick it here.')];
+    const ver = n.agent_n || a.current;
+    const row = (label, ...kids) => h('div', { class: 'grid grid-cols-[4.5rem_1fr] gap-2 text-xs' }, h('span', { class: 'muted' }, label), h('span', { class: 'min-w-0' }, ...kids));
+    return [h('div', { class: 'space-y-2 rounded-xl border border-slate-200 bg-slate-50/60 p-3 dark:border-slate-700 dark:bg-slate-800/40', id: 'g-agent-card' },
+      h('div', { class: 'flex items-center gap-2.5' }, avatar(a.name, a.id, 'size-9 text-xs'),
+        h('div', { class: 'min-w-0' }, h('div', { class: 'truncate font-semibold' }, a.name), h('div', { class: 'muted text-xs' }, 'version ' + ver + (n.agent_n ? ' (kept)' : ' (newest)') + ' · ' + tierTitle(a.tier)))),
+      row('Model', a.model || 'the assistant\'s model'),
+      row('Skills', a.skills?.length ? a.skills.map(sp => skillName(sp.id)).join(', ') : h('span', { class: 'muted' }, 'none')),
+      row('Tools', a.tools?.length ? a.tools.map(t => toolInfo(t).title).join(', ') : h('span', { class: 'muted' }, 'none: it answers from what it is given')),
+      n.agent_n && n.agent_n < a.current ? h('button', { type: 'button', class: 'btn-ghost btn-sm', id: 'g-agent-newest', onclick: () => set({ agent_n: 0 }) }, 'Use its newest version (v' + a.current + ')') : null,
+      h('div', { class: 'flex flex-wrap gap-2 pt-1' },
+        h('button', { type: 'button', class: 'btn-primary btn-sm', id: 'g-try', onclick: () => tryAgent(n) }, icon('send', 'size-3.5'), 'Try it'),
+        h('a', { class: 'btn-secondary btn-sm', href: '#/agents/' + a.id + '/build', target: '_blank', rel: 'noopener' }, icon('edit', 'size-3.5'), 'Change the agent'))),
+      pick];
+  }
+
+  function readsField(n, set, hint) {
+    const opts = readOptions(g, n.id);
+    return h('div', {}, h('div', { class: 'label' }, 'Also hand it'), h('p', { class: 'muted -mt-1 mb-1.5 text-xs' }, hint),
+      opts.length ? h('div', { class: 'space-y-1', id: 'g-reads' }, opts.map(o => h('label', { class: 'flex items-start gap-2 text-sm' },
+        h('input', { type: 'checkbox', class: 'mt-1', checked: (n.reads || []).includes(o.key), 'data-read': o.key, onchange: (e) => set({ reads: e.target.checked ? [...(n.reads || []), o.key] : (n.reads || []).filter(x => x !== o.key) }) }),
+        h('span', {}, h('span', { class: 'font-medium' }, o.label), h('span', { class: 'muted block text-xs' }, o.sub)))))
+        : h('p', { class: 'muted text-xs' }, 'Nothing yet: add nodes before this one and their answers show up here.'));
+  }
+
   function agentFields(n, set) {
     return [
-      select_('Agent', n.agent || '', [['', 'Pick an agent'], ...live.map(a => [a.id, a.name + ' (' + a.id + ')'])], v => set({ agent: v, agent_n: 0 }), 'g-agent'),
-      n.agent_n ? h('p', { class: 'hint -mt-2' }, 'Pinned at v' + n.agent_n + '. Pick the agent again to move to its current version.') : h('p', { class: 'hint -mt-2' }, 'Pinned at its current version when saved.'),
-      textarea(n.kind === 'decide' ? 'What to decide' : 'Task', n.task, v => set({ task: v }), 'g-task', 4),
-      h('div', {}, h('div', { class: 'label' }, 'Reads (handed over as data)'), h('div', { class: 'flex flex-wrap gap-2', id: 'g-reads' }, stateKeys(g, n.id).map(k => h('label', { class: 'flex items-center gap-1.5 text-sm' },
-        h('input', { type: 'checkbox', checked: (n.reads || []).includes(k), 'data-read': k, onchange: (e) => set({ reads: e.target.checked ? [...(n.reads || []), k] : (n.reads || []).filter(x => x !== k) }) }), h('code', { class: 'text-xs' }, k)))),
-        !stateKeys(g, n.id).length ? h('p', { class: 'hint' }, 'Nothing to read yet.') : null),
+      section('Who does it', null, ...agentCard(n, set)),
+      section('Input', 'What it is asked, and what it is given to work from.',
+        textarea(n.kind === 'decide' ? 'What to decide' : 'Task', n.task, v => set({ task: v }), 'g-task', 4),
+        readsField(n, set, 'Earlier answers, passed as data: it reads them but does not take orders from them.')),
     ];
   }
 
@@ -371,23 +422,26 @@ export async function graphEditorPage({ params }) {
       h('div', { class: 'flex min-w-0 items-center gap-2' }, tileBox(n.kind, 'size-7'),
         h('h2', { class: 'truncate font-semibold' }, NODE_KINDS[n.kind].label), h('code', { class: 'muted truncate text-xs' }, n.id)),
       h('button', { class: 'btn-ghost btn-sm', type: 'button', 'aria-label': 'Close', onclick: () => select('') }, icon('x', 'size-4'))),
-      input('Name', n.name, v => set({ name: v }), { maxlength: '60', placeholder: NODE_KINDS[n.kind].label, id: 'g-name' })];
+      h('p', { class: 'muted -mt-1 text-xs', id: 'g-about' }, NODE_KINDS[n.kind].note + '.'),
+      input('Name on the canvas', n.name, v => set({ name: v }), { maxlength: '60', placeholder: NODE_KINDS[n.kind].label, id: 'g-name' })];
     switch (n.kind) {
       case 'start':
         out.push(h('p', { class: 'text-sm' }, 'Starts ' + triggerSummary(meta) + '.'), h('button', { type: 'button', class: 'btn-secondary btn-sm', onclick: openSettings }, icon('gear', 'size-3.5'), 'Change what starts it'));
         break;
       case 'agent':
-        out.push(...agentFields(n, set), input('Writes these fields too', (n.fields || []).join(', '), v => set({ fields: list(v) }), { id: 'g-fields', placeholder: 'severity, service' }),
-          h('p', { class: 'hint -mt-2' }, 'The agent is asked for them at the end of its answer; a decision can test them.'));
+        out.push(...agentFields(n, set), section('Output', 'Its answer is kept for the nodes after it, and shown in the run.',
+          h('p', { class: 'text-sm' }, 'Saved as ', h('span', { class: 'font-medium' }, n.name || 'Agent'), h('code', { class: 'muted ml-1 text-xs' }, n.id)),
+          input('Pull these out of the answer too', (n.fields || []).join(', '), v => set({ fields: list(v) }), { id: 'g-fields', placeholder: 'severity, service' }),
+          h('p', { class: 'hint -mt-1' }, 'Short values such as severity: high. The agent is asked for them at the end of its answer, and a Decide node can test them.')));
         break;
       case 'lookup':
-        out.push(select_('Lookup', n.tool || '', [['', 'Pick a lookup'], ...lookups.map(t => [t, t])], v => set({ tool: v }), 'g-tool'),
+        out.push(section('Input', 'What it reads. No model is asked.'), select_('Lookup', n.tool || '', [['', 'Pick a lookup'], ...lookups.map(t => [t, toolInfo(t).title + ' (' + t + ')'])], v => set({ tool: v }), 'g-tool'),
           textarea('Arguments (JSON)', n.args ? JSON.stringify(n.args) : '{}', v => { try { set({ args: v ? JSON.parse(v) : null }); } catch { toast('Not valid JSON', 'error'); } }, 'g-args', 2),
           n.tool ? h('p', { class: 'hint -mt-2', id: 'g-tool-help' }, 'It takes ' + (tools.find(t => t.name === n.tool)?.help || '{}') + '. Numbers without quotes.') : null,
-          h('p', { class: 'hint' }, 'Reads one thing without a model. What it returns is saved under ' + n.id + '.'));
+          section('Output', 'What it returns is kept for the nodes after it.', h('p', { class: 'text-sm' }, 'Saved as ', h('span', { class: 'font-medium' }, n.name || 'Lookup'), h('code', { class: 'muted ml-1 text-xs' }, n.id))));
         break;
       case 'decide': {
-        out.push(select_('Decide by', n.by || 'rule', [['rule', 'A rule on what earlier nodes wrote'], ['agent', 'An agent choosing a branch']], v => set({ by: v, ...(v === 'rule' ? { agent: null, task: null, reads: null } : { rules: null }) }), 'g-by'));
+        out.push(section('How it chooses', 'Each wire out of a Decide node is a branch; it takes one.'), select_('Decide by', n.by || 'rule', [['rule', 'A rule on what earlier nodes wrote'], ['agent', 'An agent choosing a branch']], v => set({ by: v, ...(v === 'rule' ? { agent: null, task: null, reads: null } : { rules: null }) }), 'g-by'));
         if ((n.by || 'rule') === 'rule') {
           const rules = n.rules || [];
           const keys = stateKeys(g, n.id);
@@ -407,7 +461,7 @@ export async function graphEditorPage({ params }) {
         break;
       }
       case 'ask':
-        out.push(textarea('Question', n.question, v => set({ question: v }), 'g-question', 2),
+        out.push(section('The question', 'The run stops here until someone answers in the run view.'), textarea('Question', n.question, v => set({ question: v }), 'g-question', 2),
           input('Choices', (n.choices || []).join(', '), v => set({ choices: list(v).map(x => x.toLowerCase()) }), { id: 'g-choices', placeholder: 'approve, reject (empty: a free answer)' }),
           input('Who may answer', (n.answerers || []).join(', '), v => set({ answerers: list(v) }), { id: 'g-answerers', placeholder: 'empty: any administrator' }),
           h('p', { class: 'hint' }, 'The run waits here (up to 7 days). The answer is saved under ' + n.id + ' and, with choices, picks the wire.'));
@@ -417,21 +471,24 @@ export async function graphEditorPage({ params }) {
           input('Summary', n.summary, v => set({ summary: v }), { id: 'g-summary', maxlength: '500' }));
         break;
     }
-    if (n.kind !== 'start' && n.kind !== 'end') out.push(input('Most times it may run', n.max_visits || '', v => set({ max_visits: v || null }), { type: 'number', min: '1', max: '10', placeholder: '3', id: 'g-max' }));
+    if (n.kind !== 'start' && n.kind !== 'end') out.push(h('details', { class: 'border-t border-slate-200 pt-3 dark:border-slate-800', id: 'g-limits' },
+      h('summary', { class: 'cursor-pointer text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400' }, 'Limits'),
+      h('div', { class: 'mt-2' }, input('Most times it may run in one run', n.max_visits || '', v => set({ max_visits: v || null }), { type: 'number', min: '1', max: '10', placeholder: '3', id: 'g-max' }),
+        h('p', { class: 'hint' }, 'Only matters in a loop, when a wire leads back to it. Then the run stops it after this many times.'))));
     // Its wires, and one more.
     const mine = g.edges.filter(e => e.from === n.id);
     const others = g.nodes.filter(x => x.id !== n.id && x.kind !== 'start');
-    const to = h('select', { class: 'input', id: 'g-wire-to', 'aria-label': 'Wire to' }, others.map(x => h('option', { value: x.id }, (x.name || NODE_KINDS[x.kind].label) + ' (' + x.id + ')')));
+    const to = h('select', { class: 'input', id: 'g-wire-to', 'aria-label': 'Wire to' }, others.map(x => h('option', { value: x.id }, x.name || NODE_KINDS[x.kind].label)));
     const label = branches(n) ? h('select', { class: 'input w-auto', id: 'g-wire-when', 'aria-label': 'Branch' }, branchLabels(n).map(l => h('option', { value: l }, l))) : null;
-    out.push(h('div', { class: 'border-t border-slate-200 pt-3 dark:border-slate-800' }, h('h3', { class: 'h-section mb-2' }, 'Wires out'),
+    out.push(h('div', { class: 'border-t border-slate-200 pt-3 dark:border-slate-800' }, h('h3', { class: 'text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400' }, 'Next'), h('p', { class: 'muted mb-2 text-xs' }, 'Where the run goes after this node. Drag from its right edge on the canvas, or pick here.'),
       mine.length ? h('ul', { class: 'space-y-1 text-sm', id: 'g-wires' }, mine.map(e => h('li', { class: 'flex items-center justify-between gap-2' },
-        h('span', {}, e.when ? h('span', { class: 'mr-1 font-medium text-violet-700 dark:text-violet-300' }, e.when + ' →') : '→ ', g.nodes.find(x => x.id === e.to)?.name || e.to),
+        h('span', {}, e.when ? h('span', { class: 'mr-1 font-medium text-violet-700 dark:text-violet-300' }, 'if ' + e.when + ' →') : '→ ', (() => { const t = g.nodes.find(x => x.id === e.to); return t ? t.name || NODE_KINDS[t.kind].label : e.to; })()),
         h('button', { class: 'btn-ghost btn-sm', type: 'button', 'aria-label': 'Remove the wire to ' + e.to, onclick: () => change(removeWire(g, e.from, e.to, e.when || '')) }, icon('x', 'size-3.5'))))) : h('p', { class: 'muted text-xs' }, 'None yet.'),
       n.kind !== 'end' && others.length ? h('div', { class: 'mt-2 flex flex-wrap gap-2' }, label, to, h('button', { class: 'btn-secondary btn-sm', type: 'button', id: 'g-wire-add', onclick: () => {
         const why = wireProblem(g, n.id, to.value, label ? label.value : '');
         if (why) return toast(why, 'error');
         change(addWire(g, n.id, to.value, label ? label.value : ''));
-      } }, icon('link', 'size-3.5'), 'Wire')) : null,
+      } }, icon('link', 'size-3.5'), 'Connect')) : null,
       n.kind !== 'end' ? h('button', { class: 'btn-secondary btn-sm mt-2', type: 'button', id: 'g-add-after', onclick: () => openPicker(n.id) }, icon('plus', 'size-3.5'), 'Add a node after this one') : null));
     if (n.kind !== 'start') out.push(h('div', { class: 'flex justify-end' }, h('button', { class: 'btn-ghost btn-sm text-rose-600 dark:text-rose-400', type: 'button', id: 'g-remove', onclick: () => remove(n.id) }, icon('trash', 'size-3.5'), 'Remove node')));
     return out;
@@ -442,6 +499,7 @@ export async function graphEditorPage({ params }) {
     cur && !cur.graph ? h('div', { class: 'mb-3' }, notice('info', 'This workflow had stages. They are drawn here as a graph; saving makes a new version as a graph.')) : null,
     canvasBox);
   drawBar(); drawState(); draw();
+  el.leaveGuard = () => ({ dirty: edited, ask: () => leaveDialog({ what: 'this workflow', save: () => save({}, true) }) });
   return el;
 }
 
@@ -460,7 +518,7 @@ export function graphRunView(r, g, agents, reload) {
       waitingNode ? askCard(r, waitingNode, reload) : null,
       graphCanvas(g, { statuses, selected, agentName, view, onSelect: (id) => { selected = id; draw(); } }),
       h('section', { class: 'card card-pad' },
-        h('div', { class: 'mb-2 flex flex-wrap items-center justify-between gap-2' }, h('h2', { class: 'h-section' }, selected ? 'Node ' + selected : 'Every step, in order'),
+        h('div', { class: 'mb-2 flex flex-wrap items-center justify-between gap-2' }, h('h2', { class: 'h-section' }, selected ? (() => { const n = g.nodes.find(x => x.id === selected); return n ? (n.name || NODE_KINDS[n.kind].label) + ': what it did' : selected; })() : 'Every step, in order'),
           h('div', { class: 'flex items-center gap-3 text-xs muted' }, h('span', {}, (r.steps || 0) + ' of 50 steps'), selected ? h('button', { class: 'btn-ghost btn-sm', type: 'button', onclick: () => { selected = ''; draw(); } }, 'Show all') : null)),
         visits.length ? h('ol', { class: 'space-y-2', id: 'graph-visits' }, visits.map(v => h('li', { class: 'rounded-md bg-slate-50 p-2.5 text-sm dark:bg-slate-900', 'data-visit': v.node + '#' + v.visit, 'data-status': v.status },
           h('div', { class: 'mb-1 flex flex-wrap items-center justify-between gap-2' },
@@ -470,7 +528,7 @@ export function graphRunView(r, g, agents, reload) {
           v.answered_by ? h('p', { class: 'muted text-xs' }, 'Answered by ' + v.answered_by) : null,
           v.error ? h('p', { class: 'text-rose-700 dark:text-rose-400' }, v.error) : null,
           v.input ? h('details', {}, h('summary', { class: 'cursor-pointer text-xs' }, 'What went in'), h('pre', { class: 'mt-1 max-h-64 overflow-auto whitespace-pre-wrap text-xs' }, v.input)) : null,
-          v.output ? h('pre', { class: 'mt-1 max-h-72 overflow-auto whitespace-pre-wrap text-sm', 'data-output': '' }, v.output) : null,
+          v.output ? h('div', { class: 'mt-1 max-h-96 overflow-auto break-words', 'data-output': '' }, renderMarkdown(v.output)) : null,
           v.lookups?.length ? h('p', { class: 'muted mt-1 text-xs' }, 'Looked up: ' + v.lookups.join(', ')) : null)))
           : h('p', { class: 'muted text-sm' }, 'Nothing has run here yet.')),
       Object.keys(r.state || {}).length ? h('details', { class: 'card card-pad' }, h('summary', { class: 'cursor-pointer h-section' }, 'The state'),

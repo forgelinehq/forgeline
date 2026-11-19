@@ -7,6 +7,7 @@ section in the pull request that makes the change; a release moves it under its 
 ## [Unreleased]
 
 ### Fixed
+- **Agent answers show as Markdown** in workflow runs, missions and an agent's chat, instead of raw `**` and `-`.
 - **Two tests that failed now and then on CI.** The plugin sweeper test ended while the sweeper could still write into
   its directory (it now waits for the sweeper to stop), and the server tests waited only 5 seconds for background work
   on a busy runner (now 20; a passing test still returns at once). A red main stops the Pi's updater from deploying.
@@ -62,6 +63,9 @@ section in the pull request that makes the change; a release moves it under its 
 - **After a session ends**, the console stops polling the server (it asked every minute, forever).
 
 ### Added
+- **Clearer workflow nodes.** A node's panel is in sections (who does it, input, output, next, limits) with names
+  instead of ids, the agent as a card with its model, skills and tools, and **Try it**: a playground chat with the
+  node's task filled in. Leaving the canvas or the agent builder with unsaved changes asks to save, discard or stay.
 - **Download an agent** (design note 046). An agent's page offers the version you are looking at as a Forgeline bundle
   (`agent.yaml`, with its schema in `schema/agent.v1alpha1.schema.json`, and each skill as an Agent Skills folder) or
   as a Docker Agent file (`docker agent run`), with its remote MCP servers and skills. Forgeline's own tools stay

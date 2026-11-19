@@ -13,7 +13,7 @@ import (
 const agraphCases = `
 import { emptyGraph, addNode, updateNode, removeNode, addWire, removeWire, wireProblem, nextLabel, branchLabels, stateKeys,
   autoPlace, tidy, wirePath, graphRunStatus, stagesToGraph, nodeSummary, fitView, zoomAt, toWorld, pickerItems, addPicked,
-  triggerSummary } from './agraph.mjs';
+  triggerSummary, readOptions } from './agraph.mjs';
 let failed = 0;
 const eq = (name, got, want) => { const g = JSON.stringify(got), w = JSON.stringify(want); if (g !== w) { failed++; console.error('FAIL ' + name + '\n  got  ' + g + '\n  want ' + w); } };
 
@@ -108,6 +108,10 @@ const lone = addPicked(emptyGraph(), dec, '');
 eq('picked with nothing selected: not wired', lone.graph.edges, [{ from: 'start', to: 'end' }]);
 const endAfter = addPicked(emptyGraph(), groups[1].items[5], 'start');
 eq('an end after a wired node goes beside it', endAfter.graph.edges, [{ from: 'start', to: 'end' }, { from: 'start', to: 'end-2' }]);
+{
+  const rg = { nodes: [{ id: 'start', kind: 'start' }, { id: 's1-1', kind: 'agent', name: 'Security check', fields: ['severity'] }, { id: 'look', kind: 'lookup' }, { id: 'mine', kind: 'agent' }], edges: [] };
+  eq('reads are named for people', readOptions(rg, 'mine'), [{ key: 'look', label: 'Lookup', sub: 'its answer' }, { key: 's1-1', label: 'Security check', sub: 'its answer' }, { key: 'severity', label: 'severity', sub: 'a field from Security check' }]);
+}
 eq('triggers', [triggerSummary({}), triggerSummary({ every: 15, webhook: true, follow: 'deploy' }), triggerSummary({ every: 1440 })], ['by hand', 'by hand · every 15 min · webhook · failed runs', 'by hand · daily']);
 if (failed) process.exit(1);
 console.log(JSON.stringify(conv));

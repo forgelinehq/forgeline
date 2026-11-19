@@ -277,6 +277,22 @@ export function confirmDialog({ title, body, confirmLabel = 'Confirm', cancelLab
   }).then(v => v === true);
 }
 
+/** Asks what to do with unsaved changes before leaving a page. save() resolves true once saved. Resolves true to
+ *  leave (saved or discarded), false to keep editing. */
+export function leaveDialog({ what = 'this page', save }) {
+  return modal('Save your changes?', (close) => {
+    const err = h('div', {});
+    const saveBtn = h('button', { class: 'btn-primary', type: 'button', id: 'leave-save', onclick: async () => {
+      saveBtn.disabled = true;
+      try { if (await save()) close(true); else saveBtn.disabled = false; } catch (e) { mount(err, errorBox(e.message)); saveBtn.disabled = false; }
+    } }, 'Save and leave');
+    return h('div', {}, h('p', { class: 'text-sm text-slate-600 dark:text-slate-300' }, 'You changed ' + what + ' and have not saved it. Leaving now loses the changes.'), err,
+      h('div', { class: 'mt-5 flex flex-wrap justify-end gap-2' },
+        h('button', { class: 'btn-secondary', type: 'button', id: 'leave-stay', onclick: () => close(false) }, 'Keep editing'),
+        h('button', { class: 'btn-secondary text-rose-700 dark:text-rose-300', type: 'button', id: 'leave-discard', onclick: () => close(true) }, 'Discard changes'), saveBtn));
+  }).then(v => v === true);
+}
+
 // --- small building blocks ---
 
 export function pageHeader(title, subtitle, ...actions) {

@@ -134,6 +134,20 @@ export function stateKeys(g, except = '') {
   return [...keys].sort();
 }
 
+/** What a node can be handed from the others, labelled for people: a node's own answer by its name, an extra field
+ *  with the node that writes it. Same keys as stateKeys. */
+export function readOptions(g, except = '') {
+  const name = (n) => n.name || NODE_KINDS[n.kind].label;
+  const out = [];
+  for (const k of stateKeys(g, except)) {
+    const n = g.nodes.find(x => x.id === k);
+    if (n) { out.push({ key: k, label: name(n), sub: 'its answer' }); continue; }
+    const by = g.nodes.filter(x => x.id !== except && (x.fields || []).includes(k)).map(name);
+    out.push({ key: k, label: k, sub: 'a field from ' + (by.join(', ') || 'an earlier node') });
+  }
+  return out;
+}
+
 /** Places nodes that have no position: columns by distance from the start, as n8n lays out an import. */
 export function autoPlace(g) {
   if (g.nodes.every(n => n.x || n.y)) return clone(g);

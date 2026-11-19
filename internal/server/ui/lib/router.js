@@ -7,6 +7,10 @@
 // A page that takes a moment is replaced by a loading line at once, so the page before it never stays on screen
 // looking current. pageSignal() is aborted when the person leaves; slow reads pass it to get() so they stop
 // holding one of the browser's few connections to the server.
+//
+// A page with unsaved work sets `leaveGuard` on its element: a function returning { dirty, ask }. Before the router
+// leaves it (a link, the back button), it puts the address back and awaits ask(), which resolves true to go on; the
+// browser's own prompt covers closing or reloading the tab.
 
 const routes = [];
 let current = null;
@@ -14,6 +18,14 @@ let host = null;
 let renderToken = 0;
 let pageAbort = new AbortController();
 const LOADING_AFTER = 120; // ms: quicker pages swap without a flash
+let shownPath = null; // the address of the page on screen
+let leaving = false;  // set once a guarded page agreed to be left
+
+function unsaved() {
+  try { return current && current.leaveGuard ? current.leaveGuard() : null; } catch (e) { console.error(e); return null; }
+}
+
+addEventListener('beforeunload', (e) => { const g = unsaved(); if (g && g.dirty) { e.preventDefault(); e.returnValue = ''; } });
 
 /** Aborted when the person navigates away from the page that is showing (or loading). */
 export function pageSignal() { return pageAbort.signal; }
@@ -50,6 +62,7 @@ export function reload() { return show(); }
 
 /** Runs the current page's cleanup (timers, streams) and forgets it. Call before leaving the app shell. */
 export function stop() {
+  shownPath = null;
   renderToken++; // a page still loading must not appear afterwards
   pageAbort.abort();
   pageAbort = new AbortController();
@@ -58,6 +71,19 @@ export function stop() {
 }
 
 async function show(notFound) {
+  const target = currentPath();
+  if (!leaving && shownPath !== null && target !== shownPath) {
+    const g = unsaved();
+    if (g && g.dirty) {
+      history.replaceState(null, '', '#' + shownPath); // stay put (no hashchange) while the person decides
+      if (!(await g.ask())) return;
+      leaving = true;
+      location.hash = '#' + target; // shows it through the hashchange
+      return;
+    }
+  }
+  leaving = false;
+  shownPath = target;
   const token = ++renderToken;
   pageAbort.abort();
   pageAbort = new AbortController();

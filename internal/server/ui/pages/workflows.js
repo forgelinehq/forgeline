@@ -1,4 +1,5 @@
 import { h, icon, mount, clear, pageHeader, pill, relTime, absTime, emptyState, spinner, errorBox, notice, toast, modal, confirmDialog, field, duration, copyButton } from '../lib/dom.js';
+import { renderMarkdown } from '../lib/mdview.js';
 import { get, post, del, atLeast } from '../lib/api.js';
 import { navigate } from '../lib/router.js';
 import { session } from '../app.js';
@@ -295,7 +296,7 @@ export async function workflowRunPage({ params }) {
         h('div', { class: 'space-y-2' }, st.steps.map(sp => h('div', { class: 'rounded-md bg-slate-50 p-2.5 text-sm dark:bg-slate-900', 'data-step-status': sp.status },
           h('div', { class: 'mb-1 flex flex-wrap items-center justify-between gap-2' }, h('span', { class: 'font-medium' }, sp.agent_label || sp.agent), statusPill(sp.status)),
           sp.error && h('p', { class: 'text-rose-700 dark:text-rose-400' }, sp.error),
-          sp.output && h('pre', { class: 'whitespace-pre-wrap text-sm', 'data-output': '' }, sp.output),
+          sp.output && h('div', { class: 'max-w-none break-words', 'data-output': '' }, renderMarkdown(sp.output)),
           sp.lookups?.length ? h('p', { class: 'muted mt-1 text-xs' }, 'Looked up: ' + sp.lookups.join(', ')) : null)))))));
     clearTimeout(timer);
     if (live) timer = setTimeout(() => { if (document.body.contains(el)) load(); }, 3000);
