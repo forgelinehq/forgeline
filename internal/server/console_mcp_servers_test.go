@@ -114,6 +114,23 @@ func TestMCPServersRemoteDiscoverApproveAndUse(t *testing.T) {
 	newAgentWith(400) // not turned on yet
 	m.admin.expect(200, "PUT", "/v1/mcp-servers/weather/tools", map[string]any{"enabled": []string{"get_weather"}})
 	newAgentWith(201)
+	// The builder groups it under its server.
+	var listed struct {
+		Tools []struct {
+			Name, Needs, Server, Tool string
+			ServerName                string `json:"server_name"`
+		}
+	}
+	json.Unmarshal(m.dev.expect(200, "GET", "/v1/ai/tools", nil), &listed)
+	var fromServer []string
+	for _, x := range listed.Tools {
+		if x.Needs == "mcp-server" {
+			fromServer = append(fromServer, x.Name+" "+x.Server+" "+x.ServerName+" "+x.Tool)
+		}
+	}
+	if strings.Join(fromServer, ",") != "mcp_weather_get_weather weather Weather get_weather" {
+		t.Errorf("MCP tools listed as %q", fromServer)
+	}
 
 	// The agent uses it; the answer is data, the call is audited.
 	askAgent := func(args map[string]any) {

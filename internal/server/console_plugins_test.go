@@ -201,12 +201,12 @@ func TestAnAgentCanBeGivenAPluginToolOnlyWhenItExists(t *testing.T) {
 	installPlugin(m, e.SHA256, 201, nil)
 	m.admin.expect(201, "POST", "/v1/ai/agents", agentBody("Wx", nil, []string{"plugin_weather_pack_wx_forecast"}, "T0"))
 	var tools struct {
-		Tools []struct{ Name, Needs string }
+		Tools []struct{ Name, Needs, Plugin, Tool string }
 	}
 	json.Unmarshal(m.dev.expect(200, "GET", "/v1/ai/tools", nil), &tools)
 	found := false
 	for _, x := range tools.Tools {
-		found = found || x.Name == "plugin_weather_pack_wx_forecast" && x.Needs == "plugins"
+		found = found || x.Name == "plugin_weather_pack_wx_forecast" && x.Needs == "plugins" && x.Plugin == "weather-pack" && x.Tool == "forecast"
 	}
 	if !found {
 		t.Error("the tools list does not show the plugin tool")

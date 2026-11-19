@@ -15,9 +15,9 @@ const TONE = {
  * `input` is the textarea (read .value from it). `check(text)` returns [{level, text}]; call
  * `refresh()` when something the check depends on changes, such as the agent's tier.
  */
-export function mdEditor({ id, value = '', maxlength, placeholder, check }) {
-  const input = h('textarea', { id, class: 'block h-72 w-full resize-y bg-transparent p-3.5 font-mono text-[13px] leading-relaxed placeholder:text-slate-400 focus:outline-none', maxlength: maxlength ? String(maxlength) : null, placeholder, spellcheck: 'false' }, value);
-  const preview = h('div', { class: 'h-72 overflow-auto bg-slate-50/70 p-4 text-sm dark:bg-slate-950/40', 'aria-label': 'Formatted preview' });
+export function mdEditor({ id, value = '', maxlength, placeholder, check, height = 'h-72', mode = 'split' }) {
+  const input = h('textarea', { id, class: 'block ' + height + ' w-full resize-y bg-transparent p-3.5 font-mono text-[13px] leading-relaxed placeholder:text-slate-400 focus:outline-none', maxlength: maxlength ? String(maxlength) : null, placeholder, spellcheck: 'false' }, value);
+  const preview = h('div', { class: height + ' overflow-auto bg-slate-50/70 p-4 text-sm dark:bg-slate-950/40', 'aria-label': 'Formatted preview' });
   const panes = h('div', { class: 'grid' }, input, preview);
   const checks = h('ul', { class: 'space-y-1 text-xs', 'aria-live': 'polite' });
   const count = h('span', { class: 'muted flex-none whitespace-nowrap text-xs tabular-nums' });
@@ -64,7 +64,7 @@ export function mdEditor({ id, value = '', maxlength, placeholder, check }) {
     h('span', { class: 'flex-1' }), seg);
 
   input.addEventListener('input', refresh);
-  setMode('split');
+  setMode(mode);
   refresh();
   const el = h('div', {},
     h('div', { class: 'overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-500/25 dark:border-slate-700 dark:bg-slate-900' }, bar, panes),
