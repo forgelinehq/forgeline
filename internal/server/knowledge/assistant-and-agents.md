@@ -133,7 +133,9 @@ workflow starts and what it may do are under **Settings**.
 Loops are allowed: each node runs at most its limit (3 unless you say up to 10), and a run at most 50 steps. A run is
 drawn on the same canvas: nodes turn green or red, the wires taken are bold, and picking a node shows what went in and
 what came out each time it ran. A workflow starts by hand, on a schedule, from a signed webhook, or after a pipeline run
-fails; agents read what started it under `trigger`. Workflows made of stages still run, and **Edit on the canvas** turns
+fails; agents read what started it under `trigger`. A schedule is every few hours, daily, on weekdays, weekly or monthly
+at a time, or a cron expression, in a time zone you pick; a team can be given a goal on a schedule too. **Team ›
+Schedules** lists everything that runs by itself, with pause and run now (design note 047). Workflows made of stages still run, and **Edit on the canvas** turns
 one into a graph. **Delete** on a workflow's page archives it: it can be restored for 30 days, then it is deleted for
 good; its past runs stay.
 

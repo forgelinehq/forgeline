@@ -62,7 +62,7 @@ func TestAssistantWritesASkillAnAgentAndAWorkflow(t *testing.T) {
 		"stages": []map[string]any{{"name": "Look", "steps": []map[string]any{{"agent": "cost-watcher", "task": "Look for waste."}}},
 			{"name": "Release", "gate": true, "steps": []map[string]any{{"agent": "cost-watcher", "task": "Summarise."}}}}}))
 	fx, _ = json.Marshal(actionsIn(evs)[0]["effects"])
-	if !strings.Contains(string(fx), "every 10080 minutes") || !strings.Contains(string(fx), "waits for an administrator") {
+	if !strings.Contains(string(fx), "every 7 days") || !strings.Contains(string(fx), "waits for an administrator") {
 		t.Errorf("workflow effects = %s", fx)
 	}
 	if a := confirmCard(t, m, m.admin, evs, 200); a.Link != "/workflows/weekly-cost-review" {

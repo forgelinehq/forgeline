@@ -3,6 +3,7 @@
 // node's status and visits, the wires taken, and a question waiting for an answer. The server checks every save.
 import { h, icon, iconAt, mount, spinner, errorBox, notice, toast, field, pill, drawer, leaveDialog } from '../lib/dom.js';
 import { renderMarkdown } from '../lib/mdview.js';
+import { scheduleField } from '../lib/schedulefield.js';
 import { get, post, atLeast } from '../lib/api.js';
 import { navigate } from '../lib/router.js';
 import { session } from '../app.js';
@@ -16,7 +17,6 @@ import {
 import { avatar, chatPanel } from './agents.js';
 import { toolInfo, tierTitle } from '../lib/tools.js';
 
-const SCHEDULES = [[0, 'Only when started by hand'], [15, 'Every 15 minutes'], [60, 'Every hour'], [360, 'Every 6 hours'], [1440, 'Every day'], [10080, 'Every week']];
 const TONE = {
   pending: 'stroke-slate-300 dark:stroke-slate-600', running: 'stroke-brand-500 motion-safe:animate-pulse', succeeded: 'stroke-emerald-500',
   failed: 'stroke-rose-500', waiting: 'stroke-amber-500', cancelled: 'stroke-slate-300 dark:stroke-slate-700',
@@ -242,7 +242,7 @@ export async function graphEditorPage({ params }) {
   let g = cur?.graph ? autoPlace(cur.graph) : cur ? stagesToGraph(cur) : emptyGraph();
   let selected = '', problem = '', dirty = !wf, edited = false; // edited: changed since it was opened, so leaving asks
   const view = newView();
-  const meta = { name: wf?.name || '', description: wf?.description || '', every: cur?.every_minutes || 0, runAs: cur?.run_as || 'developer', note: '', webhook: !!cur?.webhook, follow: (cur?.on_run_failed || []).join(', ') };
+  const meta = { name: wf?.name || '', description: wf?.description || '', every: cur?.every_minutes || 0, cron: cur?.cron || '', tz: cur?.tz || '', runAs: cur?.run_as || 'developer', note: '', webhook: !!cur?.webhook, follow: (cur?.on_run_failed || []).join(', ') };
   const canvasBox = h('div', { class: 'relative' }), bar = h('div', {}), state = h('span', { class: 'text-xs', id: 'graph-dirty' });
 
   const drawState = () => mount(state, dirty ? h('span', { class: 'pill-wait' }, wf ? 'Unsaved changes' : 'Not saved yet') : h('span', { class: 'muted' }, 'Saved as v' + wf.current));
@@ -291,7 +291,7 @@ export async function graphEditorPage({ params }) {
   async function save(btn, stay = false) {
     btn.disabled = true;
     try {
-      const body = { name: meta.name, description: meta.description, every_minutes: Number(meta.every), run_as: meta.runAs, note: meta.note, graph: g,
+      const body = { name: meta.name, description: meta.description, every_minutes: Number(meta.every), cron: meta.cron, tz: meta.tz, run_as: meta.runAs, note: meta.note, graph: g,
         webhook: meta.webhook, on_run_failed: meta.follow.split(',').map(x => x.trim()).filter(Boolean) };
       const out = await post(wf ? '/v1/ai/workflows/' + wf.id + '/versions' : '/v1/ai/workflows', body);
       toast(wf ? 'Saved v' + out.current : 'Workflow created', 'ok');
@@ -304,13 +304,14 @@ export async function graphEditorPage({ params }) {
   // The workflow's settings, in a side panel so the canvas keeps the page.
   const openSettings = () => drawer('Workflow settings', () => {
     const desc = h('input', { id: 'graph-desc', class: 'input', maxlength: '300', value: meta.description, placeholder: 'What it is for', oninput: (e) => { meta.description = e.target.value; dirty = edited = true; } });
-    const every = h('select', { id: 'graph-every', class: 'input', onchange: (e) => { meta.every = e.target.value; dirty = edited = true; } }, SCHEDULES.map(([v, l]) => h('option', { value: String(v), selected: Number(meta.every) === v }, l)));
+    const every = scheduleField({ id: 'graph-every', spec: { every_minutes: Number(meta.every), cron: meta.cron, tz: meta.tz },
+      onChange: (sp) => { meta.every = sp.every_minutes || 0; meta.cron = sp.cron || ''; meta.tz = sp.tz || ''; dirty = edited = true; drawState(); } });
     const runAs = h('select', { id: 'graph-runas', class: 'input', onchange: (e) => { meta.runAs = e.target.value; dirty = edited = true; } }, [['developer', 'Developer: may file change proposals'], ['viewer', 'Viewer: reads only']].map(([v, l]) => h('option', { value: v, selected: meta.runAs === v }, l)));
     const hook = h('input', { type: 'checkbox', id: 'graph-webhook', checked: meta.webhook, onchange: (e) => { meta.webhook = e.target.checked; dirty = edited = true; } });
     const follow = h('input', { id: 'graph-follow', class: 'input', value: meta.follow, placeholder: 'pipeline names, or * for any', oninput: (e) => { meta.follow = e.target.value; dirty = edited = true; } });
     return h('div', { class: 'space-y-4' }, field('Description', desc, null, 'graph-desc'),
       h('h3', { class: 'h-section pt-2' }, 'What starts it'),
-      field('Schedule', every, 'Every run can also be started by hand.', 'graph-every'),
+      h('div', {}, h('div', { class: 'label' }, 'Schedule'), every, h('p', { class: 'hint' }, 'It can always be started by hand too. Team › Schedules lists every schedule and can pause one.')),
       h('label', { class: 'flex items-start gap-2 text-sm', for: 'graph-webhook' }, hook, h('span', {}, 'Also starts from a signed webhook. The secret is made on the workflow’s page.')),
       field('Also starts after failed runs of', follow, 'What failed reaches the graph as trigger, which agents can read as data.', 'graph-follow'),
       h('h3', { class: 'h-section pt-2' }, 'What it may do'),

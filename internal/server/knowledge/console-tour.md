@@ -241,6 +241,18 @@ bundle twice changes nothing. Every import is in the audit log.
 
 ![Importing a bundle]({{ '/console/143-agent-import.png' | relative_url }})
 
+**Schedules** lists everything that runs by itself: workflows on their schedule and goals given to teams at set
+times, soonest first, with the next run in your time, how the last one went, and **Pause**, **Resume**, **Change** and
+**Run now** for administrators. A schedule is every few minutes or hours, every day, weekdays, a day of the week or of
+the month at a time, or a cron expression, in a time zone you pick; the picker shows the next three runs before you
+save. A time missed by more than an hour (the server was down) is skipped rather than run late, and a workflow or team
+still working skips that time. A team's schedule gives it a goal and runs as a viewer or a developer, never as an
+administrator; schedule one from the team's page under **On a schedule**. **Run now** runs as you.
+
+![Team › Schedules]({{ '/console/146-schedules.png' | relative_url }})
+
+![A team's schedule]({{ '/console/145-team-schedule.png' | relative_url }})
+
 **Workflows** runs agents together; the tab lists them as cards with how each starts and its last run, every run of every
 workflow under **Runs**, and deleted ones under **Archived** for 30 days. Draw one on the canvas (**New workflow**), as in
 n8n: the canvas fills the page; a node's **+** (or **Add node**) opens a side panel to search your agents, the logic

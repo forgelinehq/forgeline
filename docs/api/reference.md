@@ -137,6 +137,8 @@ A run's `status` is one of `queued`, `running`, `succeeded`, `failed`, `canceled
 | `DELETE /v1/ai/workflows/{id}` | admin | Deletes a workflow by archiving it: turned off and hidden (`GET /v1/ai/workflows?archived=1` lists them), restorable for 30 days, then removed by the hourly sweep (`ai.workflow.purge`); its past runs stay. 409 while a run is going or waiting. Audited as `ai.workflow.archive`. |
 | `POST /v1/ai/workflows/{id}/restore` | admin | Brings an archived workflow back, still turned off. Audited. |
 | `POST /v1/ai/workflows/{id}/run` | developer | Start a run now (one at a time per workflow). |
+| `POST /v1/ai/workflows/{id}/schedule/pause` | admin | Pause the current version's schedule without a new version; it still runs by hand, from its webhook and after failed runs. Audited as `ai.schedule.pause` (design note 047). |
+| `POST /v1/ai/workflows/{id}/schedule/resume` | admin | Resume it; a cron schedule waits for its next time instead of running the missed ones. Audited as `ai.schedule.resume`. |
 | `GET /v1/ai/workflow-runs` | developer | Recent runs (`?workflow=`). |
 | `GET /v1/ai/workflow-runs/{id}` | developer | One run with each step's output. |
 | `POST /v1/ai/workflow-runs/{id}/release` | admin | Let a run waiting at a gate start its next stage. |
@@ -188,6 +190,11 @@ A run's `status` is one of `queued`, `running`, `succeeded`, `failed`, `canceled
 | `GET /v1/ai/teams/{id}` | developer | One team and its last 50 runs, newest first. |
 | `PUT /v1/ai/teams/{id}` | admin | Changes a team; the same body. Audited. |
 | `DELETE /v1/ai/teams/{id}` | admin | Removes the team; its agents and past runs stay. 409 while it is working. Audited. |
+| `POST /v1/ai/teams/{id}/schedules` | admin | Give the team a `goal` at set times: `every_minutes` (15 to 10080) or `cron` (five fields, at most every 15 minutes) with `tz` (an IANA zone; empty is UTC), and `run_as` `viewer` or `developer` (never admin). At most 10 per team. A time missed by more than an hour is skipped, not run late; a team already working skips that time. Audited as `ai.schedule.create` (design note 047). |
+| `PUT /v1/ai/team-schedules/{sid}` | admin | Change one (the same fields, and `paused`). Audited as `ai.schedule.update`. |
+| `DELETE /v1/ai/team-schedules/{sid}` | admin | Delete one; the team's past runs stay. Audited as `ai.schedule.delete`. |
+| `GET /v1/ai/schedules` | developer | Every workflow and team schedule: what it is, `describe`, `next` (three times), `last_at`, `last_run` or `last_note` (why it was skipped), `paused`, `off` (why nothing runs now). |
+| `POST /v1/ai/schedules/preview` | developer | `{every_minutes}` or `{cron, tz}`: `describe` and the next five times, or 400 saying what is wrong. Saves nothing. |
 | `POST /v1/ai/teams/{id}/runs` | developer | Gives the team a `goal` (up to 2000 characters); 202 with the run. The lead plans one task per member it picks (only its own members, once each), the members work three at a time as the person who asked, each with its own model, tools and budget, and the lead writes the `answer` from their output, which it gets as data. 409 when a member is off or the team is already working. Each agent call is audited as `ai.team.step`. |
 | `GET /v1/ai/team-runs/{id}` | developer | One run: `status` (`planning`, `working`, `writing`, `done`, `failed`), `plan_note`, `tasks` (member, task, status, output or error, lookups, time), `answer`, `error` and `proposals`. |
 | `GET /v1/ai/usage` | developer | What the AI used in a month (`?month=YYYY-MM`, default this one, UTC; note 036): per agent (`who` is its id) and `_people`, with `calls`, `input_tokens`, `output_tokens`, `millis`, `cost_usd` and `costed_calls` (cost is only known where the claude program reports it), and `blind_calls` (calls whose tokens were not reported). |

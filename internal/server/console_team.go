@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"github.com/forgelinehq/forgeline/internal/schedule"
 	"net/http"
 	"sort"
 	"time"
@@ -117,12 +118,11 @@ func (s *Server) team(ctx context.Context, now time.Time) (TeamJSON, error) {
 			continue
 		}
 		var next time.Time
-		if v.EveryMinutes > 0 && !busy[wf.ID] {
+		if v.spec().On() && !busy[wf.ID] {
 			var st wfState
 			_ = s.docs.Get(ctx, kindWFState, wf.ID, &st)
-			next = st.LastScheduledAt.Add(time.Duration(v.EveryMinutes) * time.Minute)
-			if next.Before(now) {
-				next = now
+			if nt := schedule.NextTimes(v.spec(), st.LastScheduledAt, now, 1); len(nt) > 0 && !st.Paused {
+				next = nt[0]
 			}
 		}
 		for _, stage := range v.Stages {

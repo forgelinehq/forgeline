@@ -69,6 +69,8 @@ type TeamRun struct {
 	TeamName  string     `json:"team_name"`
 	Goal      string     `json:"goal"`
 	By        string     `json:"by"`
+	Trigger   string     `json:"trigger,omitempty"` // "schedule" when a team schedule started it (note 047)
+	RunAs     string     `json:"run_as,omitempty"`  // the role its agents work with: the person's, or the schedule's
 	Status    string     `json:"status"`
 	LeadName  string     `json:"lead_name"`
 	PlanNote  string     `json:"plan_note,omitempty"`
@@ -370,46 +372,56 @@ func (s *Server) handleStartTeamRun(w http.ResponseWriter, r *http.Request) {
 		s.defError(w, "team", err)
 		return
 	}
-	if !s.aiReady(ctx) {
-		writeError(w, http.StatusConflict, noModelSetUp)
+	run, status, msg := s.startTeamRun(ctx, principalFrom(ctx), clientIP(r), t, req.Goal, "")
+	if msg != "" {
+		writeError(w, status, msg)
 		return
+	}
+	writeJSON(w, http.StatusAccepted, run)
+}
+
+// startTeamRun checks a team can work and starts it on a goal, as p. trigger is "" for a person, or "schedule".
+// A message comes back with its status when it cannot start.
+func (s *Server) startTeamRun(ctx context.Context, p Principal, ip string, t Team, goal, trigger string) (TeamRun, int, string) {
+	if !s.aiReady(ctx) {
+		return TeamRun{}, http.StatusConflict, noModelSetUp
 	}
 	// Every agent must be able to work before anything is spent.
 	for _, id := range append([]string{t.Lead}, t.Members...) {
 		a, err := s.loadAgent(ctx, id)
 		switch {
 		case err != nil:
-			writeError(w, http.StatusConflict, fmt.Sprintf("the team's agent %q no longer exists; change the team", id))
-			return
+			return TeamRun{}, http.StatusConflict, fmt.Sprintf("the team's agent %q no longer exists; change the team", id)
 		case a.Disabled:
-			writeError(w, http.StatusConflict, a.Name+" is turned off; turn it on or change the team")
-			return
+			return TeamRun{}, http.StatusConflict, a.Name + " is turned off; turn it on or change the team"
 		}
 	}
 	if !s.teams.claim(t.ID) {
-		writeError(w, http.StatusConflict, t.Name+" is already working on a goal")
-		return
+		return TeamRun{}, http.StatusConflict, t.Name + " is already working on a goal"
 	}
-	p := principalFrom(ctx)
 	now := time.Now().UTC()
 	s.pruneTeamRuns(ctx, t.ID)
-	run := TeamRun{ID: fmt.Sprintf("%020d-%s", now.UnixNano(), t.ID), Team: t.ID, TeamName: t.Name, Goal: req.Goal, By: p.Name, Status: trPlanning, Tasks: []TeamTask{}, Started: now}
+	run := TeamRun{ID: fmt.Sprintf("%020d-%s", now.UnixNano(), t.ID), Team: t.ID, TeamName: t.Name, Goal: goal, By: p.Name, Trigger: trigger, RunAs: string(p.Role), Status: trPlanning, Tasks: []TeamTask{}, Started: now}
 	if lead, err := s.loadAgent(ctx, t.Lead); err == nil {
 		run.LeadName = lead.Name
 	}
 	if err := s.docs.Put(ctx, kindTeamRun, run.ID, run); err != nil {
 		s.teams.release(t.ID)
-		s.internalError(w, "saving the run", err)
-		return
+		s.log.Error("saving the team run", "err", err)
+		return TeamRun{}, http.StatusInternalServerError, "internal error: saving the run"
 	}
-	s.auditReq(r, "ai.team.run", "team/"+t.ID, fmt.Sprintf("run %s: %s", run.ID, truncate(req.Goal, 200)), true)
+	how := ""
+	if trigger != "" {
+		how = " (by " + trigger + ")"
+	}
+	s.audit(ctx, p, ip, "ai.team.run", "team/"+t.ID, fmt.Sprintf("run %s%s: %s", run.ID, how, truncate(goal, 200)), true)
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
 		defer s.teams.release(t.ID)
 		s.workTeamRun(context.WithoutCancel(ctx), p, t, run)
 	}()
-	writeJSON(w, http.StatusAccepted, run)
+	return run, 0, ""
 }
 
 // teamPlan is what the lead answers when it plans.

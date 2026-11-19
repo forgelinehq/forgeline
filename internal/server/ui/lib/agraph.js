@@ -2,6 +2,8 @@
 // under Node in tests. Every edit returns a new graph and leaves the one it was given alone. The server checks every
 // save (internal/server/console_ai_graph.go); these helpers keep the canvas honest while people edit.
 
+import { describe } from './schedule.js';
+
 export const GNODE_W = 200, GNODE_H = 64;
 const COL_W = 260, ROW_H = 96, PAD = 24;
 
@@ -337,7 +339,8 @@ export function addPicked(g, item, after = '') {
 export function triggerSummary(meta) {
   const parts = ['by hand'];
   const every = Number(meta.every || 0);
-  if (every) parts.push(every < 60 ? 'every ' + every + ' min' : every < 1440 ? 'every ' + every / 60 + ' h' : every === 1440 ? 'daily' : 'weekly');
+  if (meta.cron) parts.push(describe({ cron: meta.cron, tz: meta.tz }));
+  else if (every) parts.push(every < 60 ? 'every ' + every + ' min' : every < 1440 ? 'every ' + every / 60 + ' h' : every === 1440 ? 'daily' : 'weekly');
   if (meta.webhook) parts.push('webhook');
   if (String(meta.follow || '').trim()) parts.push('failed runs');
   return parts.join(' · ');
