@@ -27,8 +27,8 @@ Status: **step 1: all six kinds of provider are built** (Anthropic, OpenAI, Open
 monthly limits with a fallback, a live log of model calls; agents with a `provider/model` work while the assistant is
 off). Anthropic checked on the Pi with the real API; the others only against stand-ins. Planned: several model providers at once, with each agent naming `provider/model`; an agent builder with a playground, test cases and model comparison; agent teams and a test panel in
 workflows; publishing agents as an API, an MCP tool or a headless job; Cloudflare-style code mode in a sandbox. Step 2 has begun: the agent builder with its side panel is built. Exporting
-agents (a bundle with Agent Skills, Docker Agent YAML, an OCI artifact, an A2A card) is proposed in
-[note 046](design/046-agent-export.md). See [note 045](design/045-agent-studio.md).
+agents (a bundle with Agent Skills, Docker Agent YAML, an OCI artifact, an A2A card) is accepted in
+[note 046]; downloading a bundle or a Docker Agent file and importing a bundle are built(design/046-agent-export.md). See [note 045](design/045-agent-studio.md).
 
 ## Agent graphs (note 044)
 

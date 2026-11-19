@@ -650,27 +650,35 @@ func (s *Server) handleAgentVersion(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, msg)
 		return
 	}
-	if len(a.Versions) >= maxVersions {
-		writeError(w, http.StatusConflict, fmt.Sprintf("an agent keeps at most %d versions", maxVersions))
+	a, status, msg := s.appendAgentVersion(ctx, principalFrom(ctx), clientIP(r), a, req, v, "")
+	if msg != "" {
+		writeError(w, status, msg)
 		return
+	}
+	writeJSON(w, http.StatusCreated, a)
+}
+
+// appendAgentVersion saves a resolved version as an agent's newest and audits it. A message comes back with its status
+// when the history is full or nothing changed; how says where the version came from, for the audit log.
+func (s *Server) appendAgentVersion(ctx context.Context, p Principal, ip string, a AIAgent, req agentRequest, v AgentVersion, how string) (AIAgent, int, string) {
+	if len(a.Versions) >= maxVersions {
+		return a, http.StatusConflict, fmt.Sprintf("an agent keeps at most %d versions", maxVersions)
 	}
 	last := a.Versions[len(a.Versions)-1]
 	if sameVersionContent(last, v) && a.Name == strings.TrimSpace(req.Name) && a.Description == req.Description {
-		writeError(w, http.StatusConflict, "nothing changed since the latest version")
-		return
+		return a, http.StatusConflict, "nothing changed since the latest version"
 	}
-	p := principalFrom(ctx)
 	v.N, v.By, v.At = last.N+1, p.Name, time.Now().UTC()
 	v.Hash = v.computeHash(a.ID)
 	a.Name, a.Description = strings.TrimSpace(req.Name), req.Description
 	a.Versions = append(a.Versions, v)
 	a.Current = v.N
 	if err := s.docs.Put(ctx, kindAIAgent, a.ID, a); err != nil {
-		s.internalError(w, "saving the agent", err)
-		return
+		s.log.Error("saving the agent", "err", err)
+		return a, http.StatusInternalServerError, "internal error: saving the agent"
 	}
-	s.auditReq(r, "ai.agent.version", "agent/"+a.ID, fmt.Sprintf("v%d %s tier %s", v.N, v.Hash[:12], v.Tier), true)
-	writeJSON(w, http.StatusCreated, a)
+	s.audit(ctx, p, ip, "ai.agent.version", "agent/"+a.ID, fmt.Sprintf("v%d %s tier %s%s", v.N, v.Hash[:12], v.Tier, how), true)
+	return a, 0, ""
 }
 
 func (s *Server) handleAgentRollback(w http.ResponseWriter, r *http.Request) {

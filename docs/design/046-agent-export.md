@@ -1,7 +1,7 @@
 # 046: Exporting agents: a bundle, Docker Agent YAML, an OCI artifact, an A2A card
 
-Status: **accepted 2026-11-19: every decision as proposed** (end of this note). **Step 1 is built**: both downloads, with
-their schema, tests, and an audit entry. Not yet checked with the real `docker agent run`. Revises note 045, decision 3,
+Status: **accepted 2026-11-19: every decision as proposed** (end of this note). **Steps 1 and 2 are built**: both downloads, with
+their schema, tests, and an audit entry; and **Import** of a bundle, with a preview that saves nothing. Not yet checked with the real `docker agent run`. Revises note 045, decision 3,
 which said an agent is not exported. On 2026-11-18 the maintainer asked for agents to be exportable too, in open formats.
 
 ## Question

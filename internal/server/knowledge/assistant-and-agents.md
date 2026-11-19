@@ -171,7 +171,7 @@ unless you tick **It is on a private network**; redirects are never followed. Se
 
 ## Agents you define
 
-Under **Team → Agents** you can define named agents with instructions, skills and a short list of tools. The instructions are written in Markdown, with a live preview and advisory checks; the model receives exactly the text you wrote. **New agent** and **Edit** open the builder, where one side panel picks the model, skills, MCP server tools, tools and guardrails. **Download** exports a version as a Forgeline bundle (with each skill as an Agent Skills folder) or a Docker Agent file, with no key in either. See the [Console tour]({{ '/guides/console-tour/' | relative_url }}#agents).
+Under **Team → Agents** you can define named agents with instructions, skills and a short list of tools. The instructions are written in Markdown, with a live preview and advisory checks; the model receives exactly the text you wrote. **New agent** and **Edit** open the builder, where one side panel picks the model, skills, MCP server tools, tools and guardrails. **Download** exports a version as a Forgeline bundle (with each skill as an Agent Skills folder) or a Docker Agent file, with no key in either; **Import** on the Agents page brings a bundle back in, showing first what it will create and leave out. See the [Console tour]({{ '/guides/console-tour/' | relative_url }}#agents).
 
 ## Agent steps
 
