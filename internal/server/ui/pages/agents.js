@@ -195,6 +195,7 @@ export async function agentPage({ params }) {
           h('p', { class: 'muted mt-1 text-sm' }, ag.description || 'No description.'),
           h('div', { class: 'mt-2 flex flex-wrap items-center gap-2 text-xs' }, ag.disabled ? h('span', { class: 'pill-idle' }, 'Off') : h('span', { class: 'pill-ok' }, 'On'), tierPill(v.tier), v.model ? h('span', { class: 'pill-idle', id: 'agent-model-pill' }, v.model) : null,
             h('span', { class: 'muted' }, 'Version ' + v.n + (v.n === ag.current ? ' (current)' : ' (older)')), shortHash(v.hash))),
+        downloadMenu(ag, v),
         admin && ag.archived_at && h('div', { class: 'flex w-full flex-wrap gap-2 sm:w-auto' },
           h('button', { class: 'btn-primary btn-sm', type: 'button', id: 'restore-agent', onclick: async () => {
             try { await post('/v1/ai/agents/' + ag.id + '/restore'); toast('Restored. It is still turned off.', 'ok'); load(true); } catch (e) { toast(e.message, 'error'); }
@@ -267,4 +268,17 @@ export function chatPanel(ag, v) {
     send.disabled = false; list.scrollTop = list.scrollHeight;
   } }, input, send);
   return h('aside', { class: 'card card-pad h-fit lg:sticky lg:top-20' }, h('h2', { class: 'h-section mb-3' }, 'Talk to ' + ag.name), list, form);
+}
+
+// Download one version (design note 046): Forgeline's bundle, or a Docker Agent file. No key is ever in either.
+function downloadMenu(ag, v) {
+  const url = (format) => '/v1/ai/agents/' + encodeURIComponent(ag.id) + '/export?format=' + format + '&version=' + v.n;
+  const item = (format, title, text) => h('a', { href: url(format), download: '', role: 'menuitem', 'data-export': format,
+    class: 'block rounded-lg px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-800' }, h('span', { class: 'block text-sm font-medium' }, title), h('span', { class: 'muted block text-xs' }, text));
+  return h('details', { class: 'relative', id: 'agent-download' },
+    h('summary', { class: 'btn-secondary btn-sm cursor-pointer list-none' }, icon('download', 'size-3.5'), 'Download v' + v.n),
+    h('div', { class: 'absolute right-0 z-20 mt-1 w-80 rounded-xl border border-slate-200 bg-white p-1.5 shadow-lg dark:border-slate-700 dark:bg-slate-900', role: 'menu' },
+      item('bundle', 'Forgeline bundle (.zip)', 'agent.yaml and each skill as an Agent Skills folder, to keep in Git or bring to another Forgeline.'),
+      item('docker', 'Docker Agent file (.yaml)', 'Runs with docker agent run. It keeps its remote MCP servers; Forgeline’s own tools stay behind.'),
+      h('p', { class: 'muted border-t border-slate-100 px-3 pb-1 pt-2 text-[11px] dark:border-slate-800' }, 'No key or secret is in either file: they name the environment variables to set.')));
 }

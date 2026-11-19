@@ -50,6 +50,30 @@ func Schema() ([]byte, error) {
 	return append(out, '\n'), nil
 }
 
+// SchemaFor generates a JSON Schema the same way for another file Forgeline reads and writes (such as agent.yaml,
+// note 046), from its Go type and the same struct tags. extra may add rules the tags cannot say, per $defs name.
+func SchemaFor(v any, title, description string, extra func(defs map[string]map[string]any)) ([]byte, error) {
+	g := &generator{defs: map[string]map[string]any{}}
+	root, err := g.object(reflect.TypeOf(v))
+	if err != nil {
+		return nil, err
+	}
+	root["$schema"] = "https://json-schema.org/draft/2020-12/schema"
+	root["title"] = title
+	root["description"] = description
+	if extra != nil {
+		extra(g.defs)
+	}
+	if len(g.defs) > 0 {
+		root["$defs"] = g.defs
+	}
+	out, err := json.MarshalIndent(root, "", "  ")
+	if err != nil {
+		return nil, err
+	}
+	return append(out, '\n'), nil
+}
+
 type generator struct {
 	defs map[string]map[string]any
 }

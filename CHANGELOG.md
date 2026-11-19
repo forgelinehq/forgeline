@@ -62,6 +62,10 @@ section in the pull request that makes the change; a release moves it under its 
 - **After a session ends**, the console stops polling the server (it asked every minute, forever).
 
 ### Added
+- **Download an agent** (design note 046). An agent's page offers the version you are looking at as a Forgeline bundle
+  (`agent.yaml`, with its schema in `schema/agent.v1alpha1.schema.json`, and each skill as an Agent Skills folder) or
+  as a Docker Agent file (`docker agent run`), with its remote MCP servers and skills. Forgeline's own tools stay
+  behind and are listed; no key or secret is ever in either file; every download is audited.
 - **The agent builder.** New agent and Edit open a page instead of a long form: the agent's parts (instructions,
   skills, MCP servers, tools, guardrails) with chips for what is in each, and the agent to talk to beside them. Add or
   Change on a part, or the model in the header, opens one side panel with tabs for Models (grouped by provider),

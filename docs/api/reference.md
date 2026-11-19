@@ -172,6 +172,7 @@ A run's `status` is one of `queued`, `running`, `succeeded`, `failed`, `canceled
 | `DELETE /v1/ai/skills/{id}` | admin | Remove a skill no agent version uses. |
 | `GET /v1/ai/agents` | developer | Agents with current version, tier and tools. Archived agents are left out; `?archived=1` lists only them, with `archived_at`. |
 | `GET /v1/ai/agents/{id}` | developer | One agent with every version. |
+| `GET /v1/ai/agents/{id}/export` | developer | `?format=bundle` or `docker`, `&version=n`: one version as a Forgeline bundle (a zip: `agent.yaml`, `skills/<name>/SKILL.md` in the Agent Skills format, `README.md`) or a Docker Agent file (`application/yaml`). The current version when `version` is left out. No key or secret is in either; Forgeline's own tools are listed as left out. 409 when a pinned skill or the model's provider is gone. Audited as `ai.agent.export` (design note 046). |
 | `POST /v1/ai/agents` | admin | Create an agent (version 1): instructions, pinned skills, tool allowlist, tier T0 or T1, and optionally `model` (the model it asks, such as `claude-haiku-5-5`; empty uses the assistant's). |
 | `POST /v1/ai/agents/{id}/versions` | admin | Save a new version; skill pins are made exact. |
 | `POST /v1/ai/agents/{id}/rollback` | admin | Copy an old version forward as the current one. |

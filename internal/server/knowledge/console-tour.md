@@ -221,6 +221,18 @@ or asks a person to approve. Talking to it beside the builder uses the saved ver
 
 ![Its side panel]({{ '/console/142-agent-builder-panel.png' | relative_url }})
 
+**Download** on an agent's page takes the version you are looking at out of Forgeline:
+
+- **Forgeline bundle (.zip)**: `agent.yaml` (instructions, model, tier, tools, skills and the version's fingerprint;
+  schema in `schema/agent.v1alpha1.schema.json`), each skill as an Agent Skills folder (`skills/<name>/SKILL.md`, which
+  Claude Code, Copilot, Cursor and others read as they are), and a README.
+- **Docker Agent file (.yaml)**: runs with `docker agent run`. It keeps the agent's remote MCP servers (only the tools
+  it has) and its skills inline. Forgeline's own tools, plugins and local MCP servers stay behind, since they need the
+  server; the file and its readme list them.
+
+Neither file holds a key or a secret: they name the environment variables to set (`ANTHROPIC_API_KEY`, or
+`${env.GITHUB_TOKEN}` for an MCP server's sign-in). Every download is in the audit log.
+
 **Workflows** runs agents together; the tab lists them as cards with how each starts and its last run, every run of every
 workflow under **Runs**, and deleted ones under **Archived** for 30 days. Draw one on the canvas (**New workflow**), as in
 n8n: the canvas fills the page; a node's **+** (or **Add node**) opens a side panel to search your agents, the logic
