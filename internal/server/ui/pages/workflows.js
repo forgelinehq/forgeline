@@ -6,7 +6,7 @@ import { layoutWorkflow, edgePath, runStatuses, edgeLive, NODE_W, NODE_H } from 
 import { fit } from '../lib/canvas.js';
 import { flowPath } from '../lib/flow.js';
 import { graphCanvas, graphRunView } from './agent_canvas.js';
-import { autoPlace } from '../lib/agraph.js';
+import { autoPlace, triggerSummary } from '../lib/agraph.js';
 
 // Workflows: stages of agents, run in order. Steps in a stage run together; a gated stage waits for
 // an administrator. Each save is a new version, like skills and agents.
@@ -180,7 +180,7 @@ export async function workflowPage({ params }) {
         h('section', { class: 'card card-pad' },
           h('div', { class: 'mb-3 flex flex-wrap items-center justify-between gap-2' }, h('h2', { class: 'h-section' }, 'Version ' + v.n + (v.n === wf.current ? ' (current)' : '')),
             h('div', { class: 'flex flex-wrap items-center gap-2 text-sm' }, h('span', { class: 'pill-idle' }, scheduleLabel(v.every_minutes || 0)), h('span', { class: 'pill-idle', title: 'The most a run of this workflow may do. Never an administrator.' }, 'runs as ' + v.run_as), v.webhook ? h('span', { class: 'pill-idle' }, 'webhook') : null, (v.on_run_failed || []).length ? h('span', { class: 'pill-idle' }, 'after failed runs of ' + v.on_run_failed.join(', ')) : null, shortHash(v.hash))),
-          v.graph ? graphCanvas(autoPlace(v.graph), { agentName }) : workflowGraph(layoutWorkflow(v, agentName)),
+          v.graph ? graphCanvas(autoPlace(v.graph), { agentName, startSummary: triggerSummary({ every: v.every_minutes, webhook: v.webhook, follow: (v.on_run_failed || []).join(',') }) }) : workflowGraph(layoutWorkflow(v, agentName)),
           v.graph ? null : h('h3', { class: 'h-section mb-2 mt-4' }, 'Stages in detail'),
           v.graph ? null : h('ol', { class: 'space-y-3', id: 'workflow-stages' }, (v.stages || []).map((st, i) => h('li', { class: 'rounded-lg border border-slate-200 p-3 dark:border-slate-800' },
             h('div', { class: 'mb-2 flex items-center gap-2 text-sm font-medium' }, h('span', { class: 'muted' }, (i + 1) + '.'), st.name, st.gate && h('span', { class: 'pill-wait', title: 'An administrator releases this stage' }, icon('lock', 'size-3'), 'waits for approval')),

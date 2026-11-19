@@ -115,7 +115,11 @@ is in the audit log. Cloud spend an agent causes is not counted here yet.
 
 A workflow runs agents in an order you draw. **Team › Workflows** lists them as cards (what each is made of, how it
 starts, its last run), with a **Runs** tab for every run of every workflow and an **Archived** tab. **New workflow** opens
-an n8n-style canvas: add nodes from the palette, drag from a node's port to the next to wire them, and pick a node to set it.
+an n8n-style canvas that fills the page: press a node's **+** (or **Add node**) and pick from a searchable side panel of
+your agents, the logic nodes and the lookups; the new node is wired in after the one you came from. Drag from a node's
+port to another node to wire them, pick a node to set it in the panel beside the canvas, and press Delete to remove it.
+Drag the background to move around, scroll with Ctrl (⌘ on a Mac) to zoom, and **Fit** shows the whole graph. How the
+workflow starts and what it may do are under **Settings**.
 
 | Node | What it does |
 | --- | --- |

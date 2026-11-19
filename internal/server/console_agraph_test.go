@@ -12,7 +12,8 @@ import (
 // The agent graph canvas helpers (ui/lib/agraph.js) are plain functions, run under Node. Skipped where Node is missing.
 const agraphCases = `
 import { emptyGraph, addNode, updateNode, removeNode, addWire, removeWire, wireProblem, nextLabel, branchLabels, stateKeys,
-  autoPlace, tidy, wirePath, graphRunStatus, stagesToGraph, nodeSummary } from './agraph.mjs';
+  autoPlace, tidy, wirePath, graphRunStatus, stagesToGraph, nodeSummary, fitView, zoomAt, toWorld, pickerItems, addPicked,
+  triggerSummary } from './agraph.mjs';
 let failed = 0;
 const eq = (name, got, want) => { const g = JSON.stringify(got), w = JSON.stringify(want); if (g !== w) { failed++; console.error('FAIL ' + name + '\n  got  ' + g + '\n  want ' + w); } };
 
@@ -78,6 +79,36 @@ eq('a node added after another goes to its right', [lk.x - ag.x, lk.y >= ag.y], 
 const t = tidy(g);
 eq('tidy: columns by distance from the start', ['start', 'agent', 'decide', 'end'].map(id => t.nodes.find(n => n.id === id).x), [24, 284, 24, 544]); // the decision is not reachable from the start in this graph
 eq('auto place keeps placed graphs', autoPlace(g).nodes.map(n => [n.x, n.y]), g.nodes.map(n => [n.x, n.y]));
+// Pan and zoom: fit centres the graph and never zooms in past 100%; zooming keeps the point under the pointer still.
+const two = emptyGraph();
+eq('fit a small graph', fitView(two, 1000, 500), { x: 116, y: 78, k: 1 });
+eq('fit a wide graph shrinks it', fitView(two, 400, 500).k < 1, true);
+eq('fit never below the least zoom', fitView({ nodes: [{ x: 0, y: 0 }, { x: 99999, y: 0 }] }, 400, 400).k, 0.25);
+const z = zoomAt({ x: 10, y: 20, k: 1 }, 2, 110, 120);
+eq('zoom keeps the pointer point', toWorld(z, 110, 120), toWorld({ x: 10, y: 20, k: 1 }, 110, 120));
+eq('zoom stops at the most', zoomAt({ x: 0, y: 0, k: 2 }, 2, 0, 0).k, 2);
+
+// The picker: agents by name, logic, lookups; a query narrows every group and drops empty ones.
+const groups = pickerItems([{ id: 'cl', name: 'Cloud lead', description: 'Leads' }], ['list_runs', 'get_run']);
+eq('picker groups', groups.map(gr => gr.id), ['agents', 'logic', 'lookups']);
+eq('an agent item sets the agent and its name', groups[0].items[0], { key: 'agent:cl', kind: 'agent', label: 'Cloud lead', note: 'Leads', fields: { agent: 'cl', name: 'Cloud lead' } });
+eq('search', pickerItems([{ id: 'cl', name: 'Cloud lead' }], ['list_runs'], 'runs').map(gr => gr.items.map(i => i.key)), [['lookup:list_runs']]);
+eq('search by kind', pickerItems([], [], 'decide').flatMap(gr => gr.items.map(i => i.key)), ['decide:rule', 'decide:agent']);
+
+// Adding after a node with one plain wire goes in between, and what follows moves right; after a decision it fans out.
+const agentItem = groups[0].items[0];
+let p = addPicked(emptyGraph(), agentItem, 'start');
+eq('inserted between', p.graph.edges, [{ from: 'start', to: 'agent' }, { from: 'agent', to: 'end' }]);
+eq('what follows moved right', p.graph.nodes.find(n => n.id === 'end').x > p.graph.nodes.find(n => n.id === 'agent').x, true);
+const dec = groups[1].items[0];
+p = addPicked(p.graph, dec, 'agent');
+p = addPicked(p.graph, groups[1].items[3], 'decide');
+eq('after a decision: a new branch, its next label', p.graph.edges.filter(e => e.from === 'decide'), [{ from: 'decide', to: 'end', when: 'else' }]);
+const lone = addPicked(emptyGraph(), dec, '');
+eq('picked with nothing selected: not wired', lone.graph.edges, [{ from: 'start', to: 'end' }]);
+const endAfter = addPicked(emptyGraph(), groups[1].items[5], 'start');
+eq('an end after a wired node goes beside it', endAfter.graph.edges, [{ from: 'start', to: 'end' }, { from: 'start', to: 'end-2' }]);
+eq('triggers', [triggerSummary({}), triggerSummary({ every: 15, webhook: true, follow: 'deploy' }), triggerSummary({ every: 1440 })], ['by hand', 'by hand · every 15 min · webhook · failed runs', 'by hand · daily']);
 if (failed) process.exit(1);
 console.log(JSON.stringify(conv));
 `

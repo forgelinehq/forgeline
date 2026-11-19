@@ -23,7 +23,7 @@ export function h(tag, props, ...children) {
   return el;
 }
 
-const SVG_TAGS = new Set(['svg', 'path', 'g', 'rect', 'circle', 'line', 'text', 'title', 'defs', 'marker', 'polygon', 'tspan']);
+const SVG_TAGS = new Set(['svg', 'path', 'g', 'rect', 'circle', 'line', 'text', 'title', 'defs', 'marker', 'polygon', 'tspan', 'pattern']);
 
 export function append(el, children) {
   for (const c of children.flat(Infinity)) {
@@ -52,6 +52,7 @@ const ICONS = {
   play: 'M7 4v16l13-8z',
   stop: 'M6 6h12v12H6z',
   plus: 'M12 5v14M5 12h14',
+  minus: 'M5 12h14',
   check: 'M5 12.5 10 17.5 19 7',
   x: 'M6 6l12 12M18 6 6 18',
   alert: 'M12 9v4M12 17h.01M10.3 3.9 2.4 18a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z',
@@ -89,6 +90,14 @@ const ICONS = {
   tool: 'M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.4 2.4-2.4-.6-.6-2.4z',
   clock: 'M12 7v5l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z',
 };
+
+/** An icon drawn inside an SVG drawing, at (x, y) and size px square. */
+export function iconAt(name, x, y, size, cls = '') {
+  const d = ICONS[name];
+  if (!d) throw new Error('unknown icon ' + name);
+  return h('svg', { x: String(x), y: String(y), width: String(size), height: String(size), viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor',
+    'stroke-width': '1.8', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', class: cls, 'aria-hidden': 'true' }, h('path', { d }));
+}
 
 export function icon(name, cls = 'size-4') {
   const d = ICONS[name];

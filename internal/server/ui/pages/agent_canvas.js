@@ -1,16 +1,16 @@
 // Agent graphs on a canvas (design note 044, part 2), like n8n: nodes as cards, wires from the right port of one to
 // the left of the next, a palette to add nodes, a panel to set the selected one. The same canvas shows a run: each
 // node's status and visits, the wires taken, and a question waiting for an answer. The server checks every save.
-import { h, icon, mount, pageHeader, spinner, errorBox, notice, toast, field, pill } from '../lib/dom.js';
+import { h, icon, iconAt, mount, spinner, errorBox, notice, toast, field, pill, drawer } from '../lib/dom.js';
 import { get, post, atLeast } from '../lib/api.js';
 import { navigate } from '../lib/router.js';
 import { session } from '../app.js';
 import { fit } from '../lib/canvas.js';
 import { flowPath } from '../lib/flow.js';
 import {
-  GNODE_W, GNODE_H, NODE_KINDS, PALETTE, branches, branchLabels, emptyGraph, addNode, updateNode, moveNode, removeNode, tidy,
-  addWire, removeWire, wireProblem, nextLabel, stateKeys, autoPlace, graphBounds, wirePath, labelPoint, nodeSummary,
-  graphRunStatus, stagesToGraph,
+  GNODE_W, GNODE_H, NODE_KINDS, branches, branchLabels, emptyGraph, updateNode, moveNode, removeNode, tidy,
+  addWire, removeWire, wireProblem, nextLabel, stateKeys, autoPlace, wirePath, labelPoint, nodeSummary,
+  graphRunStatus, stagesToGraph, fitView, zoomAt, toWorld, pickerItems, addPicked, triggerSummary,
 } from '../lib/agraph.js';
 
 const SCHEDULES = [[0, 'Only when started by hand'], [15, 'Every 15 minutes'], [60, 'Every hour'], [360, 'Every 6 hours'], [1440, 'Every day'], [10080, 'Every week']];
@@ -23,63 +23,103 @@ const KIND_TONE = { start: 'stroke-brand-400', ask: 'stroke-amber-400', decide: 
 const OPS = [['equals', 'equals'], ['contains', 'contains'], ['gt', 'is more than'], ['lt', 'is less than'], ['empty', 'is empty']];
 const NO_LOOKUP = new Set(['ask_agent', 'request_environment', 'prepare_action']);
 
+// Each kind's tile on its card: a colour and the kind's icon, as n8n marks its nodes.
+const TILE = {
+  start: { fill: 'fill-brand-100 dark:fill-brand-950', bg: 'bg-brand-100 dark:bg-brand-950', text: 'text-brand-700 dark:text-brand-300' },
+  agent: { fill: 'fill-orange-100 dark:fill-orange-950', bg: 'bg-orange-100 dark:bg-orange-950', text: 'text-orange-700 dark:text-orange-300' },
+  lookup: { fill: 'fill-sky-100 dark:fill-sky-950', bg: 'bg-sky-100 dark:bg-sky-950', text: 'text-sky-700 dark:text-sky-300' },
+  decide: { fill: 'fill-violet-100 dark:fill-violet-950', bg: 'bg-violet-100 dark:bg-violet-950', text: 'text-violet-700 dark:text-violet-300' },
+  ask: { fill: 'fill-amber-100 dark:fill-amber-950', bg: 'bg-amber-100 dark:bg-amber-950', text: 'text-amber-700 dark:text-amber-300' },
+  merge: { fill: 'fill-teal-100 dark:fill-teal-950', bg: 'bg-teal-100 dark:bg-teal-950', text: 'text-teal-700 dark:text-teal-300' },
+  end: { fill: 'fill-slate-100 dark:fill-slate-800', bg: 'bg-slate-100 dark:bg-slate-800', text: 'text-slate-600 dark:text-slate-300' },
+};
+const tileBox = (kind, size) => { const t = TILE[kind] || TILE.end; return h('span', { class: 'inline-flex flex-none items-center justify-center rounded-lg ' + size + ' ' + t.bg + ' ' + t.text }, icon(NODE_KINDS[kind]?.icon || 'box', 'size-4')); };
+
+/** A new view for graphCanvas: it fits the graph to the box the first time the box has a size. */
+export const newView = () => ({ x: 0, y: 0, k: 1, fitted: false });
+
 /**
- * Draws a graph. opts: { selected, statuses (from graphRunStatus), editable, agentName, onSelect(id), onMove(id, x, y),
- * onWire(from, to) }. Returns the scrolling box with the SVG in it.
+ * Draws a graph on a canvas that pans and zooms. opts: { selected, statuses (from graphRunStatus), editable, agentName,
+ * view (from newView, kept across redraws), height (classes), startSummary, onSelect(id), onMove(id, x, y),
+ * onWire(from, to), onPick(after) (the + of a node, or '' for the Add node button), onDelete(id), onTidy() }.
  */
 export function graphCanvas(g, opts = {}) {
-  const { selected = '', statuses = null, editable = false, agentName = (id) => id } = opts;
-  const { w, h: ht } = graphBounds(g);
+  const { selected = '', statuses = null, editable = false, agentName = (id) => id, view = newView(), height = 'h-[28rem]' } = opts;
   const byId = Object.fromEntries(g.nodes.map(n => [n.id, n]));
-  const svg = h('svg', { width: String(w), height: String(ht), viewBox: `0 0 ${w} ${ht}`, class: 'block select-none', id: 'graph-svg', role: 'group',
-    'aria-label': 'The workflow as a graph of ' + g.nodes.length + ' nodes' });
+  const world = h('g', {});
+  const grid = h('pattern', { id: 'graph-dots', width: '20', height: '20', patternUnits: 'userSpaceOnUse' }, h('circle', { cx: '1', cy: '1', r: '1', class: 'fill-slate-300 dark:fill-slate-700' }));
+  const svg = h('svg', { class: 'block size-full touch-none select-none', id: 'graph-svg', role: 'group', 'aria-label': 'The workflow as a graph of ' + g.nodes.length + ' nodes' },
+    h('defs', {}, grid), h('rect', { width: '100%', height: '100%', fill: 'url(#graph-dots)', 'data-bg': '' }), world);
+  const zoomLabel = h('span', { class: 'w-12 text-center text-xs tabular-nums', id: 'graph-zoom' }, '100%');
+  const apply = () => {
+    const t = `translate(${view.x} ${view.y}) scale(${view.k})`;
+    world.setAttribute('transform', t);
+    grid.setAttribute('patternTransform', t);
+    zoomLabel.textContent = Math.round(view.k * 100) + '%';
+  };
+  const box = h('div', { class: 'relative overflow-hidden rounded-xl border border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-950/60 ' + height, id: 'graph-canvas' }, svg);
+  const local = (e) => { const r = svg.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+  const setView = (v) => { Object.assign(view, v); apply(); };
+  const fitNow = () => { if (box.clientWidth) { setView({ ...fitView(g, box.clientWidth, box.clientHeight), fitted: true }); } };
+  const zoomBy = (f) => setView(zoomAt(view, f, box.clientWidth / 2, box.clientHeight / 2));
+
   for (const e of g.edges) {
     const a = byId[e.from], b = byId[e.to];
     if (!a || !b) continue;
     const d = wirePath(a, b);
     const taken = statuses && statuses.taken.has(e.from + '>' + e.to + '>' + (e.when || ''));
-    svg.append(h('path', { d, fill: 'none', 'stroke-width': taken ? '2.5' : '1.5', class: taken ? 'stroke-brand-500' : 'stroke-slate-300 dark:stroke-slate-600', 'data-wire': e.from + '>' + e.to + (e.when ? '>' + e.when : '') }));
-    if (taken && statuses.nodes[e.to]?.status === 'running') svg.append(flowPath(d, 'stroke-brand-500'));
+    world.append(h('path', { d, fill: 'none', 'stroke-width': taken ? '2.5' : '1.5', class: taken ? 'stroke-brand-500' : 'stroke-slate-400 dark:stroke-slate-600', 'data-wire': e.from + '>' + e.to + (e.when ? '>' + e.when : '') }));
+    if (taken && statuses.nodes[e.to]?.status === 'running') world.append(flowPath(d, 'stroke-brand-500'));
     if (e.when) {
-      const p = labelPoint(a, b);
-      svg.append(h('text', { x: String(p.x), y: String(p.y), class: 'fill-violet-600 text-[11px] font-medium dark:fill-violet-300', 'data-wire-label': e.when }, e.when));
+      // Labels of one node's wires stack, so two branches to the same row do not print over each other.
+      const p = labelPoint(a, b), nth = g.edges.filter(x => x.from === e.from && x.when).indexOf(e);
+      world.append(h('text', { x: String(p.x + 8), y: String(p.y - 4 - nth * 13), class: 'fill-violet-600 stroke-slate-50 text-[11px] font-medium [paint-order:stroke] [stroke-width:4px] dark:fill-violet-300 dark:stroke-slate-950', 'data-wire-label': e.when }, e.when));
     }
   }
   for (const n of g.nodes) {
-    const k = NODE_KINDS[n.kind] || { label: n.kind };
+    const k = NODE_KINDS[n.kind] || { label: n.kind, icon: 'box' };
     const st = statuses?.nodes[n.id];
     const tone = st ? TONE[st.status] || TONE.pending : n.id === selected ? 'stroke-brand-500' : KIND_TONE[n.kind] || 'stroke-slate-300 dark:stroke-slate-600';
+    const tile = TILE[n.kind] || TILE.end;
+    const summary = n.kind === 'start' && opts.startSummary ? opts.startSummary : nodeSummary(n, agentName);
+    const open = editable && n.kind !== 'end';
+    const dangling = open && !g.edges.some(e => e.from === n.id);
     const grp = h('g', { transform: `translate(${n.x} ${n.y})`, tabindex: '0', role: 'button', 'aria-pressed': String(n.id === selected), 'data-node': n.id, 'data-status': st?.status || '',
-      'aria-label': (n.name || k.label) + (st ? ', ' + (WORD[st.status] || st.status) : ''), class: (editable ? 'cursor-grab ' : 'cursor-pointer ') + 'focus:outline-none' },
+      'aria-label': (n.name || k.label) + ', ' + k.label + (st ? ', ' + (WORD[st.status] || st.status) : ''), class: (editable ? 'cursor-grab ' : 'cursor-pointer ') + 'group focus:outline-none' },
       h('rect', { width: String(GNODE_W), height: String(GNODE_H), rx: '12', 'stroke-width': n.id === selected ? '2.5' : st && st.status !== 'pending' ? '2' : '1.5',
-        'stroke-dasharray': st?.status === 'cancelled' ? '4 3' : '', class: 'fill-white dark:fill-slate-900 ' + tone }),
-      h('text', { x: '12', y: '23', class: 'fill-slate-900 text-[13px] font-semibold dark:fill-slate-100' }, fit(n.name || (n.kind === 'agent' ? agentName(n.agent) : k.label), 20)),
-      h('text', { x: String(GNODE_W - 10), y: '22', 'text-anchor': 'end', class: 'fill-slate-400 text-[10px] uppercase tracking-wide' }, k.label),
-      h('text', { x: '12', y: '42', class: 'fill-slate-500 text-[11px] dark:fill-slate-400' }, fit(nodeSummary(n, agentName), 30)),
-      st && st.status !== 'pending' ? h('text', { x: '12', y: '57', class: 'fill-slate-500 text-[10px] dark:fill-slate-400' }, (WORD[st.status] || st.status) + (st.visits > 1 ? ' · ran ' + st.visits + ' times' : '')) : null,
+        'stroke-dasharray': st?.status === 'cancelled' ? '4 3' : '', class: 'fill-white shadow-sm group-focus-visible:stroke-brand-500 dark:fill-slate-900 ' + tone }),
+      h('rect', { x: '10', y: '14', width: '36', height: '36', rx: '9', class: tile.fill }),
+      iconAt(k.icon, 18, 22, 20, tile.text),
+      h('text', { x: '56', y: '28', class: 'fill-slate-900 text-[13px] font-semibold dark:fill-slate-100' }, fit(n.name || (n.kind === 'agent' ? agentName(n.agent) : k.label), 18)),
+      h('text', { x: '56', y: '45', class: 'fill-slate-500 text-[11px] dark:fill-slate-400' }, fit(st && st.status !== 'pending' ? (WORD[st.status] || st.status) + (st.visits > 1 ? ' · ran ' + st.visits + ' times' : '') : summary, 24)),
       n.kind !== 'start' ? h('circle', { cx: '0', cy: String(GNODE_H / 2), r: '4', class: 'fill-white stroke-slate-400 dark:fill-slate-900' }) : null,
-      editable && n.kind !== 'end' ? h('circle', { cx: String(GNODE_W), cy: String(GNODE_H / 2), r: '7', 'data-port': n.id, class: 'cursor-crosshair fill-brand-500 stroke-white hover:fill-brand-600 dark:stroke-slate-900', 'aria-hidden': 'true' }) : null,
-      h('title', {}, (n.name || k.label) + ': ' + nodeSummary(n, agentName)));
+      dangling ? h('path', { d: `M${GNODE_W + 7} ${GNODE_H / 2} H${GNODE_W + 44}`, 'stroke-dasharray': '3 3', class: 'stroke-slate-400 pointer-events-none' }) : null,
+      dangling ? h('g', { 'data-plus': n.id, class: 'cursor-pointer', role: 'button', 'aria-label': 'Add a node after ' + (n.name || k.label) },
+        h('rect', { x: String(GNODE_W + 44), y: String(GNODE_H / 2 - 12), width: '24', height: '24', rx: '6', class: 'fill-white stroke-slate-400 hover:stroke-brand-500 dark:fill-slate-900' }),
+        h('path', { d: `M${GNODE_W + 56} ${GNODE_H / 2 - 6} v12 M${GNODE_W + 50} ${GNODE_H / 2} h12`, class: 'stroke-slate-500 pointer-events-none', 'stroke-width': '1.8' })) : null,
+      open ? h('g', { 'data-port': n.id, class: 'cursor-crosshair' },
+        h('circle', { cx: String(GNODE_W), cy: String(GNODE_H / 2), r: '8', class: 'fill-brand-500 stroke-white hover:fill-brand-600 dark:stroke-slate-900' }),
+        h('path', { d: `M${GNODE_W - 4} ${GNODE_H / 2} h8 M${GNODE_W} ${GNODE_H / 2 - 4} v8`, class: 'stroke-white pointer-events-none', 'stroke-width': '1.8' })) : null,
+      h('title', {}, (n.name || k.label) + ' (' + k.label + '): ' + summary));
     grp.addEventListener('pointerdown', (ev) => {
       if (ev.button !== 0) return;
+      ev.stopPropagation();
+      if (ev.target.closest?.('[data-plus]')) { ev.preventDefault(); opts.onPick?.(n.id); return; }
       const port = ev.target.closest?.('[data-port]');
-      const scale = svg.getBoundingClientRect().width / w || 1;
-      const origin = svg.getBoundingClientRect();
-      if (port && editable && opts.onWire) {
-        // Draw a wire: follow the pointer, and drop on another node.
+      if (port && editable) {
+        // Click the port to add a node after this one; drag from it to wire it to another node.
         ev.preventDefault();
+        const from = { x: n.x + GNODE_W, y: n.y + GNODE_H / 2 }, s0 = { x: ev.clientX, y: ev.clientY };
         const line = h('path', { fill: 'none', 'stroke-width': '2', 'stroke-dasharray': '5 4', class: 'stroke-brand-500 pointer-events-none' });
-        svg.append(line);
-        const move = (e2) => {
-          const x = (e2.clientX - origin.left) / scale, y = (e2.clientY - origin.top) / scale;
-          line.setAttribute('d', `M${n.x + GNODE_W} ${n.y + GNODE_H / 2} L${x} ${y}`);
-        };
+        world.append(line);
+        const move = (e2) => { const p = toWorld(view, local(e2).x, local(e2).y); line.setAttribute('d', `M${from.x} ${from.y} L${p.x} ${p.y}`); };
         const up = (e2) => {
           window.removeEventListener('pointermove', move);
           window.removeEventListener('pointerup', up);
           line.remove();
+          if (Math.hypot(e2.clientX - s0.x, e2.clientY - s0.y) < 4) { opts.onPick?.(n.id); return; }
           const target = document.elementFromPoint(e2.clientX, e2.clientY)?.closest?.('[data-node]');
-          if (target && target.dataset.node !== n.id) opts.onWire(n.id, target.dataset.node);
+          if (target && target.dataset.node !== n.id) opts.onWire?.(n.id, target.dataset.node);
         };
         window.addEventListener('pointermove', move);
         window.addEventListener('pointerup', up);
@@ -90,7 +130,7 @@ export function graphCanvas(g, opts = {}) {
       grp.setPointerCapture(ev.pointerId);
       const move = (e2) => {
         if (!editable) return;
-        const dx = (e2.clientX - start.x) / scale, dy = (e2.clientY - start.y) / scale;
+        const dx = (e2.clientX - start.x) / view.k, dy = (e2.clientY - start.y) / view.k;
         if (!moved && Math.hypot(dx, dy) < 4) return;
         moved = true;
         grp.setAttribute('transform', `translate(${Math.max(0, start.nx + dx)} ${Math.max(0, start.ny + dy)})`);
@@ -98,7 +138,7 @@ export function graphCanvas(g, opts = {}) {
       const up = (e2) => {
         grp.removeEventListener('pointermove', move);
         grp.removeEventListener('pointerup', up);
-        if (moved) opts.onMove?.(n.id, start.nx + (e2.clientX - start.x) / scale, start.ny + (e2.clientY - start.y) / scale);
+        if (moved) opts.onMove?.(n.id, start.nx + (e2.clientX - start.x) / view.k, start.ny + (e2.clientY - start.y) / view.k);
         else opts.onSelect?.(n.id === selected ? '' : n.id);
       };
       grp.addEventListener('pointermove', move);
@@ -108,10 +148,75 @@ export function graphCanvas(g, opts = {}) {
       const step = e.shiftKey ? 40 : 10, d = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[e.key];
       if (d && editable) { e.preventDefault(); opts.onMove?.(n.id, n.x + d[0], n.y + d[1]); }
       else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); opts.onSelect?.(n.id === selected ? '' : n.id); }
+      else if ((e.key === 'Delete' || e.key === 'Backspace') && editable && n.kind !== 'start') { e.preventDefault(); opts.onDelete?.(n.id); }
     });
-    svg.append(grp);
+    world.append(grp);
   }
-  return h('div', { class: 'overflow-auto rounded-xl border border-slate-200 bg-slate-50 p-2 dark:border-slate-800 dark:bg-slate-950/40', id: 'graph-canvas' }, svg);
+
+  // Drag the background to move around; a click on it clears the selection. Scroll moves, Ctrl or ⌘ and scroll zooms.
+  svg.addEventListener('pointerdown', (ev) => {
+    if (ev.button !== 0 || ev.target.closest?.('[data-node]')) return;
+    const s0 = { x: ev.clientX, y: ev.clientY, vx: view.x, vy: view.y };
+    let moved = false;
+    svg.setPointerCapture(ev.pointerId);
+    svg.classList.add('cursor-grabbing');
+    const move = (e2) => {
+      if (!moved && Math.hypot(e2.clientX - s0.x, e2.clientY - s0.y) < 4) return;
+      moved = true;
+      setView({ x: s0.vx + e2.clientX - s0.x, y: s0.vy + e2.clientY - s0.y });
+    };
+    const up = () => {
+      svg.removeEventListener('pointermove', move);
+      svg.removeEventListener('pointerup', up);
+      svg.classList.remove('cursor-grabbing');
+      if (!moved && selected) opts.onSelect?.('');
+    };
+    svg.addEventListener('pointermove', move);
+    svg.addEventListener('pointerup', up);
+  });
+  svg.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    if (e.ctrlKey || e.metaKey) { const p = local(e); setView(zoomAt(view, Math.exp(-e.deltaY * 0.002), p.x, p.y)); }
+    else setView({ x: view.x - e.deltaX, y: view.y - e.deltaY });
+  }, { passive: false });
+
+  const ctl = (id, label, ic, onclick) => h('button', { type: 'button', class: 'btn-ghost btn-sm', id, 'aria-label': label, title: label, onclick }, icon(ic, 'size-4'));
+  box.append(h('div', { class: 'absolute bottom-3 left-3 flex items-center rounded-lg border border-slate-200 bg-white/95 shadow-sm dark:border-slate-700 dark:bg-slate-900/95', id: 'graph-controls' },
+    ctl('graph-zoom-out', 'Zoom out', 'minus', () => zoomBy(1 / 1.2)), zoomLabel, ctl('graph-zoom-in', 'Zoom in', 'plus', () => zoomBy(1.2)),
+    ctl('graph-fit', 'Fit to the screen', 'expand', fitNow),
+    opts.onTidy ? ctl('graph-tidy', 'Lay the nodes out again, left to right', 'grid', () => { view.fitted = false; opts.onTidy(); }) : null));
+  if (editable && opts.onPick) box.append(h('div', { class: 'absolute right-3 top-3 flex items-center gap-2' },
+    h('button', { type: 'button', class: 'btn-primary btn-sm shadow-sm', id: 'graph-add', onclick: () => opts.onPick(selected) }, icon('plus', 'size-4'), 'Add node')));
+  if (editable) box.append(h('p', { class: 'muted pointer-events-none absolute bottom-3 right-3 hidden text-[11px] md:block' }, 'Drag the background to move · Ctrl + scroll to zoom · + adds the next node'));
+  apply();
+  // Fit once the box has a size (it is not on the page yet).
+  if (!view.fitted) requestAnimationFrame(() => { if (!view.fitted) fitNow(); });
+  return box;
+}
+
+// ------------------------------------------------------------------ the node picker
+
+/** A side panel to pick what to add: agents by name, logic, lookups. Resolves with an item of pickerItems, or nothing. */
+function pickNode(agents, lookups, afterName) {
+  return drawer('Add a node', (close) => {
+    const list = h('div', { class: 'space-y-5', id: 'picker-list' });
+    const search = h('input', { class: 'input', type: 'search', id: 'picker-search', placeholder: 'Search agents, logic and lookups', 'aria-label': 'Search', autocomplete: 'off' });
+    const draw = () => {
+      const groups = pickerItems(agents, lookups, search.value);
+      mount(list, groups.length ? groups.map(gr => h('section', { 'data-group': gr.id },
+        h('h3', { class: 'h-section mb-2' }, gr.label),
+        h('div', { class: 'grid gap-1.5' }, gr.items.map(it => {
+          return h('button', { type: 'button', class: 'flex w-full items-start gap-3 rounded-lg border border-transparent p-2 text-left hover:border-slate-200 hover:bg-slate-50 focus-visible:border-brand-500 dark:hover:border-slate-700 dark:hover:bg-slate-800/60', 'data-pick': it.key, onclick: () => close(it) },
+            h('span', { class: 'mt-0.5' }, tileBox(it.kind, 'size-8')),
+            h('span', { class: 'min-w-0' }, h('span', { class: 'block text-sm font-medium' }, it.label), h('span', { class: 'muted block text-xs' }, it.note)));
+        }))))
+        : h('p', { class: 'muted text-sm' }, 'Nothing matches.' + (agents.length ? '' : ' Create an agent first under Team › Agents.')));
+    };
+    search.addEventListener('input', draw);
+    search.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); list.querySelector('[data-pick]')?.click(); } });
+    draw();
+    return h('div', { class: 'space-y-4' }, search, list);
+  }, { subtitle: afterName ? 'It goes after ' + afterName + ', wired from it.' : 'It goes on the canvas; wire it from its port.' });
 }
 
 // ------------------------------------------------------------------ editor
@@ -132,51 +237,95 @@ export async function graphEditorPage({ params }) {
   const lookups = tools.filter(t => !t.needs && !NO_LOOKUP.has(t.name) && !t.name.startsWith('propose_')).map(t => t.name);
   const cur = wf && wf.versions.find(v => v.n === wf.current);
   let g = cur?.graph ? autoPlace(cur.graph) : cur ? stagesToGraph(cur) : emptyGraph();
-  let selected = '', problem = '';
+  let selected = '', problem = '', dirty = !wf;
+  const view = newView();
   const meta = { name: wf?.name || '', description: wf?.description || '', every: cur?.every_minutes || 0, runAs: cur?.run_as || 'developer', note: '', webhook: !!cur?.webhook, follow: (cur?.on_run_failed || []).join(', ') };
-  const canvasBox = h('div', {}), panel = h('aside', { class: 'card card-pad space-y-3 self-start', id: 'graph-panel' }), bar = h('div', {});
+  const canvasBox = h('div', { class: 'relative' }), bar = h('div', {}), state = h('span', { class: 'text-xs', id: 'graph-dirty' });
 
-  const change = (next, redrawPanel = true) => { g = next; problem = ''; draw(); if (redrawPanel) drawPanel(); };
-  const select = (id) => { selected = id; draw(); drawPanel(); };
+  const drawState = () => mount(state, dirty ? h('span', { class: 'pill-wait' }, wf ? 'Unsaved changes' : 'Not saved yet') : h('span', { class: 'muted' }, 'Saved as v' + wf.current));
+  // A change redraws the canvas; the side panel is rebuilt only when its shape changes, so typing in one field and
+  // clicking the next does not lose the click to a rebuilt panel.
+  const change = (next, panel = true) => { g = next; problem = ''; dirty = true; drawProblem(); drawState(); draw(panel); };
+  // Keep a node that was just picked clear of the side panel (22rem and its margin) and of the left edge.
+  const reveal = (id) => {
+    const n = g.nodes.find(x => x.id === id), w = canvasBox.clientWidth;
+    if (!n || !w) return;
+    const left = n.x * view.k + view.x, right = left + GNODE_W * view.k, limit = w - 384;
+    if (right > limit) view.x -= right - limit + 24;
+    else if (left < 16) view.x += 16 - left;
+    const top = n.y * view.k + view.y, bottom = top + GNODE_H * view.k, ht = canvasBox.clientHeight;
+    if (bottom > ht - 64) view.y -= bottom - ht + 64;
+    else if (top < 56) view.y += 56 - top;
+  };
+  const select = (id) => { selected = id; reveal(id); draw(); };
   const wireUp = (from, to) => {
     const label = nextLabel(g, from);
     const why = wireProblem(g, from, to, label);
     if (why) { toast(why, 'error'); return; }
     change(addWire(g, from, to, label));
   };
+  const remove = (id) => { selected = ''; change(removeNode(g, id)); };
+  const openPicker = async (after) => {
+    const a = after && g.nodes.find(n => n.id === after);
+    const item = await pickNode(live, lookups, a && a.kind !== 'end' ? a.name || NODE_KINDS[a.kind].label : '');
+    if (!item) return;
+    const r = addPicked(g, item, a && a.kind !== 'end' ? after : '');
+    selected = r.id;
+    g = r.graph;
+    reveal(r.id);
+    change(r.graph);
+  };
 
-  function draw() {
-    mount(canvasBox, graphCanvas(g, { selected, editable: true, agentName, onSelect: select, onMove: (id, x, y) => change(moveNode(g, id, x, y), false), onWire: wireUp }));
+  const canvasSlot = h('div', {}), panelSlot = h('div', {});
+  mount(canvasBox, canvasSlot, panelSlot);
+  function draw(panel = true) {
+    const n = g.nodes.find(x => x.id === selected);
+    mount(canvasSlot, graphCanvas(g, { selected, editable: true, agentName, view, height: 'h-[calc(100vh-13rem)] min-h-[30rem]', startSummary: triggerSummary(meta),
+      onSelect: select, onMove: (id, x, y) => change(moveNode(g, id, x, y), false), onWire: wireUp, onPick: openPicker, onDelete: remove, onTidy: () => change(tidy(g)) }));
+    if (panel) mount(panelSlot, n ? h('aside', { class: 'card card-pad absolute bottom-3 right-3 top-14 w-[22rem] max-w-[calc(100%-1.5rem)] space-y-3 overflow-y-auto shadow-lg', id: 'graph-panel' }, nodePanel(n)) : null);
   }
+
+  async function save(btn) {
+    btn.disabled = true;
+    try {
+      const body = { name: meta.name, description: meta.description, every_minutes: Number(meta.every), run_as: meta.runAs, note: meta.note, graph: g,
+        webhook: meta.webhook, on_run_failed: meta.follow.split(',').map(x => x.trim()).filter(Boolean) };
+      const out = await post(wf ? '/v1/ai/workflows/' + wf.id + '/versions' : '/v1/ai/workflows', body);
+      toast(wf ? 'Saved v' + out.current : 'Workflow created', 'ok');
+      navigate('/workflows/' + out.id);
+    } catch (e) { problem = e.message; drawProblem(); btn.disabled = false; }
+  }
+
+  // The workflow's settings, in a side panel so the canvas keeps the page.
+  const openSettings = () => drawer('Workflow settings', () => {
+    const desc = h('input', { id: 'graph-desc', class: 'input', maxlength: '300', value: meta.description, placeholder: 'What it is for', oninput: (e) => { meta.description = e.target.value; dirty = true; } });
+    const every = h('select', { id: 'graph-every', class: 'input', onchange: (e) => { meta.every = e.target.value; dirty = true; } }, SCHEDULES.map(([v, l]) => h('option', { value: String(v), selected: Number(meta.every) === v }, l)));
+    const runAs = h('select', { id: 'graph-runas', class: 'input', onchange: (e) => { meta.runAs = e.target.value; dirty = true; } }, [['developer', 'Developer: may file change proposals'], ['viewer', 'Viewer: reads only']].map(([v, l]) => h('option', { value: v, selected: meta.runAs === v }, l)));
+    const hook = h('input', { type: 'checkbox', id: 'graph-webhook', checked: meta.webhook, onchange: (e) => { meta.webhook = e.target.checked; dirty = true; } });
+    const follow = h('input', { id: 'graph-follow', class: 'input', value: meta.follow, placeholder: 'pipeline names, or * for any', oninput: (e) => { meta.follow = e.target.value; dirty = true; } });
+    return h('div', { class: 'space-y-4' }, field('Description', desc, null, 'graph-desc'),
+      h('h3', { class: 'h-section pt-2' }, 'What starts it'),
+      field('Schedule', every, 'Every run can also be started by hand.', 'graph-every'),
+      h('label', { class: 'flex items-start gap-2 text-sm', for: 'graph-webhook' }, hook, h('span', {}, 'Also starts from a signed webhook. The secret is made on the workflow’s page.')),
+      field('Also starts after failed runs of', follow, 'What failed reaches the graph as trigger, which agents can read as data.', 'graph-follow'),
+      h('h3', { class: 'h-section pt-2' }, 'What it may do'),
+      field('Runs as', runAs, 'Never as an administrator. Change proposals still need a different administrator to approve them.', 'graph-runas'),
+      h('p', { class: 'hint' }, 'Nodes share one state: each writes what it found under its id. Decisions take one wire; loops are allowed, each node runs at most its limit, and a run at most 50 steps.'));
+  }, { subtitle: meta.name || 'A new workflow', footer: (close) => h('button', { type: 'button', class: 'btn-primary btn-sm', id: 'graph-settings-done', onclick: () => close() }, 'Done') })
+    .then(() => { drawState(); draw(); });
 
   function drawBar() {
-    const save = h('button', { class: 'btn-primary', id: 'graph-save', type: 'button', onclick: async () => {
-      save.disabled = true;
-      try {
-        const body = { name: meta.name, description: meta.description, every_minutes: Number(meta.every), run_as: meta.runAs, note: meta.note, graph: g,
-          webhook: meta.webhook, on_run_failed: meta.follow.split(',').map(x => x.trim()).filter(Boolean) };
-        const out = await post(wf ? '/v1/ai/workflows/' + wf.id + '/versions' : '/v1/ai/workflows', body);
-        toast(wf ? 'Saved v' + out.current : 'Workflow created', 'ok');
-        navigate('/workflows/' + out.id);
-      } catch (e) { problem = e.message; drawProblem(); save.disabled = false; }
-    } }, icon('check', 'size-4'), wf ? 'Save as a new version' : 'Create workflow');
-    const name = h('input', { id: 'graph-name', class: 'input', maxlength: '60', value: meta.name, placeholder: 'Incident triage', oninput: (e) => { meta.name = e.target.value; } });
-    const desc = h('input', { id: 'graph-desc', class: 'input', maxlength: '300', value: meta.description, placeholder: 'What it is for', oninput: (e) => { meta.description = e.target.value; } });
-    const every = h('select', { id: 'graph-every', class: 'input', onchange: (e) => { meta.every = e.target.value; } }, SCHEDULES.map(([v, l]) => h('option', { value: String(v), selected: Number(meta.every) === v }, l)));
-    const runAs = h('select', { id: 'graph-runas', class: 'input', onchange: (e) => { meta.runAs = e.target.value; } }, [['developer', 'Developer: may file change proposals'], ['viewer', 'Viewer: reads only']].map(([v, l]) => h('option', { value: v, selected: meta.runAs === v }, l)));
-    const hook = h('input', { type: 'checkbox', id: 'graph-webhook', checked: meta.webhook, onchange: (e) => { meta.webhook = e.target.checked; } });
-    const follow = h('input', { id: 'graph-follow', class: 'input', value: meta.follow, placeholder: 'pipeline names, or * for any', oninput: (e) => { meta.follow = e.target.value; } });
-    const note = h('input', { id: 'graph-note', class: 'input', maxlength: '200', placeholder: wf ? 'What changed and why' : 'First version', oninput: (e) => { meta.note = e.target.value; } });
-    mount(bar, h('section', { class: 'card card-pad mb-4 space-y-3' },
-      h('div', { class: 'grid gap-3 md:grid-cols-2 xl:grid-cols-4' }, field('Name', name, null, 'graph-name'), field('Description', desc, null, 'graph-desc'), field('Schedule', every, null, 'graph-every'), field('Runs as', runAs, null, 'graph-runas')),
-      h('div', { class: 'grid gap-3 md:grid-cols-2' },
-        h('label', { class: 'flex items-center gap-2 self-end pb-2 text-sm', for: 'graph-webhook' }, hook, 'Also starts from a signed webhook (the secret is made on the workflow\u2019s page)'),
-        field('Also starts after failed runs of', follow, 'What failed reaches the graph as trigger, which agents can read as data.', 'graph-follow')),
-      h('div', { class: 'flex flex-wrap items-end gap-3' }, h('div', { class: 'min-w-64 flex-1' }, field('Note', note, null, 'graph-note')), save),
-      h('div', { id: 'graph-problem' })));
+    const saveBtn = h('button', { class: 'btn-primary', id: 'graph-save', type: 'button', onclick: () => save(saveBtn) }, icon('check', 'size-4'), wf ? 'Save version' : 'Create workflow');
+    const name = h('input', { id: 'graph-name', class: 'input w-64 max-w-full font-semibold', maxlength: '60', value: meta.name, placeholder: 'Name the workflow', 'aria-label': 'Name', oninput: (e) => { meta.name = e.target.value; dirty = true; drawState(); } });
+    const note = h('input', { id: 'graph-note', class: 'input w-56 max-w-full', maxlength: '200', placeholder: wf ? 'What changed and why' : 'First version', 'aria-label': 'Note for this version', oninput: (e) => { meta.note = e.target.value; } });
+    mount(bar, h('div', { class: 'mb-3 flex flex-wrap items-center gap-2' },
+      h('a', { class: 'btn-ghost btn-sm', href: wf ? '#/workflows/' + wf.id : '#/workflows', 'aria-label': 'Back' }, icon('chevron', 'size-4 rotate-180'), 'Workflows'),
+      name, state, h('div', { class: 'flex-1' }), note,
+      h('button', { type: 'button', class: 'btn-secondary', id: 'graph-settings', onclick: openSettings }, icon('gear', 'size-4'), 'Settings'), saveBtn),
+      h('div', { id: 'graph-problem' }));
     drawProblem();
   }
-  const drawProblem = () => { const box = bar.querySelector('#graph-problem'); if (box) mount(box, problem ? errorBox(problem) : null); };
+  const drawProblem = () => { const box = bar.querySelector('#graph-problem'); if (box) mount(box, problem ? h('div', { class: 'mb-3' }, errorBox(problem)) : null); };
 
   const input = (label, value, onChange, attrs = {}) => {
     const id = attrs.id || 'g-' + label.toLowerCase().replace(/[^a-z]+/g, '-');
@@ -208,31 +357,25 @@ export async function graphEditorPage({ params }) {
     ];
   }
 
-  // The palette: with a node selected, a new node goes to its right and is wired from it when that is possible.
-  const palette = (after) => h('div', { class: 'grid grid-cols-2 gap-2', id: 'graph-palette' }, PALETTE.map(kind => h('button', { type: 'button', class: 'btn-secondary btn-sm justify-start', 'data-add': kind, title: NODE_KINDS[kind].note,
-    onclick: () => {
-      const r = addNode(g, kind, null, kind === 'end' ? { outcome: 'succeeded' } : kind === 'decide' ? { by: 'rule', rules: [] } : {}, after);
-      let next = r.graph;
-      const label = after ? nextLabel(next, after) : '';
-      if (after && !wireProblem(next, after, r.id, label)) next = addWire(next, after, r.id, label);
-      selected = r.id; change(next);
-    } }, icon(NODE_KINDS[kind].icon, 'size-3.5'), NODE_KINDS[kind].label)));
-
-  function drawPanel() {
-    const n = g.nodes.find(x => x.id === selected);
-    if (!n) {
-      mount(panel, h('div', { class: 'flex items-center justify-between gap-2' }, h('h2', { class: 'h-section' }, 'Add a node'),
-          h('button', { type: 'button', class: 'btn-ghost btn-sm', id: 'graph-tidy', title: 'Lay the nodes out again, left to right', onclick: () => change(tidy(g)) }, icon('grid', 'size-3.5'), 'Tidy up')),
-        palette(''),
-        h('p', { class: 'hint' }, 'Pick a node to set it. Drag a node to move it; drag from its blue port to another node to wire them. A decision’s wires carry the branch they are for.'),
-        h('div', { class: 'muted space-y-1 text-xs' }, Object.values(NODE_KINDS).map(k => h('p', {}, h('strong', {}, k.label + ': '), k.note))));
-      return;
-    }
-    const set = (fields) => change(updateNode(g, n.id, fields));
-    const out = [h('div', { class: 'flex items-center justify-between gap-2' }, h('h2', { class: 'h-section' }, NODE_KINDS[n.kind].label + ' · ' + n.id),
+  function nodePanel(node) {
+    let n = node;
+    // What changes the panel's own fields (or the wires it lists) rebuilds it; text does not.
+    const SHAPE = ['by', 'agent', 'outcome', 'choices', 'tool'];
+    const set = (fields) => {
+      const reshapes = SHAPE.some(k => k in fields) || ('rules' in fields && ((fields.rules || []).length !== (n.rules || []).length
+        || (fields.rules || []).some((r, i) => r.when !== n.rules[i]?.when || r.key !== n.rules[i]?.key)));
+      change(updateNode(g, n.id, fields), reshapes);
+      if (!reshapes) n = g.nodes.find(x => x.id === n.id) || n;
+    };
+    const out = [h('div', { class: 'flex items-center justify-between gap-2' },
+      h('div', { class: 'flex min-w-0 items-center gap-2' }, tileBox(n.kind, 'size-7'),
+        h('h2', { class: 'truncate font-semibold' }, NODE_KINDS[n.kind].label), h('code', { class: 'muted truncate text-xs' }, n.id)),
       h('button', { class: 'btn-ghost btn-sm', type: 'button', 'aria-label': 'Close', onclick: () => select('') }, icon('x', 'size-4'))),
       input('Name', n.name, v => set({ name: v }), { maxlength: '60', placeholder: NODE_KINDS[n.kind].label, id: 'g-name' })];
     switch (n.kind) {
+      case 'start':
+        out.push(h('p', { class: 'text-sm' }, 'Starts ' + triggerSummary(meta) + '.'), h('button', { type: 'button', class: 'btn-secondary btn-sm', onclick: openSettings }, icon('gear', 'size-3.5'), 'Change what starts it'));
+        break;
       case 'agent':
         out.push(...agentFields(n, set), input('Writes these fields too', (n.fields || []).join(', '), v => set({ fields: list(v) }), { id: 'g-fields', placeholder: 'severity, service' }),
           h('p', { class: 'hint -mt-2' }, 'The agent is asked for them at the end of its answer; a decision can test them.'));
@@ -249,14 +392,14 @@ export async function graphEditorPage({ params }) {
           const rules = n.rules || [];
           const keys = stateKeys(g, n.id);
           out.push(h('div', { class: 'space-y-2', id: 'g-rules' }, rules.map((r, i) => {
-            const upd = (f) => set({ rules: rules.map((x, j) => j === i ? { ...x, ...f } : x) });
+            const upd = (f) => set({ rules: (n.rules || []).map((x, j) => j === i ? { ...x, ...f } : x) });
             return h('div', { class: 'grid grid-cols-2 gap-1.5 rounded-lg border border-slate-200 p-2 dark:border-slate-800', 'data-rule': String(i) },
               h('select', { class: 'input', 'aria-label': 'Key', onchange: (e) => upd({ key: e.target.value }) }, [['', 'value of…'], ...keys.map(k => [k, k])].map(([v, t]) => h('option', { value: v, selected: v === (r.key || '') }, t))),
               h('select', { class: 'input', 'aria-label': 'Test', onchange: (e) => upd({ op: e.target.value }) }, OPS.map(([v, t]) => h('option', { value: v, selected: v === (r.op || 'equals') }, t))),
               h('input', { class: 'input', 'aria-label': 'Value', value: r.value || '', placeholder: 'high', onchange: (e) => upd({ value: e.target.value.trim() }) }),
               h('input', { class: 'input', 'aria-label': 'Branch', value: r.when || '', placeholder: 'branch, e.g. page', onchange: (e) => upd({ when: e.target.value.trim().toLowerCase() }) }),
-              h('button', { class: 'btn-ghost btn-sm col-span-2 justify-self-end', type: 'button', onclick: () => set({ rules: rules.filter((_, j) => j !== i) }) }, icon('trash', 'size-3.5'), 'Remove'));
-          }), h('button', { class: 'btn-secondary btn-sm', type: 'button', id: 'g-add-rule', onclick: () => set({ rules: [...rules, { key: keys[0] || '', op: 'equals', value: '', when: 'branch-' + (rules.length + 1) }] }) }, icon('plus', 'size-3.5'), 'Add a rule')),
+              h('button', { class: 'btn-ghost btn-sm col-span-2 justify-self-end', type: 'button', onclick: () => set({ rules: (n.rules || []).filter((_, j) => j !== i) }) }, icon('trash', 'size-3.5'), 'Remove'));
+          }), h('button', { class: 'btn-secondary btn-sm', type: 'button', id: 'g-add-rule', onclick: () => { const now = n.rules || []; set({ rules: [...now, { key: keys[0] || '', op: 'equals', value: '', when: 'branch-' + (now.length + 1) }] }); } }, icon('plus', 'size-3.5'), 'Add a rule')),
           h('p', { class: 'hint' }, 'The first rule that matches picks its branch; otherwise the else wire.'));
         } else {
           out.push(...agentFields(n, set), h('p', { class: 'hint' }, 'The agent must answer one of the wires’ branches; an unclear answer is asked once more, then else is taken.'));
@@ -288,18 +431,17 @@ export async function graphEditorPage({ params }) {
         const why = wireProblem(g, n.id, to.value, label ? label.value : '');
         if (why) return toast(why, 'error');
         change(addWire(g, n.id, to.value, label ? label.value : ''));
-      } }, icon('link', 'size-3.5'), 'Wire')) : null));
-    if (n.kind !== 'end') out.push(h('div', { class: 'border-t border-slate-200 pt-3 dark:border-slate-800' }, h('h3', { class: 'h-section mb-2' }, 'Add a node after this one'), palette(n.id)));
-    if (n.kind !== 'start') out.push(h('div', { class: 'flex justify-end' }, h('button', { class: 'btn-ghost btn-sm text-rose-600 dark:text-rose-400', type: 'button', id: 'g-remove', onclick: () => { selected = ''; change(removeNode(g, n.id)); } }, icon('trash', 'size-3.5'), 'Remove node')));
-    mount(panel, ...out);
+      } }, icon('link', 'size-3.5'), 'Wire')) : null,
+      n.kind !== 'end' ? h('button', { class: 'btn-secondary btn-sm mt-2', type: 'button', id: 'g-add-after', onclick: () => openPicker(n.id) }, icon('plus', 'size-3.5'), 'Add a node after this one') : null));
+    if (n.kind !== 'start') out.push(h('div', { class: 'flex justify-end' }, h('button', { class: 'btn-ghost btn-sm text-rose-600 dark:text-rose-400', type: 'button', id: 'g-remove', onclick: () => remove(n.id) }, icon('trash', 'size-3.5'), 'Remove node')));
+    return out;
   }
 
-  mount(el, pageHeader(wf ? 'Edit ' + wf.name : 'New workflow', 'Nodes share one state: each writes what it found under its id. Decisions take one wire; loops are allowed, each node runs at most its limit, and a run at most 50 steps. Only an agent’s own tools may propose changes, and a different administrator approves them.',
-    h('a', { class: 'btn-secondary btn-sm', href: wf ? '#/workflows/' + wf.id : '#/workflows' }, 'Back')),
-    !live.length ? h('div', { class: 'mb-4' }, notice('info', 'Create an agent first: agent and decision nodes need one.')) : null,
-    cur && !cur.graph ? h('div', { class: 'mb-4' }, notice('info', 'This workflow had stages. They are drawn here as a graph; saving makes a new version as a graph.')) : null,
-    bar, h('div', { class: 'grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]' }, canvasBox, panel));
-  drawBar(); draw(); drawPanel();
+  mount(el, bar,
+    !live.length ? h('div', { class: 'mb-3' }, notice('info', 'Create an agent first: agent and decision nodes need one.')) : null,
+    cur && !cur.graph ? h('div', { class: 'mb-3' }, notice('info', 'This workflow had stages. They are drawn here as a graph; saving makes a new version as a graph.')) : null,
+    canvasBox);
+  drawBar(); drawState(); draw();
   return el;
 }
 
@@ -310,13 +452,13 @@ export function graphRunView(r, g, agents, reload) {
   const agentName = (id) => agents.find(a => a.id === id)?.name || id;
   const box = h('div', { class: 'space-y-4', id: 'graph-run' });
   let selected = r.waiting || '';
-  const statuses = graphRunStatus(g, r);
+  const statuses = graphRunStatus(g, r), view = newView();
   function draw() {
     const waitingNode = r.waiting && g.nodes.find(n => n.id === r.waiting);
     const visits = (r.visits || []).filter(v => !selected || v.node === selected);
     mount(box,
       waitingNode ? askCard(r, waitingNode, reload) : null,
-      graphCanvas(g, { statuses, selected, agentName, onSelect: (id) => { selected = id; draw(); } }),
+      graphCanvas(g, { statuses, selected, agentName, view, onSelect: (id) => { selected = id; draw(); } }),
       h('section', { class: 'card card-pad' },
         h('div', { class: 'mb-2 flex flex-wrap items-center justify-between gap-2' }, h('h2', { class: 'h-section' }, selected ? 'Node ' + selected : 'Every step, in order'),
           h('div', { class: 'flex items-center gap-3 text-xs muted' }, h('span', {}, (r.steps || 0) + ' of 50 steps'), selected ? h('button', { class: 'btn-ghost btn-sm', type: 'button', onclick: () => { selected = ''; draw(); } }, 'Show all') : null)),

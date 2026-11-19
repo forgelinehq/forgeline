@@ -15,7 +15,6 @@ export const NODE_KINDS = {
   merge: { label: 'Merge', icon: 'layers', note: 'Waits for the branches that reach it' },
   end: { label: 'End', icon: 'check', note: 'Finishes the run' },
 };
-export const PALETTE = ['agent', 'lookup', 'decide', 'ask', 'merge', 'end'];
 
 const clone = (x) => JSON.parse(JSON.stringify(x));
 
@@ -163,13 +162,6 @@ export function tidy(g) {
   return out;
 }
 
-/** The canvas size that holds every node. */
-export function graphBounds(g) {
-  const w = Math.max(...g.nodes.map(n => (n.x || 0) + GNODE_W), 600) + PAD;
-  const h = Math.max(...g.nodes.map(n => (n.y || 0) + GNODE_H), 300) + PAD + 40; // room for a loop's wire below
-  return { w, h };
-}
-
 /** A wire's path from the right port of one node to the left port of another, looping round when it goes back. */
 export function wirePath(a, b) {
   const x1 = a.x + GNODE_W, y1 = a.y + GNODE_H / 2, x2 = b.x, y2 = b.y + GNODE_H / 2;
@@ -191,7 +183,7 @@ export function labelPoint(a, b) {
 export function nodeSummary(n, agentName = (id) => id) {
   switch (n.kind) {
     case 'start': return 'by hand or on schedule';
-    case 'agent': return agentName(n.agent) + (n.task ? ': ' + n.task : '');
+    case 'agent': return n.name && n.name === agentName(n.agent) ? n.task || 'say what to do' : agentName(n.agent) + (n.task ? ': ' + n.task : '');
     case 'lookup': return n.tool || 'pick a lookup';
     case 'decide': return n.by === 'agent' ? agentName(n.agent) + ' chooses' : (n.rules || []).map(r => `${r.key} ${r.op} ${r.value || ''}`.trim()).join('; ') || 'add a rule';
     case 'ask': return n.question || 'ask a question';
@@ -254,4 +246,85 @@ export function stagesToGraph(v) {
   g.nodes.push({ id: 'end', kind: 'end', outcome: 'succeeded' });
   for (const p of prev) g.edges.push(p.startsWith('release-') ? { from: p, to: 'end', when: 'release' } : { from: p, to: 'end' });
   return autoPlace(g);
+}
+
+// ------------------------------------------------------------------ viewport: pan and zoom, like n8n
+
+export const MIN_ZOOM = 0.25, MAX_ZOOM = 2;
+const clampZoom = (k) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, k));
+
+/** A view that shows every node in a box of bw×bh, centred, never zoomed in past 100%. */
+export function fitView(g, bw, bh, pad = 40) {
+  if (!g.nodes.length || bw <= 0 || bh <= 0) return { x: 0, y: 0, k: 1 };
+  const x0 = Math.min(...g.nodes.map(n => n.x || 0)), y0 = Math.min(...g.nodes.map(n => n.y || 0));
+  const x1 = Math.max(...g.nodes.map(n => (n.x || 0) + GNODE_W)), y1 = Math.max(...g.nodes.map(n => (n.y || 0) + GNODE_H + 40));
+  const k = clampZoom(Math.min(1, (bw - pad * 2) / (x1 - x0), (bh - pad * 2) / (y1 - y0)));
+  return { x: Math.round((bw - (x1 - x0) * k) / 2 - x0 * k), y: Math.round((bh - (y1 - y0) * k) / 2 - y0 * k), k: Math.round(k * 1000) / 1000 };
+}
+
+/** Zoom by a factor and keep the point (px, py) of the box where it is on screen. */
+export function zoomAt(view, factor, px, py) {
+  const k = clampZoom(view.k * factor);
+  if (k === view.k) return { ...view };
+  const wx = (px - view.x) / view.k, wy = (py - view.y) / view.k;
+  return { x: px - wx * k, y: py - wy * k, k };
+}
+
+/** A point of the box (from its top left corner) on the graph. */
+export const toWorld = (view, sx, sy) => ({ x: (sx - view.x) / view.k, y: (sy - view.y) / view.k });
+
+// ------------------------------------------------------------------ the node picker
+
+/**
+ * What the node picker offers, in groups, filtered by a query on the label and the note: each agent by name, the
+ * logic nodes, and each lookup by name. Every item says which kind it adds and with which fields.
+ */
+export function pickerItems(agents, lookups, query = '') {
+  const q = query.trim().toLowerCase();
+  const groups = [
+    { id: 'agents', label: 'Agents', items: agents.map(a => ({ key: 'agent:' + a.id, kind: 'agent', label: a.name, note: a.description || 'Does a task and writes what it found', fields: { agent: a.id, name: a.name } })) },
+    { id: 'logic', label: 'Logic', items: [
+      { key: 'decide:rule', kind: 'decide', label: 'Decide by a rule', note: 'Takes one wire by what earlier nodes wrote', fields: { by: 'rule', rules: [] } },
+      { key: 'decide:agent', kind: 'decide', label: 'Decide by an agent', note: 'An agent picks one of the wires', fields: { by: 'agent' } },
+      { key: 'merge', kind: 'merge', label: 'Merge', note: NODE_KINDS.merge.note, fields: {} },
+      { key: 'ask', kind: 'ask', label: 'Ask a person', note: NODE_KINDS.ask.note, fields: {} },
+      { key: 'end:succeeded', kind: 'end', label: 'End as done', note: 'Finishes the run', fields: { outcome: 'succeeded' } },
+      { key: 'end:failed', kind: 'end', label: 'End as failed', note: 'Finishes the run as failed', fields: { outcome: 'failed' } },
+    ] },
+    { id: 'lookups', label: 'Lookups (no model)', items: lookups.map(t => ({ key: 'lookup:' + t, kind: 'lookup', label: t.replaceAll('_', ' '), note: 'Reads one thing', fields: { tool: t } })) },
+  ];
+  return groups.map(gr => ({ ...gr, items: gr.items.filter(i => !q || (i.label + ' ' + i.note + ' ' + i.kind).toLowerCase().includes(q)) })).filter(gr => gr.items.length);
+}
+
+/**
+ * Adds what the picker chose after a node (or on its own when after is empty), wired from it when that is allowed.
+ * When that node had one plain wire out, the new node goes in between, as n8n inserts: the nodes from there on move
+ * one column right. An end goes beside instead, since nothing wires out of it. Returns { graph, id }.
+ */
+export function addPicked(g, item, after = '') {
+  const prev = after && g.nodes.find(n => n.id === after);
+  const outs = prev ? g.edges.filter(e => e.from === after) : [];
+  const insert = prev && item.kind !== 'end' && !branches(prev) && outs.length === 1 && !outs[0].when;
+  let base = g;
+  if (insert) {
+    base = clone(g);
+    base.edges = base.edges.filter(e => e !== base.edges.find(x => x.from === after && x.to === outs[0].to && !x.when));
+    for (const n of base.nodes) if (n.x > prev.x && Math.abs(n.y - prev.y) < ROW_H) n.x += COL_W;
+  }
+  const r = addNode(base, item.kind, insert ? { x: prev.x + COL_W, y: prev.y } : null, clone(item.fields), after);
+  let next = r.graph;
+  const label = after ? nextLabel(next, after) : '';
+  if (after && !wireProblem(next, after, r.id, label)) next = addWire(next, after, r.id, label);
+  if (insert) next = addWire(next, r.id, outs[0].to, nextLabel(next, r.id));
+  return { graph: next, id: r.id };
+}
+
+/** The start node's line: what starts the workflow, from its settings. */
+export function triggerSummary(meta) {
+  const parts = ['by hand'];
+  const every = Number(meta.every || 0);
+  if (every) parts.push(every < 60 ? 'every ' + every + ' min' : every < 1440 ? 'every ' + every / 60 + ' h' : every === 1440 ? 'daily' : 'weekly');
+  if (meta.webhook) parts.push('webhook');
+  if (String(meta.follow || '').trim()) parts.push('failed runs');
+  return parts.join(' · ');
 }

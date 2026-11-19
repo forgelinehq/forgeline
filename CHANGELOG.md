@@ -62,6 +62,12 @@ section in the pull request that makes the change; a release moves it under its 
 - **After a session ends**, the console stops polling the server (it asked every minute, forever).
 
 ### Added
+- **The workflow canvas fills the page, as in n8n.** It pans (drag the background or scroll) and zooms (Ctrl + scroll,
+  or the controls, with Fit); nodes carry their kind's icon, and the Start node says what starts the workflow. A node's
+  **+**, or **Add node**, opens a searchable side panel of your agents by name, the logic nodes and the lookups; the new
+  node is wired in after the one you came from, and goes between it and the next when there was one plain wire. The
+  workflow's settings moved into a side panel, so the canvas keeps the page; Delete removes the picked node. Typing in
+  one field of a node and clicking the next no longer loses the click.
 - **Team › Workflows.** Workflows have a tab of their own instead of hiding under Agents: cards that say what each is
   made of, how it starts (by hand, schedule, webhook, a failed run) and how its last run went, with Run and the canvas
   one click away; every run of every workflow under Runs; and Delete, which archives a workflow for 30 days like an agent.
