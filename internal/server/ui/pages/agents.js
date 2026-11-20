@@ -7,6 +7,7 @@ import { mdEditor } from '../lib/mdeditor.js';
 import { markdownBox, renderReply } from '../lib/mdview.js';
 import { checkInstructions } from '../lib/markdown.js';
 import { groupTools, toolInfo, TIERS, tierTitle } from '../lib/tools.js';
+import { pushDrawer } from './pushes.js';
 
 // Agents and skills. Every save is a new version; old versions are never edited, and a rollback is
 // a copy of an old version saved as the newest one.
@@ -250,6 +251,7 @@ export async function agentPage({ params }) {
           h('div', { class: 'mt-2 flex flex-wrap items-center gap-2 text-xs' }, ag.disabled ? h('span', { class: 'pill-idle' }, 'Off') : h('span', { class: 'pill-ok' }, 'On'), tierPill(v.tier), v.model ? h('span', { class: 'pill-idle', id: 'agent-model-pill' }, v.model) : null,
             h('span', { class: 'muted' }, 'Version ' + v.n + (v.n === ag.current ? ' (current)' : ' (older)')), shortHash(v.hash))),
         downloadMenu(ag, v),
+        admin && !ag.archived_at && h('button', { class: 'btn-secondary btn-sm', type: 'button', id: 'agent-push', onclick: () => pushDrawer(ag, v) }, icon('upload', 'size-3.5'), 'Push v' + v.n),
         admin && ag.archived_at && h('div', { class: 'flex w-full flex-wrap gap-2 sm:w-auto' },
           h('button', { class: 'btn-primary btn-sm', type: 'button', id: 'restore-agent', onclick: async () => {
             try { await post('/v1/ai/agents/' + ag.id + '/restore'); toast('Restored. It is still turned off.', 'ok'); load(true); } catch (e) { toast(e.message, 'error'); }

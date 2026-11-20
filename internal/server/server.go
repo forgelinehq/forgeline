@@ -101,6 +101,7 @@ type Server struct {
 	acctMu   sync.Mutex                                                 // serialises changes to an added account's settings
 	aiMu     sync.Mutex                                                 // guards aiBusy and proposal decisions
 	aiBusy   bool                                                       // an approved AI change is being applied
+	pushMu   sync.Mutex                                                 // guards agent push decisions (note 046, step 3)
 	mcpStart func(ctx context.Context, st awsSettings) (mcpConn, error) // replaced in tests
 
 	started    time.Time

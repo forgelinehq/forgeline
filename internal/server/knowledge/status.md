@@ -55,6 +55,6 @@ Everything below is built and tested with the race detector, and the console in 
 ## Not built yet
 
 See the [roadmap]({{ '/roadmap/' | relative_url }}). Next: the agent builder with side-panel pickers and a playground,
-exporting an agent (an agent file with its skills, a Docker Agent file, a package in a container registry), a
+publishing agents (an MCP toolset with agent keys, an A2A card), a
 Workflows section of its own, the assistant knowing every page and feature, and code mode in a local sandbox. Google
 Cloud and Azure blocks come after the AWS work is done.

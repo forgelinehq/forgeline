@@ -12,7 +12,7 @@
 export const SPACES = [
   { id: 'home', label: 'Home', icon: 'home', path: '/', tabs: [
     { path: '/', label: 'Today', min: 'viewer', exact: true },
-    { path: '/proposals', label: 'Approvals', min: 'viewer' },
+    { path: '/proposals', label: 'Approvals', min: 'viewer', also: ['/pushes/'] },
   ] },
   { id: 'build', label: 'Build', icon: 'grid', path: '/environments', tabs: [
     { path: '/design', label: 'Design', min: 'developer' },

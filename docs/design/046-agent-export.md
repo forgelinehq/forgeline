@@ -1,7 +1,12 @@
 # 046: Exporting agents: a bundle, Docker Agent YAML, an OCI artifact, an A2A card
 
-Status: **accepted 2026-11-19: every decision as proposed** (end of this note). **Steps 1 and 2 are built**: both downloads, with
-their schema, tests, and an audit entry; and **Import** of a bundle, with a preview that saves nothing. Checked 2026-11-19 with the real Docker Agent CLI (v1.162.0): a file for every provider kind loads with
+Status: **accepted 2026-11-19: every decision as proposed** (end of this note). **Steps 1 to 3 are built**: both downloads, with
+their schema, tests, and an audit entry; **Import** of a bundle, with a preview that saves nothing; and **Push** to a
+registry as a proposal a different administrator approves (Settings › Agent registries, `internal/oci`). Checked
+2026-11-20 against a local registry (`registry:3`): what Forgeline pushes loads with `docker agent run <ref> --dry-run`
+and comes back byte for byte with `docker agent share pull` (`FORGELINE_DOCKER_AGENT=<binary>
+FORGELINE_TEST_REGISTRY=127.0.0.1:5055 go test ./internal/oci -run TestPushLoadsInDockerAgent`). Not yet pushed to GHCR,
+Docker Hub or ECR; ECR through a connected AWS account, and the bundle as a second artifact type, are not built. Checked 2026-11-19 with the real Docker Agent CLI (v1.162.0): a file for every provider kind loads with
 `docker agent run <file> --dry-run`, which does refuse an unknown provider, field, MCP reference or incomplete skill
 (`FORGELINE_DOCKER_AGENT=<binary> go test ./internal/agentfile -run TestDockerYAMLLoadsInDockerAgent`). Revises note 045, decision 3,
 which said an agent is not exported. On 2026-11-18 the maintainer asked for agents to be exportable too, in open formats.
@@ -83,6 +88,13 @@ So an exported copy can never do more than read on its own, and anything it chan
   `io.docker.agent.*` annotations, tagged `v<n>`, so `docker agent run <ref>` works. The bundle can go as a second
   artifact type (its zip as one layer) for Forgeline-to-Forgeline moves.
 - Written in Go against the OCI distribution API (upload blobs, then the manifest), with no new dependency.
+- As built (2026-11-20), matching Docker Agent v1.162.0: an OCI image manifest with `artifactType`
+  `application/vnd.docker.agent.config.v1+json`, a Docker image config naming one layer, and that layer, which is the
+  YAML gzipped (not a tar). Docker Agent refuses an artifact without the `io.docker.agent.version` annotation; it only
+  checks that it is there, so Forgeline writes its own name and version in it. Forgeline adds
+  `org.opencontainers.image.title` and `io.forgeline.agent.{id,version,fingerprint}`. Sign-in is the registry's
+  token flow or basic; the token address must be https (http only on this machine), and an upload address on another
+  host is refused, so the token goes nowhere else.
 - Registry credentials are kept in the vault, like every other credential.
 - **A push is a proposal** that a different administrator approves, because it publishes outside Forgeline and, for
   ECR, changes the cloud (note 006). The proposal shows the exact files and the target reference.

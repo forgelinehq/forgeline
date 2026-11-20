@@ -241,6 +241,18 @@ bundle twice changes nothing. Every import is in the audit log.
 
 ![Importing a bundle]({{ '/console/143-agent-import.png' | relative_url }})
 
+**Push** on an agent's page (administrators) sends the version you are looking at to a container registry, the way
+`docker agent share push` stores it, so anyone with access runs it with `docker agent run <ref>`. Add the registry
+first under **Settings › Agent registries**: GitHub Container Registry, Docker Hub or any OCI registry, with a user
+name and a token that may push (kept in the vault, never shown again), and **Check** that it signs in. A push is a
+proposal: the drawer shows the exact address (`host/namespace/repository:v<n>`) and asks why; a different
+administrator then reads the exact Docker Agent file under **Home › Approvals › Agent pushes** and approves it. Only
+then does Forgeline sign in and push, and the page shows the digest the registry confirmed and the command to run it.
+A push waiting longer than 24 hours expires, and one whose registry was removed or moved is refused. Approval rules can
+ask for two approvals for pushes (kind **Pushing an agent to a registry**). Everything is in the audit log.
+
+![An approved push]({{ '/console/147-agent-push.png' | relative_url }})
+
 **Schedules** lists everything that runs by itself: workflows on their schedule and goals given to teams at set
 times, soonest first, with the next run in your time, how the last one went, and **Pause**, **Resume**, **Change** and
 **Run now** for administrators. A schedule is every few minutes or hours, every day, weekdays, a day of the week or of
