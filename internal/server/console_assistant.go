@@ -451,6 +451,9 @@ func (s *Server) askAssistant(ctx context.Context, role authn.Role, turns []chat
 	if setup, _ := ctx.Value(setupKey{}).(string); setup != "" {
 		system += "\n\n" + setup
 	}
+	if scopeFrom(ctx) == nil { // the assistant itself, not an agent: what became of the cards it prepared
+		system += s.recentCardsBlock(ctx, principalFrom(ctx).UserID)
+	}
 	if mt := memTurnFrom(ctx); mt != nil {
 		if mt.question == "" && len(turns) > 0 {
 			mt.question = turns[len(turns)-1].Content

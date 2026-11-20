@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/forgelinehq/forgeline/internal/schedule"
 	"net/http"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -402,4 +403,44 @@ func (s *Server) doSaveDefinition(ctx context.Context, p Principal, ip string, a
 		}
 		return fmt.Sprintf("Created workflow %q.", wf.Name), "/workflows/" + wf.ID, nil
 	}
+}
+
+// recentCardsBlock tells the assistant what became of the cards it prepared for this person in the last 24 hours:
+// confirmed (and what that made), dismissed, failed, or still waiting. Without it the model only sees its own
+// "a card is waiting" and prepares the same thing again after the person has confirmed it.
+func (s *Server) recentCardsBlock(ctx context.Context, owner string) string {
+	if owner == "" {
+		return ""
+	}
+	docs, err := s.docs.List(ctx, kindAssistAction, docstore.ListOptions{Desc: true, Limit: 200})
+	if err != nil {
+		return ""
+	}
+	all, _ := docstore.Decode[AssistAction](docs)
+	sort.Slice(all, func(i, j int) bool { return all[i].Created.Before(all[j].Created) })
+	var b strings.Builder
+	for _, a := range all {
+		if a.Owner != owner || time.Since(a.Created) > 24*time.Hour {
+			continue
+		}
+		state := map[string]string{actDone: "confirmed", actDismissed: "dismissed by the person", actFailed: "failed when confirmed"}[a.Status]
+		if a.Status == actPending {
+			state = "still waiting for Confirm"
+			if time.Now().After(a.Expires) {
+				state = "expired without an answer"
+			}
+		}
+		fmt.Fprintf(&b, "- %s %q (%s): %s", a.Kind, a.Title, a.Created.Format("15:04 UTC"), state)
+		if a.Result != "" {
+			fmt.Fprintf(&b, ": %s", truncate(a.Result, 200))
+		}
+		if a.Link != "" {
+			fmt.Fprintf(&b, " (%s)", a.Link)
+		}
+		b.WriteString("\n")
+	}
+	if b.Len() == 0 {
+		return ""
+	}
+	return "\n\nCards you prepared for this person in the last 24 hours, and what became of each. Something confirmed exists now: do not prepare it again; refer to it, or prepare a change to it only if asked. Something still waiting needs the person's Confirm, not a new card.\n<your_cards>\n" + b.String() + "</your_cards>"
 }

@@ -239,6 +239,13 @@ func (s *Server) resolveWorkflow(ctx context.Context, req wfRequest) (WFVersion,
 		if msg != "" {
 			return WFVersion{}, msg
 		}
+		for i, n := range g.Nodes {
+			if n.Agent != "" {
+				if m := s.toolsBeyondRole(ctx, fmt.Sprintf("nodes[%d] (%s)", i, n.ID), n.Agent, n.AgentN, req.RunAs); m != "" {
+					return WFVersion{}, m
+				}
+			}
+		}
 		if len(req.OnRunFailed) > 10 {
 			return WFVersion{}, "follow at most 10 pipelines"
 		}
@@ -297,6 +304,9 @@ func (s *Server) resolveWorkflow(ctx context.Context, req wfRequest) (WFVersion,
 			}
 			if seen[sp.ID] {
 				return WFVersion{}, "duplicate step"
+			}
+			if m := s.toolsBeyondRole(ctx, fmt.Sprintf("stage %q", st.Name), sp.Agent, sp.AgentN, req.RunAs); m != "" {
+				return WFVersion{}, m
 			}
 			seen[sp.ID] = true
 			steps = append(steps, sp)
@@ -1020,4 +1030,37 @@ func (s *Server) scheduleTick(ctx context.Context, now time.Time) {
 		_ = s.docs.Put(ctx, kindWFState, wf.ID, st)
 		_ = s.audit(ctx, Principal{Name: "workflow:" + wf.ID, Role: authn.Role(v.RunAs)}, "", "ai.workflow.run", "workflow/"+wf.ID, fmt.Sprintf("v%d by schedule", v.N), true)
 	}
+}
+
+// toolsBeyondRole says which of an agent version's tools the role a workflow runs as may never use. Such a tool is
+// refused on every run, so the agent would work without it and the run would look fine but miss what it was for (a
+// maintainer's report writer had call_aws, for administrators only, in a workflow running as a viewer).
+func (s *Server) toolsBeyondRole(ctx context.Context, at, agentID string, n int, role string) string {
+	a, err := s.loadAgent(ctx, agentID)
+	if err != nil {
+		return ""
+	}
+	v, ok := a.version(n)
+	if !ok {
+		return ""
+	}
+	min := map[string]authn.Role{}
+	for _, t := range assistantLookups() {
+		min[t.name] = t.min
+	}
+	var bad []string
+	for _, t := range v.Tools {
+		need, known := min[t]
+		if !known && (strings.HasPrefix(t, mcpToolPrefix) || strings.HasPrefix(t, pluginToolPrefix)) {
+			need, known = authn.Developer, true
+		}
+		if known && !authn.Role(role).AtLeast(need) {
+			bad = append(bad, fmt.Sprintf("%s (needs %s)", t, need))
+		}
+	}
+	if len(bad) == 0 {
+		return ""
+	}
+	return fmt.Sprintf("%s: agent %q v%d has %s, which a run as %s may never use, so every call would be refused. Run the workflow as a developer if that is enough, or give the agent a tool its role may use (for example inspector_findings, guard_findings or aws_resources instead of call_aws)",
+		at, a.Name, v.N, strings.Join(bad, ", "), role)
 }
