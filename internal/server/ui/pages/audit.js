@@ -1,4 +1,4 @@
-// Settings › Audit log: read it, filter it, download it (CSV or JSON Lines), and choose how long it is kept
+// Security › Audit log: read it, filter it, download it (CSV or JSON Lines), and choose how long it is kept
 // (design note 033). Every download and every change of the period is itself in the log.
 import { h, icon, mount, pageHeader, relTime, absTime, emptyState, spinner, errorBox, toast, confirmDialog } from '../lib/dom.js';
 import { get, put } from '../lib/api.js';

@@ -6,9 +6,11 @@ import { visibleGroups } from '../lib/settingsnav.js';
 
 /** A page that exists: a link with what it is for. */
 function pageLink(i) {
-  return h('a', { href: '#' + i.path, class: 'block rounded-lg px-3 py-2 hover:bg-slate-50 dark:hover:bg-slate-800', 'data-settings': i.path },
-    h('div', { class: 'flex items-center gap-2 text-sm font-medium' }, i.label, icon('chevron', 'size-3.5 text-slate-400')),
-    h('div', { class: 'muted text-xs' }, i.note));
+  return h('a', { href: '#' + i.path, class: 'flex items-start gap-3 rounded-lg px-3 py-2 hover:bg-slate-50 dark:hover:bg-slate-800', 'data-settings': i.path },
+    i.icon ? h('span', { class: 'mt-0.5 rounded-lg bg-slate-100 p-1.5 text-slate-600 dark:bg-slate-800 dark:text-slate-300' }, icon(i.icon, 'size-4')) : null,
+    h('div', { class: 'min-w-0' },
+      h('div', { class: 'flex items-center gap-2 text-sm font-medium' }, i.label, icon('chevron', 'size-3.5 text-slate-400')),
+      h('div', { class: 'muted text-xs' }, i.note)));
 }
 
 /** A page that is planned: shown dashed, with no link, so nothing looks clickable that is not. */

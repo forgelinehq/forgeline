@@ -1,4 +1,4 @@
-// Team › Schedules (design note 047): every workflow and team schedule in one list, with when each runs next, how its
+// Workflows › Schedules (design note 047): every workflow and team schedule in one list, with when each runs next, how its
 // last time went, and pause, resume, edit and run now. A team's own page shows its schedules with the same drawer.
 
 import { h, icon, mount, pageHeader, relTime, absTime, spinner, errorBox, toast, emptyState, drawer, field, confirmDialog } from '../lib/dom.js';

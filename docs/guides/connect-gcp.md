@@ -18,7 +18,7 @@ On the server, as the user Forgeline runs as:
 
 ## Connect
 
-Go to **Settings → Connections → Add a connection → Google Cloud → Connect** (a short wizard), or **Watch → Infrastructure → Google Cloud**, and enter the scope (a bare project id such as `my-project` works, or `projects/my-project`, `folders/1234567890`, `organizations/1234567890`) and choose **Connect**. If the server's `gcloud` has a default project, it is filled in for you; Forgeline reads only its name. Before it saves anything, Forgeline proves the login can read the scope, and says what to fix if not: no login, no permission, the API not enabled, or an unknown scope.
+Go to **Settings → Connections → Add a connection → Google Cloud → Connect** (a short wizard), or **Operations → Infrastructure → Google Cloud**, and enter the scope (a bare project id such as `my-project` works, or `projects/my-project`, `folders/1234567890`, `organizations/1234567890`) and choose **Connect**. If the server's `gcloud` has a default project, it is filled in for you; Forgeline reads only its name. Before it saves anything, Forgeline proves the login can read the scope, and says what to fix if not: no login, no permission, the API not enabled, or an unknown scope.
 
 Once connected it is listed under **Settings → Connections**, where **Test connection** runs the checks again at any time. It only reads.
 

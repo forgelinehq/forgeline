@@ -9,19 +9,23 @@ nav_order: 1
 Everything below is done from the web console. The pictures were taken on 2026-11-08 from the current console, in a
 real browser, on stand-ins for AWS, GitHub and Claude with demo data.
 
-The sidebar has five spaces, named after the job you are doing: **Home** (what needs you), **Build** (what should
-exist), **Ship** (getting code out), **Team** (your AI agents) and **Watch** (how it is running). Each space has tabs at
-the top. Setup lives behind **Settings** at the bottom. **Approvals** is also a button at the top right of every page,
+The sidebar has seven spaces, named after what you look after: **Home** (what needs you), **Agents** (your AI agents
+and teams of them), **Workflows** (agents, decisions and people in a flow, and everything that runs on a schedule),
+**Delivery** (pipelines), **Cloud** (what should exist and what does), **Operations** (how it is running) and
+**Security** (findings, approval rules, policy packs and the audit log). Each space has tabs at the top, each with an
+icon. Setup lives behind **Settings** at the bottom. **Approvals** is also a button at the top right of every page,
 with the number of changes waiting. What you see depends on your role, and old addresses still work.
 
 | Space | Tabs |
 | --- | --- |
 | Home | Today, Approvals |
-| Build | Design, Environments, Blueprints, Built |
-| Ship | Pipelines, GitHub Actions |
-| Team | Teams, Agents, Workflows, Missions, Library |
-| Watch | Map, Services, Infrastructure, Kubernetes, Security |
-| Settings | Setup, People and roles, Sign-in (SSO), Connections, Secrets, MCP servers, Image builds, Models and providers, Assistant model, Memory, AI use and budgets, Audit log, Approval rules, Resource types, Policy packs, API tokens |
+| Agents | Agents, Teams, Library, Usage and budgets |
+| Workflows | Workflows, Schedules |
+| Delivery | Pipelines, GitHub Actions |
+| Cloud | Canvas, Environments, Blueprints, Resources, Map |
+| Operations | Services, Infrastructure, Kubernetes, Missions |
+| Security | Findings, Approval rules, Policy packs, Resource types, Audit log |
+| Settings | Setup, People and roles, Sign-in (SSO), Connections, Secrets, MCP servers, Agent registries, Image builds, Models and providers, Assistant model, Memory, API tokens |
 
 ## Home
 
@@ -155,11 +159,11 @@ block is created empty; you set its value in AWS, and only the apps linked to it
 open to the internet, an unencrypted disk, an IAM user, or a policy that allows every action: Send for approval stays off
 until the blueprint changes, and the attempt is audited. An amber line is a **warning**, for example a web port open to
 the internet on a front door or deleting a table: it does not stop anything, and the approver reads it next to the
-changes. An administrator can add more rules under Settings › Policy packs (Trivy, Checkov, or your own Conftest
+changes. An administrator can add more rules under Security › Policy packs (Trivy, Checkov, or your own Conftest
 rules); their findings appear in the same list, and the line under it says which rule sets checked the preview.
 
 For anything the blocks and templates do not cover, a **Resource** block can make any AWS resource type an
-administrator allowed under Settings › Resource types, with a form made from the provider's schema.
+administrator allowed under Security › Resource types, with a form made from the provider's schema.
 
 ![A blueprint]({{ '/console/90-blueprint.png' | relative_url }})
 
@@ -203,8 +207,8 @@ one answer; the run is drawn live, with each member's task and findings. Below t
 what it is doing (working on a workflow, waiting for your OK, asleep until its next run, waiting to be asked, or off),
 the teams it is in and what it used this month. See [Teams]({{ '/guides/assistant-and-agents/' | relative_url }}#teams).
 
-**Agents** lists your agents, skills and workflows. An agent has instructions (Markdown, with a live preview and advisory
-checks), skills it follows, and a short list of tools, shown in plain words. **Advises** means it reads and explains;
+**Agents** lists your agents and skills (workflows have their own space). An agent has instructions (written in
+sections, with advisory checks), skills it follows, and a short list of tools, shown in plain words. **Advises** means it reads and explains;
 **Proposes** means it can also draft changes, which a person approves. An agent can ask its own **model** (a quick one
 for routing, a stronger one for analysis); by default it uses the assistant's. Every save is a version you can roll back, and you
 can talk to an agent beside its page. **Delete** archives an agent: it can be restored for 30 days from Agents ›
@@ -216,6 +220,15 @@ opens one side panel with a tab for each: models grouped by provider, skills wit
 tools an administrator turned on for each MCP server, Forgeline's own tools in plain words, and the guardrails (how much
 it may do, and the rules every agent has, shown locked). Each tab has search and filters, and says whether a tool reads
 or asks a person to approve. Talking to it beside the builder uses the saved version; save to try your changes.
+
+The **instructions** are written in sections, each with an icon and a hint: **Who it is**, **Goal**, **Steps** (one per
+row, in order; Enter adds the next, the arrows move one), **Rules**, **Output** (with presets: short summary, bullet
+points, table, JSON) and **When to stop**, plus **Examples**, **Background** or a section of your own from **Add a
+section**. Leave out what does not matter; empty sections are not written. They make one Markdown text, a `##` heading
+per section, which **What the model receives** shows exactly and **Markdown** lets you edit directly. Switching between
+the two changes nothing.
+
+![The menus and Settings]({{ '/console/148-menus-and-settings.png' | relative_url }})
 
 ![The agent builder]({{ '/console/141-agent-builder.png' | relative_url }})
 
@@ -261,7 +274,7 @@ save. A time missed by more than an hour (the server was down) is skipped rather
 still working skips that time. A team's schedule gives it a goal and runs as a viewer or a developer, never as an
 administrator; schedule one from the team's page under **On a schedule**. **Run now** runs as you.
 
-![Team › Schedules]({{ '/console/146-schedules.png' | relative_url }})
+![Workflows › Schedules]({{ '/console/146-schedules.png' | relative_url }})
 
 ![A team's schedule]({{ '/console/145-team-schedule.png' | relative_url }})
 
@@ -336,7 +349,7 @@ enabled (in the direction data goes; traffic itself is not measured); nothing is
 an alarm in alarm). Pick anything to see which stack made it, what it uses and what uses it, and, when something is
 flagged, **Ask the assistant to fix it**. A switch at the top changes account.
 
-![Watch › Map]({{ '/console/89-watch-map.png' | relative_url }})
+![Cloud › Map]({{ '/console/89-watch-map.png' | relative_url }})
 
 **Services** shows one tile per AWS service (EC2, Lambda, S3, RDS, queues, stacks and so on). The page draws at once
 and each tile is read on its own, a few at a time, so the first ones fill in while the rest are still being read; a
@@ -344,7 +357,7 @@ service the role may not list says so on its tile. Opening a tile shows everythi
 own page, with search, details and alarms, read with that service's calls only. The Map's list view links to the same
 pages ("Open its page").
 
-![Watch › Services]({{ '/console/118-watch-services.png' | relative_url }})
+![Operations › Services]({{ '/console/118-watch-services.png' | relative_url }})
 
 **Infrastructure** has tabs for the **Platform** (the Forgeline server, the Docker host and running steps), each cloud
 (**AWS account**, **Google Cloud**, **Azure**) and **Cloud changes** (stacks, blueprints and environments proposed, approved
@@ -389,7 +402,7 @@ never as orders; a note it took from logs or cloud data waits for you to press K
 OpenAI-compatible servers such as Ollama), turns their models on with prices, a monthly limit and a fallback, and shows a
 live log of every model call. See [Models and providers]({{ '/guides/models-and-providers/' | relative_url }}).
 
-**AI use and budgets** shows what each agent used this month (tokens, model time, calls, and the cost where the claude
+**Agents › Usage and budgets** shows what each agent used this month (tokens, model time, calls, and the cost where the claude
 program reports it). An administrator can set a monthly budget per agent; at 80% the console warns, and when it is used
 up the agent stops before its next model call.
 

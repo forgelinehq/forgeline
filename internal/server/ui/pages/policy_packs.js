@@ -1,4 +1,4 @@
-// Settings › Policy packs (design note 040, step 6): rule sets that check every blueprint preview, on top of the
+// Security › Policy packs (design note 040, step 6): rule sets that check every blueprint preview, on top of the
 // built-in guardrails. Developers can read them (so they know what a preview is checked by); administrators change them.
 import { h, icon, mount, pageHeader, spinner, errorBox, notice, toast, emptyState } from '../lib/dom.js';
 import { get, put, atLeast } from '../lib/api.js';

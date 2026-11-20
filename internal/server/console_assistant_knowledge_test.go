@@ -88,19 +88,19 @@ const pageContextCases = `
 import { pageContext } from './pagectx.js';
 const eq = (name, got, want) => { if (JSON.stringify(got) !== JSON.stringify(want)) { console.log('FAIL', name, JSON.stringify(got), 'want', JSON.stringify(want)); process.exitCode = 1; } };
 const pick = (c) => [c.kind, c.id, c.where];
-eq('missions list', pick(pageContext('/missions')), ['page', '', 'Team › Missions']);
-eq('one mission', pick(pageContext('/missions/m-42')), ['mission', 'm-42', 'Team › Missions']);
-eq('a team', pick(pageContext('/teams/platform-health')), ['team', 'platform-health', 'Team › Teams']);
-eq('workflows tab', pick(pageContext('/agents?tab=workflows')), ['page', '', 'Team › Agents › Workflows']);
-eq('a workflow canvas', pick(pageContext('/workflows/triage/canvas')), ['workflow', 'triage', 'Team › Workflows']);
-eq('workflows', pick(pageContext('/workflows?tab=runs')), ['page', '', 'Team › Workflows › Runs']);
+eq('missions list', pick(pageContext('/missions')), ['page', '', 'Operations › Missions']);
+eq('one mission', pick(pageContext('/missions/m-42')), ['mission', 'm-42', 'Operations › Missions']);
+eq('a team', pick(pageContext('/teams/platform-health')), ['team', 'platform-health', 'Agents › Teams']);
+eq('workflows tab', pick(pageContext('/agents?tab=workflows')), ['page', '', 'Agents › Workflows']);
+eq('a workflow canvas', pick(pageContext('/workflows/triage/canvas')), ['workflow', 'triage', 'Workflows']);
+eq('workflows', pick(pageContext('/workflows?tab=runs')), ['page', '', 'Workflows › Runs']);
 eq('new workflow', pick(pageContext('/workflows/new/canvas'))[0], 'page');
-eq('a workflow run', pick(pageContext('/workflow-runs/r1')), ['workflow_run', 'r1', 'Team › Workflows']);
+eq('a workflow run', pick(pageContext('/workflow-runs/r1')), ['workflow_run', 'r1', 'Workflows']);
 eq('providers', pick(pageContext('/providers')), ['page', '', 'Settings › Models and providers']);
 eq('home', pick(pageContext('/')), ['none', '', 'Home › Today']);
-eq('a run', pick(pageContext('/runs/abc')), ['run', 'abc', 'Ship › Pipelines']);
+eq('a run', pick(pageContext('/runs/abc')), ['run', 'abc', 'Delivery › Pipelines']);
 eq('new pipeline', pick(pageContext('/pipelines/new'))[0], 'page');
-eq('design', pick(pageContext('/design/bp-1')), ['page', '', 'Build › Design']);
+eq('design', pick(pageContext('/design/bp-1')), ['page', '', 'Cloud › Canvas']);
 eq('security', pick(pageContext('/guard'))[0], 'guard');
 `
 

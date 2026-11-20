@@ -1,4 +1,4 @@
-// Forgeline web console: what Forgeline built, in words (Build › Built).
+// Forgeline web console: what Forgeline built, in words (Cloud › Resources).
 //
 // No imports and no DOM, so it runs under Node in tests.
 

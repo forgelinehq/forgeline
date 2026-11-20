@@ -92,19 +92,22 @@ eq('recent limit', recentChanges({ proposals: Array.from({ length: 9 }, (_, i) =
 
 // The sidebar: five spaces, the pages as tabs inside them, the same role checks as before.
 const ids = role => spacesFor(role).map(s => s.id);
-eq('a viewer has no Build or Team (nothing there a viewer may open)', ids('viewer'), ['home', 'ship', 'watch']);
-eq('a developer sees all five', ids('developer'), ['home', 'build', 'ship', 'team', 'watch']);
+eq('a viewer has no Agents or Workflows (nothing there a viewer may open)', ids('viewer'), ['home', 'delivery', 'cloud', 'operations', 'security']);
+eq('a developer sees all seven', ids('developer'), ['home', 'agents', 'workflows', 'delivery', 'cloud', 'operations', 'security']);
 eq('an unknown role sees nothing', ids('nobody'), []);
-eq('a space links to its first tab the role may open', spacesFor('developer').map(s => s.path), ['/', '/design', '/pipelines', '/team', '/map']);
-eq('a viewer sees only the Ship tabs they may open', tabsFor(SPACES.find(s => s.id === 'ship'), 'viewer').map(t => t.label), ['Pipelines']);
-eq('the team space has missions', tabsFor(SPACES.find(s => s.id === 'team'), 'developer').map(t => (t.planned ? '~' : '') + t.label), ['Teams', 'Agents', 'Workflows', 'Missions', 'Schedules', 'Library']);
-eq('build has the canvas first', tabsFor(SPACES.find(s => s.id === 'build'), 'developer').map(t => t.label), ['Design', 'Environments', 'Blueprints', 'Built']);
+eq('a space links to its first tab the role may open', spacesFor('developer').map(s => s.path), ['/', '/agents', '/workflows', '/pipelines', '/design', '/services', '/guard']);
+eq('a viewer\'s Cloud opens the map, the one tab they may open', spacesFor('viewer').find(s => s.id === 'cloud').path, '/map');
+eq('a viewer sees only the Delivery tabs they may open', tabsFor(SPACES.find(s => s.id === 'delivery'), 'viewer').map(t => t.label), ['Pipelines']);
+eq('agents and workflows are spaces of their own', [tabsFor(SPACES.find(s => s.id === 'agents'), 'developer').map(t => t.label), tabsFor(SPACES.find(s => s.id === 'workflows'), 'developer').map(t => t.label)], [['Agents', 'Teams', 'Library', 'Usage and budgets'], ['Workflows', 'Schedules']]);
+eq('security holds findings, rules and the audit log; only administrators see the log', [tabsFor(SPACES.find(s => s.id === 'security'), 'admin').map(t => t.label), tabsFor(SPACES.find(s => s.id === 'security'), 'developer').map(t => t.label).includes('Audit log')], [['Findings', 'Approval rules', 'Policy packs', 'Resource types', 'Audit log'], false]);
+eq('every tab has an icon', SPACES.every(s => s.icon && s.tabs.every(t => t.icon)), true);
+eq('cloud has the canvas first', tabsFor(SPACES.find(s => s.id === 'cloud'), 'developer').map(t => t.label), ['Canvas', 'Environments', 'Blueprints', 'Resources', 'Map']);
 eq('planned tabs have no path', SPACES.every(s => s.tabs.every(t => !t.planned || !t.path)), true);
-eq('every page belongs to its space', ['/', '/proposals/abc', '/design/bp-1', '/blueprints', '/environments', '/pipelines/new', '/runs/r1', '/actions', '/team', '/agents/x', '/skills/y', '/workflow-runs/z', '/missions/ms-1', '/built', '/library', '/map', '/infrastructure?tab=aws', '/kubernetes/k1', '/guard'].map(p => activeSpace(p)?.id),
-  ['home', 'home', 'build', 'build', 'build', 'ship', 'ship', 'ship', 'team', 'team', 'team', 'team', 'team', 'build', 'team', 'watch', 'watch', 'watch', 'watch']);
+eq('every page belongs to its space', ['/', '/proposals/abc', '/design/bp-1', '/blueprints', '/environments', '/pipelines/new', '/runs/r1', '/actions', '/team', '/agents/x', '/skills/y', '/workflow-runs/z', '/missions/ms-1', '/built', '/library', '/map', '/infrastructure?tab=aws', '/kubernetes/k1', '/guard', '/pushes/p1', '/schedules', '/ai-use', '/audit', '/approval-rules'].map(p => activeSpace(p)?.id),
+  ['home', 'home', 'cloud', 'cloud', 'cloud', 'delivery', 'delivery', 'delivery', 'agents', 'agents', 'agents', 'workflows', 'operations', 'cloud', 'agents', 'cloud', 'operations', 'operations', 'security', 'home', 'workflows', 'agents', 'security', 'security']);
 eq('settings pages belong to no space', ['/settings', '/integrations', '/people', '/account'].map(p => activeSpace(p)), [null, null, null, null]);
 eq('Home matches only itself', [tabMatches(SPACES[0].tabs[0], '/'), tabMatches(SPACES[0].tabs[0], '/pipelines')], [true, false]);
-eq('active tab', [activeTab('/skills/a')?.label, activeTab('/guard')?.label, activeTab('/agentsx')?.label, activeTab('/team')?.label], ['Agents', 'Security', undefined, 'Teams']);
+eq('active tab', [activeTab('/skills/a')?.label, activeTab('/guard')?.label, activeTab('/agentsx')?.label, activeTab('/team')?.label], ['Agents', 'Findings', undefined, 'Teams']);
 eq('a path that only starts like a page is not that page', activeSpace('/pipelinesx'), null);
 
 if (failed) process.exit(1);

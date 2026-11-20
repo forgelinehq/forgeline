@@ -1,4 +1,4 @@
-// Settings › Resource types (design note 040, step 7): which AWS resource types the generic resource block may make,
+// Security › Resource types (design note 040, step 7): which AWS resource types the generic resource block may make,
 // per account. Developers can read the list (so they know what they can draw); administrators change it.
 import { h, icon, mount, pageHeader, spinner, errorBox, notice, toast } from '../lib/dom.js';
 import { get, put, atLeast } from '../lib/api.js';

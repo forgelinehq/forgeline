@@ -61,7 +61,7 @@ export function workflowList(workflows, admin) {
       h('td', { class: 'text-sm' }, w.run_as), h('td', { class: 'text-sm' }, 'v' + w.current))))));
 }
 
-// ------------------------------------------------------------------ Team › Workflows
+// ------------------------------------------------------------------ Workflows
 
 const KIND_WORDS = { agent: ['agent', 'agents'], lookup: ['lookup', 'lookups'], decide: ['decision', 'decisions'], ask: ['question for a person', 'questions for people'], merge: ['merge', 'merges'] };
 const RUN_HOW = { schedule: 'on its schedule', webhook: 'by its webhook', 'run-failed': 'after a failed run' };

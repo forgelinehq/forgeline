@@ -1,4 +1,4 @@
-// Build › Blueprints (design note 035, slice 1): drafts of what should exist in a cloud account, what each
+// Cloud › Blueprints (design note 035, slice 1): drafts of what should exist in a cloud account, what each
 // one means in plain words, and the OpenTofu code it generates. The canvas to edit blocks, the preview and
 // the approval come in the next slices; nothing here touches the cloud.
 import { h, icon, mount, pageHeader, relTime, spinner, errorBox, notice, toast, modal, confirmDialog, field, emptyState } from '../lib/dom.js';

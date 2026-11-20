@@ -213,7 +213,7 @@ function pickNode(agents, lookups, afterName) {
             h('span', { class: 'mt-0.5' }, tileBox(it.kind, 'size-8')),
             h('span', { class: 'min-w-0' }, h('span', { class: 'block text-sm font-medium' }, it.label), h('span', { class: 'muted block text-xs' }, it.note)));
         }))))
-        : h('p', { class: 'muted text-sm' }, 'Nothing matches.' + (agents.length ? '' : ' Create an agent first under Team › Agents.')));
+        : h('p', { class: 'muted text-sm' }, 'Nothing matches.' + (agents.length ? '' : ' Create an agent first under Agents.')));
     };
     search.addEventListener('input', draw);
     search.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); list.querySelector('[data-pick]')?.click(); } });
@@ -224,7 +224,7 @@ function pickNode(agents, lookups, afterName) {
 
 // ------------------------------------------------------------------ editor
 
-/** Team › Workflows › a workflow › Edit on the canvas (or a new graph workflow when params.id is "new"). */
+/** Workflows › a workflow › Edit on the canvas (or a new graph workflow when params.id is "new"). */
 export async function graphEditorPage({ params }) {
   const admin = atLeast(session.role, 'admin');
   const el = h('div', {});
@@ -311,7 +311,7 @@ export async function graphEditorPage({ params }) {
     const follow = h('input', { id: 'graph-follow', class: 'input', value: meta.follow, placeholder: 'pipeline names, or * for any', oninput: (e) => { meta.follow = e.target.value; dirty = edited = true; } });
     return h('div', { class: 'space-y-4' }, field('Description', desc, null, 'graph-desc'),
       h('h3', { class: 'h-section pt-2' }, 'What starts it'),
-      h('div', {}, h('div', { class: 'label' }, 'Schedule'), every, h('p', { class: 'hint' }, 'It can always be started by hand too. Team › Schedules lists every schedule and can pause one.')),
+      h('div', {}, h('div', { class: 'label' }, 'Schedule'), every, h('p', { class: 'hint' }, 'It can always be started by hand too. Workflows › Schedules lists every schedule and can pause one.')),
       h('label', { class: 'flex items-start gap-2 text-sm', for: 'graph-webhook' }, hook, h('span', {}, 'Also starts from a signed webhook. The secret is made on the workflow’s page.')),
       field('Also starts after failed runs of', follow, 'What failed reaches the graph as trigger, which agents can read as data.', 'graph-follow'),
       h('h3', { class: 'h-section pt-2' }, 'What it may do'),

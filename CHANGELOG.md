@@ -74,6 +74,13 @@ section in the pull request that makes the change; a release moves it under its 
   (`agent.yaml`, with its schema in `schema/agent.v1alpha1.schema.json`, and each skill as an Agent Skills folder) or
   as a Docker Agent file (`docker agent run`), with its remote MCP servers and skills. Forgeline's own tools stay
   behind and are listed; no key or secret is ever in either file; every download is audited.
+- **Clearer menus and real icons** (design note 048). Seven spaces named after what you look after: Home, Agents,
+  Workflows, Delivery, Cloud, Operations and Security, with an icon on every space, tab and Settings entry (Lucide).
+  Approval rules, policy packs, resource types and the audit log moved from Settings to Security, and usage and
+  budgets to Agents. Every page keeps its address.
+- **Instructions in sections.** An agent's instructions are written part by part: who it is, goal, steps, rules,
+  output, when to stop, and examples, background or sections of your own. Steps and rules are lists, the output has
+  presets, and "What the model receives" shows the one Markdown text they make. Markdown mode is still there.
 - **Push an agent to a registry** (design note 046, step 3). Settings › Agent registries holds GitHub Container
   Registry, Docker Hub or any OCI registry, with its token in the vault. Push on an agent's page proposes sending one
   version there as Docker Agent stores it; a different administrator approves the exact file under Approvals, then it

@@ -54,7 +54,7 @@ the card, as in the console.
 
 ## Teams
 
-**Team › Teams** holds teams of agents. A team is a **lead** and up to eight **members**, and an agent can be in several
+**Agents › Teams** holds teams of agents. A team is a **lead** and up to eight **members**, and an agent can be in several
 teams. An administrator makes one with **New team**: a side panel asks for a name, a purpose (the lead reads it), the
 lead, and the members, picked from a searchable list of agents.
 
@@ -102,7 +102,7 @@ can cancel any.
 
 ### Budgets
 
-Settings › **AI use and budgets** shows what each agent used this month (tokens, model time, calls, and the cost where
+Agents › **Usage and budgets** shows what each agent used this month (tokens, model time, calls, and the cost where
 the claude program reports it) and what people used asking the assistant themselves. An administrator can give an agent a
 monthly budget in tokens, minutes or both. At 80% the agent's card and the page warn; once a budget is used up the agent
 stops before its next model call, its card says **Stopped**, and a workflow step it was running fails with a message
@@ -113,7 +113,7 @@ is in the audit log. Cloud spend an agent causes is not counted here yet.
 
 ## Workflows
 
-A workflow runs agents in an order you draw. **Team › Workflows** lists them as cards (what each is made of, how it
+A workflow runs agents in an order you draw. **Workflows** lists them as cards (what each is made of, how it
 starts, its last run), with a **Runs** tab for every run of every workflow and an **Archived** tab. **New workflow** opens
 an n8n-style canvas that fills the page: press a node's **+** (or **Add node**) and pick from a searchable side panel of
 your agents, the logic nodes and the lookups; the new node is wired in after the one you came from. Drag from a node's
@@ -173,7 +173,7 @@ unless you tick **It is on a private network**; redirects are never followed. Se
 
 ## Agents you define
 
-Under **Team → Agents** you can define named agents with instructions, skills and a short list of tools. The instructions are written in Markdown, with a live preview and advisory checks; the model receives exactly the text you wrote. **New agent** and **Edit** open the builder, where one side panel picks the model, skills, MCP server tools, tools and guardrails. **Download** exports a version as a Forgeline bundle (with each skill as an Agent Skills folder) or a Docker Agent file, with no key in either; **Import** on the Agents page brings a bundle back in, showing first what it will create and leave out. See the [Console tour]({{ '/guides/console-tour/' | relative_url }}#agents).
+Under **Agents** you can define named agents with instructions, skills and a short list of tools. The instructions are written in sections (who it is, goal, steps, rules, output, when to stop, and any you add) or as plain Markdown, with advisory checks; the model receives exactly the one text they make. **New agent** and **Edit** open the builder, where one side panel picks the model, skills, MCP server tools, tools and guardrails. **Download** exports a version as a Forgeline bundle (with each skill as an Agent Skills folder) or a Docker Agent file, with no key in either; **Import** on the Agents page brings a bundle back in, showing first what it will create and leave out. See the [Console tour]({{ '/guides/console-tour/' | relative_url }}#agents).
 
 ## Agent steps
 

@@ -4,7 +4,7 @@ import { h, icon, mount, spinner, errorBox, notice, toast, field, drawer, brandM
 import { get, post, atLeast } from '../lib/api.js';
 import { navigate } from '../lib/router.js';
 import { session } from '../app.js';
-import { mdEditor } from '../lib/mdeditor.js';
+import { instructionsEditor } from '../lib/insteditor.js';
 import { checkInstructions } from '../lib/markdown.js';
 import { TIERS } from '../lib/tools.js';
 import { TABS, draftFrom, draftBody, changed, pickerGroups, tabFilters, toggle, tabSummary, partChips } from '../lib/builder.js';
@@ -38,17 +38,18 @@ export async function agentBuilderPage({ params }) {
     mount(modelChip, brandMark(m ? m.kind : 'anthropic', 'sm'), h('span', { class: 'font-medium' }, m ? m.label : d.model || 'The assistant’s model'),
       h('span', { class: 'muted text-xs' }, m ? m.provider_name : d.model ? 'through the assistant' : ''), icon('chevron', 'size-3 rotate-90 text-slate-400'));
   };
-  const set = (next) => { d = next; problem = ''; drawStatus(); drawModel(); drawParts(); mount(problemBox, null); };
+  const set = (next) => { d = next; problem = ''; drawStatus(); drawModel(); drawParts(); mount(problemBox, null); ins.refresh(); };
 
   // The instructions are edited in place; everything else is picked in the side panel.
-  const ins = mdEditor({ id: 'agent-ins', value: d.instructions, maxlength: 4096, height: 'h-44', mode: 'write', placeholder: '## Goal\nFind idle or oversized resources and propose the smallest safe change.\n\n## Rules\n- Look before you suggest anything.',
-    check: (t) => checkInstructions(t, { tier: d.tier, max: 4096 }) });
-  ins.input.addEventListener('input', () => { d = { ...d, instructions: ins.input.value }; drawStatus(); });
+  const ins = instructionsEditor({ value: d.instructions, maxlength: 4096, check: (t) => checkInstructions(t, { tier: d.tier, max: 4096 }),
+    onchange: (t) => { d = { ...d, instructions: t }; drawStatus(); } });
 
-  function part(title, hint, kind, tab, chips, extra = null) {
+  // A part's icon: a tile with a real icon, filled in when the part has something in it.
+  const tile = (name, on) => h('span', { class: 'flex size-9 flex-none items-center justify-center rounded-lg ' + (on ? 'bg-brand-50 text-brand-700 dark:bg-brand-500/15 dark:text-brand-200' : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400') }, icon(name, 'size-[18px]'));
+  function part(title, hint, ic, tab, chips, extra = null) {
     return h('section', { class: 'card card-pad space-y-3', 'data-part': tab },
       h('div', { class: 'flex items-start justify-between gap-3' },
-        h('div', { class: 'flex min-w-0 items-center gap-3' }, brandMark(kind, 'sm'), h('div', { class: 'min-w-0' }, h('h2', { class: 'font-semibold' }, title), h('p', { class: 'muted text-xs' }, hint))),
+        h('div', { class: 'flex min-w-0 items-center gap-3' }, tile(ic, chips.length || !!extra), h('div', { class: 'min-w-0' }, h('h2', { class: 'font-semibold' }, title), h('p', { class: 'muted text-xs' }, hint))),
         h('button', { type: 'button', class: 'btn-secondary btn-sm', 'data-open': tab, onclick: () => openPanel(tab) }, icon(chips.length || extra ? 'edit' : 'plus', 'size-3.5'), chips.length || extra ? 'Change' : 'Add')),
       chips.length ? h('div', { class: 'flex flex-wrap gap-1.5' }, chips.map(c => h('span', { class: 'inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 py-0.5 pl-2.5 pr-1 text-xs dark:border-slate-700 dark:bg-slate-800/60', 'data-chip': c.key },
         c.label, h('button', { type: 'button', class: 'rounded-full p-0.5 hover:bg-slate-200 dark:hover:bg-slate-700', 'aria-label': 'Remove ' + c.label, onclick: () => set(toggle(d, tab, c.key)) }, icon('x', 'size-3'))))) : null,
@@ -59,12 +60,12 @@ export async function agentBuilderPage({ params }) {
     const tier = TIERS.find(t => t.id === d.tier) || TIERS[0];
     const mcp = partChips('MCP servers', data, d), tools = partChips('Tools', data, d), skills = partChips('Skills', data, d);
     mount(parts,
-      h('section', { class: 'card card-pad space-y-3', 'data-part': 'Instructions' }, h('div', { class: 'flex items-center gap-3' }, brandMark('forgeline', 'sm'),
-        h('div', {}, h('h2', { class: 'font-semibold' }, 'Instructions'), h('p', { class: 'muted text-xs' }, 'What it should do and how, in Markdown. The model receives exactly this text.'))), ins.el),
-      part('Skills', skills.length ? 'Step-by-step procedures it follows, each pinned to its version' : 'None yet: procedures it can follow, from Agents › Skills or the Library', 'library', 'Skills', skills),
-      part('MCP servers', mcp.length ? 'Read-only tools from connected MCP servers' : data.tools.some(t => t.needs === 'mcp-server') ? 'None picked' : 'No MCP server tools are turned on yet', 'mcp', 'MCP servers', mcp),
-      part('Tools', tools.length ? 'What it can look at or ask for in Forgeline and your clouds' : 'Nothing: it can only answer from what you tell it', 'forgeline', 'Tools', tools),
-      part('Guardrails', tier.text, 'guard', 'Guardrails', [], h('div', { class: 'flex flex-wrap gap-1.5 text-xs' }, h('span', { class: d.tier === 'T1' ? 'pill-wait' : 'pill-ok' }, tier.title),
+      h('section', { class: 'card card-pad space-y-3', 'data-part': 'Instructions' }, h('div', { class: 'flex items-center gap-3' }, tile('instructions', true),
+        h('div', {}, h('h2', { class: 'font-semibold' }, 'Instructions'), h('p', { class: 'muted text-xs' }, 'What it does and how, part by part. They are written as one Markdown text, which the model receives exactly.'))), ins.el),
+      part('Skills', skills.length ? 'Step-by-step procedures it follows, each pinned to its version' : 'None yet: procedures it can follow, from Agents › Skills or the Library', 'skills', 'Skills', skills),
+      part('MCP servers', mcp.length ? 'Read-only tools from connected MCP servers' : data.tools.some(t => t.needs === 'mcp-server') ? 'None picked' : 'No MCP server tools are turned on yet', 'plug', 'MCP servers', mcp),
+      part('Tools', tools.length ? 'What it can look at or ask for in Forgeline and your clouds' : 'Nothing: it can only answer from what you tell it', 'tool', 'Tools', tools),
+      part('Guardrails', tier.text, 'guardrails', 'Guardrails', [], h('div', { class: 'flex flex-wrap gap-1.5 text-xs' }, h('span', { class: d.tier === 'T1' ? 'pill-wait' : 'pill-ok' }, tier.title),
         h('span', { class: 'pill-idle', title: 'Works as the person who asks; a different administrator approves changes; tool results are data; its runs are audited' }, icon('lock', 'size-3'), '4 rules always on'),
         ag?.budget?.tokens ? h('span', { class: 'pill-idle' }, 'budget ' + ag.budget.tokens.toLocaleString() + ' tokens a month') : null)));
   }
@@ -112,7 +113,7 @@ export async function agentBuilderPage({ params }) {
   let saved = false;
   async function save(btn, stay = false) {
     btn.disabled = true;
-    d = { ...d, instructions: ins.input.value };
+    d = { ...d, instructions: ins.value() };
     try {
       const out = await post(ag ? '/v1/ai/agents/' + ag.id + '/versions' : '/v1/ai/agents', draftBody(d));
       toast(ag ? 'Saved v' + out.current : 'Agent created', 'ok');
@@ -142,7 +143,7 @@ export async function agentBuilderPage({ params }) {
       h('div', { class: 'min-w-0 lg:col-span-3' }, h('p', { class: 'muted mb-2 text-sm' }, 'What this agent is made of. Add or Change on a part opens the side panel.'), parts),
       h('div', { class: 'min-w-0 lg:col-span-2 lg:sticky lg:top-20 lg:self-start' }, tryIt)));
   // Leaving with a draft that differs from what was opened asks first (an untouched new agent does not).
-  el.leaveGuard = () => ({ dirty: !saved && changed({ ...d, instructions: ins.input.value }, base), ask: () => leaveDialog({ what: 'this agent', save: () => save({}, true) }) });
+  el.leaveGuard = () => ({ dirty: !saved && changed({ ...d, instructions: ins.value() }, base), ask: () => leaveDialog({ what: 'this agent', save: () => save({}, true) }) });
   return el;
 }
 

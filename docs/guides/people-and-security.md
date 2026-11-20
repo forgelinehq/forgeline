@@ -58,7 +58,7 @@ What to know:
 ## Approval rules
 
 Every change to your cloud already needs an administrator who did not propose it. Under
-**Settings → Approval rules** you can ask for more where it matters:
+**Security → Approval rules** you can ask for more where it matters:
 
 - **Needs two approvals**: the first approval is recorded and the change keeps waiting ("Approve (1 of 2)"); it
   runs only when a second, different administrator approves the same exact change.
@@ -75,7 +75,7 @@ will review their changes; only administrators change them, and every change is 
 
 ## Policy packs
 
-Every blueprint preview is checked by Forgeline's built-in guardrails. Under **Settings → Policy packs** an
+Every blueprint preview is checked by Forgeline's built-in guardrails. Under **Security → Policy packs** an
 administrator can add more rules:
 
 - **Trivy**: known misconfigurations, each rated low to critical. Choose **Deny from** (for example Critical) and a
@@ -110,7 +110,7 @@ approval say which pack and tool version checked the plan, and every change to t
 
 ## Downloading the audit log, and how long it is kept
 
-Under **Settings → Audit log**, filter by person, action or dates and choose **Download CSV** (for a spreadsheet or
+Under **Security → Audit log**, filter by person, action or dates and choose **Download CSV** (for a spreadsheet or
 an auditor) or **JSON Lines** (for a SIEM or a script). The download has every event that matches, oldest first,
 not only the 200 shown. Each download is itself recorded in the log, with what was taken. In the CSV, a cell that
 would start a spreadsheet formula gets a leading `'`, so opening the file never runs one.

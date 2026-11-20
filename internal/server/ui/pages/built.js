@@ -1,4 +1,4 @@
-// Build › Built: everything Forgeline created and keeps in your cloud accounts. Each built blueprint is drawn as an
+// Cloud › Resources: everything Forgeline created and keeps in your cloud accounts. Each built blueprint is drawn as an
 // interactive diagram (its blocks where they sit on the canvas, with what flows between them moving), each block with
 // the AWS resources it made; pick one to list them. Stacks and environments follow. "Check against AWS" looks each
 // resource up in the account's inventory (a read) and marks it as still there or missing.

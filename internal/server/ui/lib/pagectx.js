@@ -4,11 +4,11 @@
 import { activeSpace, activeTab } from './nav.js';
 import { activeItem } from './settingsnav.js';
 
-/** Where a console address is, as the console names it: "Team › Missions", "Settings › Models and providers". */
+/** Where a console address is, as the console names it: "Operations › Missions", "Settings › Models and providers". */
 export function whereIs(full) {
   const [p, query] = String(full).split('?');
   const sp = activeSpace(p), tab = activeTab(p);
-  let label = sp && tab ? sp.label + ' › ' + tab.label : activeItem(p) ? 'Settings › ' + activeItem(p).label : p === '/account' ? 'Your account' : 'Home › Today';
+  let label = sp && tab ? (sp.label === tab.label ? sp.label : sp.label + ' › ' + tab.label) : activeItem(p) ? 'Settings › ' + activeItem(p).label : p === '/account' ? 'Your account' : 'Home › Today';
   const sub = new URLSearchParams(query || '').get('tab');
   if (sub) label += ' › ' + sub.charAt(0).toUpperCase() + sub.slice(1).replace(/-/g, ' ');
   return label;

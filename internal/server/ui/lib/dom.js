@@ -5,6 +5,8 @@
 // GitHub data and error messages are all untrusted, and this makes inserting them as markup
 // impossible rather than merely careful.
 
+import { ICON_SET } from './icons.js';
+
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
 /** h('div', {class: 'x', onclick: fn}, 'text', [child, child]) */
@@ -23,7 +25,7 @@ export function h(tag, props, ...children) {
   return el;
 }
 
-const SVG_TAGS = new Set(['svg', 'path', 'g', 'rect', 'circle', 'line', 'text', 'title', 'defs', 'marker', 'polygon', 'tspan', 'pattern']);
+const SVG_TAGS = new Set(['svg', 'path', 'g', 'rect', 'circle', 'line', 'text', 'title', 'defs', 'marker', 'polygon', 'polyline', 'ellipse', 'tspan', 'pattern']);
 
 export function append(el, children) {
   for (const c of children.flat(Infinity)) {
@@ -37,75 +39,24 @@ export function clear(el) { while (el.firstChild) el.removeChild(el.firstChild);
 
 export function mount(el, ...children) { clear(el); append(el, children); return el; }
 
-// --- icons (fixed path data; nothing here comes from the server) ---
+// --- icons (Lucide, generated into icons.js; nothing here comes from the server) ---
 
-const ICONS = {
-  home: 'M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z',
-  flow: 'M4 6h6v4H4zM14 14h6v4h-6zM14 4h6v4h-6zM10 8h2a2 2 0 0 1 2 2v4M10 8h2a2 2 0 0 0 2-2',
-  server: 'M4 5h16v6H4zM4 13h16v6H4zM8 8h.01M8 16h.01',
-  plug: 'M9 2v5M15 2v5M6 7h12v4a6 6 0 0 1-12 0zM12 17v5',
-  key: 'M15 7a4 4 0 1 1-3.9 5H4v-3h2v-2h3.1A4 4 0 0 1 15 7zM15 8h.01',
-  users: 'M16 19v-1a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v1M9.5 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM21 19v-1a4 4 0 0 0-3-3.9M16 4.1a3 3 0 0 1 0 5.8',
-  shield: 'M12 3 5 6v5c0 4.5 3 8.3 7 10 4-1.7 7-5.5 7-10V6z',
-  list: 'M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01',
-  cloud: 'M7 18a4 4 0 0 1-.5-8A6 6 0 0 1 18 9a4.5 4.5 0 0 1-.5 9z',
-  play: 'M7 4v16l13-8z',
-  stop: 'M6 6h12v12H6z',
-  plus: 'M12 5v14M5 12h14',
-  minus: 'M5 12h14',
-  check: 'M5 12.5 10 17.5 19 7',
-  x: 'M6 6l12 12M18 6 6 18',
-  alert: 'M12 9v4M12 17h.01M10.3 3.9 2.4 18a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z',
-  info: 'M12 8h.01M11 12h1v5h1M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z',
-  refresh: 'M20 11a8 8 0 0 0-14.9-3M4 5v4h4M4 13a8 8 0 0 0 14.9 3M20 19v-4h-4',
-  download: 'M12 4v11M7 10l5 5 5-5M5 20h14',
-  upload: 'M12 15V4M7 9l5-5 5 5M5 20h14',
-  trash: 'M4 7h16M10 11v6M14 11v6M6 7l1 12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-12M9 7V4h6v3',
-  edit: 'M4 20h4L19 9l-4-4L4 16zM14 6l4 4',
-  copy: 'M9 9h10v10H9zM5 15V5h10',
-  sun: 'M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4',
-  moon: 'M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z',
-  menu: 'M4 6h16M4 12h16M4 18h16',
-  logout: 'M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 8l-4 4 4 4M6 12h10',
-  chevron: 'M9 6l6 6-6 6',
-  git: 'M6 3v12M18 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM18 9a9 9 0 0 1-9 9',
-  history: 'M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5M12 7v5l3 2',
-  eye: 'M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
-  lock: 'M6 11h12v9H6zM8 11V8a4 4 0 0 1 8 0v3',
-  bolt: 'M13 2 4 14h7l-1 8 9-12h-7z',
-  box: 'M21 8 12 3 3 8v8l9 5 9-5zM3 8l9 5 9-5M12 13v8',
-  search: 'M10.5 4a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13zM20 20l-4.8-4.8',
-  grid: 'M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z',
-  globe: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM3 12h18M12 3c2.5 2.5 3.8 5.5 3.8 9s-1.3 6.5-3.8 9c-2.5-2.5-3.8-5.5-3.8-9S9.5 5.5 12 3z',
-  folder: 'M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z',
-  inbox: 'M4 13l2.5-7h11L20 13v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1zM4 13h5l1 2h4l1-2h5',
-  link: 'M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1',
-  layers: 'M12 3 2 8l10 5 10-5zM2 13l10 5 10-5M2 17.5l10 5 10-5',
-  sparkle: 'M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM19 16l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z',
-  send: 'M4 12 20 4l-6 16-3-7z',
-  gear: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z',
-  expand: 'M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5',
-  shrink: 'M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5',
-  dock: 'M3 5h18v14H3zM15 5v14',
-  window: 'M4 6h16v12H4zM4 10h16M7 8h.01',
-  tool: 'M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.4 2.4-2.4-.6-.6-2.4z',
-  clock: 'M12 7v5l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z',
-};
+function iconChildren(name) {
+  const parts = ICON_SET[name];
+  if (!parts) throw new Error('unknown icon ' + name);
+  return parts.map(([tag, attrs]) => h(tag, attrs));
+}
 
-/** An icon drawn inside an SVG drawing, at (x, y) and size px square. */
+/** Whether the console has an icon by this name. */
+export const hasIcon = (name) => Object.prototype.hasOwnProperty.call(ICON_SET, name);
+
 export function iconAt(name, x, y, size, cls = '') {
-  const d = ICONS[name];
-  if (!d) throw new Error('unknown icon ' + name);
   return h('svg', { x: String(x), y: String(y), width: String(size), height: String(size), viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor',
-    'stroke-width': '1.8', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', class: cls, 'aria-hidden': 'true' }, h('path', { d }));
+    'stroke-width': '1.75', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', class: cls, 'aria-hidden': 'true' }, iconChildren(name));
 }
 
 export function icon(name, cls = 'size-4') {
-  const d = ICONS[name];
-  if (!d) throw new Error('unknown icon ' + name);
-  const svg = h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '1.8', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', class: cls + ' shrink-0', 'aria-hidden': 'true' });
-  svg.append(h('path', { d }));
-  return svg;
+  return h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '1.75', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', class: cls + ' shrink-0', 'aria-hidden': 'true' }, iconChildren(name));
 }
 
 // --- formatting ---
