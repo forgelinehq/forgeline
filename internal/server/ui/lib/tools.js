@@ -38,6 +38,7 @@ const TOOLS = {
   github_repos: ['github', 'See allowed repositories'],
   github_files: ['github', 'Read files in a repository'],
   guard_findings: ['security', 'Read security findings'],
+  inspector_findings: ['security', 'Read Amazon Inspector findings'],
   morning_check: ['security', 'Do the morning check'],
   search_audit: ['security', 'Search the audit log'],
   environment_templates: ['work', 'See environment templates'],

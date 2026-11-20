@@ -78,6 +78,20 @@ section in the pull request that makes the change; a release moves it under its 
   Workflows, Delivery, Cloud, Operations and Security, with an icon on every space, tab and Settings entry (Lucide).
   Approval rules, policy packs, resource types and the audit log moved from Settings to Security, and usage and
   budgets to Agents. Every page keeps its address.
+- **Fixed: the Copilot assistant ran with tools.** Given `--available-tools` with no value, the copilot CLI (1.0.107)
+  still offered the model 25 tools, `bash` among them. Forgeline now names a tool that does not exist, which leaves
+  none, and refuses a reply whose output shows any tool was offered. It also works behind a corporate proxy (proxy and
+  certificate variables are passed on), with older CLIs (the prompt goes in `--prompt` where piped stdin is not read,
+  and flags the CLI does not list are left out), and choosing Copilot clears a leftover Claude model name. Thanks to the
+  maintainer for the report and the first fix on a work setup.
+- **Fixed: the assistant re-prepared what was already confirmed.** It is now told what became of the cards it
+  prepared for you in the last day (confirmed with what it made, dismissed, failed or still waiting).
+- **Amazon Inspector findings for agents.** The `inspector_findings` lookup reads ACTIVE findings, worst first, with
+  counts by severity and resource type, the CVE, package, fixed version, resource, fix and exploit availability and
+  EPSS score, for viewers and up, so a workflow running as a viewer can use it.
+- **Workflows refuse agents with tools their run cannot use.** Saving a workflow whose agent has a tool its run-as role
+  may never use (such as `call_aws`, for administrators only, in a workflow running as a viewer) now says so, instead of
+  every run quietly going without it.
 - **Evals** (design note 050). Agents › Evals holds suites of cases for an agent, with fixtures for tools and checks
   (contains, matches, JSON, fields, tools called or never called, limits on tool calls, tokens and time, and a judge
   model with your rubric). A run asks each case one to five times on a version and model you pick; nothing it runs

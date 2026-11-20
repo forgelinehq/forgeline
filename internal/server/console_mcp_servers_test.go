@@ -236,7 +236,13 @@ func TestMCPServersWhoMayCall(t *testing.T) {
 	a := newAgent(t, m.admin, agentBody("Forecaster", nil, []string{tool}, "T0"))
 	wb := wfBody("As viewer", []WFStage{{Steps: []WFStep{step(a.ID, "weather?")}}})
 	wb["run_as"] = "viewer"
-	w := newWorkflow(t, m.admin, wb)
+	m.admin.expect(400, "POST", "/v1/ai/workflows", wb) // refused on save: the tool would be refused on every run
+	wb["run_as"] = "developer"
+	w := newWorkflow(t, m.admin, wb) // saved before that check, as viewer: its runs still never get the tool
+	var storedWF Workflow
+	m.harness.srv.docs.Get(t.Context(), kindWorkflow, w.ID, &storedWF)
+	storedWF.Versions[len(storedWF.Versions)-1].RunAs = "viewer"
+	m.harness.srv.docs.Put(t.Context(), kindWorkflow, w.ID, storedWF)
 	m.llm.script(call, "done")
 	m.waitRun(m.startWF(m.admin, w.ID, 202).ID, wfSucceeded, wfFailed)
 	if u := m.llm.lastUser(1); strings.Contains(u, "sunny") || !strings.Contains(u, "not available to your role") {

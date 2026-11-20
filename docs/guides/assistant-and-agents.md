@@ -32,9 +32,14 @@ The settings offer five ways to sign in:
 - **Claude Code login token**: paste the output of `claude setup-token` once. It is stored as the secret `CLAUDE_CODE_OAUTH_TOKEN`, the same one agent steps use. The `claude` program runs in a scratch home directory with only that token, so the server user's own login is not touched.
 - **Local `claude` CLI**: uses the login of the person running the server. Meant for a single-person setup.
 - **Local `copilot` CLI** (GitHub Copilot): run `copilot login` as the server's user first. Forgeline runs
-  `copilot` with no tools, no MCP servers and no custom instructions, in an empty scratch folder, with the question on
-  stdin and nothing of the server's environment. Each question uses one Copilot premium request (a free plan has only
-  a few a month); leave the model empty to let Copilot choose, or name one. Meant for a single-person setup.
+  `copilot` with no tools (`--available-tools` naming a tool that does not exist; it refuses any reply whose output
+  shows the model was offered tools), no MCP servers and no custom instructions, in an empty scratch folder. Of the
+  server's environment it passes on only proxy and certificate settings (`HTTPS_PROXY`, `HTTP_PROXY`, `ALL_PROXY`,
+  `NO_PROXY`, `NODE_EXTRA_CA_CERTS`, `NODE_USE_SYSTEM_CA`, `SSL_CERT_FILE`, `SSL_CERT_DIR`, upper or lower case), which
+  a corporate network needs. The question goes on stdin when the CLI reads a piped prompt (1.0.107 does), and with
+  `--prompt` on older CLIs (1.0.34), where it then shows in the process list; flags an older CLI does not list in
+  `--help` are left out. Each question uses one Copilot premium request (a free plan has only a few a month); leave the
+  model empty to let Copilot choose, or name one. Meant for a single-person setup.
 
 ![Settings]({{ '/console/33-assistant-token.png' | relative_url }})
 
@@ -195,6 +200,12 @@ Forgeline builds the command line and runs the vendor's own `claude` CLI in the 
 ![Agent step]({{ '/console/20-agent-step.png' | relative_url }})
 
 {: .warning }
+A workflow never runs as an administrator, so its agents may use only the tools a viewer or a developer may: saving a
+workflow whose agent has a tool its run-as role may never use (`call_aws` and `aws_script` are for administrators only)
+is refused, with the tool named. For security reviews, give agents `guard_findings` (Forgeline's own checks),
+`inspector_findings` (Amazon Inspector's active findings, worst first, with CVE, package, fixed version, exploit and EPSS)
+and `aws_resources`; all three are open to viewers.
+
 Check Anthropic's terms before using a subscription token (`setup-token`) for automation. An API key is the safer production choice. Codex and Copilot agent steps are not built yet; Copilot can already answer as the assistant.
 
 Designs: [007 agent steps](https://github.com/forgelinehq/forgeline/blob/main/docs/design/007-agent-steps.md), [008 assistant](https://github.com/forgelinehq/forgeline/blob/main/docs/design/008-assistant.md).

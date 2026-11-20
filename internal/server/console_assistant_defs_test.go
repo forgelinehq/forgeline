@@ -112,3 +112,26 @@ func TestAssistantDefinitionsAreForAdministratorsAndChecked(t *testing.T) {
 	}
 	m.admin.expect(404, "GET", "/v1/ai/workflows/w", nil)
 }
+
+// After a card is confirmed or dismissed, the assistant's next turn says so, so it does not prepare the same thing
+// again (a maintainer saw it re-prepare a workflow after "Created workflow …").
+func TestAssistantKnowsWhatBecameOfItsCards(t *testing.T) {
+	m := newMCPHarness(t)
+	evs := m.run(m.admin, map[string]any{"message": "write a skill"}, prepareDef("save_skill",
+		map[string]any{"name": "Cost review", "description": "Steps", "body": "1. Read.\n2. Report."}))
+	confirmCard(t, m, m.admin, evs, 200)
+	evs = m.run(m.admin, map[string]any{"message": "and another"}, prepareDef("save_skill",
+		map[string]any{"name": "Tag review", "description": "Steps", "body": "1. Read tags."}))
+	m.admin.expect(200, "POST", "/v1/assistant/actions/"+actionsIn(evs)[0]["id"].(string)+"/dismiss", nil)
+	m.run(m.admin, map[string]any{"message": "continue"}, "ok")
+	sys := m.lastSystem()
+	if !strings.Contains(sys, "<your_cards>") || !strings.Contains(sys, `save_skill "Create skill Cost review"`) || !strings.Contains(sys, "confirmed") ||
+		!strings.Contains(sys, "/skills/cost-review") || !strings.Contains(sys, `"Create skill Tag review"`) || !strings.Contains(sys, "dismissed by the person") {
+		t.Errorf("the assistant was not told what became of its cards:\n%s", sys[strings.Index(sys, "Cards you prepared")+0:])
+	}
+	// Another person's cards are not theirs.
+	m.run(m.dev, map[string]any{"message": "hi"}, "ok")
+	if strings.Contains(m.lastSystem(), "Cost review") {
+		t.Error("another person's cards were shown")
+	}
+}

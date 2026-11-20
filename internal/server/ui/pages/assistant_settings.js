@@ -29,7 +29,13 @@ export async function assistantSettings(box, admin) {
   const copilotWarn = notice('warn', 'This runs GitHub\'s ', h('code', { class: 'font-mono text-xs' }, 'copilot'), ' program on the server with the server user\'s login (run ', h('code', { class: 'font-mono text-xs' }, 'copilot login'), ' there first), with no tools. Each question uses one Copilot premium request; a free plan has only a few a month. Leave the model empty to let Copilot choose. Use it only on a server for one person.');
   const err = h('div', { class: 'mt-4 hidden' });
   const out = h('div', { class: 'mt-4' });
-  const sync = () => { provField.classList.toggle('hidden', backend.value !== 'provider'); modelField.classList.toggle('hidden', backend.value === 'provider'); keyField.classList.toggle('hidden', backend.value !== 'api'); tokField.classList.toggle('hidden', backend.value !== 'claude-token'); cliWarn.classList.toggle('hidden', backend.value !== 'cli'); copilotWarn.classList.toggle('hidden', backend.value !== 'copilot'); };
+  // Copilot picks its own model when the field is empty; a Claude name left from another backend would only be
+  // ignored, so it is cleared, and the field says what empty means.
+  const fitModel = () => {
+    if (backend.value === 'copilot' && /^(claude-|sonnet$|opus$|haiku$)/.test(model.value.trim())) model.value = '';
+    model.placeholder = backend.value === 'copilot' ? 'Empty: Copilot chooses' : '';
+  };
+  const sync = () => { fitModel(); provField.classList.toggle('hidden', backend.value !== 'provider'); modelField.classList.toggle('hidden', backend.value === 'provider'); keyField.classList.toggle('hidden', backend.value !== 'api'); tokField.classList.toggle('hidden', backend.value !== 'claude-token'); cliWarn.classList.toggle('hidden', backend.value !== 'cli'); copilotWarn.classList.toggle('hidden', backend.value !== 'copilot'); };
   backend.addEventListener('change', sync); sync();
 
   const save = h('button', { class: 'btn-primary', type: 'submit', disabled: !admin }, icon('check', 'size-4'), 'Save');

@@ -231,7 +231,17 @@ func TestWorkflowUnattendedRunsAreCappedBelowAdministrator(t *testing.T) {
 	a := newAgent(t, m.admin, agentBody("Changer", nil, []string{"propose_aws_change"}, "T1"))
 	body := wfBody("As viewer", []WFStage{{Steps: []WFStep{step(a.ID, "change something")}}})
 	body["run_as"] = "viewer"
+	// Saving refuses it: the tool would be refused on every run.
+	if out := string(m.admin.expect(400, "POST", "/v1/ai/workflows", body)); !strings.Contains(out, "propose_aws_change (needs developer)") {
+		t.Errorf("save: %s", out)
+	}
+	// A workflow saved before that check, as viewer: its runs still never get the tool.
+	body["run_as"] = "developer"
 	w := newWorkflow(t, m.admin, body)
+	var stored Workflow
+	m.srv.docs.Get(context.Background(), kindWorkflow, w.ID, &stored)
+	stored.Versions[len(stored.Versions)-1].RunAs = "viewer"
+	m.srv.docs.Put(context.Background(), kindWorkflow, w.ID, stored)
 	m.turnOn()
 	m.llm.script(lookupReply("propose_aws_change", map[string]any{"title": "x", "reason": "y", "code": changeScript}), "done")
 	run := m.waitRun(m.startWF(m.admin, w.ID, 202).ID, wfSucceeded, wfFailed) // an administrator starts it, it still runs as viewer

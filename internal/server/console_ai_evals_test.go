@@ -49,9 +49,15 @@ func TestAnEvalRunIsSafeAndChecked(t *testing.T) {
 		func(s map[string]any) { s["name"] = "" },
 		func(s map[string]any) { s["attempts"] = 9 },
 		func(s map[string]any) { s["agent"] = "nobody" },
-		func(s map[string]any) { s["cases"] = []map[string]any{{"name": "x", "input": "y", "checks": []map[string]any{}}} },
-		func(s map[string]any) { s["cases"] = []map[string]any{{"name": "x", "input": "y", "checks": []map[string]any{{"kind": "regex", "value": "("}}}} },
-		func(s map[string]any) { s["cases"] = []map[string]any{{"name": "x", "input": "y", "checks": []map[string]any{{"kind": "teleport"}}}} },
+		func(s map[string]any) {
+			s["cases"] = []map[string]any{{"name": "x", "input": "y", "checks": []map[string]any{}}}
+		},
+		func(s map[string]any) {
+			s["cases"] = []map[string]any{{"name": "x", "input": "y", "checks": []map[string]any{{"kind": "regex", "value": "("}}}}
+		},
+		func(s map[string]any) {
+			s["cases"] = []map[string]any{{"name": "x", "input": "y", "checks": []map[string]any{{"kind": "teleport"}}}}
+		},
 		func(s map[string]any) { s["judge"] = "nope/model" },
 	} {
 		b := map[string]any{}
