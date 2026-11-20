@@ -15,6 +15,7 @@ import {
   graphRunStatus, stagesToGraph, fitView, zoomAt, toWorld, pickerItems, addPicked, triggerSummary, readOptions,
 } from '../lib/agraph.js';
 import { avatar, chatPanel } from './agents.js';
+import { tabs, chipInput, choiceCards } from '../lib/controls.js';
 import { toolInfo, tierTitle } from '../lib/tools.js';
 
 const TONE = {
@@ -285,7 +286,7 @@ export async function graphEditorPage({ params }) {
     const n = g.nodes.find(x => x.id === selected);
     mount(canvasSlot, graphCanvas(g, { selected, editable: true, agentName, view, height: 'h-[calc(100vh-13rem)] min-h-[30rem]', startSummary: triggerSummary(meta),
       onSelect: select, onMove: (id, x, y) => change(moveNode(g, id, x, y), false), onWire: wireUp, onPick: openPicker, onDelete: remove, onTidy: () => change(tidy(g)) }));
-    if (panel) mount(panelSlot, n ? h('aside', { class: 'card card-pad absolute bottom-3 right-3 top-14 w-[22rem] max-w-[calc(100%-1.5rem)] space-y-3 overflow-y-auto shadow-lg', id: 'graph-panel' }, nodePanel(n)) : null);
+    if (panel) mount(panelSlot, n ? h('aside', { class: 'card card-pad absolute bottom-3 right-3 top-14 w-[24rem] max-w-[calc(100%-1.5rem)] space-y-3 overflow-y-auto shadow-lg', id: 'graph-panel' }, nodePanel(n)) : null);
   }
 
   async function save(btn, stay = false) {
@@ -302,21 +303,34 @@ export async function graphEditorPage({ params }) {
   }
 
   // The workflow's settings, in a side panel so the canvas keeps the page.
+  // The workflow's settings, in a side panel so the canvas keeps the page: what it is, what starts it, what it may do.
+  let settingsTab = 'trigger';
   const openSettings = () => drawer('Workflow settings', () => {
-    const desc = h('input', { id: 'graph-desc', class: 'input', maxlength: '300', value: meta.description, placeholder: 'What it is for', oninput: (e) => { meta.description = e.target.value; dirty = edited = true; } });
-    const every = scheduleField({ id: 'graph-every', spec: { every_minutes: Number(meta.every), cron: meta.cron, tz: meta.tz },
-      onChange: (sp) => { meta.every = sp.every_minutes || 0; meta.cron = sp.cron || ''; meta.tz = sp.tz || ''; dirty = edited = true; drawState(); } });
-    const runAs = h('select', { id: 'graph-runas', class: 'input', onchange: (e) => { meta.runAs = e.target.value; dirty = edited = true; } }, [['developer', 'Developer: may file change proposals'], ['viewer', 'Viewer: reads only']].map(([v, l]) => h('option', { value: v, selected: meta.runAs === v }, l)));
-    const hook = h('input', { type: 'checkbox', id: 'graph-webhook', checked: meta.webhook, onchange: (e) => { meta.webhook = e.target.checked; dirty = edited = true; } });
-    const follow = h('input', { id: 'graph-follow', class: 'input', value: meta.follow, placeholder: 'pipeline names, or * for any', oninput: (e) => { meta.follow = e.target.value; dirty = edited = true; } });
-    return h('div', { class: 'space-y-4' }, field('Description', desc, null, 'graph-desc'),
-      h('h3', { class: 'h-section pt-2' }, 'What starts it'),
-      h('div', {}, h('div', { class: 'label' }, 'Schedule'), every, h('p', { class: 'hint' }, 'It can always be started by hand too. Workflows › Schedules lists every schedule and can pause one.')),
-      h('label', { class: 'flex items-start gap-2 text-sm', for: 'graph-webhook' }, hook, h('span', {}, 'Also starts from a signed webhook. The secret is made on the workflow’s page.')),
-      field('Also starts after failed runs of', follow, 'What failed reaches the graph as trigger, which agents can read as data.', 'graph-follow'),
-      h('h3', { class: 'h-section pt-2' }, 'What it may do'),
-      field('Runs as', runAs, 'Never as an administrator. Change proposals still need a different administrator to approve them.', 'graph-runas'),
-      h('p', { class: 'hint' }, 'Nodes share one state: each writes what it found under its id. Decisions take one wire; loops are allowed, each node runs at most its limit, and a run at most 50 steps.'));
+    const desc = h('textarea', { id: 'graph-desc', class: 'input', rows: '3', maxlength: '300', placeholder: 'What it is for, in a sentence', oninput: (e) => { meta.description = e.target.value; dirty = edited = true; } }, meta.description);
+    const hook = h('input', { type: 'checkbox', id: 'graph-webhook', class: 'mt-1', checked: meta.webhook, onchange: (e) => { meta.webhook = e.target.checked; dirty = edited = true; } });
+    const card = (ic, title, note, ...kids) => h('section', { class: 'space-y-2 rounded-xl border border-slate-200 p-3.5 dark:border-slate-800' },
+      h('div', { class: 'flex items-start gap-2.5' }, h('span', { class: 'flex size-8 flex-none items-center justify-center rounded-lg bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300' }, icon(ic, 'size-4')),
+        h('div', { class: 'min-w-0' }, h('h3', { class: 'text-sm font-semibold' }, title), h('p', { class: 'muted text-xs' }, note))), ...kids);
+    const t = tabs({ id: 'graph-settings', active: settingsTab, onchange: (v) => { settingsTab = v; }, items: [
+      { id: 'about', label: 'About', icon: 'info', render: () => [field('Description', desc, 'Shown on the workflow\'s card and to the assistant.', 'graph-desc')] },
+      { id: 'trigger', label: 'Trigger', icon: 'trigger', render: () => [
+        card('play', 'By hand', 'Anyone who may see it can start it from its page. Always on.'),
+        card('schedule', 'On a schedule', 'Workflows › Schedules lists every schedule and can pause one.',
+          scheduleField({ id: 'graph-every', spec: { every_minutes: Number(meta.every), cron: meta.cron, tz: meta.tz },
+            onChange: (sp) => { meta.every = sp.every_minutes || 0; meta.cron = sp.cron || ''; meta.tz = sp.tz || ''; dirty = edited = true; drawState(); } })),
+        card('webhook', 'From a webhook', 'Another system starts it with a signed request. The secret is made on the workflow\'s page.',
+          h('label', { class: 'flex items-start gap-2 text-sm', for: 'graph-webhook' }, hook, h('span', {}, 'Also starts from a signed webhook'))),
+        card('failed', 'After a failed pipeline run', 'What failed reaches the workflow as its trigger, which agents read as data.',
+          chipInput({ id: 'graph-follow', values: meta.follow.split(',').map(x => x.trim()).filter(Boolean), placeholder: 'pipeline names, or * for any',
+            onchange: (v) => { meta.follow = v.join(', '); dirty = edited = true; } }))] },
+      { id: 'access', label: 'Permissions', icon: 'runas', render: () => [
+        h('p', { class: 'muted text-xs' }, 'Who the run acts as. Never an administrator: change proposals still need a different administrator to approve them.'),
+        choiceCards({ id: 'graph-runas', value: meta.runAs, onchange: (v) => { meta.runAs = v; dirty = edited = true; }, options: [
+          { value: 'developer', label: 'Developer', icon: 'edit', note: 'Reads, and may file change proposals' },
+          { value: 'viewer', label: 'Viewer', icon: 'eye', note: 'Reads only' }] }),
+        h('p', { class: 'hint' }, 'Nodes share one state: each writes what it found under its id. Decisions take one wire; loops are allowed, each node runs at most its limit, and a run at most 50 steps.')] },
+    ] });
+    return t.el;
   }, { subtitle: meta.name || 'A new workflow', footer: (close) => h('button', { type: 'button', class: 'btn-primary btn-sm', id: 'graph-settings-done', onclick: () => close() }, 'Done') })
     .then(() => { drawState(); draw(); });
 
@@ -350,12 +364,7 @@ export async function graphEditorPage({ params }) {
     x.addEventListener('change', () => onChange(x.value.trim()));
     return h('div', {}, h('label', { class: 'label', for: id }, label), x);
   };
-  const list = (s) => s.split(',').map(x => x.trim()).filter(Boolean);
 
-  // The panel reads top to bottom like a Langflow component: what the node is, who does the work, what goes in, what
-  // comes out, where it goes next. Ids stay out of the way; names are what people see.
-  const section = (title, hint, ...kids) => h('section', { class: 'space-y-2 border-t border-slate-200 pt-3 dark:border-slate-800', 'data-section': title },
-    h('div', {}, h('h3', { class: 'text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400' }, title), hint ? h('p', { class: 'muted text-xs' }, hint) : null), ...kids);
   const skillName = (id) => skills.find(x => x.id === id)?.name || id;
 
   // Try an agent with this node's task: its own chat, beside the canvas, answering with the version the node uses.
@@ -391,107 +400,147 @@ export async function graphEditorPage({ params }) {
       pick];
   }
 
+  // Earlier answers it is handed, as chips to switch on and off.
   function readsField(n, set, hint) {
     const opts = readOptions(g, n.id);
+    const on = new Set(n.reads || []);
     return h('div', {}, h('div', { class: 'label' }, 'Also hand it'), h('p', { class: 'muted -mt-1 mb-1.5 text-xs' }, hint),
-      opts.length ? h('div', { class: 'space-y-1', id: 'g-reads' }, opts.map(o => h('label', { class: 'flex items-start gap-2 text-sm' },
-        h('input', { type: 'checkbox', class: 'mt-1', checked: (n.reads || []).includes(o.key), 'data-read': o.key, onchange: (e) => set({ reads: e.target.checked ? [...(n.reads || []), o.key] : (n.reads || []).filter(x => x !== o.key) }) }),
-        h('span', {}, h('span', { class: 'font-medium' }, o.label), h('span', { class: 'muted block text-xs' }, o.sub)))))
+      opts.length ? h('div', { class: 'flex flex-wrap gap-1.5', id: 'g-reads' }, opts.map(o => h('button', { type: 'button', 'aria-pressed': String(on.has(o.key)), 'data-read': o.key, title: o.sub,
+        class: 'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs ' + (on.has(o.key)
+          ? 'border-brand-400 bg-brand-50 text-brand-800 dark:border-brand-500/60 dark:bg-brand-500/10 dark:text-brand-200'
+          : 'border-slate-200 text-slate-600 hover:border-slate-300 dark:border-slate-700 dark:text-slate-300'),
+        onclick: () => set({ reads: on.has(o.key) ? (n.reads || []).filter(x => x !== o.key) : [...(n.reads || []), o.key] }) },
+        icon(on.has(o.key) ? 'check' : 'plus', 'size-3'), o.label)))
         : h('p', { class: 'muted text-xs' }, 'Nothing yet: add nodes before this one and their answers show up here.'));
   }
 
-  function agentFields(n, set) {
-    return [
-      section('Who does it', null, ...agentCard(n, set)),
-      section('Input', 'What it is asked, and what it is given to work from.',
-        textarea(n.kind === 'decide' ? 'What to decide' : 'Task', n.task, v => set({ task: v }), 'g-task', 4),
-        readsField(n, set, 'Earlier answers, passed as data: it reads them but does not take orders from them.')),
-    ];
+  function taskField(n, set) {
+    const x = h('textarea', { class: 'input text-sm leading-relaxed', rows: '5', id: 'g-task', maxlength: '2000',
+      placeholder: n.kind === 'decide' ? 'Is this an incident? Answer with one of the branches.' : 'Explain why the latest run failed, in plain words.' }, n.task || '');
+    x.addEventListener('change', () => set({ task: x.value.trim() }));
+    return h('div', {}, h('label', { class: 'label flex items-center gap-1.5', for: 'g-task' }, icon('task', 'size-3.5'), n.kind === 'decide' ? 'What to decide' : 'Task'), x,
+      h('p', { class: 'hint' }, 'What this node asks its agent. The agent\'s own instructions still apply.'));
   }
 
+  const savedAs = (n, what) => h('div', { class: 'flex items-start gap-2 rounded-lg bg-slate-50 px-3 py-2 text-sm dark:bg-slate-800/50' }, icon('output', 'mt-0.5 size-4 text-slate-500'),
+    h('span', {}, what + ' is saved as ', h('span', { class: 'font-medium' }, n.name || NODE_KINDS[n.kind].label), h('code', { class: 'muted ml-1 text-xs' }, n.id), ', for the nodes after it.'));
+
+  // The open tab for each kind of node, so rebuilding the panel after a change keeps it.
+  const panelTab = {};
+
+  // The panel: the node's name and kind, then one tab at a time (who does it, what goes in, what comes out, where it
+  // goes next, limits) instead of one long column.
   function nodePanel(node) {
     let n = node;
     // What changes the panel's own fields (or the wires it lists) rebuilds it; text does not.
-    const SHAPE = ['by', 'agent', 'outcome', 'choices', 'tool'];
+    const SHAPE = ['by', 'agent', 'outcome', 'choices', 'tool', 'reads'];
     const set = (fields) => {
       const reshapes = SHAPE.some(k => k in fields) || ('rules' in fields && ((fields.rules || []).length !== (n.rules || []).length
         || (fields.rules || []).some((r, i) => r.when !== n.rules[i]?.when || r.key !== n.rules[i]?.key)));
       change(updateNode(g, n.id, fields), reshapes);
       if (!reshapes) n = g.nodes.find(x => x.id === n.id) || n;
     };
-    const out = [h('div', { class: 'flex items-center justify-between gap-2' },
-      h('div', { class: 'flex min-w-0 items-center gap-2' }, tileBox(n.kind, 'size-7'),
-        h('h2', { class: 'truncate font-semibold' }, NODE_KINDS[n.kind].label), h('code', { class: 'muted truncate text-xs' }, n.id)),
-      h('button', { class: 'btn-ghost btn-sm', type: 'button', 'aria-label': 'Close', onclick: () => select('') }, icon('x', 'size-4'))),
-      h('p', { class: 'muted -mt-1 text-xs', id: 'g-about' }, NODE_KINDS[n.kind].note + '.'),
-      input('Name on the canvas', n.name, v => set({ name: v }), { maxlength: '60', placeholder: NODE_KINDS[n.kind].label, id: 'g-name' })];
+    const name = h('input', { id: 'g-name', class: 'w-full rounded bg-transparent text-base font-semibold focus:outline-none focus:ring-2 focus:ring-brand-500/25', value: n.name || '', maxlength: '60',
+      placeholder: NODE_KINDS[n.kind].label, 'aria-label': 'Name on the canvas' });
+    name.addEventListener('change', () => set({ name: name.value.trim() }));
+    const head = h('div', { class: 'flex items-start gap-2.5' }, tileBox(n.kind, 'size-9'),
+      h('div', { class: 'min-w-0 flex-1' }, name, h('p', { class: 'muted text-xs', id: 'g-about' }, NODE_KINDS[n.kind].label + ' · ' + NODE_KINDS[n.kind].note + '.')),
+      h('button', { class: 'btn-ghost btn-sm', type: 'button', 'aria-label': 'Close', onclick: () => select('') }, icon('x', 'size-4')));
+
+    const T = [];
+    const agentTab = { id: 'agent', label: 'Agent', icon: 'agents', render: () => agentCard(n, set) };
+    const inputTab = { id: 'input', label: 'Input', icon: 'input', badge: (n.reads || []).length || null, render: () => [taskField(n, set),
+      readsField(n, set, 'Earlier answers, passed as data: it reads them but does not take orders from them.')] };
     switch (n.kind) {
       case 'start':
-        out.push(h('p', { class: 'text-sm' }, 'Starts ' + triggerSummary(meta) + '.'), h('button', { type: 'button', class: 'btn-secondary btn-sm', onclick: openSettings }, icon('gear', 'size-3.5'), 'Change what starts it'));
+        T.push({ id: 'trigger', label: 'Trigger', icon: 'trigger', render: () => [
+          h('div', { class: 'flex items-start gap-2 rounded-lg bg-slate-50 px-3 py-2.5 text-sm dark:bg-slate-800/50' }, icon('trigger', 'mt-0.5 size-4 text-slate-500'), h('span', {}, 'Starts ' + triggerSummary(meta) + '.')),
+          h('button', { type: 'button', class: 'btn-secondary btn-sm', onclick: openSettings }, icon('gear', 'size-3.5'), 'Change what starts it')] });
         break;
       case 'agent':
-        out.push(...agentFields(n, set), section('Output', 'Its answer is kept for the nodes after it, and shown in the run.',
-          h('p', { class: 'text-sm' }, 'Saved as ', h('span', { class: 'font-medium' }, n.name || 'Agent'), h('code', { class: 'muted ml-1 text-xs' }, n.id)),
-          input('Pull these out of the answer too', (n.fields || []).join(', '), v => set({ fields: list(v) }), { id: 'g-fields', placeholder: 'severity, service' }),
-          h('p', { class: 'hint -mt-1' }, 'Short values such as severity: high. The agent is asked for them at the end of its answer, and a Decide node can test them.')));
+        T.push(agentTab, inputTab, { id: 'output', label: 'Output', icon: 'output', badge: (n.fields || []).length || null, render: () => [savedAs(n, 'Its answer'),
+          chipInput({ id: 'g-fields', label: 'Pull these out of the answer too', values: n.fields || [], placeholder: 'severity, service', onchange: (v) => set({ fields: v }),
+            hint: 'Short values such as severity: high. The agent is asked for them at the end of its answer, and a Decide node can test them. Enter or a comma adds one.' })] });
         break;
       case 'lookup':
-        out.push(section('Input', 'What it reads. No model is asked.'), select_('Lookup', n.tool || '', [['', 'Pick a lookup'], ...lookups.map(t => [t, toolInfo(t).title + ' (' + t + ')'])], v => set({ tool: v }), 'g-tool'),
-          textarea('Arguments (JSON)', n.args ? JSON.stringify(n.args) : '{}', v => { try { set({ args: v ? JSON.parse(v) : null }); } catch { toast('Not valid JSON', 'error'); } }, 'g-args', 2),
-          n.tool ? h('p', { class: 'hint -mt-2', id: 'g-tool-help' }, 'It takes ' + (tools.find(t => t.name === n.tool)?.help || '{}') + '. Numbers without quotes.') : null,
-          section('Output', 'What it returns is kept for the nodes after it.', h('p', { class: 'text-sm' }, 'Saved as ', h('span', { class: 'font-medium' }, n.name || 'Lookup'), h('code', { class: 'muted ml-1 text-xs' }, n.id))));
+        T.push({ id: 'lookup', label: 'Lookup', icon: 'lookup', render: () => [
+          select_('Lookup', n.tool || '', [['', 'Pick a lookup'], ...lookups.map(t => [t, toolInfo(t).title + ' (' + t + ')'])], v => set({ tool: v }), 'g-tool'),
+          textarea('Arguments (JSON)', n.args ? JSON.stringify(n.args) : '{}', v => { try { set({ args: v ? JSON.parse(v) : null }); } catch { toast('Not valid JSON', 'error'); } }, 'g-args', 3),
+          n.tool ? h('p', { class: 'hint -mt-2', id: 'g-tool-help' }, 'It takes ' + (tools.find(t => t.name === n.tool)?.help || '{}') + '. Numbers without quotes.') : h('p', { class: 'hint -mt-2' }, 'It reads; no model is asked.')] },
+        { id: 'output', label: 'Output', icon: 'output', render: () => [savedAs(n, 'What it returns')] });
         break;
       case 'decide': {
-        out.push(section('How it chooses', 'Each wire out of a Decide node is a branch; it takes one.'), select_('Decide by', n.by || 'rule', [['rule', 'A rule on what earlier nodes wrote'], ['agent', 'An agent choosing a branch']], v => set({ by: v, ...(v === 'rule' ? { agent: null, task: null, reads: null } : { rules: null }) }), 'g-by'));
-        if ((n.by || 'rule') === 'rule') {
-          const rules = n.rules || [];
-          const keys = stateKeys(g, n.id);
-          out.push(h('div', { class: 'space-y-2', id: 'g-rules' }, rules.map((r, i) => {
-            const upd = (f) => set({ rules: (n.rules || []).map((x, j) => j === i ? { ...x, ...f } : x) });
-            return h('div', { class: 'grid grid-cols-2 gap-1.5 rounded-lg border border-slate-200 p-2 dark:border-slate-800', 'data-rule': String(i) },
-              h('select', { class: 'input', 'aria-label': 'Key', onchange: (e) => upd({ key: e.target.value }) }, [['', 'value of…'], ...keys.map(k => [k, k])].map(([v, t]) => h('option', { value: v, selected: v === (r.key || '') }, t))),
-              h('select', { class: 'input', 'aria-label': 'Test', onchange: (e) => upd({ op: e.target.value }) }, OPS.map(([v, t]) => h('option', { value: v, selected: v === (r.op || 'equals') }, t))),
-              h('input', { class: 'input', 'aria-label': 'Value', value: r.value || '', placeholder: 'high', onchange: (e) => upd({ value: e.target.value.trim() }) }),
-              h('input', { class: 'input', 'aria-label': 'Branch', value: r.when || '', placeholder: 'branch, e.g. page', onchange: (e) => upd({ when: e.target.value.trim().toLowerCase() }) }),
-              h('button', { class: 'btn-ghost btn-sm col-span-2 justify-self-end', type: 'button', onclick: () => set({ rules: (n.rules || []).filter((_, j) => j !== i) }) }, icon('trash', 'size-3.5'), 'Remove'));
-          }), h('button', { class: 'btn-secondary btn-sm', type: 'button', id: 'g-add-rule', onclick: () => { const now = n.rules || []; set({ rules: [...now, { key: keys[0] || '', op: 'equals', value: '', when: 'branch-' + (now.length + 1) }] }); } }, icon('plus', 'size-3.5'), 'Add a rule')),
-          h('p', { class: 'hint' }, 'The first rule that matches picks its branch; otherwise the else wire.'));
-        } else {
-          out.push(...agentFields(n, set), h('p', { class: 'hint' }, 'The agent must answer one of the wires’ branches; an unclear answer is asked once more, then else is taken.'));
-        }
+        const byRule = (n.by || 'rule') === 'rule';
+        T.push({ id: 'decide', label: 'Choose', icon: 'decide', render: () => {
+          const out = [h('p', { class: 'muted text-xs' }, 'Each wire out of a Decide node is a branch; it takes one.'),
+            choiceCards({ id: 'g-by', value: n.by || 'rule', onchange: (v) => set({ by: v, ...(v === 'rule' ? { agent: null, task: null, reads: null } : { rules: null }) }), options: [
+              { value: 'rule', label: 'By a rule', icon: 'rules', note: 'Test what earlier nodes wrote' },
+              { value: 'agent', label: 'By an agent', icon: 'agents', note: 'An agent picks a branch' }] })];
+          if (byRule) {
+            const rules = n.rules || [];
+            const keys = stateKeys(g, n.id);
+            out.push(h('div', { class: 'space-y-2', id: 'g-rules' }, rules.map((r, i) => {
+              const upd = (f) => set({ rules: (n.rules || []).map((x, j) => j === i ? { ...x, ...f } : x) });
+              return h('div', { class: 'space-y-1.5 rounded-xl border border-slate-200 p-2.5 dark:border-slate-800', 'data-rule': String(i) },
+                h('div', { class: 'flex items-center gap-1.5 text-xs font-medium text-slate-500' }, h('span', { class: 'rounded bg-slate-100 px-1.5 dark:bg-slate-800' }, 'If'), 'rule ' + (i + 1),
+                  h('button', { class: 'btn-ghost ml-auto p-1', type: 'button', 'aria-label': 'Remove rule ' + (i + 1), onclick: () => set({ rules: (n.rules || []).filter((_, j) => j !== i) }) }, icon('trash', 'size-3.5'))),
+                h('div', { class: 'grid grid-cols-2 gap-1.5' },
+                  h('select', { class: 'input', 'aria-label': 'Key', onchange: (e) => upd({ key: e.target.value }) }, [['', 'value of…'], ...keys.map(k => [k, k])].map(([v, t]) => h('option', { value: v, selected: v === (r.key || '') }, t))),
+                  h('select', { class: 'input', 'aria-label': 'Test', onchange: (e) => upd({ op: e.target.value }) }, OPS.map(([v, t]) => h('option', { value: v, selected: v === (r.op || 'equals') }, t))),
+                  h('input', { class: 'input', 'aria-label': 'Value', value: r.value || '', placeholder: 'high', onchange: (e) => upd({ value: e.target.value.trim() }) }),
+                  h('div', { class: 'flex items-center gap-1.5' }, icon('next', 'size-3.5 flex-none text-violet-600'),
+                    h('input', { class: 'input', 'aria-label': 'Branch', value: r.when || '', placeholder: 'branch, e.g. page', onchange: (e) => upd({ when: e.target.value.trim().toLowerCase() }) }))));
+            }), h('button', { class: 'btn-secondary btn-sm', type: 'button', id: 'g-add-rule', onclick: () => { const now = n.rules || []; set({ rules: [...now, { key: keys[0] || '', op: 'equals', value: '', when: 'branch-' + (now.length + 1) }] }); } }, icon('plus', 'size-3.5'), 'Add a rule')),
+            h('p', { class: 'hint' }, 'The first rule that matches picks its branch; otherwise the else wire.'));
+          } else out.push(h('p', { class: 'hint' }, 'The agent must answer one of the wires’ branches; an unclear answer is asked once more, then else is taken. Set it up under Agent and Input.'));
+          return out;
+        } });
+        if (!byRule) T.push(agentTab, inputTab);
         break;
       }
       case 'ask':
-        out.push(section('The question', 'The run stops here until someone answers in the run view.'), textarea('Question', n.question, v => set({ question: v }), 'g-question', 2),
-          input('Choices', (n.choices || []).join(', '), v => set({ choices: list(v).map(x => x.toLowerCase()) }), { id: 'g-choices', placeholder: 'approve, reject (empty: a free answer)' }),
-          input('Who may answer', (n.answerers || []).join(', '), v => set({ answerers: list(v) }), { id: 'g-answerers', placeholder: 'empty: any administrator' }),
-          h('p', { class: 'hint' }, 'The run waits here (up to 7 days). The answer is saved under ' + n.id + ' and, with choices, picks the wire.'));
+        T.push({ id: 'question', label: 'Question', icon: 'ask', render: () => [textarea('Question', n.question, v => set({ question: v }), 'g-question', 3),
+          chipInput({ id: 'g-choices', label: 'Choices', values: n.choices || [], lower: true, placeholder: 'approve, reject', onchange: (v) => set({ choices: v }), hint: 'With choices, the answer picks the wire. With none, any answer is taken.' }),
+          chipInput({ id: 'g-answerers', label: 'Who may answer', values: n.answerers || [], placeholder: 'user names', onchange: (v) => set({ answerers: v }), hint: 'Empty: any administrator.' }),
+          h('p', { class: 'hint' }, 'The run waits here, up to 7 days, until someone answers in the run view. The answer is saved under ' + n.id + '.')] });
         break;
       case 'end':
-        out.push(select_('Ends the run as', n.outcome || 'succeeded', [['succeeded', 'Done'], ['failed', 'Failed']], v => set({ outcome: v }), 'g-outcome'),
-          input('Summary', n.summary, v => set({ summary: v }), { id: 'g-summary', maxlength: '500' }));
+        T.push({ id: 'end', label: 'Ending', icon: 'end', render: () => [choiceCards({ id: 'g-outcome', value: n.outcome || 'succeeded', onchange: (v) => set({ outcome: v }), options: [
+          { value: 'succeeded', label: 'Done', icon: 'succeeded', note: 'The run succeeded' }, { value: 'failed', label: 'Failed', icon: 'failed', note: 'The run failed here' }] }),
+          input('Summary', n.summary, v => set({ summary: v }), { id: 'g-summary', maxlength: '500', placeholder: 'What happened, for the run list' })] });
         break;
     }
-    if (n.kind !== 'start' && n.kind !== 'end') out.push(h('details', { class: 'border-t border-slate-200 pt-3 dark:border-slate-800', id: 'g-limits' },
-      h('summary', { class: 'cursor-pointer text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400' }, 'Limits'),
-      h('div', { class: 'mt-2' }, input('Most times it may run in one run', n.max_visits || '', v => set({ max_visits: v || null }), { type: 'number', min: '1', max: '10', placeholder: '3', id: 'g-max' }),
-        h('p', { class: 'hint' }, 'Only matters in a loop, when a wire leads back to it. Then the run stops it after this many times.'))));
+
     // Its wires, and one more.
     const mine = g.edges.filter(e => e.from === n.id);
-    const others = g.nodes.filter(x => x.id !== n.id && x.kind !== 'start');
-    const to = h('select', { class: 'input', id: 'g-wire-to', 'aria-label': 'Wire to' }, others.map(x => h('option', { value: x.id }, x.name || NODE_KINDS[x.kind].label)));
-    const label = branches(n) ? h('select', { class: 'input w-auto', id: 'g-wire-when', 'aria-label': 'Branch' }, branchLabels(n).map(l => h('option', { value: l }, l))) : null;
-    out.push(h('div', { class: 'border-t border-slate-200 pt-3 dark:border-slate-800' }, h('h3', { class: 'text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400' }, 'Next'), h('p', { class: 'muted mb-2 text-xs' }, 'Where the run goes after this node. Drag from its right edge on the canvas, or pick here.'),
-      mine.length ? h('ul', { class: 'space-y-1 text-sm', id: 'g-wires' }, mine.map(e => h('li', { class: 'flex items-center justify-between gap-2' },
-        h('span', {}, e.when ? h('span', { class: 'mr-1 font-medium text-violet-700 dark:text-violet-300' }, 'if ' + e.when + ' →') : '→ ', (() => { const t = g.nodes.find(x => x.id === e.to); return t ? t.name || NODE_KINDS[t.kind].label : e.to; })()),
-        h('button', { class: 'btn-ghost btn-sm', type: 'button', 'aria-label': 'Remove the wire to ' + e.to, onclick: () => change(removeWire(g, e.from, e.to, e.when || '')) }, icon('x', 'size-3.5'))))) : h('p', { class: 'muted text-xs' }, 'None yet.'),
-      n.kind !== 'end' && others.length ? h('div', { class: 'mt-2 flex flex-wrap gap-2' }, label, to, h('button', { class: 'btn-secondary btn-sm', type: 'button', id: 'g-wire-add', onclick: () => {
-        const why = wireProblem(g, n.id, to.value, label ? label.value : '');
-        if (why) return toast(why, 'error');
-        change(addWire(g, n.id, to.value, label ? label.value : ''));
-      } }, icon('link', 'size-3.5'), 'Connect')) : null,
-      n.kind !== 'end' ? h('button', { class: 'btn-secondary btn-sm mt-2', type: 'button', id: 'g-add-after', onclick: () => openPicker(n.id) }, icon('plus', 'size-3.5'), 'Add a node after this one') : null));
-    if (n.kind !== 'start') out.push(h('div', { class: 'flex justify-end' }, h('button', { class: 'btn-ghost btn-sm text-rose-600 dark:text-rose-400', type: 'button', id: 'g-remove', onclick: () => remove(n.id) }, icon('trash', 'size-3.5'), 'Remove node')));
+    if (n.kind !== 'end') T.push({ id: 'next', label: 'Next', icon: 'next', badge: mine.length || null, render: () => {
+      const others = g.nodes.filter(x => x.id !== n.id && x.kind !== 'start');
+      const to = h('select', { class: 'input min-w-0 flex-1', id: 'g-wire-to', 'aria-label': 'Wire to' }, others.map(x => h('option', { value: x.id }, x.name || NODE_KINDS[x.kind].label)));
+      const label = branches(n) ? h('select', { class: 'input w-auto', id: 'g-wire-when', 'aria-label': 'Branch' }, branchLabels(n).map(l => h('option', { value: l }, l))) : null;
+      return [h('p', { class: 'muted text-xs' }, 'Where the run goes after this node. Drag from its right edge on the canvas, or pick here.'),
+        mine.length ? h('ul', { class: 'space-y-1.5', id: 'g-wires' }, mine.map(e => {
+          const t = g.nodes.find(x => x.id === e.to);
+          return h('li', { class: 'flex items-center gap-2.5 rounded-xl border border-slate-200 px-2.5 py-2 dark:border-slate-800' },
+            e.when ? h('span', { class: 'rounded-full bg-violet-50 px-2 py-0.5 text-xs font-medium text-violet-700 dark:bg-violet-500/15 dark:text-violet-300' }, 'if ' + e.when) : icon('next', 'size-4 text-slate-400'),
+            t ? tileBox(t.kind, 'size-6') : null,
+            h('span', { class: 'min-w-0 flex-1 truncate text-sm font-medium' }, t ? t.name || NODE_KINDS[t.kind].label : e.to),
+            h('button', { class: 'btn-ghost p-1', type: 'button', 'aria-label': 'Remove the wire to ' + e.to, onclick: () => change(removeWire(g, e.from, e.to, e.when || '')) }, icon('x', 'size-3.5')));
+        })) : h('p', { class: 'rounded-lg border border-dashed border-slate-300 px-3 py-2.5 text-xs text-slate-500 dark:border-slate-700' }, 'No wire yet: the run would stop here.'),
+        others.length ? h('div', { class: 'flex flex-wrap gap-2' }, label, to, h('button', { class: 'btn-secondary btn-sm', type: 'button', id: 'g-wire-add', onclick: () => {
+          const why = wireProblem(g, n.id, to.value, label ? label.value : '');
+          if (why) return toast(why, 'error');
+          change(addWire(g, n.id, to.value, label ? label.value : ''));
+        } }, icon('link', 'size-3.5'), 'Connect')) : null,
+        h('button', { class: 'btn-secondary btn-sm', type: 'button', id: 'g-add-after', onclick: () => openPicker(n.id) }, icon('plus', 'size-3.5'), 'Add a node after this one')];
+    } });
+    if (n.kind !== 'start' && n.kind !== 'end') T.push({ id: 'limits', label: 'Limits', icon: 'limits', render: () => [
+      input('Most times it may run in one run', n.max_visits || '', v => set({ max_visits: v || null }), { type: 'number', min: '1', max: '10', placeholder: '3', id: 'g-max' }),
+      h('p', { class: 'hint' }, 'Only matters in a loop, when a wire leads back to it. Then the run stops it after this many times.')] });
+
+    const t = tabs({ items: T, active: panelTab[n.kind], onchange: (id) => { panelTab[n.kind] = id; }, id: 'g-panel', compact: true });
+    const out = [head, t.el];
+    if (n.kind !== 'start') out.push(h('div', { class: 'flex justify-end border-t border-slate-200 pt-3 dark:border-slate-800' },
+      h('button', { class: 'btn-ghost btn-sm text-rose-600 dark:text-rose-400', type: 'button', id: 'g-remove', onclick: () => remove(n.id) }, icon('trash', 'size-3.5'), 'Remove node')));
     return out;
   }
 

@@ -285,14 +285,19 @@ nodes and the lookups, and wires the new node in after the one you came from. Dr
 wire them, pick a node to set it, drag the background to move, Ctrl + scroll to zoom, and **Settings** holds how the
 workflow starts and what it may do.
 
-A node's panel reads top to bottom: what the node does, **Who does it** (for an agent node, the agent as a card with
-its model, skills and tools, **Try it** to chat with it in a playground with the node's task filled in, and a link to
-change it in the builder), **Input** (the task, and earlier nodes' answers to hand it, by name), **Output** (where its
-answer is kept, and short fields to pull out of it), **Next** (its wires) and **Limits**. Leaving the canvas or the agent
+A node's panel has its name and kind at the top (click the name to change it) and tabs with icons below, one part at a
+time: **Agent** (the agent as a card with its model, skills and tools, **Try it** to chat with it in a playground with
+the node's task filled in, and a link to change it in the builder), **Input** (the task, and earlier nodes' answers to
+hand it, as chips you switch on), **Output** (where its answer is kept, and short fields to pull out of it, as chips:
+type one and press Enter), **Next** (each wire as a card with the node it leads to and its branch) and **Limits**. A
+Decide node chooses **by a rule** or **by an agent**; an Ask node's choices and the people who may answer are chips;
+an End node is **Done** or **Failed**. A number on a tab says how many things are set there. **Settings** on the canvas
+has three tabs: **About**, **Trigger** (by hand, on a schedule, from a webhook, after failed pipeline runs, each a card)
+and **Permissions** (developer or viewer). Leaving the canvas or the agent
 builder with unsaved changes asks first: save and leave, discard, or keep editing. Agent answers in a run, a mission and
 an agent's chat show as formatted Markdown.
 
-![A node's panel]({{ '/console/144-workflow-node-panel.png' | relative_url }})
+![A node's panel]({{ '/console/149-workflow-node-tabs.png' | relative_url }})
 
 - **Agent**: an agent does a task; it may also write named fields, such as `severity`.
 - **Lookup**: one read-only lookup, without a model.

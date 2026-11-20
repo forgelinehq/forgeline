@@ -1,6 +1,6 @@
 # 048: Console structure, icons and section editors
 
-Status: **steps 1 and 2 built 2026-11-20; step 3 next.** On 2026-11-20 the maintainer said the menus mislead ("not sure
+Status: **steps 1 to 3 built 2026-11-20; step 4 (⌘K search) next.** On 2026-11-20 the maintainer said the menus mislead ("not sure
 what is where"), accepted the proposed spaces with **Workflows as a space of its own**, and asked that the agent's
 instructions and the settings panels stop being "just an input box", and that the console get proper icons. This note
 replaces the spaces of note 029, frame 1.
@@ -58,13 +58,18 @@ Markdown box, the panels long lists of fields, and the icons hand-drawn paths pl
   receives" shows it exactly, and **Markdown** mode edits it directly. Any text reads into sections and writes back
   unchanged (`ui/lib/instructions.js`, tested): an unknown heading becomes a section of its own, a list that is not a
   plain list stays text, a heading inside a code block is not a heading.
-- **Workflow nodes** (step 3): the panel becomes tabs with icons (Agent, Input, Output, Next, Limits) instead of one
-  long column. The task is a prompt with chips to put an earlier node's answer in; output fields are chips; Next shows
-  each wire with the node it leads to. The workflow's settings drawer gets the same: Trigger, Schedule, Runs as.
+- **Workflow nodes** (step 3, built): the panel is tabs with icons (Agent, Input, Output, Next, Limits; Choose for a
+  Decide node, Question for Ask, Ending for End) instead of one long column, each with a count of what is set.
+  Earlier answers to hand an agent are chips to switch on; output fields, an Ask node's choices and who may answer are
+  chip inputs; Decide by a rule or an agent, and Done or Failed, are cards; Next shows each wire as a card with the node
+  it leads to. Tasks are passed as written: the server has no placeholders in a task, so earlier answers stay data the
+  agent reads, never text spliced into its orders. The settings drawer is tabs too: About, Trigger (by hand, schedule,
+  webhook, failed runs, each a card) and Permissions (developer or viewer as cards). Shared controls are in
+  `ui/lib/controls.js`.
 
 ## Order of work
 
 1. Spaces and Lucide icons, with tabs and Settings entries showing their icon. **Built.**
 2. The instructions editor in sections, with real icons on the agent's parts and in the Markdown toolbar. **Built.**
-3. Workflow node panel and settings drawer in tabs with chips.
+3. Workflow node panel and settings drawer in tabs with chips. **Built.**
 4. The ⌘K search, then the new pages as their features land.
