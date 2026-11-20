@@ -78,6 +78,10 @@ section in the pull request that makes the change; a release moves it under its 
   Workflows, Delivery, Cloud, Operations and Security, with an icon on every space, tab and Settings entry (Lucide).
   Approval rules, policy packs, resource types and the audit log moved from Settings to Security, and usage and
   budgets to Agents. Every page keeps its address.
+- **Evals** (design note 050). Agents › Evals holds suites of cases for an agent, with fixtures for tools and checks
+  (contains, matches, JSON, fields, tools called or never called, limits on tool calls, tokens and time, and a judge
+  model with your rubric). A run asks each case one to five times on a version and model you pick; nothing it runs
+  changes anything, and a case passes only if every attempt does. Traces that kept their prompt can be added as cases.
 - **More traces, and prompts on request** (design note 049). Team runs, missions (a span per stage) and pipeline runs
   (a span per step) are traces too, linked from their pages. Settings › OpenTelemetry can keep prompts, answers and
   tool arguments and results in traces, with credentials and stored secrets hidden; it is off by default.

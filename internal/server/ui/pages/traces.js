@@ -1,10 +1,11 @@
 // Agents › Runs and traces (design note 049): every assistant chat, agent run and workflow run as a trace. The list
 // says what started it, who, how long, what it cost and whether it failed; a trace opens as a waterfall of its spans
 // (agent runs, model calls, tool calls, workflow nodes) on one time scale, with a span's details beside it.
-import { h, icon, mount, pageHeader, relTime, absTime, emptyState, spinner, errorBox, pill } from '../lib/dom.js';
-import { get } from '../lib/api.js';
+import { h, icon, mount, pageHeader, relTime, absTime, emptyState, spinner, errorBox, pill, drawer, toast } from '../lib/dom.js';
+import { get, post } from '../lib/api.js';
 import { navigate } from '../lib/router.js';
 import { spanTree, spanLook, fmtMillis, fmtTokens, fmtCost, KIND_LABEL } from '../lib/traceview.js';
+import { caseDrawer } from './evals.js';
 
 const FILTERS = [['', 'All'], ['agent', 'Agents'], ['workflow', 'Workflows'], ['team', 'Teams'], ['mission', 'Missions'], ['pipeline', 'Pipelines'], ['assistant', 'Assistant'], ['failed', 'Failed']];
 
@@ -89,6 +90,7 @@ async function traceDetail(id) {
     h('div', { class: 'mb-4 flex flex-wrap items-start gap-3' }, h('span', { class: 'flex size-11 flex-none items-center justify-center rounded-xl ' + look.tile }, icon(look.icon, 'size-5')),
       h('div', { class: 'min-w-0 flex-1' }, h('h1', { class: 'h-page' }, d.name.replace(/^(invoke_agent|invoke_workflow|team|mission|pipeline) /, '')),
         h('p', { class: 'muted text-sm' }, (KIND_LABEL[d.kind] || d.kind) + (d.who ? ' · ' + d.who : '') + ' · ' + absTime(d.started))),
+      d.spans.some(s => s.attrs && s.attrs['gen_ai.input.messages'] && s.attrs['gen_ai.operation.name'] === 'invoke_agent') ? h('button', { class: 'btn-secondary btn-sm', type: 'button', id: 'trace-to-eval', onclick: () => toSuite(d.id) }, icon('eval', 'size-3.5'), 'Add to a suite') : null,
       d.failed ? pill('failed', 'Failed') : pill('succeeded', 'OK')),
     h('div', { class: 'card card-pad mb-4 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6', id: 'trace-stats' },
       stat('Took', fmtMillis(d.millis)), stat('Model calls', String(d.model_calls)), stat('Tool calls', String(d.tool_calls)),
@@ -97,4 +99,22 @@ async function traceDetail(id) {
     h('div', { class: 'grid gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]' }, h('div', { class: 'min-w-0' }, waterfall), side));
   if (rows.length) showSpan(rows[0].span);
   return el;
+}
+
+// Add to a suite: the trace's question becomes a case for one of its agent's suites, opened in the case editor.
+async function toSuite(traceID) {
+  let got, suites, agent;
+  try {
+    got = await post('/v1/ai/evals/case-from-trace', { trace_id: traceID });
+    if (!got.agent) return toast('This trace is an assistant chat; suites are for agents.', 'error');
+    [suites, agent] = await Promise.all([get('/v1/ai/evals?agent=' + encodeURIComponent(got.agent)).then(r => r.suites), get('/v1/ai/agents/' + encodeURIComponent(got.agent))]);
+  } catch (e) { return toast(e.message, 'error'); }
+  const open = (x) => caseDrawer(x, agent, -1, () => navigate('/evals/' + x.id), { ...got.case, fixtures: {}, fields: [] });
+  if (suites.length === 1) return open(suites[0]);
+  drawer('Add to a suite', (close) => h('div', { class: 'space-y-2', id: 'pick-suite' },
+    suites.map(x => h('button', { type: 'button', class: 'flex w-full items-center gap-2 rounded-lg border border-slate-200 p-3 text-left hover:border-brand-400 dark:border-slate-700', onclick: () => { close(); open(x); } },
+      icon('eval', 'size-4'), h('span', { class: 'font-medium' }, x.name), h('span', { class: 'muted ml-auto text-xs' }, x.cases.length + ' cases'))),
+    h('button', { type: 'button', class: 'btn-secondary btn-sm', id: 'new-suite-from-trace', onclick: async () => {
+      try { const x = await post('/v1/ai/evals', { agent: got.agent, name: 'From real runs', attempts: 1, cases: [] }); close(); open(x); } catch (e) { toast(e.message, 'error'); }
+    } }, icon('plus', 'size-3.5'), 'A new suite: From real runs')), { subtitle: agent.name });
 }

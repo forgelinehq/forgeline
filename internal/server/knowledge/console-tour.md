@@ -440,6 +440,21 @@ Tool results can hold anything an agent read, so turn it on only where that is a
 
 ![One trace]({{ '/console/152-trace.png' | relative_url }})
 
+**Agents › Evals** tests an agent before people rely on it. A suite is a list of cases for one agent: what it is
+asked, optional **fixtures** (what a tool returns in that case instead of live data, so the input is the same every
+time; put an attack in one to test that the agent does not obey it), and checks: the answer contains, does not contain
+or matches something, is JSON, sets a field to a value; the agent calls a tool, never calls one, or stays within a
+number of tool calls, tokens or seconds; or a **judge** model grades the answer against a rubric you write. **Run**
+asks every case one to five times against a version you pick, optionally on another model, as you. Nothing an eval
+runs changes anything: proposals, environment requests and memory notes are recorded and checked, never filed. A case
+passes only if every attempt passes, so answers that hold up only sometimes show up. The run page shows each case's
+attempts as ticks and crosses; click one for its checks, its answer and its trace. A trace that kept its prompt has
+**Add to a suite**, which fills a case in from it.
+
+![A suite]({{ '/console/155-eval-suite.png' | relative_url }})
+
+![A run]({{ '/console/156-eval-run.png' | relative_url }})
+
 **Agents › Usage and budgets** shows what each agent used this month (tokens, model time, calls, and the cost where the claude
 program reports it). An administrator can set a monthly budget per agent; at 80% the console warns, and when it is used
 up the agent stops before its next model call.

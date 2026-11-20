@@ -98,7 +98,7 @@ eq('an unknown role sees nothing', ids('nobody'), []);
 eq('a space links to its first tab the role may open', spacesFor('developer').map(s => s.path), ['/', '/agents', '/workflows', '/pipelines', '/design', '/services', '/guard']);
 eq('a viewer\'s Cloud opens the map, the one tab they may open', spacesFor('viewer').find(s => s.id === 'cloud').path, '/map');
 eq('a viewer sees only the Delivery tabs they may open', tabsFor(SPACES.find(s => s.id === 'delivery'), 'viewer').map(t => t.label), ['Pipelines']);
-eq('agents and workflows are spaces of their own', [tabsFor(SPACES.find(s => s.id === 'agents'), 'developer').map(t => t.label), tabsFor(SPACES.find(s => s.id === 'workflows'), 'developer').map(t => t.label)], [['Agents', 'Teams', 'Runs and traces', 'Library', 'Usage and budgets'], ['Workflows', 'Schedules']]);
+eq('agents and workflows are spaces of their own', [tabsFor(SPACES.find(s => s.id === 'agents'), 'developer').map(t => t.label), tabsFor(SPACES.find(s => s.id === 'workflows'), 'developer').map(t => t.label)], [['Agents', 'Teams', 'Runs and traces', 'Evals', 'Library', 'Usage and budgets'], ['Workflows', 'Schedules']]);
 eq('security holds findings, rules and the audit log; only administrators see the log', [tabsFor(SPACES.find(s => s.id === 'security'), 'admin').map(t => t.label), tabsFor(SPACES.find(s => s.id === 'security'), 'developer').map(t => t.label).includes('Audit log')], [['Findings', 'Approval rules', 'Policy packs', 'Resource types', 'Audit log'], false]);
 eq('every tab has an icon', SPACES.every(s => s.icon && s.tabs.every(t => t.icon)), true);
 eq('cloud has the canvas first', tabsFor(SPACES.find(s => s.id === 'cloud'), 'developer').map(t => t.label), ['Canvas', 'Environments', 'Blueprints', 'Resources', 'Map']);
