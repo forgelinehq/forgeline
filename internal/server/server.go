@@ -122,6 +122,7 @@ type Server struct {
 	calls      callLog         // serialises updates to the model call log and provider spend
 	tracer     *trace.Tracer   // what agents, workflows and the assistant do, as spans (note 049)
 	traces     traceStore      // serialises updates to stored traces
+	evals      evalBook        // which eval suites are running (note 050)
 	otel       *trace.Exporter // sends traces to an OpenTelemetry backend, when one is set (note 049)
 	teams      teamRuns        // which teams are working on a goal
 	missions   missionState    // missions (note 037)

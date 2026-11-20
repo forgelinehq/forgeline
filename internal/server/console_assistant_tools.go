@@ -286,7 +286,18 @@ func (s *Server) lookupLoop(ctx context.Context, p Principal, turns []chatTurn, 
 			obs(assistEvent{Kind: evToolStart, ID: id, Tool: call.Tool, Args: argsPreview(call)})
 		}
 		tctx, tspan := s.tracer.Start(ctx, "execute_tool "+call.Tool, trace.Internal, trace.WithAttrs(map[string]any{attrOp: "execute_tool", attrTool: call.Tool, attrToolType: "function"}))
-		out, lerr := s.runLookup(tctx, p, call)
+		var out string
+		var lerr error
+		held := false
+		if ev := evalFrom(ctx); ev != nil && scopeFrom(ctx).allows(call.Tool) {
+			// An eval (note 050): a call that would change something is recorded, and a tool with a fixture answers
+			// with it; anything else runs as in a chat.
+			out, held = ev.intercept(call)
+			tspan.Set("forgeline.eval.answered", held)
+		}
+		if !held {
+			out, lerr = s.runLookup(tctx, p, call)
+		}
 		if lerr != nil {
 			tspan.Set(attrErrorType, "tool_error")
 			tspan.Fail("tool_error")

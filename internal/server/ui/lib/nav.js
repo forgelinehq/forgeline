@@ -19,6 +19,7 @@ export const SPACES = [
     { path: '/agents', label: 'Agents', icon: 'agents', min: 'developer', also: ['/skills/'] },
     { path: '/team', label: 'Teams', icon: 'team', min: 'developer', also: ['/teams/'] },
     { path: '/traces', label: 'Runs and traces', icon: 'trace', min: 'developer' },
+    { path: '/evals', label: 'Evals', icon: 'eval', min: 'developer', also: ['/eval-runs/'] },
     { path: '/library', label: 'Library', icon: 'library', min: 'developer', also: ['/marketplace'] },
     { path: '/ai-use', label: 'Usage and budgets', icon: 'usage', min: 'developer' },
   ] },

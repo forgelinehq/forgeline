@@ -40,6 +40,7 @@ import { registriesPage } from './pages/registries.js';
 import { pushPage } from './pages/pushes.js';
 import { tracesPage } from './pages/traces.js';
 import { otelPage } from './pages/otel.js';
+import { evalsPage, suitePage, evalRunPage } from './pages/evals.js';
 import { providersPage } from './pages/providers.js';
 import { buildRulesPage } from './pages/build_rules.js';
 import { watchMapPage } from './pages/watch_map.js';
@@ -271,6 +272,9 @@ async function boot() {
     route('/pushes/:id', guard('developer', pushPage));
     route('/traces', guard('developer', tracesPage));
     route('/traces/:id', guard('developer', tracesPage));
+    route('/evals', guard('developer', evalsPage));
+    route('/evals/:id', guard('developer', suitePage));
+    route('/eval-runs/:id', guard('developer', evalRunPage));
     route('/map', guard('viewer', watchMapPage));
     route('/services', guard('viewer', servicesPage));
     route('/services/:id', guard('viewer', servicePage));
