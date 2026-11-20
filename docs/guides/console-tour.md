@@ -451,6 +451,14 @@ passes only if every attempt passes, so answers that hold up only sometimes show
 attempts as ticks and crosses; click one for its checks, its answer and its trace. A trace that kept its prompt has
 **Add to a suite**, which fills a case in from it.
 
+An agent's page has **Publishing**: pick a suite a new version must pass. From then on, saving makes a **candidate**
+(shown as such under Versions) while the current version keeps serving workflows, teams and schedules. **Publish**
+makes a candidate current once a run of the suite has passed on it since the suite last changed; **Run the suite,
+publish if it passes** does both, and leaves it a candidate if any case fails. Rolling back is not gated, so a known
+good version can always be restored.
+
+![Publishing an agent version]({{ '/console/157-agent-publishing.png' | relative_url }})
+
 ![A suite]({{ '/console/155-eval-suite.png' | relative_url }})
 
 ![A run]({{ '/console/156-eval-run.png' | relative_url }})

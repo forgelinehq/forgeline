@@ -1,5 +1,5 @@
 import { h, icon, mount, clear, pageHeader, relTime, absTime, emptyState, spinner, errorBox, notice, toast, modal, confirmDialog, field } from '../lib/dom.js';
-import { get, post, del, atLeast } from '../lib/api.js';
+import { get, post, put, del, atLeast } from '../lib/api.js';
 import { navigate } from '../lib/router.js';
 import { session } from '../app.js';
 
@@ -62,7 +62,7 @@ function versionTable(versions, current, selected, onPick, onRollback) {
     h('thead', {}, h('tr', {}, ['Version', 'Saved by', 'When', 'Note', 'Fingerprint', ''].map(x => h('th', {}, x)))),
     h('tbody', {}, [...versions].reverse().map(v => h('tr', { class: 'row-link' + (v.n === selected ? ' bg-brand-50/60 dark:bg-brand-950/20' : ''), tabindex: '0', 'data-version': String(v.n),
       onclick: () => onPick(v.n), onkeydown: (e) => { if (e.key === 'Enter') onPick(v.n); } },
-      h('td', { class: 'whitespace-nowrap font-medium' }, 'v' + v.n, v.n === current && h('span', { class: 'pill-ok ml-2' }, 'current')),
+      h('td', { class: 'whitespace-nowrap font-medium' }, 'v' + v.n, v.n === current && h('span', { class: 'pill-ok ml-2' }, 'current'), v.n > current && h('span', { class: 'pill-wait ml-2', title: 'Saved, not yet current: it becomes current when it is published' }, 'candidate')),
       h('td', { class: 'text-sm' }, v.by), h('td', { class: 'muted whitespace-nowrap text-sm', title: absTime(v.at) }, relTime(v.at)),
       h('td', { class: 'max-w-xs truncate text-sm' }, v.note || h('span', { class: 'muted' }, '–')), h('td', {}, shortHash(v.hash)),
       h('td', { class: 'text-right' }, onRollback && v.n !== current && h('button', { class: 'btn-ghost btn-sm', type: 'button', 'data-rollback': String(v.n), onclick: (e) => { e.stopPropagation(); onRollback(v.n); } }, icon('history', 'size-3.5'), 'Roll back to this')))))));
@@ -229,9 +229,9 @@ function skillForm(sk, after) {
 export async function agentPage({ params }) {
   const admin = atLeast(session.role, 'admin');
   const el = h('div', {});
-  let ag, selected = 0, skills = [], tools = [];
+  let ag, selected = 0, skills = [], tools = [], suites = [];
   async function load(keep) {
-    try { [ag, skills, tools] = await Promise.all([get('/v1/ai/agents/' + encodeURIComponent(params.id)), get('/v1/ai/skills').then(r => r.skills), get('/v1/ai/tools').then(r => r.tools)]); } catch (e) { return mount(el, errorBox(e.message)); }
+    try { [ag, skills, tools, suites] = await Promise.all([get('/v1/ai/agents/' + encodeURIComponent(params.id)), get('/v1/ai/skills').then(r => r.skills), get('/v1/ai/tools').then(r => r.tools), get('/v1/ai/evals?agent=' + encodeURIComponent(params.id)).then(r => r.suites).catch(() => [])]); } catch (e) { return mount(el, errorBox(e.message)); }
     if (!keep || !ag.versions.some(v => v.n === selected)) selected = ag.current;
     draw();
   }
@@ -281,6 +281,7 @@ export async function agentPage({ params }) {
             h('div', { class: 'h-section mb-1 mt-1' }, 'Instructions'), diffView(prev.instructions, v.instructions),
             (() => { const ch = [...setDiff(prev.skills.map(pinLabel), v.skills.map(pinLabel)).map(x => 'Skill ' + x), ...setDiff(prev.tools, v.tools).map(x => 'Tool ' + x), ...(prev.tier !== v.tier ? [`Tier ${tierTitle(prev.tier)} → ${tierTitle(v.tier)}`] : [])];
               return ch.length ? h('ul', { class: 'mt-3 space-y-0.5 text-sm', id: 'agent-changes' }, ch.map(c => h('li', {}, c))) : null; })()),
+          publishingCard(ag, suites, admin, () => load(true)),
           h('section', { class: 'card' }, h('div', { class: 'border-b border-slate-200 px-5 py-3 dark:border-slate-800' }, h('h2', { class: 'h-section' }, 'Versions')),
             versionTable(ag.versions, ag.current, selected, (n) => { selected = n; draw(); }, admin && rollback))),
         h('div', { class: 'min-w-0 lg:col-span-2' }, chatPanel(ag, v))));
@@ -338,4 +339,33 @@ function downloadMenu(ag, v) {
       item('bundle', 'Forgeline bundle (.zip)', 'agent.yaml and each skill as an Agent Skills folder, to keep in Git or bring to another Forgeline.'),
       item('docker', 'Docker Agent file (.yaml)', 'Runs with docker agent run. It keeps its remote MCP servers; Forgeline’s own tools stay behind.'),
       h('p', { class: 'muted border-t border-slate-100 px-3 pb-1 pt-2 text-[11px] dark:border-slate-800' }, 'No key or secret is in either file: they name the environment variables to set.')));
+}
+
+// Publishing (design note 050, decision 5): with a gate, a saved version is a candidate until its suite passes on it and
+// it is published. Workflows, teams and schedules use the current version meanwhile.
+function publishingCard(ag, suites, admin, reload) {
+  const gate = ag.gate && suites.find(x => x.id === ag.gate.suite);
+  const candidate = Math.max(...ag.versions.map(v => v.n)) > ag.current ? Math.max(...ag.versions.map(v => v.n)) : 0;
+  const pick = h('select', { class: 'input w-auto py-1.5 text-sm', id: 'gate-suite', 'aria-label': 'Gate suite', disabled: !admin },
+    h('option', { value: '' }, 'Off: a saved version is current at once'), suites.map(x => h('option', { value: x.id, selected: ag.gate && ag.gate.suite === x.id }, 'Must pass ' + x.name + ' (' + x.cases.length + ' cases)')));
+  pick.addEventListener('change', async () => {
+    try { await put('/v1/ai/agents/' + ag.id + '/gate', { suite: pick.value }); toast(pick.value ? 'New versions must now pass the suite' : 'Gate turned off', 'ok'); reload(); }
+    catch (e) { toast(e.message, 'error'); reload(); }
+  });
+  const publish = async (whenPasses) => {
+    try {
+      const r = await post('/v1/ai/agents/' + ag.id + '/publish', { version: candidate, when_passes: whenPasses });
+      if (r.run) { toast('Running the suite; v' + candidate + ' is published if every case passes', 'ok'); navigate('/eval-runs/' + r.run.id); }
+      else { toast('v' + candidate + ' is current', 'ok'); reload(); }
+    } catch (e) { toast(e.message, 'error'); }
+  };
+  return h('section', { class: 'card card-pad space-y-3', id: 'agent-publishing' },
+    h('div', { class: 'flex flex-wrap items-center justify-between gap-3' },
+      h('div', { class: 'flex items-center gap-2.5' }, h('span', { class: 'flex size-8 items-center justify-center rounded-lg bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300' }, icon('eval', 'size-4')),
+        h('div', {}, h('h2', { class: 'h-section' }, 'Publishing'), h('p', { class: 'muted text-xs' }, gate ? 'A new version becomes current only after it passes ' + gate.name + ' and is published.' : 'Choose a suite a new version must pass before it becomes current.'))),
+      suites.length ? pick : h('a', { class: 'btn-ghost btn-sm', href: '#/evals?agent=' + ag.id }, icon('plus', 'size-3.5'), 'Make a suite first')),
+    candidate ? h('div', { class: 'flex flex-wrap items-center gap-2 rounded-lg border border-amber-200 bg-amber-50/70 px-3 py-2.5 text-sm dark:border-amber-500/30 dark:bg-amber-950/30', id: 'candidate-banner' },
+      h('span', { class: 'min-w-0 flex-1' }, h('b', {}, 'v' + candidate + ' is a candidate.'), ' v' + ag.current + ' stays current until v' + candidate + (gate ? ' passes ' + gate.name + ' and is published.' : ' is published.')),
+      admin ? [h('button', { class: 'btn-secondary btn-sm', type: 'button', id: 'publish-now', onclick: () => publish(false) }, icon('check', 'size-3.5'), 'Publish v' + candidate),
+        gate ? h('button', { class: 'btn-primary btn-sm', type: 'button', id: 'publish-when-passes', onclick: () => publish(true) }, icon('play', 'size-3.5'), 'Run the suite, publish if it passes') : null] : null) : null);
 }
