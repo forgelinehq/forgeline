@@ -92,6 +92,9 @@ section in the pull request that makes the change; a release moves it under its 
 - **Workflows refuse agents with tools their run cannot use.** Saving a workflow whose agent has a tool its run-as role
   may never use (such as `call_aws`, for administrators only, in a workflow running as a viewer) now says so, instead of
   every run quietly going without it.
+- **Publish agent versions only when they pass.** An agent's page can name a suite a new version must pass. Saving then
+  makes a candidate; Publish makes it current once the suite has passed on it, and "Run the suite, publish if it
+  passes" does both. Workflows, teams and schedules keep using the current version meanwhile.
 - **Evals** (design note 050). Agents › Evals holds suites of cases for an agent, with fixtures for tools and checks
   (contains, matches, JSON, fields, tools called or never called, limits on tool calls, tokens and time, and a judge
   model with your rubric). A run asks each case one to five times on a version and model you pick; nothing it runs

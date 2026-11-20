@@ -82,16 +82,26 @@ type AgentVersion struct {
 
 // AIAgent is a named worker with a history.
 type AIAgent struct {
-	ID          string         `json:"id"`
-	Name        string         `json:"name"`
-	Description string         `json:"description"`
-	Current     int            `json:"current"`
-	Disabled    bool           `json:"disabled,omitempty"`
-	ReportsTo   string         `json:"reports_to,omitempty"`  // another agent; empty reports to people (frame 5)
-	Budget      *AgentBudget   `json:"budget,omitempty"`      // a monthly limit (note 036); kept on the agent, not in its versions
-	ArchivedAt  *time.Time     `json:"archived_at,omitempty"` // deleted: hidden, restorable until the sweep removes it
-	ArchivedBy  string         `json:"archived_by,omitempty"`
-	Versions    []AgentVersion `json:"versions"`
+	ID          string       `json:"id"`
+	Name        string       `json:"name"`
+	Description string       `json:"description"`
+	Current     int          `json:"current"`
+	Disabled    bool         `json:"disabled,omitempty"`
+	ReportsTo   string       `json:"reports_to,omitempty"`  // another agent; empty reports to people (frame 5)
+	Budget      *AgentBudget `json:"budget,omitempty"`      // a monthly limit (note 036); kept on the agent, not in its versions
+	ArchivedAt  *time.Time   `json:"archived_at,omitempty"` // deleted: hidden, restorable until the sweep removes it
+	ArchivedBy  string       `json:"archived_by,omitempty"`
+	// Gate (note 050, decision 5): when set, a new version is a candidate until its suite passes on it and it is
+	// published. Workflows, teams and schedules keep using the current version meanwhile.
+	Gate     *AgentGate     `json:"gate,omitempty"`
+	Versions []AgentVersion `json:"versions"`
+}
+
+// AgentGate names the suite a new version must pass before it may become current.
+type AgentGate struct {
+	Suite string    `json:"suite"`
+	By    string    `json:"by"`
+	At    time.Time `json:"at"`
 }
 
 func sha(parts ...string) string {
@@ -672,7 +682,11 @@ func (s *Server) appendAgentVersion(ctx context.Context, p Principal, ip string,
 	v.Hash = v.computeHash(a.ID)
 	a.Name, a.Description = strings.TrimSpace(req.Name), req.Description
 	a.Versions = append(a.Versions, v)
-	a.Current = v.N
+	if a.Gate == nil {
+		a.Current = v.N
+	} else {
+		how += fmt.Sprintf(" (a candidate: it becomes current once suite %s passes on it and it is published)", a.Gate.Suite)
+	}
 	if err := s.docs.Put(ctx, kindAIAgent, a.ID, a); err != nil {
 		s.log.Error("saving the agent", "err", err)
 		return a, http.StatusInternalServerError, "internal error: saving the agent"

@@ -116,6 +116,7 @@ type EvalRun struct {
 	Attempts  int              `json:"attempts"`
 	Results   []EvalCaseResult `json:"results"`
 	Error     string           `json:"error,omitempty"`
+	Publish   int              `json:"publish,omitempty"` // publish this version when every case passes (note 050, decision 5)
 }
 
 // --- checking what is written ---
@@ -463,25 +464,35 @@ func (s *Server) handleRunSuite(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if !s.evals.start(x.ID) {
-		writeError(w, http.StatusConflict, errEvalBusy.Error())
+	run, status, msg := s.startSuiteRun(ctx, p, x, a, v, req.Model, 0)
+	if msg != "" {
+		writeError(w, status, msg)
 		return
 	}
-	run := EvalRun{EvalRunSummary: EvalRunSummary{ID: authn.NewID(), Status: "running", Version: v.N, Model: req.Model, Total: len(x.Cases), By: p.Name, Started: time.Now().UTC()},
-		Suite: x.ID, SuiteName: x.Name, Agent: a.ID, AgentName: a.Name, Attempts: x.Attempts, Results: []EvalCaseResult{}}
+	writeJSON(w, http.StatusAccepted, run)
+}
+
+// startSuiteRun saves a new run and runs it in the background. publish, when not 0, is the version to make current
+// if every case passes.
+func (s *Server) startSuiteRun(ctx context.Context, p Principal, x EvalSuite, a AIAgent, v AgentVersion, model string, publish int) (EvalRun, int, string) {
+	if !s.evals.start(x.ID) {
+		return EvalRun{}, http.StatusConflict, errEvalBusy.Error()
+	}
+	run := EvalRun{EvalRunSummary: EvalRunSummary{ID: authn.NewID(), Status: "running", Version: v.N, Model: model, Total: len(x.Cases), By: p.Name, Started: time.Now().UTC()},
+		Suite: x.ID, SuiteName: x.Name, Agent: a.ID, AgentName: a.Name, Attempts: x.Attempts, Results: []EvalCaseResult{}, Publish: publish}
 	if err := s.docs.Put(ctx, kindEvalRun, run.ID, run); err != nil {
 		s.evals.done(x.ID)
-		s.internalError(w, "saving the run", err)
-		return
+		return EvalRun{}, http.StatusInternalServerError, "internal error: saving the run"
 	}
-	s.auditReq(r, "ai.eval.run", "eval/"+x.ID, fmt.Sprintf("v%d of %s%s, %d cases × %d", v.N, a.ID, map[bool]string{true: " on " + req.Model, false: ""}[req.Model != ""], len(x.Cases), x.Attempts), true)
+	s.audit(ctx, p, "", "ai.eval.run", "eval/"+x.ID, fmt.Sprintf("v%d of %s%s, %d cases × %d%s", v.N, a.ID, map[bool]string{true: " on " + model, false: ""}[model != ""], len(x.Cases), x.Attempts,
+		map[bool]string{true: ", publishing it if every case passes", false: ""}[publish != 0]), true)
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
 		defer s.evals.done(x.ID)
 		s.runSuite(context.WithoutCancel(ctx), p, x, a, v, &run)
 	}()
-	writeJSON(w, http.StatusAccepted, run)
+	return run, 0, ""
 }
 
 type evalBook struct {
@@ -532,6 +543,14 @@ func (s *Server) runSuite(ctx context.Context, p Principal, x EvalSuite, a AIAge
 		s.log.Error("saving an eval run", "run", run.ID, "err", err)
 	}
 	s.audit(context.Background(), p, "", "ai.eval.done", "eval/"+x.ID, fmt.Sprintf("run %s: %d of %d cases passed", run.ID, run.Passed, run.Total), true)
+	if run.Publish != 0 && run.Passed == run.Total {
+		// Only if the agent still gates on this suite and it has not changed since the run started.
+		if ag, err := s.loadAgent(context.Background(), a.ID); err == nil && ag.Gate != nil && ag.Gate.Suite == x.ID {
+			if cur, err := s.loadSuite(context.Background(), x.ID); err == nil && !run.Started.Before(cur.UpdatedAt) {
+				s.publish(context.Background(), p, "", a.ID, run.Publish, "suite "+x.ID+" passed in run "+run.ID)
+			}
+		}
+	}
 	s.pruneEvalRuns(context.Background(), x.ID)
 }
 

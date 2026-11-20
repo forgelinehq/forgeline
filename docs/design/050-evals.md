@@ -1,6 +1,6 @@
 # 050: Evals: test an agent before people rely on it
 
-Status: **slice 1 built 2026-11-20**; the gate (decision 5) waits for the maintainer. Phase 2 of the product direction the maintainer accepted on
+Status: **slices 1 and 2 built 2026-11-20**; slice 3 (attack suites, a pipeline step) next. Phase 2 of the product direction the maintainer accepted on
 2026-11-20. Builds on traces (note 049): every eval attempt is a trace.
 
 ## Question
@@ -62,7 +62,12 @@ check. It uses a model the suite names, or the assistant's.
 A trace that kept its prompt and answer (note 049, decision 3) has **Add to a suite**: its question becomes a case,
 and the answer it gave becomes a "contains" hint to edit. Without kept content, a case is typed.
 
-### 5. A gate on new versions (slice 2, needs the maintainer)
+### 5. A gate on new versions (slice 2, accepted and built 2026-11-20)
+
+The maintainer: "yes if passes and published it should be the current version". As built: Publishing on an agent's
+page names the gate suite; a saved version is then a candidate; **Publish** needs a run of that suite on that version,
+with its own model, every case passed, started after the suite last changed; **Run the suite, publish if it passes**
+starts one and publishes on a full pass. A rollback is not gated. Checked in the browser against a stand-in model.
 
 An agent can say "a new version becomes current only if suite X passes". Until it passes, a saved version stays a
 candidate that people can try but that workflows, teams and schedules do not use. This changes what saving an agent
@@ -87,5 +92,4 @@ said why. Added to any agent's suites in one click.
 
 ## Decisions for the maintainer
 
-1. The gate (decision 5): should a new agent version wait for its suite before it becomes current? Proposed: yes, per
-   agent, off until an administrator turns it on.
+1. ~~The gate (decision 5)~~: **yes** (2026-11-20): a version becomes current when it passes and is published.

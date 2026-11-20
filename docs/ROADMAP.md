@@ -23,11 +23,11 @@ in [PLAN.md](PLAN.md).
 
 ## Evals (note 050)
 
-Status: **slice 1 built (2026-11-20).** Suites of cases per agent with fixtures and checks (text, JSON, fields,
+Status: **slices 1 and 2 built (2026-11-20).** Suites of cases per agent with fixtures and checks (text, JSON, fields,
 tools called or never called, budgets, an LLM judge), runs of one to five attempts per case (pass only if all pass)
-on any version and model, with nothing changed, and cases from traces. Next: a gate so a new agent version becomes
-current only when its suite passes (waits for a decision), then attack suites mapped to the OWASP agentic list and an
-eval step for pipelines. Phase 2 of the product direction. See [note 050](design/050-evals.md).
+on any version and model, with nothing changed, and cases from traces; and a gate: a new version is a candidate until
+its suite passes on it and it is published. Next: attack suites mapped to the OWASP agentic list and an eval step for
+pipelines. Phase 2 of the product direction. See [note 050](design/050-evals.md).
 
 ## Traces (note 049)
 

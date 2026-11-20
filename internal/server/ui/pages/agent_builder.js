@@ -116,7 +116,8 @@ export async function agentBuilderPage({ params }) {
     d = { ...d, instructions: ins.value() };
     try {
       const out = await post(ag ? '/v1/ai/agents/' + ag.id + '/versions' : '/v1/ai/agents', draftBody(d));
-      toast(ag ? 'Saved v' + out.current : 'Agent created', 'ok');
+      const newest = Math.max(...out.versions.map(v => v.n));
+      toast(!ag ? 'Agent created' : newest > out.current ? 'Saved v' + newest + ' as a candidate: v' + out.current + ' stays current until it passes and is published' : 'Saved v' + out.current, 'ok');
       saved = true;
       if (!stay) navigate('/agents/' + out.id);
       return true;
