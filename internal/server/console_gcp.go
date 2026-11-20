@@ -342,5 +342,5 @@ func (s *Server) lookupGCPResources(ctx context.Context, raw json.RawMessage) (s
 	if d.Error != "" {
 		return "", errors.New(d.Error)
 	}
-	return formatInventory(fmt.Sprintf("Google Cloud scope %s, read %s. Counts include every resource found; names are listed up to %d per service.", st.Scope, d.FetchedAt, inventoryMax), d, a.Service)
+	return formatInventory(fmt.Sprintf("Google Cloud scope %s, read %s. Counts include every resource found; names are listed up to %d per service.", st.Scope, d.FetchedAt, inventoryMax), d, a.Service, "")
 }

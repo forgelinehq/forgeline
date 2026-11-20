@@ -135,3 +135,25 @@ func TestAssistantKnowsWhatBecameOfItsCards(t *testing.T) {
 		t.Error("another person's cards were shown")
 	}
 }
+
+// Preparing a card does not spend the lookup budget: after every lookup is used, the card the lookups were for still
+// comes back (a maintainer saw "the last prepare_action lookup was sent but its result never came back").
+func TestACardAfterTheLookupBudget(t *testing.T) {
+	m := newMCPHarness(t)
+	replies := []string{}
+	for i := 0; i < maxLookups; i++ {
+		replies = append(replies, lookupReply("list_runs", map[string]any{}))
+	}
+	replies = append(replies, prepareDef("save_skill", map[string]any{"name": "Late skill", "description": "d", "body": "1. Do."}), "Prepared.")
+	evs := m.run(m.admin, map[string]any{"message": "look around, then write a skill"}, replies...)
+	if cards := actionsIn(evs); len(cards) != 1 {
+		t.Fatalf("the card was not prepared after %d lookups: %v", maxLookups, cards)
+	}
+	// Another lookup after the budget is still refused.
+	replies = replies[:maxLookups]
+	replies = append(replies, lookupReply("list_runs", map[string]any{}), "Answer.")
+	m.run(m.admin, map[string]any{"message": "look more"}, replies...)
+	if !strings.Contains(m.llm.lastUser(m.llm.count()-1), "No more lookups") {
+		t.Errorf("a lookup beyond the budget ran: %s", m.llm.lastUser(m.llm.count()-1))
+	}
+}

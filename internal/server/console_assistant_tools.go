@@ -20,7 +20,7 @@ import (
 // as the person who asked, with that person's role, and returns text. The model asks by writing
 // one fenced block; the server never runs anything else the model writes.
 const (
-	maxLookups      = 6        // per question
+	maxLookups      = 10       // per question; preparing a card does not count, so the answer it was for still comes back
 	maxLookupResult = 12 << 10 // per result
 	lookupFence     = "```forgeline-lookup"
 )
@@ -49,7 +49,7 @@ func assistantLookups() []lookupTool {
 		{"blueprints_built", `{"blueprint":"optional blueprint id"} what each blueprint built: every resource's address and AWS arn or id, from its saved state`, authn.Developer, (*Server).lookupBlueprintsBuilt},
 		{"get_pipeline", `{"id":"pipeline id"} one saved pipeline file`, authn.Viewer, (*Server).lookupGetPipeline},
 		{"aws_accounts", `{} the AWS accounts that are connected, with their ids`, authn.Viewer, (*Server).lookupAWSAccounts},
-		{"aws_resources", `{"account":"optional account id","service":"optional, e.g. ecs, ec2, s3, lambda, rds"} everything in the account by service with state and key details: ECS clusters and services, EC2, EBS, Lambda, S3, RDS, DynamoDB, VPCs, load balancers, queues, log groups`, authn.Viewer, (*Server).lookupAWSResources},
+		{"aws_resources", `{"account":"optional account id","service":"optional, e.g. ecs, ecs-services, ec2, ecr, s3, lambda, rds","name":"optional, keep only names or details containing this, e.g. dev01"} without service an overview of names and states; with service the details (tasks, images, sizes, settings). Everything in the account by service with state and key details: ECS clusters and services, EC2, EBS, Lambda, S3, RDS, DynamoDB, VPCs, load balancers, queues, log groups`, authn.Viewer, (*Server).lookupAWSResources},
 		{"k8s_clusters", `{} the Kubernetes clusters that are registered, with their ids`, authn.Viewer, (*Server).lookupK8sClusters},
 		{"k8s_resources", `{"cluster":"cluster id from k8s_clusters","kind":"optional: nodes, deployments, statefulsets, daemonsets, pods, services, namespaces, events"} what runs in a cluster, with state and key details`, authn.Viewer, (*Server).lookupK8sResources},
 		{"gcp_resources", `{"service":"optional, e.g. compute, storage, gke, cloud run, vertex"} everything in the connected Google Cloud scope by service, with state and key details`, authn.Viewer, (*Server).lookupGCPResources},
@@ -250,7 +250,7 @@ func (s *Server) askWithLookups(ctx context.Context, p Principal, turns []chatTu
 // lookupLoop asks the model, runs the lookups it asks for, and returns its answer (see askWithLookups).
 func (s *Server) lookupLoop(ctx context.Context, p Principal, turns []chatTurn, ctxText string, audit func(detail string, ok bool), span *trace.Active) (string, []string, error) {
 	var used []string
-	nudged := false
+	nudged, spent := false, 0
 	obs := lookupObserver(ctx)
 	for i := 0; ; i++ {
 		reply, err := s.askAssistant(ctx, p.Role, turns, ctxText)
@@ -270,7 +270,10 @@ func (s *Server) lookupLoop(ctx context.Context, p Principal, turns []chatTurn, 
 		if !isLookup {
 			return reply, used, nil
 		}
-		if i >= maxLookups {
+		// Preparing a card is what the lookups were for, so it does not spend the budget; a hard stop at twice the budget
+		// keeps a model that only prepares cards from going on forever.
+		free := call.Tool == "prepare_action" && i < 2*maxLookups
+		if spent >= maxLookups && !free {
 			turns = append(turns, chatTurn{Role: "assistant", Content: reply},
 				chatTurn{Role: "user", Content: "No more lookups are allowed for this question. Answer now with what you have, and say what is missing."})
 			reply, err = s.askAssistant(ctx, p.Role, turns, ctxText)
@@ -281,6 +284,9 @@ func (s *Server) lookupLoop(ctx context.Context, p Principal, turns []chatTurn, 
 				return "I could not finish: the question needed more lookups than are allowed. Try a narrower question.", used, nil
 			}
 			return reply, used, nil
+		}
+		if !free {
+			spent++
 		}
 		id := "call-" + strconv.Itoa(len(used)+1)
 		if obs != nil {
