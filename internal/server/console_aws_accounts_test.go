@@ -255,14 +255,14 @@ func TestAccountsCallAWSWhileTheMCPServerOwnsThePrimary(t *testing.T) {
 	if st.called("staging", "s3api list-buckets") != 1 {
 		t.Error("the call should have used the staging profile")
 	}
-	// It is still only reads, and still admins only.
+	// It is still only reads; developers may use it too (design note 051).
 	m.ask(m.admin, "```forgeline-lookup\n{\"tool\":\"call_aws\",\"args\":{\"cli_command\":\"aws s3api delete-bucket --bucket x\",\"account\":\"staging\"}}\n```")
 	if st.called("staging", "s3api delete-bucket") != 0 {
 		t.Error("a write ran against an added account")
 	}
 	m.ask(m.dev, "```forgeline-lookup\n{\"tool\":\"call_aws\",\"args\":{\"cli_command\":\"aws s3api list-buckets\",\"account\":\"staging\"}}\n```")
-	if st.called("staging", "s3api list-buckets") != 1 {
-		t.Error("a developer ran call_aws")
+	if st.called("staging", "s3api list-buckets") != 2 {
+		t.Error("a developer could not run call_aws")
 	}
 	// The audit log says which account.
 	if !strings.Contains(string(m.admin.expect(200, "GET", "/v1/audit?limit=50", nil)), "call_aws [staging]") {

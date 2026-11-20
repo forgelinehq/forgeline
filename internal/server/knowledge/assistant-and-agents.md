@@ -201,10 +201,13 @@ Forgeline builds the command line and runs the vendor's own `claude` CLI in the 
 
 {: .warning }
 A workflow never runs as an administrator, so its agents may use only the tools a viewer or a developer may: saving a
-workflow whose agent has a tool its run-as role may never use (`call_aws` and `aws_script` are for administrators only)
+workflow whose agent has a tool its run-as role may never use (`aws_script` and `search_audit` are for administrators
+only; a workflow running as a viewer may not use `call_aws` or proposal tools either)
 is refused, with the tool named. For security reviews, give agents `guard_findings` (Forgeline's own checks),
 `inspector_findings` (Amazon Inspector's active findings, worst first, with CVE, package, fixed version, exploit and EPSS)
-and `aws_resources`; all three are open to viewers.
+and `aws_resources`; all three are open to viewers and summarise, so they fit one answer. When they do not answer the
+question, `call_aws` runs one read-only AWS CLI call (describe, list and get only; no secrets, data or logs) for
+developers and administrators, so a workflow running as a developer can use it (design note 051).
 
 Check Anthropic's terms before using a subscription token (`setup-token`) for automation. An API key is the safer production choice. Codex and Copilot agent steps are not built yet; Copilot can already answer as the assistant.
 

@@ -182,10 +182,9 @@ func TestAgentCanUseOnlyItsOwnTools(t *testing.T) {
 
 func TestAgentNeverGainsThePersonsPermissions(t *testing.T) {
 	m := newMCPHarness(t)
-	// call_aws is administrators only. An agent that lists it still runs it as the developer asking.
-	a := newAgent(t, m.admin, agentBody("Caller", nil, []string{"call_aws"}, "T0"))
-	m.admin.expect(200, "PUT", "/v1/integrations/aws", map[string]any{"enabled": true, "profile": "dev", "region": "ap-south-1"})
-	m.llm.script(lookupReply("call_aws", map[string]any{"cli_command": "aws s3api list-buckets"}), "done")
+	// search_audit is administrators only. An agent that lists it still runs it as the developer asking.
+	a := newAgent(t, m.admin, agentBody("Caller", nil, []string{"search_audit"}, "T0"))
+	m.llm.script(lookupReply("search_audit", map[string]any{}), "done")
 	m.dev.expect(200, "POST", "/v1/ai/agents/"+a.ID+"/chat", map[string]any{"message": "go"})
 	if res := m.llm.lastUser(1); !strings.Contains(res, "not available to your role") {
 		t.Errorf("a developer's agent run used an admin tool: %s", res)

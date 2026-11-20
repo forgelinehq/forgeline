@@ -92,6 +92,9 @@ section in the pull request that makes the change; a release moves it under its 
 - **Workflows refuse agents with tools their run cannot use.** Saving a workflow whose agent has a tool its run-as role
   may never use (such as `call_aws`, for administrators only, in a workflow running as a viewer) now says so, instead of
   every run quietly going without it.
+- **`call_aws` for developers** (design note 051, decision 3). The read-only AWS CLI lookup (describe, list and get only,
+  no secrets, data or logs) is open to developers, so agents in a workflow running as a developer can use it when
+  Forgeline's summarised lookups do not answer.
 - **Big AWS accounts.** `aws_resources` gives an overview (names and states) without a service and details with one,
   takes a `name` filter (such as `dev01`), and says how many resources did not fit instead of cutting the list off.
   ECS services are read eight clusters at a time, so accounts with dozens of clusters no longer time out.
