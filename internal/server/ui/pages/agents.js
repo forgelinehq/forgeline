@@ -319,7 +319,8 @@ export function chatPanel(ag, v) {
       wait.replaceWith(bubble('agent', h('div', { class: 'break-words', 'data-reply': '' }, renderReply(r.reply)),
         r.lookups?.length ? h('div', { class: 'muted mt-2 flex flex-wrap gap-1 text-xs' }, icon('search', 'size-3.5'), 'Looked at: ' + r.lookups.map(n => toolInfo(n).title.toLowerCase()).join(', ')) : null,
         r.proposals?.length ? h('div', { class: 'mt-2 text-xs' }, 'Filed: ', r.proposals.map(id => h('a', { class: 'underline', href: '#/proposals/' + id }, id))) : null,
-        r.environments?.length ? h('div', { class: 'mt-2 text-xs' }, 'Environment requested: ', h('a', { class: 'underline', href: '#/environments' }, 'see Environments')) : null));
+        r.environments?.length ? h('div', { class: 'mt-2 text-xs' }, 'Environment requested: ', h('a', { class: 'underline', href: '#/environments' }, 'see Environments')) : null,
+        r.trace_id ? h('a', { class: 'muted mt-2 inline-flex items-center gap-1 text-xs hover:underline', href: '#/traces/' + r.trace_id, 'data-trace-link': '' }, icon('trace', 'size-3.5'), 'See its trace') : null));
     } catch (err) { wait.replaceWith(bubble('agent', errorBox(err.message))); }
     send.disabled = false; list.scrollTop = list.scrollHeight;
   } }, input, send);

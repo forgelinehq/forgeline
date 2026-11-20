@@ -38,6 +38,7 @@ import { schedulesPage } from './pages/schedules.js';
 import { mcpServersPage } from './pages/mcp_servers.js';
 import { registriesPage } from './pages/registries.js';
 import { pushPage } from './pages/pushes.js';
+import { tracesPage } from './pages/traces.js';
 import { providersPage } from './pages/providers.js';
 import { buildRulesPage } from './pages/build_rules.js';
 import { watchMapPage } from './pages/watch_map.js';
@@ -267,6 +268,8 @@ async function boot() {
     route('/proposals', guard('viewer', proposalsPage));
     route('/proposals/:id', guard('viewer', proposalsPage));
     route('/pushes/:id', guard('developer', pushPage));
+    route('/traces', guard('developer', tracesPage));
+    route('/traces/:id', guard('developer', tracesPage));
     route('/map', guard('viewer', watchMapPage));
     route('/services', guard('viewer', servicesPage));
     route('/services/:id', guard('viewer', servicePage));

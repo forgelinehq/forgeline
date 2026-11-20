@@ -375,6 +375,7 @@ func (s *Server) noteCall(ctx context.Context, c ModelCall) {
 			c.Who = "Assistant"
 		}
 	}
+	s.traceModelCall(ctx, c)
 	s.calls.mu.Lock()
 	defer s.calls.mu.Unlock()
 	var log recentCalls

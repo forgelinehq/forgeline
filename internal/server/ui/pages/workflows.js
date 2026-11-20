@@ -278,6 +278,7 @@ export async function workflowRunPage({ params }) {
     const live = r.status === 'running' || r.status === 'waiting';
     mount(el, pageHeader(r.workflow_name, `Run of version ${r.version}, ${({ schedule: 'by its schedule', webhook: 'from its webhook', 'run-failed': 'after a failed pipeline run' })[r.trigger] || 'started by ' + r.by}, ${relTime(r.started_at)}`,
       h('a', { class: 'btn-secondary btn-sm', href: '#/workflows/' + r.workflow }, 'The workflow'),
+      r.trace_id ? h('a', { class: 'btn-secondary btn-sm', href: '#/traces/' + r.trace_id, id: 'run-trace' }, icon('trace', 'size-3.5'), 'Trace') : null,
       live && h('button', { class: 'btn-secondary btn-sm', id: 'cancel-run', type: 'button', onclick: async () => {
         if (!await confirmDialog({ title: 'Cancel this run?', body: 'Steps already finished keep their results. Nothing further starts.', confirmLabel: 'Cancel the run', cancelLabel: 'Keep running', danger: true })) return;
         try { await post('/v1/ai/workflow-runs/' + r.id + '/cancel'); toast('Cancelled', 'ok'); load(); } catch (e) { toast(e.message, 'error'); }

@@ -451,6 +451,7 @@ func (s *Server) lookupProposeChange(ctx context.Context, raw json.RawMessage) (
 type lookupSinkKey struct{}
 type lookupSink struct {
 	proposals, environments []string
+	traceID                 string       // the trace of the run that answered (note 049)
 	notes                   []MemoryNote // notes the assistant tried to remember, for the card
 	actions                 []AssistAction
 }

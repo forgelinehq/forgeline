@@ -11,6 +11,7 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"github.com/forgelinehq/forgeline/internal/trace"
 	"log/slog"
 	"net/http"
 	"os"
@@ -119,6 +120,8 @@ type Server struct {
 	schemaRun  schemaRunner   // tests replace `tofu providers schema -json`
 	usage      usageState     // serialises updates to the AI use ledger
 	calls      callLog        // serialises updates to the model call log and provider spend
+	tracer     *trace.Tracer  // what agents, workflows and the assistant do, as spans (note 049)
+	traces     traceStore     // serialises updates to stored traces
 	teams      teamRuns       // which teams are working on a goal
 	missions   missionState   // missions (note 037)
 	gcpInv     invCache       // Google Cloud inventories, by scope
@@ -226,6 +229,7 @@ func New(cfg Config) (*Server, error) {
 		srv.ghSource.Store("flags")
 	}
 	srv.checkouts = make(chan struct{}, maxCheckouts)
+	srv.tracer = trace.New(srv.saveTrace)
 	if err := srv.reloadGitHub(context.Background()); err != nil {
 		srv.log.Warn("the saved GitHub settings are not usable; GitHub triggers are off", "err", err)
 	}

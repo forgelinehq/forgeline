@@ -412,6 +412,18 @@ never as orders; a note it took from logs or cloud data waits for you to press K
 OpenAI-compatible servers such as Ollama), turns their models on with prices, a monthly limit and a fallback, and shows a
 live log of every model call. See [Models and providers]({{ '/guides/models-and-providers/' | relative_url }}).
 
+**Agents › Runs and traces** lists every assistant chat, agent run and workflow run as a trace: what started it, who,
+how long it took, its model calls and tool calls, tokens and cost, and whether it failed, with filters for agents,
+workflows, the assistant and failures. A trace opens as a waterfall: the agent's run, each model call and each tool
+call (and, for a workflow, each node and the time it waited for a person) as bars on one time scale, nested under what
+started them. Click one to see its details, named as OpenTelemetry's GenAI conventions name them. A trace keeps no
+prompt, answer, instructions or tool arguments. An agent's answer has **See its trace**, and a workflow run a
+**Trace** button. Forgeline keeps the newest 1,000 traces, for at most 14 days. Developers and administrators see them.
+
+![Runs and traces]({{ '/console/151-traces.png' | relative_url }})
+
+![One trace]({{ '/console/152-trace.png' | relative_url }})
+
 **Agents › Usage and budgets** shows what each agent used this month (tokens, model time, calls, and the cost where the claude
 program reports it). An administrator can set a monthly budget per agent; at 80% the console warns, and when it is used
 up the agent stops before its next model call.

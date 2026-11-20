@@ -21,6 +21,13 @@ in [PLAN.md](PLAN.md).
 | M6 | AI agents | Governed agent steps with scoped credentials and cost tracking; failure triage; fix suggestions as pull requests, never auto-applied | In progress: Claude Code agent steps built (note 007); Codex, Copilot, triage and cost tracking open |
 | M7 | Migration and breadth | Importers for Jenkinsfile and GitHub Actions workflows; Bitbucket and GitLab triggers; additional cloud targets | Not started |
 
+## Traces (note 049)
+
+Status: **slice 1 built (2026-11-20).** Every assistant chat, agent run and workflow run as a trace of spans (agent
+runs, model calls, tool calls, workflow nodes and waits) with the OpenTelemetry GenAI names, kept 14 days and shown
+under Agents › Runs and traces. Next: sending traces to any OpenTelemetry backend (OTLP), then missions, teams and
+pipelines. Phase 1 of the product direction; evals come next. See [note 049](design/049-traces.md).
+
 ## Console structure and icons (note 048)
 
 Status: **built (2026-11-20).** Seven spaces named after what people look after (Home, Agents,
