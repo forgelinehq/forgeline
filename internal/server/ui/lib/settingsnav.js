@@ -15,6 +15,7 @@ export const SETTINGS = [
     { path: '/secrets', label: 'Secrets', icon: 'secret', note: 'Keys and tokens, stored encrypted and never shown again', min: 'developer' },
     { path: '/mcp-servers', label: 'MCP servers', icon: 'plug', note: 'Remote and local MCP servers whose tools agents and the assistant may use', min: 'admin' },
     { path: '/registries', label: 'Agent registries', icon: 'registry', note: 'Where agents may be pushed, so they run anywhere with docker agent run', min: 'admin' },
+    { path: '/opentelemetry', label: 'OpenTelemetry', icon: 'trace', note: 'Send traces of agent and workflow runs to Grafana, Datadog, Honeycomb or any OTLP backend', min: 'admin' },
     { path: '/image-builds', label: 'Image builds', icon: 'image', note: 'Which repositories and branches may push built images, and where', min: 'admin' },
   ] },
   { title: 'AI', items: [

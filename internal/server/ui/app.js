@@ -39,6 +39,7 @@ import { mcpServersPage } from './pages/mcp_servers.js';
 import { registriesPage } from './pages/registries.js';
 import { pushPage } from './pages/pushes.js';
 import { tracesPage } from './pages/traces.js';
+import { otelPage } from './pages/otel.js';
 import { providersPage } from './pages/providers.js';
 import { buildRulesPage } from './pages/build_rules.js';
 import { watchMapPage } from './pages/watch_map.js';
@@ -284,6 +285,7 @@ async function boot() {
     route('/integrations', guard('developer', inSettings(integrationsHubPage)));
     route('/mcp-servers', guard('admin', inSettings(mcpServersPage)));
     route('/registries', guard('admin', inSettings(registriesPage)));
+    route('/opentelemetry', guard('admin', inSettings(otelPage)));
     route('/providers', guard('developer', inSettings(providersPage)));
     route('/image-builds', guard('admin', inSettings(buildRulesPage)));
     route('/integrations/github/settings', guard('developer', inSettings(githubSettingsPage)));

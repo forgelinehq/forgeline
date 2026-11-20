@@ -420,6 +420,15 @@ started them. Click one to see its details, named as OpenTelemetry's GenAI conve
 prompt, answer, instructions or tool arguments. An agent's answer has **See its trace**, and a workflow run a
 **Trace** button. Forgeline keeps the newest 1,000 traces, for at most 14 days. Developers and administrators see them.
 
+**Settings › Connections › OpenTelemetry** sends every trace to the observability tools you already use (Grafana,
+Datadog, Honeycomb, Jaeger, an OpenTelemetry Collector) over OTLP/HTTP. Give the endpoint (Forgeline adds
+`/v1/traces`), a service name, and headers such as an API key, whose values go into the vault and are never shown
+again; **Send a test trace** checks it. Traces are sent in the background in batches, so a slow or broken endpoint
+never slows an agent; the page counts what was sent, is waiting and was dropped, and shows the last error. What is sent
+is what Forgeline keeps, minus the person's user name: never a prompt, an answer, instructions or tool arguments.
+
+![OpenTelemetry]({{ '/console/153-opentelemetry.png' | relative_url }})
+
 ![Runs and traces]({{ '/console/151-traces.png' | relative_url }})
 
 ![One trace]({{ '/console/152-trace.png' | relative_url }})

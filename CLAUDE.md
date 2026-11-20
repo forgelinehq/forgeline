@@ -24,6 +24,9 @@ what to do next**. The project is pre-alpha and maintained by one person.
   `internal/agentfile/docker.go`. Pushing to a registry is checked the same way with a local registry
   (`docker run -d -p 127.0.0.1:5055:5000 registry:3`, then `FORGELINE_TEST_REGISTRY=127.0.0.1:5055` as well, `go test
   ./internal/oci -run TestPushLoadsInDockerAgent`). Run it after changing `internal/oci`.
+- Sending traces over OTLP is checked against a real Jaeger only when `FORGELINE_TEST_JAEGER=127.0.0.1` names one
+  (`docker run -d -p 127.0.0.1:4318:4318 -p 127.0.0.1:16686:16686 jaegertracing/jaeger:2.23.0`, then
+  `go test ./internal/trace -run TestSendReachesJaeger`). Run it after changing `internal/trace/otlp.go`.
 - The documentation site (GitHub Pages) is Starlight in `site/`. Write pages in `docs/` as Markdown; `site/scripts/sync.mjs`
   copies them in at build time (titles from front matter or the first heading, `relative_url` paths, callouts, `.md`
   links). Preview with `cd site && npm ci && npm run dev`; `node --test site/scripts/sync.test.mjs` runs in CI. Add a new

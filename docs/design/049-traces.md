@@ -1,6 +1,6 @@
 # 049: Traces of what agents do, with OpenTelemetry
 
-Status: **slice 1 built 2026-11-20**; slice 2 (OTLP export) next. Phase 1 of the product direction the maintainer accepted on
+Status: **slices 1 and 2 built 2026-11-20**; slice 3 (missions, teams, pipelines, content on request) next. Phase 1 of the product direction the maintainer accepted on
 2026-11-20 (traces, then evals, then guardrails and supply chain, then AI SRE). Evals, security alerts and incident
 investigation all read traces, so traces come first.
 
@@ -81,7 +81,11 @@ Forgeline needs; if a later need (metrics, logs, sampling rules) makes the SDK w
    **Built:** `internal/trace`, `console_traces.go`, `ui/pages/traces.js`. A question a workflow asks a person is a span
    from when it was asked to when it was answered, with the choice (never a free answer). The streamed assistant
    chat is traced but does not show its trace link yet.
-2. OTLP export and its settings, checked against a real collector.
+2. OTLP export and its settings, checked against a real collector. **Built:** `internal/trace/otlp.go`,
+   `console_otel.go`, `ui/pages/otel.js`. Checked 2026-11-20 against Jaeger 2.23.0: an agent chat arrives as one
+   trace with the right nesting, span kinds, GenAI attributes and tokens, and no user name
+   (`FORGELINE_TEST_JAEGER=127.0.0.1 go test ./internal/trace -run TestSendReachesJaeger`). Not yet tried with a hosted
+   backend (Grafana Cloud, Datadog, Honeycomb).
 3. Missions, teams and pipelines; proposals as events; content on request.
 
 ## Decisions for the maintainer

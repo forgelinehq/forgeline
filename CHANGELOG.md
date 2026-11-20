@@ -78,6 +78,9 @@ section in the pull request that makes the change; a release moves it under its 
   Workflows, Delivery, Cloud, Operations and Security, with an icon on every space, tab and Settings entry (Lucide).
   Approval rules, policy packs, resource types and the audit log moved from Settings to Security, and usage and
   budgets to Agents. Every page keeps its address.
+- **Send traces to your observability tools** (design note 049). Settings › Connections › OpenTelemetry sends every
+  trace over OTLP/HTTP to Grafana, Datadog, Honeycomb, Jaeger or an OpenTelemetry Collector, in the background, with
+  header values (API keys) kept in the vault. A person's user name is never sent. Checked against Jaeger.
 - **Runs and traces** (design note 049). Agents › Runs and traces shows every assistant chat, agent run and workflow
   run as a trace: its model calls and tool calls (and a workflow's nodes and waits) on one time scale, with tokens,
   cost and errors, named as OpenTelemetry's GenAI conventions name them. No prompt or answer is kept. Agent answers and
