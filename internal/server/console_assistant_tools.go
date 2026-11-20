@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/forgelinehq/forgeline/internal/trace"
 	"sort"
 	"strconv"
 	"strings"
@@ -231,9 +232,16 @@ func (s *Server) askWithLookups(ctx context.Context, p Principal, turns []chatTu
 	var used []string
 	nudged := false
 	obs := lookupObserver(ctx)
+	ctx, span := s.startAgentSpan(ctx, p)
+	defer span.End()
+	if sink, ok := ctx.Value(lookupSinkKey{}).(*lookupSink); ok && sink.traceID == "" {
+		sink.traceID = span.TraceID()
+	}
+	defer func() { span.Set("forgeline.tool_calls", int64(len(used))) }()
 	for i := 0; ; i++ {
 		reply, err := s.askAssistant(ctx, p.Role, turns, ctxText)
 		if err != nil {
+			span.Fail("model_error")
 			return "", used, err
 		}
 		call, isLookup := parseLookup(reply)
@@ -264,7 +272,13 @@ func (s *Server) askWithLookups(ctx context.Context, p Principal, turns []chatTu
 		if obs != nil {
 			obs(assistEvent{Kind: evToolStart, ID: id, Tool: call.Tool, Args: argsPreview(call)})
 		}
-		out, lerr := s.runLookup(ctx, p, call)
+		tctx, tspan := s.tracer.Start(ctx, "execute_tool "+call.Tool, trace.Internal, trace.WithAttrs(map[string]any{attrOp: "execute_tool", attrTool: call.Tool, attrToolType: "function"}))
+		out, lerr := s.runLookup(tctx, p, call)
+		if lerr != nil {
+			tspan.Set(attrErrorType, "tool_error")
+			tspan.Fail("tool_error")
+		}
+		tspan.End()
 		if mt := memTurnFrom(ctx); mt != nil && call.Tool != rememberTool {
 			mt.dirty = true // what a lookup returned may carry text the person did not type
 		}

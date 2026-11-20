@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/forgelinehq/forgeline/internal/schedule"
+	"github.com/forgelinehq/forgeline/internal/trace"
 	"net/http"
 	"sort"
 	"strings"
@@ -174,6 +175,7 @@ type WFRun struct {
 	// A graph run (note 044): the state, every node visit, what is ready to run, what a merge has received, the
 	// question it waits at, and how many node steps it took.
 	Graph   bool                `json:"graph,omitempty"`
+	TraceID string              `json:"trace_id,omitempty"` // filled in on reads: the run's trace (note 049)
 	State   map[string]string   `json:"state,omitempty"`
 	Visits  []WFNodeRun         `json:"visits,omitempty"`
 	Ready   []string            `json:"ready,omitempty"`
@@ -873,6 +875,9 @@ func (s *Server) handleGetWorkflowRun(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		s.defError(w, "run", err)
 		return
+	}
+	if run.Graph {
+		run.TraceID = trace.IDFor(run.ID)
 	}
 	writeJSON(w, http.StatusOK, run)
 }

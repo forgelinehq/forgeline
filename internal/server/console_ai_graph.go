@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/forgelinehq/forgeline/internal/trace"
 	"net/http"
 	"regexp"
 	"sort"
@@ -477,6 +478,18 @@ type nodeResult struct {
 // merged, and the next ready nodes are found. It stops at a question, at an end, at a failure or at a limit, and
 // saves the run after every step.
 func (s *Server) driveGraph(ctx context.Context, run WFRun, g WFGraph) {
+	// One span per stretch of the run; a run that waited for a person comes back in the same trace (note 049).
+	ctx, span := s.tracer.Start(ctx, "invoke_workflow "+run.WorkflowName, trace.Internal, trace.WithTraceID(trace.IDFor(run.ID)), trace.WithAttrs(map[string]any{
+		attrOp: "invoke_workflow", attrKind: "workflow", attrSubject: run.Workflow, attrWorkflowID: run.Workflow, attrWorkflowRun: run.ID,
+		attrAgentName: run.WorkflowName, attrUser: run.By, attrRole: run.RunAs, "forgeline.workflow.version": int64(run.Version), "forgeline.trigger": run.Trigger}))
+	defer func() {
+		span.Set("forgeline.workflow.status", run.Status)
+		if run.Status == wfFailed {
+			span.Set(attrErrorType, "workflow_failed")
+			span.Fail("workflow_failed")
+		}
+		span.End()
+	}()
 	for {
 		if ctx.Err() != nil {
 			return
@@ -643,8 +656,23 @@ func visitsOf(run WFRun, id string) int {
 }
 
 // runNode runs one node. It never returns an error: a failure is the visit's status.
-func (s *Server) runNode(ctx context.Context, run WFRun, g WFGraph, n WFNode, visit WFNodeRun) nodeResult {
-	res := nodeResult{visit: visit}
+func (s *Server) runNode(ctx context.Context, run WFRun, g WFGraph, n WFNode, visit WFNodeRun) (res nodeResult) {
+	name := n.Name
+	if name == "" {
+		name = n.ID
+	}
+	ctx, span := s.tracer.Start(ctx, n.Kind+" "+name, trace.Internal, trace.WithAttrs(map[string]any{attrNodeID: n.ID, attrNodeKind: n.Kind, attrNodeVisit: int64(visit.Visit)}))
+	defer func() {
+		if res.visit.Branch != "" {
+			span.Set("forgeline.node.branch", res.visit.Branch)
+		}
+		if res.visit.Status == wfFailed {
+			span.Set(attrErrorType, "node_failed")
+			span.Fail("node_failed")
+		}
+		span.End()
+	}()
+	res = nodeResult{visit: visit}
 	res.visit.Status = wfSucceeded
 	plain := func() []string {
 		var out []string
@@ -965,6 +993,21 @@ func (s *Server) handleAnswerWorkflow(w http.ResponseWriter, r *http.Request) {
 			if len(n.Choices) > 0 {
 				run.Visits[i].Branch = answer
 			}
+			// The wait as a span in the run's trace (note 049): when it was asked, when answered, and the choice
+			// (never a free answer, which may hold anything).
+			name := n.Name
+			if name == "" {
+				name = n.ID
+			}
+			started := now
+			if run.Visits[i].StartedAt != nil {
+				started = *run.Visits[i].StartedAt
+			}
+			attrs := map[string]any{attrNodeID: n.ID, attrNodeKind: nodeAsk, attrNodeVisit: int64(run.Visits[i].Visit), attrUser: p.Name, attrRole: string(p.Role)}
+			if len(n.Choices) > 0 {
+				attrs["forgeline.node.branch"] = answer
+			}
+			s.tracer.Done(context.Background(), trace.Span{TraceID: trace.IDFor(run.ID), Name: "ask " + name, Kind: trace.Internal, Start: started, End: now, Attrs: attrs})
 			break
 		}
 	}

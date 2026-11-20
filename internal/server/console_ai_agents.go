@@ -808,7 +808,7 @@ func (s *Server) handleAgentChat(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"reply": reply, "lookups": lookups, "proposals": sink.proposals, "environments": sink.environments, "agent": label, "hash": v.Hash})
+	writeJSON(w, http.StatusOK, map[string]any{"reply": reply, "lookups": lookups, "proposals": sink.proposals, "environments": sink.environments, "agent": label, "hash": v.Hash, "trace_id": sink.traceID})
 }
 
 // historyTurns trims a conversation the same way the assistant does.

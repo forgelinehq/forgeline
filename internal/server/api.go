@@ -136,6 +136,8 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("PUT /v1/ai/agents/{id}/reports-to", s.requireRole(authn.Admin, s.handleAgentReportsTo))
 	mux.Handle("POST /v1/ai/agents/{id}/push", s.requireRole(authn.Admin, s.handleProposePush))
 	mux.Handle("GET /v1/ai/pushes", s.requireRole(authn.Developer, s.handleListPushes))
+	mux.Handle("GET /v1/traces", s.requireRole(authn.Developer, s.handleListTraces))
+	mux.Handle("GET /v1/traces/{id}", s.requireRole(authn.Developer, s.handleGetTrace))
 	mux.Handle("GET /v1/ai/pushes/{id}", s.requireRole(authn.Developer, s.handleGetPush))
 	mux.Handle("POST /v1/ai/pushes/{id}/approve", s.requireRole(authn.Admin, s.handleApprovePush))
 	mux.Handle("POST /v1/ai/pushes/{id}/reject", s.requireRole(authn.Admin, s.handleDecidePush(true)))

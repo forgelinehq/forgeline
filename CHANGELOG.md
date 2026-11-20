@@ -78,6 +78,10 @@ section in the pull request that makes the change; a release moves it under its 
   Workflows, Delivery, Cloud, Operations and Security, with an icon on every space, tab and Settings entry (Lucide).
   Approval rules, policy packs, resource types and the audit log moved from Settings to Security, and usage and
   budgets to Agents. Every page keeps its address.
+- **Runs and traces** (design note 049). Agents › Runs and traces shows every assistant chat, agent run and workflow
+  run as a trace: its model calls and tool calls (and a workflow's nodes and waits) on one time scale, with tokens,
+  cost and errors, named as OpenTelemetry's GenAI conventions name them. No prompt or answer is kept. Agent answers and
+  workflow runs link to their trace.
 - **Search anywhere.** Ctrl K (⌘K on a Mac), /, or the box at the top finds a page, an agent, a workflow, a team, a
   skill, a pipeline, a mission or a blueprint by name, and offers shortcuts such as New agent. It lists only what your
   role may open.
