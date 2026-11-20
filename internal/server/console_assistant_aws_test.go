@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"github.com/forgelinehq/forgeline/internal/authn"
 	"strings"
 	"sync"
 	"testing"
@@ -118,16 +119,20 @@ func TestAssistantCallAWSRunsAReadWithTheConsoleConnection(t *testing.T) {
 		t.Errorf("a write reached the CLI: %v / %s", calls(), llm.lastUser(1))
 	}
 
-	// Developers cannot use it, and the prompt does not offer it to them.
+	// Developers may use it (design note 051, decision 3), so a workflow running as a developer can; viewers may not,
+	// and their prompt does not offer it.
+	reset()
 	ask(dev, lookupReply("call_aws", map[string]string{"cli_command": "aws ecs list-clusters"}))
-	if len(calls()) != 0 || !strings.Contains(llm.lastUser(1), "not available to your role") {
-		t.Errorf("a developer ran call_aws: %v / %s", calls(), llm.lastUser(1))
+	if len(calls()) != 1 {
+		t.Errorf("a developer could not run call_aws: %v / %s", calls(), llm.lastUser(1))
 	}
-	llm.mu.Lock()
-	sys := llm.reqs[0]["system"].(string)
-	llm.mu.Unlock()
-	if strings.Contains(sys, "call_aws") {
-		t.Error("the developer's prompt advertises call_aws")
+	viewer := Principal{Name: "vera", Role: authn.Viewer}
+	reset()
+	if _, err := h.srv.runLookup(context.WithValue(context.Background(), principalKey{}, viewer), viewer, lookupCall{Tool: "call_aws", Args: json.RawMessage(`{"cli_command":"aws ecs list-clusters"}`)}); err == nil || len(calls()) != 0 {
+		t.Errorf("a viewer ran call_aws: %v / %v", calls(), err)
+	}
+	if help := h.srv.lookupHelp(context.Background(), authn.Viewer); strings.Contains(help, "call_aws") {
+		t.Error("a viewer is offered call_aws")
 	}
 
 	// The audit log records the command that was run.
