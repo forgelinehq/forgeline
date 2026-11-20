@@ -1,6 +1,7 @@
 // Forgeline web console. See docs/design/006-console.md.
 import { h, icon, mount, toast, spinner, errorBox } from './lib/dom.js';
 import { get, post, atLeast, onSignedOut } from './lib/api.js';
+import { openSearch, isSearchKey } from './lib/cmdk.js';
 import { route, start, stop, currentPath } from './lib/router.js';
 import { loginPage, setupPage } from './pages/auth.js';
 import { overviewPage } from './pages/overview.js';
@@ -59,6 +60,11 @@ function setTheme(dark) {
   try { localStorage.setItem('forgeline-theme', dark ? 'dark' : 'light'); } catch { /* storage blocked */ }
 }
 
+
+// The search box opens on ⌘K, Ctrl+K or /, anywhere in the console once signed in.
+document.addEventListener('keydown', (e) => {
+  if (session.name && document.querySelector('#search-button') && isSearchKey(e) && !document.querySelector('[role=dialog]')) { e.preventDefault(); openSearch(session.role); }
+});
 
 function shell() {
   const outlet = h('main', { id: 'main', tabindex: '-1', class: 'mx-auto w-full max-w-7xl flex-1 px-4 py-6 outline-none sm:px-6 lg:px-8 min-[1800px]:max-w-[96rem] min-[2300px]:max-w-[120rem]' });
@@ -145,7 +151,11 @@ function shell() {
 
   const top = h('header', { class: 'sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-slate-200 bg-white/85 px-4 backdrop-blur lg:pl-72 dark:border-slate-800 dark:bg-slate-900/85' },
     h('button', { class: 'btn-ghost btn-sm lg:hidden', type: 'button', 'aria-label': 'Open menu', onclick: () => { sidebar.classList.toggle('hidden'); sidebar.classList.toggle('flex'); } }, icon('menu', 'size-5')),
-    h('div', { class: 'flex-1' }), approvalsButton, assistantButton(session.role), themeBtn, userMenu);
+    h('div', { class: 'flex flex-1 justify-center px-2' }, h('button', { type: 'button', id: 'search-button', 'aria-label': 'Search (Ctrl+K)', onclick: () => openSearch(session.role),
+      class: 'flex w-full max-w-md items-center gap-2 rounded-lg border border-slate-200 bg-white/70 px-3 py-1.5 text-sm text-slate-500 hover:border-slate-300 hover:text-slate-700 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-400' },
+      icon('search', 'size-4'), h('span', { class: 'hidden flex-1 text-left sm:block' }, 'Search pages, agents, workflows…'),
+      h('kbd', { class: 'hidden rounded border border-slate-200 px-1.5 font-mono text-[10px] sm:block dark:border-slate-700' }, /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘K' : 'Ctrl K'))),
+    approvalsButton, assistantButton(session.role), themeBtn, userMenu);
 
   renderUser(); renderNav();
   addEventListener('hashchange', renderNav);

@@ -13,8 +13,13 @@ The sidebar has seven spaces, named after what you look after: **Home** (what ne
 and teams of them), **Workflows** (agents, decisions and people in a flow, and everything that runs on a schedule),
 **Delivery** (pipelines), **Cloud** (what should exist and what does), **Operations** (how it is running) and
 **Security** (findings, approval rules, policy packs and the audit log). Each space has tabs at the top, each with an
-icon. Setup lives behind **Settings** at the bottom. **Approvals** is also a button at the top right of every page,
+icon. To go anywhere without knowing where it lives, press **Ctrl K** (**⌘K** on a Mac) or **/**, or click the search
+box at the top: type part of a page's name, an agent, a workflow, a team, a skill, a pipeline, a mission or a
+blueprint, then use the arrows and Enter. It also offers shortcuts such as **New agent** and **New workflow**, and only
+lists what your role may open. Setup lives behind **Settings** at the bottom. **Approvals** is also a button at the top right of every page,
 with the number of changes waiting. What you see depends on your role, and old addresses still work.
+
+![Search]({{ '/console/150-search.png' | relative_url }})
 
 | Space | Tabs |
 | --- | --- |
