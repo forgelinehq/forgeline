@@ -29,7 +29,7 @@ const (
 type approvalRule struct {
 	Name      string   `json:"name"`
 	Accounts  []string `json:"accounts,omitempty"`  // account ids ("primary", an added account); empty is every account
-	Kinds     []string `json:"kinds,omitempty"`     // "ai", "cloud"; empty is both
+	Kinds     []string `json:"kinds,omitempty"`     // "ai", "cloud", "publish"; empty is all of them
 	HighRisk  bool     `json:"high_risk,omitempty"` // only changes rated high risk
 	Approvals int      `json:"approvals"`           // 1 or 2
 	Approvers []string `json:"approvers,omitempty"` // usernames of administrators; empty is any administrator
@@ -71,8 +71,10 @@ func (s *Server) loadApprovalRules(ctx context.Context) (approvalRules, error) {
 	return r, err
 }
 
+// matches says whether a rule applies. Publishing an agent (note 046) is not made in an AWS account, so a rule that
+// names accounts never applies to it.
 func (r approvalRule) matches(kind, account string, high bool) bool {
-	return (len(r.Accounts) == 0 || contains(r.Accounts, account)) &&
+	return (len(r.Accounts) == 0 || kind != approvalKindPush && contains(r.Accounts, account)) &&
 		(len(r.Kinds) == 0 || contains(r.Kinds, kind)) &&
 		(!r.HighRisk || high)
 }
@@ -223,8 +225,8 @@ func (s *Server) handlePutApprovalRules(w http.ResponseWriter, r *http.Request) 
 			}
 		}
 		for j, k := range rl.Kinds {
-			if k != approvalKindAI && k != approvalKindCons {
-				writeError(w, http.StatusBadRequest, fmt.Sprintf("%s.kinds[%d]: %q must be ai or cloud", at, j, k))
+			if k != approvalKindAI && k != approvalKindCons && k != approvalKindPush {
+				writeError(w, http.StatusBadRequest, fmt.Sprintf("%s.kinds[%d]: %q must be ai, cloud or publish", at, j, k))
 				return
 			}
 		}

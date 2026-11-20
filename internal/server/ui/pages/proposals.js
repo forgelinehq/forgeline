@@ -2,6 +2,7 @@ import { h, icon, mount, pageHeader, relTime, absTime, pill, emptyState, spinner
 import { approvalView } from '../lib/approval.js';
 import { get, post, atLeast } from '../lib/api.js';
 import { session } from '../app.js';
+import { pushesCard } from './pushes.js';
 
 // Changes the assistant drafted. Nothing here runs until a different administrator approves the
 // exact text shown.
@@ -22,6 +23,8 @@ export async function proposalsPage({ params }) {
           h('td', { class: 'text-sm' }, p.proposed_by, p.via_ai && h('span', { class: 'muted ml-1 text-xs' }, p.mission ? '· from a mission' : '· drafted by the assistant')),
           h('td', { class: 'muted text-sm', title: absTime(p.proposed_at) }, relTime(p.proposed_at)))))))
         : emptyState('check', 'No proposals yet', 'Ask the assistant to change something in AWS. It files a proposal here instead of acting.'));
+    const pushes = await pushesCard();
+    if (pushes) el.append(pushes);
   }
 
   async function detail(id) {

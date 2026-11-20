@@ -35,6 +35,8 @@ import { resourceTypesPage } from './pages/resource_types.js';
 import { teamPage, teamDetailPage } from './pages/team.js';
 import { schedulesPage } from './pages/schedules.js';
 import { mcpServersPage } from './pages/mcp_servers.js';
+import { registriesPage } from './pages/registries.js';
+import { pushPage } from './pages/pushes.js';
 import { providersPage } from './pages/providers.js';
 import { buildRulesPage } from './pages/build_rules.js';
 import { watchMapPage } from './pages/watch_map.js';
@@ -129,8 +131,9 @@ function shell() {
   const approvalsButton = h('a', { href: '#/proposals', class: 'btn-ghost btn-sm', id: 'approvals-button', title: 'Changes waiting for approval' });
   const renderApprovals = () => { mount(approvalsButton, icon('check', 'size-4'), h('span', { class: 'hidden sm:inline' }, 'Approvals'), approvalsBadge(false)); approvalsButton.setAttribute('aria-label', 'Approvals, ' + waiting + ' waiting'); };
   const loadApprovals = async () => {
-    const [a, c] = await Promise.all([get('/v1/ai/proposals').catch(() => null), get('/v1/cloud/changes').catch(() => null)]);
-    const n = [...(a?.proposals || []), ...(c?.changes || [])].filter(x => x.status === 'proposed').length;
+    const dev = atLeast(session.role, 'developer'); // viewers cannot read agent pushes
+    const [a, c, ps] = await Promise.all([get('/v1/ai/proposals').catch(() => null), get('/v1/cloud/changes').catch(() => null), dev ? get('/v1/ai/pushes').catch(() => null) : null]);
+    const n = [...(a?.proposals || []), ...(c?.changes || []), ...(ps?.pushes || [])].filter(x => x.status === 'proposed').length;
     if (n !== waiting) { waiting = n; renderApprovals(); renderTabs(); }
   };
   renderApprovals(); loadApprovals();
@@ -253,6 +256,7 @@ async function boot() {
     route('/workflow-runs/:id', guard('developer', workflowRunPage));
     route('/proposals', guard('viewer', proposalsPage));
     route('/proposals/:id', guard('viewer', proposalsPage));
+    route('/pushes/:id', guard('developer', pushPage));
     route('/map', guard('viewer', watchMapPage));
     route('/services', guard('viewer', servicesPage));
     route('/services/:id', guard('viewer', servicePage));
@@ -266,6 +270,7 @@ async function boot() {
     route('/settings', guard('developer', settingsPage));
     route('/integrations', guard('developer', inSettings(integrationsHubPage)));
     route('/mcp-servers', guard('admin', inSettings(mcpServersPage)));
+    route('/registries', guard('admin', inSettings(registriesPage)));
     route('/providers', guard('developer', inSettings(providersPage)));
     route('/image-builds', guard('admin', inSettings(buildRulesPage)));
     route('/integrations/github/settings', guard('developer', inSettings(githubSettingsPage)));
