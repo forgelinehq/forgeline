@@ -1,43 +1,53 @@
-// Forgeline web console: the sidebar and the tabs inside each space (design note 029, frame 1).
+// Forgeline web console: the sidebar and the tabs inside each space (design note 048, which replaces the spaces of
+// note 029).
 //
-// No imports and no DOM, so it runs under Node in tests. The sidebar holds five spaces, named after the
-// job a person is doing: Home (what needs me), Build (what should exist), Ship (getting code out), Team
-// (the agents doing the work) and Watch (how it is running). The pages people know are tabs inside a
-// space. Setup lives under Settings (settingsnav.js). Routes and role checks are unchanged: a tab is the
-// same address it always was, so old links keep working.
+// No imports and no DOM, so it runs under Node in tests. The sidebar holds seven spaces, named after the things
+// people own: Home (what needs me), Agents, Workflows, Delivery (pipelines), Cloud (what should exist and what does),
+// Operations (how it is running) and Security. The pages people know are tabs inside a space, each with an icon.
+// Setup lives under Settings (settingsnav.js). Routes and role checks are unchanged: a tab is the same address it
+// always was, so old links keep working.
 //
 // A tab with `planned: true` has no page yet. It is shown dimmed and without a link, so a space says what
 // is coming without a button that does nothing.
 
 export const SPACES = [
   { id: 'home', label: 'Home', icon: 'home', path: '/', tabs: [
-    { path: '/', label: 'Today', min: 'viewer', exact: true },
-    { path: '/proposals', label: 'Approvals', min: 'viewer', also: ['/pushes/'] },
+    { path: '/', label: 'Today', icon: 'inbox', min: 'viewer', exact: true },
+    { path: '/proposals', label: 'Approvals', icon: 'approval', min: 'viewer', also: ['/pushes/'] },
   ] },
-  { id: 'build', label: 'Build', icon: 'grid', path: '/environments', tabs: [
-    { path: '/design', label: 'Design', min: 'developer' },
-    { path: '/environments', label: 'Environments', min: 'developer' },
-    { path: '/blueprints', label: 'Blueprints', min: 'developer' },
-    { path: '/built', label: 'Built', min: 'developer' },
+  { id: 'agents', label: 'Agents', icon: 'agents', path: '/agents', tabs: [
+    { path: '/agents', label: 'Agents', icon: 'agents', min: 'developer', also: ['/skills/'] },
+    { path: '/team', label: 'Teams', icon: 'team', min: 'developer', also: ['/teams/'] },
+    { path: '/library', label: 'Library', icon: 'library', min: 'developer', also: ['/marketplace'] },
+    { path: '/ai-use', label: 'Usage and budgets', icon: 'usage', min: 'developer' },
   ] },
-  { id: 'ship', label: 'Ship', icon: 'flow', path: '/pipelines', tabs: [
-    { path: '/pipelines', label: 'Pipelines', min: 'viewer', also: ['/runs/'] },
-    { path: '/actions', label: 'GitHub Actions', min: 'developer' },
+  { id: 'workflows', label: 'Workflows', icon: 'workflows', path: '/workflows', tabs: [
+    { path: '/workflows', label: 'Workflows', icon: 'workflows', min: 'developer', also: ['/workflow-runs/'] },
+    { path: '/schedules', label: 'Schedules', icon: 'schedule', min: 'developer' },
   ] },
-  { id: 'team', label: 'Team', icon: 'sparkle', path: '/team', tabs: [
-    { path: '/team', label: 'Teams', min: 'developer', also: ['/teams/'] },
-    { path: '/agents', label: 'Agents', min: 'developer', also: ['/skills/'] },
-    { path: '/workflows', label: 'Workflows', min: 'developer', also: ['/workflow-runs/'] },
-    { path: '/missions', label: 'Missions', min: 'developer' },
-    { path: '/schedules', label: 'Schedules', min: 'developer' },
-    { path: '/library', label: 'Library', min: 'developer', also: ['/marketplace'] },
+  { id: 'delivery', label: 'Delivery', icon: 'delivery', path: '/pipelines', tabs: [
+    { path: '/pipelines', label: 'Pipelines', icon: 'pipeline', min: 'viewer', also: ['/runs/'] },
+    { path: '/actions', label: 'GitHub Actions', icon: 'github', min: 'developer' },
   ] },
-  { id: 'watch', label: 'Watch', icon: 'eye', path: '/map', tabs: [
-    { path: '/map', label: 'Map', min: 'viewer' },
-    { path: '/services', label: 'Services', min: 'viewer' },
-    { path: '/infrastructure', label: 'Infrastructure', min: 'viewer' },
-    { path: '/kubernetes', label: 'Kubernetes', min: 'viewer' },
-    { path: '/guard', label: 'Security', min: 'viewer' },
+  { id: 'cloud', label: 'Cloud', icon: 'cloud', path: '/design', tabs: [
+    { path: '/design', label: 'Canvas', icon: 'design', min: 'developer' },
+    { path: '/environments', label: 'Environments', icon: 'environment', min: 'developer' },
+    { path: '/blueprints', label: 'Blueprints', icon: 'blueprint', min: 'developer' },
+    { path: '/built', label: 'Resources', icon: 'resource', min: 'developer' },
+    { path: '/map', label: 'Map', icon: 'map', min: 'viewer' },
+  ] },
+  { id: 'operations', label: 'Operations', icon: 'operations', path: '/services', tabs: [
+    { path: '/services', label: 'Services', icon: 'service', min: 'viewer' },
+    { path: '/infrastructure', label: 'Infrastructure', icon: 'infrastructure', min: 'viewer' },
+    { path: '/kubernetes', label: 'Kubernetes', icon: 'kubernetes', min: 'viewer' },
+    { path: '/missions', label: 'Missions', icon: 'mission', min: 'developer' },
+  ] },
+  { id: 'security', label: 'Security', icon: 'security', path: '/guard', tabs: [
+    { path: '/guard', label: 'Findings', icon: 'findings', min: 'viewer' },
+    { path: '/approval-rules', label: 'Approval rules', icon: 'approval', min: 'developer' },
+    { path: '/policy-packs', label: 'Policy packs', icon: 'policy', min: 'developer' },
+    { path: '/resource-types', label: 'Resource types', icon: 'resource', min: 'developer' },
+    { path: '/audit', label: 'Audit log', icon: 'audit', min: 'admin' },
   ] },
 ];
 

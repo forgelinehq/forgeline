@@ -57,10 +57,10 @@ export function mdEditor({ id, value = '', maxlength, placeholder, check, height
       input.setSelectionRange(s + p.length, s + p.length);
     });
   }
-  const tool = (label, title, fn) => h('button', { type: 'button', class: 'min-w-8 rounded-md px-2 py-1 font-mono text-xs font-medium text-slate-600 hover:bg-white hover:text-slate-900 hover:shadow-sm dark:text-slate-300 dark:hover:bg-slate-700 dark:hover:text-white', title, 'aria-label': title, onclick: fn }, label);
+  const tool = (ic, title, fn) => h('button', { type: 'button', class: 'rounded-md p-1.5 text-slate-600 hover:bg-white hover:text-slate-900 hover:shadow-sm dark:text-slate-300 dark:hover:bg-slate-700 dark:hover:text-white', title, 'aria-label': title, onclick: fn }, icon(ic, 'size-4'));
   const bar = h('div', { class: 'flex flex-wrap items-center gap-0.5 border-b border-slate-200 bg-slate-50 px-2 py-1.5 dark:border-slate-800 dark:bg-slate-900', role: 'toolbar', 'aria-label': 'Formatting' },
-    tool('H', 'Heading', () => prefix('## ')), tool('B', 'Bold', () => wrap('**', '**', 'bold')), tool('</>', 'Code', () => wrap('`', '`', 'code')),
-    tool('•', 'List', () => prefix('- ')), tool('1.', 'Numbered list', () => prefix('1. ')), tool('[ ]', 'Checklist', () => prefix('- [ ] ')), tool('>', 'Rule or callout', () => prefix('> ')),
+    tool('heading', 'Heading', () => prefix('## ')), tool('bold', 'Bold', () => wrap('**', '**', 'bold')), tool('code', 'Code', () => wrap('`', '`', 'code')),
+    tool('bullets', 'List', () => prefix('- ')), tool('steps', 'Numbered list', () => prefix('1. ')), tool('checklist', 'Checklist', () => prefix('- [ ] ')), tool('quote', 'Rule or callout', () => prefix('> ')),
     h('span', { class: 'flex-1' }), seg);
 
   input.addEventListener('input', refresh);

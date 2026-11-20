@@ -2,7 +2,7 @@ import { h, icon, mount, clear, pageHeader, emptyState, spinner, errorBox, notic
 import { get, post, put, del, atLeast } from '../lib/api.js';
 import { session } from '../app.js';
 
-// Team › Library (design note 040, step 8; it was the marketplace): packages of skills, agents, workflows, environment
+// Agents › Library (design note 040, step 8; it was the marketplace): packages of skills, agents, workflows, environment
 // templates, plugins, guardrail packs and MCP servers, and the reviewed OpenTofu templates the canvas offers. Each is shown with what it can do before anyone
 // installs it, and the install is bound to the fingerprint that was shown.
 
@@ -48,7 +48,7 @@ export async function marketplacePage() {
     return h('div', { class: 'card flex flex-col p-4', 'data-template': t.ref },
       h('div', { class: 'flex items-start justify-between gap-2' }, h('h3', { class: 'font-semibold' }, t.title), h('span', { class: 'pill-idle' }, 'template')),
       h('p', { class: 'muted mt-1 flex-1 text-sm' }, t.summary),
-      h('div', { class: 'muted mt-3 text-xs' }, `OpenTofu template · v${t.version} · built in, reviewed with Forgeline's code · on the canvas in Build › Design`),
+      h('div', { class: 'muted mt-3 text-xs' }, `OpenTofu template · v${t.version} · built in, reviewed with Forgeline's code · on the canvas in Cloud › Canvas`),
       h('div', { class: 'mt-3 flex justify-end' }, h('a', { class: 'btn-secondary btn-sm', href: '/v1/templates/' + encodeURIComponent(t.name) + '/' + encodeURIComponent(t.version) + '/code', target: '_blank', rel: 'noopener' }, 'Read its code')));
   }
 
@@ -139,7 +139,7 @@ export async function marketplacePage() {
         (p.policy_packs || []).length ? h('div', {}, h('div', { class: 'h-section mb-2' }, 'Guardrail packs it adds'), p.policy_packs.map(pk => h('div', { class: 'mb-3 rounded-lg border border-slate-200 p-3 dark:border-slate-800', 'data-pack': pk.id },
           h('div', { class: 'font-medium' }, pk.name), h('div', { class: 'muted text-xs' }, ({ trivy: 'Trivy', checkov: 'Checkov', conftest: 'Conftest (Rego)' })[pk.tool] + (pk.deny_at ? ' · denies from ' + pk.deny_at : '') + ((pk.deny || []).length ? ' · always denies ' + pk.deny.join(', ') : '') + ((pk.skip || []).length ? ' · skips ' + pk.skip.join(', ') : '')),
           Object.entries(pk.rules || {}).map(([n, body]) => h('details', { class: 'mt-2' }, h('summary', { class: 'cursor-pointer text-xs' }, n), h('pre', { class: 'mt-1 max-h-64 overflow-auto whitespace-pre-wrap rounded-lg border border-slate-200 p-3 text-xs dark:border-slate-800' }, body))))),
-          notice('info', 'Installed turned off. Turn each on under Settings › Policy packs after reading what it would deny.')) : null,
+          notice('info', 'Installed turned off. Turn each on under Security › Policy packs after reading what it would deny.')) : null,
         (p.mcp_servers || []).length ? h('div', {}, h('div', { class: 'h-section mb-2' }, 'Tools it adds (MCP servers)'), p.mcp_servers.map(ms => h('div', { class: 'mb-3 rounded-lg border border-slate-200 p-3 dark:border-slate-800', 'data-mcp': ms.key },
           h('div', { class: 'font-medium' }, ms.name), h('div', { class: 'muted text-sm' }, ms.description),
           h('div', { class: 'mt-2 break-all text-xs' }, h('span', { class: 'muted' }, ms.kind === 'remote' ? 'Address: ' : 'Image: '), h('code', {}, ms.url || ms.image)),

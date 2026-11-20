@@ -1,4 +1,4 @@
-// Watch › Map (note 029, frame 6; note 034): the AWS map on its own page, with the accounts to switch between.
+// Cloud › Map (note 029, frame 6; note 034): the AWS map on its own page, with the accounts to switch between.
 // What a stack made sits in the stack's box; a line is drawn only where AWS states the link. Read-only:
 // anything that changes the account is a proposal someone approves.
 import { h, mount, pageHeader, spinner, errorBox, emptyState } from '../lib/dom.js';

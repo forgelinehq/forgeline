@@ -1,4 +1,4 @@
-// Watch › Services: one tile per AWS service, each read on its own, so the page draws at once and fills in as
+// Operations › Services: one tile per AWS service, each read on its own, so the page draws at once and fills in as
 // each answer comes; a page per service lists only that service. Read-only, like the map.
 import { h, icon, mount, pageHeader, spinner, errorBox, emptyState } from '../lib/dom.js';
 import { get, atLeast } from '../lib/api.js';
@@ -6,7 +6,7 @@ import { pageSignal } from '../lib/router.js';
 import { session } from '../app.js';
 import { explorer } from './aws_explorer.js';
 
-const ACCOUNT_KEY = 'forgeline-aws-account'; // shared with Watch › Map and Infrastructure › AWS
+const ACCOUNT_KEY = 'forgeline-aws-account'; // shared with Cloud › Map and Infrastructure › AWS
 const CATEGORIES = ['Compute', 'Containers', 'Storage', 'Databases', 'Network', 'Messaging', 'AI', 'Management'];
 const DOT = { Compute: 'bg-sky-500', Containers: 'bg-violet-500', Storage: 'bg-emerald-500', Databases: 'bg-amber-500', Network: 'bg-cyan-500', Messaging: 'bg-pink-500', AI: 'bg-fuchsia-500', Management: 'bg-slate-500' };
 const AT_ONCE = 4; // reads in flight at a time: each is one AWS call on the server

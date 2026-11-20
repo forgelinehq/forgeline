@@ -90,7 +90,7 @@ to just print the list (exit code 0 when everything is done or skipped).
 
 ## 3. Run a pipeline
 
-Go to **Ship → Pipelines → New pipeline** (or press **New pipeline** on Home) and paste:
+Go to **Delivery → Pipelines → New pipeline** (or press **New pipeline** on Home) and paste:
 
 ```yaml
 version: v1alpha1

@@ -1,4 +1,4 @@
-// Settings › Approval rules (design note 032): which changes need two approvals, and who may approve them.
+// Security › Approval rules (design note 032): which changes need two approvals, and who may approve them.
 // Developers can read the rules (so they know who will approve); administrators change them.
 import { h, icon, mount, pageHeader, spinner, errorBox, notice, toast, emptyState } from '../lib/dom.js';
 import { get, put, atLeast } from '../lib/api.js';

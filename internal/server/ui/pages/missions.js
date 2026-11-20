@@ -1,4 +1,4 @@
-// Team › Missions (design note 037, part 2): the board of missions by where they stand, and one mission live, stage
+// Operations › Missions (design note 037, part 2): the board of missions by where they stand, and one mission live, stage
 // by stage, with what it found, what it proposed, what it checked afterwards and the report Forgeline wrote.
 import { h, icon, mount, pageHeader, relTime, spinner, errorBox, notice, toast, modal, field, confirmDialog, emptyState } from '../lib/dom.js';
 import { renderMarkdown } from '../lib/mdview.js';
@@ -33,7 +33,7 @@ async function startMission(after) {
     const budget = h('input', { id: 'm-budget', class: 'input', type: 'number', min: '1000', step: '10000', placeholder: '200000' });
     const err = h('div', {});
     return h('div', { class: 'space-y-4' },
-      !agents.length ? notice('warn', 'There is no agent that is turned on. Make one under Team › Agents first.') : null,
+      !agents.length ? notice('warn', 'There is no agent that is turned on. Make one under Agents first.') : null,
       field('Goal', goal, 'In your own words. The agent reads first, then proposes; nothing changes without an administrator’s approval.'),
       h('div', { class: 'grid gap-3 sm:grid-cols-2' }, field('Agent', agent), field('AWS account', acct, 'The only account it may look at')),
       field('Token budget', budget, 'It stops before its next model call once this is used. Empty means 200,000.'),

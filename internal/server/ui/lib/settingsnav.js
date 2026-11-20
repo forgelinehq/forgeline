@@ -6,31 +6,24 @@
 
 export const SETTINGS = [
   { title: 'Workspace', items: [
-    { path: '/setup', label: 'Setup', note: 'The first-run steps: what is set up, and what is left', min: 'developer' },
-    { path: '/people', label: 'People and roles', note: 'Who can sign in and what each person may do', min: 'admin' },
-    { path: '/sso', label: 'Sign-in (SSO)', note: 'Let people sign in with the company login, with roles from their groups', min: 'admin' },
+    { path: '/setup', label: 'Setup', icon: 'setup', note: 'The first-run steps: what is set up, and what is left', min: 'developer' },
+    { path: '/people', label: 'People and roles', icon: 'people', note: 'Who can sign in and what each person may do', min: 'admin' },
+    { path: '/sso', label: 'Sign-in (SSO)', icon: 'sso', note: 'Let people sign in with the company login, with roles from their groups', min: 'admin' },
   ] },
   { title: 'Connections', items: [
-    { path: '/integrations', label: 'Connections', note: 'GitHub, AWS, Docker, Kubernetes, Claude, and what the AI may do with each', min: 'developer', also: ['/integrations/'] },
-    { path: '/secrets', label: 'Secrets', note: 'Keys and tokens, stored encrypted and never shown again', min: 'developer' },
-    { path: '/mcp-servers', label: 'MCP servers', note: 'Remote and local MCP servers whose tools agents and the assistant may use', min: 'admin' },
-    { path: '/registries', label: 'Agent registries', note: 'Where agents may be pushed, so they run anywhere with docker agent run', min: 'admin' },
-    { path: '/image-builds', label: 'Image builds', note: 'Which repositories and branches may push built images, and where', min: 'admin' },
+    { path: '/integrations', label: 'Connections', icon: 'connections', note: 'GitHub, AWS, Docker, Kubernetes, Claude, and what the AI may do with each', min: 'developer', also: ['/integrations/'] },
+    { path: '/secrets', label: 'Secrets', icon: 'secret', note: 'Keys and tokens, stored encrypted and never shown again', min: 'developer' },
+    { path: '/mcp-servers', label: 'MCP servers', icon: 'plug', note: 'Remote and local MCP servers whose tools agents and the assistant may use', min: 'admin' },
+    { path: '/registries', label: 'Agent registries', icon: 'registry', note: 'Where agents may be pushed, so they run anywhere with docker agent run', min: 'admin' },
+    { path: '/image-builds', label: 'Image builds', icon: 'image', note: 'Which repositories and branches may push built images, and where', min: 'admin' },
   ] },
   { title: 'AI', items: [
-    { path: '/providers', label: 'Models and providers', note: 'Providers whose models agents, workflows and the assistant use, with spend, limits and a log of calls', min: 'developer' },
-    { path: '/integrations/claude/settings', label: 'Assistant model', note: 'Which model answers the assistant, and agents that have no model of their own', min: 'developer' },
-    { path: '/memory', label: 'Memory', note: 'What the assistant remembers about you and this system, and your conversations', min: 'developer' },
-    { path: '/ai-use', label: 'AI use and budgets', note: 'What each agent used this month, and how much it may use', min: 'developer' },
-  ] },
-  { title: 'Security', items: [
-    { path: '/audit', label: 'Audit log', note: 'Who did what, including refusals and failed sign-ins', min: 'admin' },
-    { path: '/approval-rules', label: 'Approval rules', note: 'Which changes need two approvals, and who may approve them', min: 'developer' },
-    { path: '/resource-types', label: 'Resource types', note: 'Which AWS resource types the resource block may make, per account', min: 'developer' },
-    { path: '/policy-packs', label: 'Policy packs', note: 'Rule sets that check every blueprint preview, on top of the built-in guardrails', min: 'developer' },
+    { path: '/providers', label: 'Models and providers', icon: 'model', note: 'Providers whose models agents, workflows and the assistant use, with spend, limits and a log of calls', min: 'developer' },
+    { path: '/integrations/claude/settings', label: 'Assistant model', icon: 'sparkle', note: 'Which model answers the assistant, and agents that have no model of their own', min: 'developer' },
+    { path: '/memory', label: 'Memory', icon: 'memory', note: 'What the assistant remembers about you and this system, and your conversations', min: 'developer' },
   ] },
   { title: 'Developer', items: [
-    { path: '/account', label: 'API tokens', note: 'Personal tokens for AI tools that connect over MCP', min: 'viewer' },
+    { path: '/account', label: 'API tokens', icon: 'token', note: 'Personal tokens for AI tools that connect over MCP', min: 'viewer' },
   ] },
 ];
 

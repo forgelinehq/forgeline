@@ -1,4 +1,4 @@
-// Settings › AI use and budgets (design note 036): what each agent and people used per month, and each
+// Agents › Usage and budgets (design note 036): what each agent and people used per month, and each
 // agent's monthly budget. At 80% the console warns; once a budget is used up the agent stops before its next
 // model call. Tokens are as the model reports them; cost only where the claude program reports it.
 import { h, mount, pageHeader, spinner, errorBox, notice, toast, modal, field } from '../lib/dom.js';
@@ -19,7 +19,7 @@ export async function aiUsePage({ query }) {
   const admin = atLeast(session.role, 'admin');
   const months = recentMonths();
   const month = months.includes(query.month) ? query.month : months[0];
-  const header = () => pageHeader('AI use and budgets', 'What each agent used, and how much it may use in a month. An agent over its budget stops before its next model call.',
+  const header = () => pageHeader('Usage and budgets', 'What each agent used, and how much it may use in a month. An agent over its budget stops before its next model call.',
     h('select', { class: 'input w-auto', id: 'use-month', 'aria-label': 'Month', onchange: (e) => { location.hash = '#/ai-use?month=' + e.target.value; } },
       months.map(m => h('option', { value: m, selected: m === month }, m))));
   mount(el, header(), spinner());

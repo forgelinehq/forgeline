@@ -20,11 +20,12 @@ const eq = (name, got, want) => {
 const links = (role) => visibleGroups(role).flatMap(g => g.items.filter(i => !i.planned).map(i => i.path));
 
 // Who sees what.
-eq('an administrator sees every page', links('admin'), ['/setup', '/people', '/sso', '/integrations', '/secrets', '/mcp-servers', '/registries', '/image-builds', '/providers', '/integrations/claude/settings', '/memory', '/ai-use', '/audit', '/approval-rules', '/resource-types', '/policy-packs', '/account']);
-eq('a developer does not see People or the audit log', links('developer'), ['/setup', '/integrations', '/secrets', '/providers', '/integrations/claude/settings', '/memory', '/ai-use', '/approval-rules', '/resource-types', '/policy-packs', '/account']);
+eq('an administrator sees every page', links('admin'), ['/setup', '/people', '/sso', '/integrations', '/secrets', '/mcp-servers', '/registries', '/image-builds', '/providers', '/integrations/claude/settings', '/memory', '/account']);
+eq('a developer does not see People, registries or image builds', links('developer'), ['/setup', '/integrations', '/secrets', '/providers', '/integrations/claude/settings', '/memory', '/account']);
 eq('a viewer sees only their own tokens', links('viewer'), ['/account']);
 eq('an unknown role sees nothing', links('nobody'), []);
-eq('a group with no pages for the role is left out', visibleGroups('developer').map(g => g.title), ['Workspace', 'Connections', 'AI', 'Security', 'Developer']);
+eq('a group with no pages for the role is left out', visibleGroups('developer').map(g => g.title), ['Workspace', 'Connections', 'AI', 'Developer']);
+eq('every entry has an icon', SETTINGS.every(g => g.items.every(i => i.icon)), true);
 eq('settings open for developers and administrators only', [canOpenSettings('viewer'), canOpenSettings('developer'), canOpenSettings('admin')], [false, true, true]);
 
 // Planned entries are shown but are never links.
@@ -36,7 +37,7 @@ eq('a real page is never marked planned', SETTINGS.flatMap(g => g.items).filter(
 // Which pages are part of Settings.
 eq('the landing page', isSettingsPath('/settings'), true);
 eq('integrations and a popup deep link', [isSettingsPath('/integrations'), isSettingsPath('/integrations/aws'), isSettingsPath('/integrations/github/settings')], [true, true, true]);
-eq('secrets, people, audit', [isSettingsPath('/secrets'), isSettingsPath('/people'), isSettingsPath('/audit')], [true, true, true]);
+eq('secrets and people are settings; the audit log and rules moved to Security (note 048)', [isSettingsPath('/secrets'), isSettingsPath('/people'), isSettingsPath('/audit'), isSettingsPath('/approval-rules')], [true, true, false, false]);
 eq('a query string is ignored', isSettingsPath('/integrations?x=1'), true);
 eq('daily pages are not settings', ['/', '/pipelines', '/runs/abc', '/infrastructure', '/kubernetes', '/proposals', '/agents'].map(isSettingsPath), [false, false, false, false, false, false, false]);
 eq('a path that only starts like a settings page is not one', isSettingsPath('/peoplex'), false);

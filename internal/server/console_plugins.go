@@ -429,7 +429,7 @@ func (s *Server) approvePlugins(ctx context.Context, pkg MarketPackage, old map[
 		return nil, 0, ""
 	}
 	if !s.loadPluginSettings(ctx).Enabled {
-		return nil, http.StatusConflict, "this package has plugins, and plugins are turned off (Team › Library › Plugins)"
+		return nil, http.StatusConflict, "this package has plugins, and plugins are turned off (Agents › Library › Plugins)"
 	}
 	vault := s.stepSecrets(ctx)
 	out := map[string]PluginGrant{}

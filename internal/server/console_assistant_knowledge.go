@@ -194,7 +194,7 @@ func (s *Server) lookupListTeams(ctx context.Context, _ json.RawMessage) (string
 		return "", errors.New("could not read the teams")
 	}
 	if len(ts) == 0 {
-		return "There are no teams. An administrator makes one under Team › Teams, or installs one from the library.", nil
+		return "There are no teams. An administrator makes one under Agents › Teams, or installs one from the library.", nil
 	}
 	var b strings.Builder
 	for _, t := range ts {

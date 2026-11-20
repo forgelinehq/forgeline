@@ -102,7 +102,7 @@ export async function agentsPage({ query }) {
       h('button', { class: 'btn-primary', id: 'new-agent', type: 'button', onclick: () => navigate('/agents/new/build') }, icon('plus', 'size-4'), 'New agent'))
       : tab === 'skills' ? h('button', { class: 'btn-primary', id: 'new-skill', type: 'button', onclick: () => skillForm(null) }, icon('plus', 'size-4'), 'New skill')
       : null)),
-    h('div', { class: 'mb-4 flex gap-1', role: 'tablist' }, tabBtn('agents', 'Agents (' + agents.agents.length + ')'), tabBtn('skills', 'Skills (' + skills.skills.length + ')'), h('a', { href: '#/workflows', class: 'muted rounded-lg px-3 py-1.5 text-sm font-medium hover:bg-slate-100 dark:hover:bg-slate-800' }, 'Workflows (' + workflows.workflows.length + ') →')),
+    h('div', { class: 'mb-4 flex gap-1', role: 'tablist' }, tabBtn('agents', 'Agents (' + agents.agents.length + ')'), tabBtn('skills', 'Skills (' + skills.skills.length + ')')),
     tab === 'agents' ? agentCards : skillRows,
     tab === 'agents' && archived.agents.length ? h('details', { class: 'mt-6', id: 'archived-agents' },
       h('summary', { class: 'muted cursor-pointer text-sm' }, `Archived (${archived.agents.length}): restorable for 30 days, then deleted`),

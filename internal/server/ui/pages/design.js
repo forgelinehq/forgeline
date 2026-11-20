@@ -1,4 +1,4 @@
-// Build › Design (design note 035, slice 2): a blueprint on a canvas. Blocks are drawn in SVG (positions are
+// Cloud › Canvas (design note 035, slice 2): a blueprint on a canvas. Blocks are drawn in SVG (positions are
 // attributes, so the CSP needs no inline styles), dragged to move, and edited in the panel on the right. Every
 // change is checked by the server as you go; Save keeps it. Preview and approval are the next slice.
 import { h, icon, mount, pageHeader, relTime, spinner, errorBox, notice, toast, emptyState, modal, field, copyButton } from '../lib/dom.js';
@@ -14,7 +14,7 @@ import {
   addLink, removeLink, toBody, linkPath, linkPorts, bounds, fit, explainError, planByBlock, planState, planWords, placeNew, flowOf,
 } from '../lib/canvas.js';
 
-/** Build › Design without a blueprint: open the one changed last, or say how to make one. */
+/** Cloud › Canvas without a blueprint: open the one changed last, or say how to make one. */
 export async function designHomePage() {
   const el = h('div', {});
   mount(el, spinner());
@@ -535,7 +535,7 @@ export async function designPage({ params }) {
     const allowed = allowedTypes[bp.target.account] || [];
     const pick = select_('Resource type', b.resource_type || '', [['', allowed.length ? 'Pick one…' : 'None allowed yet'], ...allowed.map(t => [t, t])],
       v => { set({ resource_type: v || null, attributes: null }); drawInspector(); });
-    if (!b.resource_type) return [pick, h('p', { class: 'hint' }, allowed.length ? 'Any resource type an administrator allowed for this account.' : 'An administrator allows resource types for this account under Settings › Resource types.')];
+    if (!b.resource_type) return [pick, h('p', { class: 'hint' }, allowed.length ? 'Any resource type an administrator allowed for this account.' : 'An administrator allows resource types for this account under Security › Resource types.')];
     const s = needSchema(b.resource_type);
     if (s.loading) return [pick, spinner()];
     if (s.error) return [pick, notice('warn', s.error)];

@@ -1,4 +1,4 @@
-// Team › Team: teams of agents (note 045). Each team is a lead and its members; give it a goal and the lead plans a
+// Agents › Teams: teams of agents (note 045). Each team is a lead and its members; give it a goal and the lead plans a
 // task for each member, the members work at the same time, and the lead writes the answer. Below the teams, every
 // agent with what it is doing now and its budget. Adding or changing a team happens in a side panel.
 import { h, icon, mount, pageHeader, relTime, spinner, errorBox, notice, toast, emptyState, drawer, field, confirmDialog } from '../lib/dom.js';

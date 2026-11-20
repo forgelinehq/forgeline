@@ -85,9 +85,9 @@ function shell() {
         tabs.map(t => t.planned
           ? h('span', { class: 'flex items-center gap-1.5 whitespace-nowrap px-3 py-3 text-sm text-slate-400 dark:text-slate-600', title: 'Coming soon' }, t.label, h('span', { class: 'rounded bg-slate-100 px-1 font-mono text-[9px] uppercase tracking-wider dark:bg-slate-800' }, 'soon'))
           : h('a', { href: '#' + t.path, 'data-tab': t.path, 'aria-current': tabMatches(t, path) ? 'page' : null,
-              class: 'whitespace-nowrap border-b-2 px-3 py-3 text-sm font-medium transition-colors ' + (tabMatches(t, path)
+              class: 'flex items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-3 text-sm font-medium transition-colors ' + (tabMatches(t, path)
                 ? 'border-brand-600 text-brand-700 dark:border-brand-400 dark:text-brand-200'
-                : 'border-transparent text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white') }, t.label,
+                : 'border-transparent text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white') }, t.icon ? icon(t.icon, 'size-4 opacity-80') : null, t.label,
               t.path === '/proposals' ? approvalsBadge(true) : null)))));
   };
   const renderNav = () => {
@@ -172,7 +172,7 @@ function settingsMenuItem(i, here) {
   }
   const on = here && here.path === i.path;
   const cls = on ? 'bg-brand-50 font-medium text-brand-700 dark:bg-brand-500/15 dark:text-brand-200' : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800';
-  return h('li', {}, h('a', { href: '#' + i.path, 'aria-current': on ? 'page' : null, class: 'block rounded-md px-2 py-1 ' + cls }, i.label));
+  return h('li', {}, h('a', { href: '#' + i.path, 'aria-current': on ? 'page' : null, class: 'flex items-center gap-2 rounded-md px-2 py-1 ' + cls }, i.icon ? icon(i.icon, 'size-4 opacity-70') : null, i.label));
 }
 
 /** Setup pages show the Settings menu on the left, so the way to the others is one click away. */
@@ -280,10 +280,10 @@ async function boot() {
     route('/memory', guard('developer', inSettings(memoryPage)));
     route('/people', guard('admin', inSettings(peoplePage)));
     route('/sso', guard('admin', inSettings(ssoPage)));
-    route('/approval-rules', guard('developer', inSettings(approvalRulesPage)));
-    route('/resource-types', guard('developer', inSettings(resourceTypesPage)));
-    route('/policy-packs', guard('developer', inSettings(policyPacksPage)));
-    route('/audit', guard('admin', inSettings(auditPage)));
+    route('/approval-rules', guard('developer', approvalRulesPage));
+    route('/resource-types', guard('developer', resourceTypesPage));
+    route('/policy-packs', guard('developer', policyPacksPage));
+    route('/audit', guard('admin', auditPage));
     route('/account', guard('viewer', accountPage));
   }
   start(outlet, notFound);

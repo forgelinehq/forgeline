@@ -21,6 +21,13 @@ in [PLAN.md](PLAN.md).
 | M6 | AI agents | Governed agent steps with scoped credentials and cost tracking; failure triage; fix suggestions as pull requests, never auto-applied | In progress: Claude Code agent steps built (note 007); Codex, Copilot, triage and cost tracking open |
 | M7 | Migration and breadth | Importers for Jenkinsfile and GitHub Actions workflows; Bitbucket and GitLab triggers; additional cloud targets | Not started |
 
+## Console structure and icons (note 048)
+
+Status: **steps 1 and 2 built (2026-11-20).** Seven spaces named after what people look after (Home, Agents,
+Workflows, Delivery, Cloud, Operations, Security), Lucide icons throughout, and an agent's instructions written in
+sections. Next: workflow node panels and settings in tabs with chips, then a ⌘K search. See
+[note 048](design/048-console-structure-icons-and-editors.md).
+
 ## Agent Studio (note 045)
 
 Status: **step 1: all six kinds of provider are built** (Anthropic, OpenAI, OpenAI-compatible such as Ollama, Gemini, Azure OpenAI, AWS Bedrock) (Settings › Models and providers: keys in the vault, prices,
