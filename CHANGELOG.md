@@ -78,6 +78,9 @@ section in the pull request that makes the change; a release moves it under its 
   Workflows, Delivery, Cloud, Operations and Security, with an icon on every space, tab and Settings entry (Lucide).
   Approval rules, policy packs, resource types and the audit log moved from Settings to Security, and usage and
   budgets to Agents. Every page keeps its address.
+- **Workflow panels in tabs.** A node's panel shows one part at a time (Agent, Input, Output, Next, Limits), with
+  chips for earlier answers, output fields, choices and who may answer, and each wire as a card. The workflow's settings
+  are tabs too: About, Trigger and Permissions.
 - **Instructions in sections.** An agent's instructions are written part by part: who it is, goal, steps, rules,
   output, when to stop, and examples, background or sections of your own. Steps and rules are lists, the output has
   presets, and "What the model receives" shows the one Markdown text they make. Markdown mode is still there.
