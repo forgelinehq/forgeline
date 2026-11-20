@@ -78,6 +78,9 @@ section in the pull request that makes the change; a release moves it under its 
   Workflows, Delivery, Cloud, Operations and Security, with an icon on every space, tab and Settings entry (Lucide).
   Approval rules, policy packs, resource types and the audit log moved from Settings to Security, and usage and
   budgets to Agents. Every page keeps its address.
+- **Search anywhere.** Ctrl K (⌘K on a Mac), /, or the box at the top finds a page, an agent, a workflow, a team, a
+  skill, a pipeline, a mission or a blueprint by name, and offers shortcuts such as New agent. It lists only what your
+  role may open.
 - **Workflow panels in tabs.** A node's panel shows one part at a time (Agent, Input, Output, Next, Limits), with
   chips for earlier answers, output fields, choices and who may answer, and each wire as a card. The workflow's settings
   are tabs too: About, Trigger and Permissions.

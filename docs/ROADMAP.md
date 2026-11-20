@@ -23,9 +23,9 @@ in [PLAN.md](PLAN.md).
 
 ## Console structure and icons (note 048)
 
-Status: **steps 1 to 3 built (2026-11-20).** Seven spaces named after what people look after (Home, Agents,
+Status: **built (2026-11-20).** Seven spaces named after what people look after (Home, Agents,
 Workflows, Delivery, Cloud, Operations, Security), Lucide icons throughout, and an agent's instructions written in
-sections, and workflow node panels and settings in tabs with chips and cards. Next: a ⌘K search. See
+sections, workflow node panels and settings in tabs with chips and cards, and a search box (Ctrl K) for any page or thing. See
 [note 048](design/048-console-structure-icons-and-editors.md).
 
 ## Agent Studio (note 045)

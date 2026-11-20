@@ -1,6 +1,6 @@
 # 048: Console structure, icons and section editors
 
-Status: **steps 1 to 3 built 2026-11-20; step 4 (⌘K search) next.** On 2026-11-20 the maintainer said the menus mislead ("not sure
+Status: **built 2026-11-20** (steps 1 to 4). On 2026-11-20 the maintainer said the menus mislead ("not sure
 what is where"), accepted the proposed spaces with **Workflows as a space of its own**, and asked that the agent's
 instructions and the settings panels stop being "just an input box", and that the console get proper icons. This note
 replaces the spaces of note 029, frame 1.
@@ -72,4 +72,7 @@ Markdown box, the panels long lists of fields, and the icons hand-drawn paths pl
 1. Spaces and Lucide icons, with tabs and Settings entries showing their icon. **Built.**
 2. The instructions editor in sections, with real icons on the agent's parts and in the Markdown toolbar. **Built.**
 3. Workflow node panel and settings drawer in tabs with chips. **Built.**
-4. The ⌘K search, then the new pages as their features land.
+4. The search box: Ctrl K, ⌘K or /, or the box at the top. It finds pages, agents, workflows, teams, skills,
+   pipelines, missions and blueprints, and offers shortcuts (New agent…), only what the role may open: pages from the
+   menus the role sees, things from the lists the API lets it read (`ui/lib/palette.js`, tested). **Built.** The new
+   pages come with their features.
