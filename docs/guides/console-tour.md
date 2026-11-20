@@ -412,20 +412,27 @@ never as orders; a note it took from logs or cloud data waits for you to press K
 OpenAI-compatible servers such as Ollama), turns their models on with prices, a monthly limit and a fallback, and shows a
 live log of every model call. See [Models and providers]({{ '/guides/models-and-providers/' | relative_url }}).
 
-**Agents › Runs and traces** lists every assistant chat, agent run and workflow run as a trace: what started it, who,
+**Agents › Runs and traces** lists every assistant chat, agent run, workflow run, team run, mission and pipeline run as a trace: what started it, who,
 how long it took, its model calls and tool calls, tokens and cost, and whether it failed, with filters for agents,
 workflows, the assistant and failures. A trace opens as a waterfall: the agent's run, each model call and each tool
 call (and, for a workflow, each node and the time it waited for a person) as bars on one time scale, nested under what
-started them. Click one to see its details, named as OpenTelemetry's GenAI conventions name them. A trace keeps no
-prompt, answer, instructions or tool arguments. An agent's answer has **See its trace**, and a workflow run a
-**Trace** button. Forgeline keeps the newest 1,000 traces, for at most 14 days. Developers and administrators see them.
+started them. A team run shows the lead's and each member's work under it; a mission shows a span per stage (discover,
+propose, verify) with the agent's runs and the proposals it filed; a pipeline run shows each step, with its exit code.
+Click one to see its details, named as OpenTelemetry's GenAI conventions name them. By default a trace keeps no
+prompt, answer, instructions or tool arguments (see **Keep prompts and answers** below). An agent's answer and a team
+run have **See its trace**; a workflow run, a mission and (for developers) a pipeline run have a **Trace** button. Forgeline keeps the newest 1,000 traces, for at most 14 days. Developers and administrators see them.
+
+![A pipeline run's trace]({{ '/console/154-pipeline-trace.png' | relative_url }})
 
 **Settings › Connections › OpenTelemetry** sends every trace to the observability tools you already use (Grafana,
 Datadog, Honeycomb, Jaeger, an OpenTelemetry Collector) over OTLP/HTTP. Give the endpoint (Forgeline adds
 `/v1/traces`), a service name, and headers such as an API key, whose values go into the vault and are never shown
 again; **Send a test trace** checks it. Traces are sent in the background in batches, so a slow or broken endpoint
 never slows an agent; the page counts what was sent, is waiting and was dropped, and shows the last error. What is sent
-is what Forgeline keeps, minus the person's user name: never a prompt, an answer, instructions or tool arguments.
+is what Forgeline keeps, minus the person's user name. **Keep prompts and answers in traces** (off by default) adds
+the question, the answer, and each tool's arguments and result, cut to 4 KB, with anything shaped like a credential
+and the value of every stored secret replaced by `[hidden]`; it applies to the traces kept here and to what is sent.
+Tool results can hold anything an agent read, so turn it on only where that is acceptable.
 
 ![OpenTelemetry]({{ '/console/153-opentelemetry.png' | relative_url }})
 

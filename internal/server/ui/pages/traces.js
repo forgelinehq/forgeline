@@ -6,7 +6,7 @@ import { get } from '../lib/api.js';
 import { navigate } from '../lib/router.js';
 import { spanTree, spanLook, fmtMillis, fmtTokens, fmtCost, KIND_LABEL } from '../lib/traceview.js';
 
-const FILTERS = [['', 'All'], ['agent', 'Agents'], ['workflow', 'Workflows'], ['assistant', 'Assistant'], ['failed', 'Failed']];
+const FILTERS = [['', 'All'], ['agent', 'Agents'], ['workflow', 'Workflows'], ['team', 'Teams'], ['mission', 'Missions'], ['pipeline', 'Pipelines'], ['assistant', 'Assistant'], ['failed', 'Failed']];
 
 export async function tracesPage({ params, query }) {
   if (params && params.id) return traceDetail(params.id);
@@ -16,7 +16,7 @@ export async function tracesPage({ params, query }) {
     const q = filter === 'failed' ? '?failed=1' : filter ? '?kind=' + filter : '';
     let r;
     try { r = await get('/v1/traces' + q); } catch (e) { return mount(el, errorBox(e.message)); }
-    mount(el, pageHeader('Runs and traces', 'Every assistant chat, agent run and workflow run, step by step: the model calls and tools it used, how long each took and what it cost. Prompts and answers are not kept.'),
+    mount(el, pageHeader('Runs and traces', 'Every assistant chat, agent run, workflow, team run, mission and pipeline run, step by step: the model calls and tools it used, how long each took and what it cost. Prompts and answers are kept only if an administrator turned that on under Settings › OpenTelemetry.'),
       h('div', { class: 'mb-4 flex flex-wrap gap-1.5', id: 'trace-filters' }, FILTERS.map(([v, l]) => h('button', { type: 'button', 'aria-pressed': String(filter === v), 'data-filter': v,
         class: 'rounded-full border px-3 py-1 text-sm ' + (filter === v ? 'border-brand-400 bg-brand-50 text-brand-800 dark:border-brand-500/60 dark:bg-brand-500/10 dark:text-brand-200' : 'border-slate-200 text-slate-600 hover:border-slate-300 dark:border-slate-700 dark:text-slate-300'),
         onclick: () => { filter = v; load(); } }, l))),
@@ -24,8 +24,8 @@ export async function tracesPage({ params, query }) {
         h('thead', {}, h('tr', {}, ['Run', 'Who', 'When', 'Took', 'Model calls', 'Tools', 'Tokens', 'Cost', ''].map(x => h('th', {}, x)))),
         h('tbody', {}, r.traces.map(t => h('tr', { class: 'cursor-pointer', 'data-trace': t.id, onclick: () => navigate('/traces/' + t.id) },
           h('td', {}, h('div', { class: 'flex items-center gap-2.5' }, h('span', { class: 'flex size-8 flex-none items-center justify-center rounded-lg ' + spanLook({ kind: t.kind }).tile }, icon(spanLook({ kind: t.kind }).icon, 'size-4')),
-            h('div', { class: 'min-w-0' }, h('div', { class: 'truncate font-medium' }, t.name.replace(/^(invoke_agent|invoke_workflow) /, '')), h('div', { class: 'muted text-xs' }, KIND_LABEL[t.kind] || t.kind)))),
-          h('td', { class: 'text-sm' }, t.who || h('span', { class: 'muted' }, 'schedule')),
+            h('div', { class: 'min-w-0' }, h('div', { class: 'truncate font-medium' }, t.name.replace(/^(invoke_agent|invoke_workflow|team|mission|pipeline) /, '')), h('div', { class: 'muted text-xs' }, KIND_LABEL[t.kind] || t.kind)))),
+          h('td', { class: 'text-sm' }, t.who || h('span', { class: 'muted' }, t.kind === 'pipeline' ? 'pipeline' : 'schedule')),
           h('td', { class: 'muted whitespace-nowrap text-sm', title: absTime(t.started) }, relTime(t.started)),
           h('td', { class: 'whitespace-nowrap text-sm tabular-nums' }, fmtMillis(t.millis)),
           h('td', { class: 'text-sm tabular-nums' }, String(t.model_calls)),
@@ -87,7 +87,7 @@ async function traceDetail(id) {
   mount(el,
     h('nav', { class: 'mb-2 text-sm', 'aria-label': 'Breadcrumb' }, h('a', { href: '#/traces', class: 'muted hover:underline' }, 'Runs and traces'), h('span', { class: 'muted' }, ' › '), h('span', { class: 'font-mono text-xs' }, d.id)),
     h('div', { class: 'mb-4 flex flex-wrap items-start gap-3' }, h('span', { class: 'flex size-11 flex-none items-center justify-center rounded-xl ' + look.tile }, icon(look.icon, 'size-5')),
-      h('div', { class: 'min-w-0 flex-1' }, h('h1', { class: 'h-page' }, d.name.replace(/^(invoke_agent|invoke_workflow) /, '')),
+      h('div', { class: 'min-w-0 flex-1' }, h('h1', { class: 'h-page' }, d.name.replace(/^(invoke_agent|invoke_workflow|team|mission|pipeline) /, '')),
         h('p', { class: 'muted text-sm' }, (KIND_LABEL[d.kind] || d.kind) + (d.who ? ' · ' + d.who : '') + ' · ' + absTime(d.started))),
       d.failed ? pill('failed', 'Failed') : pill('succeeded', 'OK')),
     h('div', { class: 'card card-pad mb-4 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6', id: 'trace-stats' },

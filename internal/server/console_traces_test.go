@@ -3,6 +3,8 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"github.com/forgelinehq/forgeline/internal/executor"
+	"io"
 	"strings"
 	"testing"
 	"time"
@@ -60,9 +62,12 @@ func TestAnAgentChatIsATrace(t *testing.T) {
 	if len(list.Traces) != 1 || list.Traces[0].ID != out.TraceID || list.Traces[0].Spans != nil {
 		t.Errorf("list: %+v", list.Traces)
 	}
-	json.Unmarshal(m.dev.expect(200, "GET", "/v1/traces?failed=1", nil), &list)
-	if len(list.Traces) != 0 {
-		t.Errorf("failed filter: %+v", list.Traces)
+	var failed struct {
+		Traces []TraceDoc `json:"traces"`
+	}
+	json.Unmarshal(m.dev.expect(200, "GET", "/v1/traces?kind=agent&failed=1", nil), &failed)
+	if len(failed.Traces) != 0 {
+		t.Errorf("failed filter: %+v", failed.Traces)
 	}
 	m.v.expect(403, "GET", "/v1/traces", nil)
 	m.v.expect(403, "GET", "/v1/traces/"+out.TraceID, nil)
@@ -93,7 +98,17 @@ func TestTracesArePruned(t *testing.T) {
 		_, sp := s.tracer.Start(context.Background(), "invoke_agent X", trace.Internal)
 		sp.End()
 	}
-	all, _ := s.listTraces(context.Background())
+	mine := func() []TraceDoc {
+		all, _ := s.listTraces(context.Background())
+		var out []TraceDoc
+		for _, d := range all {
+			if d.Name == "invoke_agent X" {
+				out = append(out, d)
+			}
+		}
+		return out
+	}
+	all := mine()
 	if len(all) != 3 {
 		t.Fatalf("got %d traces", len(all))
 	}
@@ -106,8 +121,7 @@ func TestTracesArePruned(t *testing.T) {
 	summarize(&d)
 	s.docs.Put(context.Background(), kindTrace, d.ID, d)
 	s.pruneTraces(context.Background())
-	all, _ = s.listTraces(context.Background())
-	if len(all) != 2 {
+	if all = mine(); len(all) != 2 {
 		t.Errorf("a trace older than 14 days was kept: %d", len(all))
 	}
 }
@@ -160,4 +174,73 @@ func namesOf(d TraceDoc) string {
 		b.WriteString(s.Name + "; ")
 	}
 	return b.String()
+}
+
+// waitTrace reads a trace until check accepts it (a run's outermost span ends just after the run is saved).
+func waitTrace(t *testing.T, s *Server, id string, check func(TraceDoc) bool) TraceDoc {
+	t.Helper()
+	var d TraceDoc
+	for i := 0; i < 150; i++ {
+		d = TraceDoc{}
+		if err := s.docs.Get(context.Background(), kindTrace, id, &d); err == nil && check(d) {
+			return d
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatalf("trace %s never became ready: %s", id, namesOf(d))
+	return d
+}
+
+// A pipeline run is a trace: the run and a span per step, failed steps marked (note 049, slice 3).
+func TestAPipelineRunIsATrace(t *testing.T) {
+	fake := &executor.Fake{Handler: func(_ context.Context, s executor.StepRun, logs io.Writer) (executor.Result, error) {
+		if s.ID == "test" {
+			return executor.Result{ExitCode: 3}, nil
+		}
+		return executor.Result{}, nil
+	}}
+	h := newHarness(t, fake)
+	_, run := h.submit(twoSteps, nil)
+	h.waitStatus(run.ID, "failed")
+	d := waitTrace(t, h.srv, trace.IDFor("run:"+run.ID), func(d TraceDoc) bool { return spanNamed(d, "pipeline ") != nil })
+	root, build, test := spanNamed(d, "pipeline "), spanNamed(d, "step build"), spanNamed(d, "step test")
+	if root == nil || build == nil || test == nil || build.ParentID != root.SpanID || test.ParentID != root.SpanID {
+		t.Fatalf("spans: %s", namesOf(d))
+	}
+	if build.Error != "" || test.Error == "" || test.Attrs["forgeline.step.exit_code"] != float64(3) || root.Error != "run_failed" || d.Kind != "pipeline" || !d.Failed {
+		t.Errorf("statuses: build %+v test %+v root %+v", build, test, root)
+	}
+}
+
+// With "keep prompts and answers" on, a trace has the question, the answer and the tool's arguments and result,
+// with anything shaped like a credential and every stored secret hidden. Off (the default) it has none of them.
+func TestTracesKeepContentOnlyWhenAsked(t *testing.T) {
+	m := newMCPHarness(t)
+	m.admin.expect(201, "PUT", "/v1/secrets/DB_PASSWORD", map[string]any{"value": "hunter2-very-secret"})
+	a := newAgent(t, m.admin, agentBody("Reviewer", nil, []string{"list_runs"}, "T0"))
+	ask := func() TraceDoc {
+		m.llm.script("```forgeline-lookup\n{\"tool\":\"list_runs\",\"args\":{\"limit\":3}}\n```", "The answer mentions hunter2-very-secret.")
+		var out struct {
+			TraceID string `json:"trace_id"`
+		}
+		json.Unmarshal(m.dev.expect(200, "POST", "/v1/ai/agents/"+a.ID+"/chat", map[string]any{"message": "QUESTION with AKIAABCDEFGHIJKLMNOP"}), &out)
+		var d TraceDoc
+		json.Unmarshal(m.dev.expect(200, "GET", "/v1/traces/"+out.TraceID, nil), &d)
+		return d
+	}
+	if d := ask(); spanNamed(d, "invoke_agent").Attrs[attrInput] != nil || spanNamed(d, "execute_tool").Attrs[attrToolArgs] != nil {
+		t.Fatal("content was kept with the setting off")
+	}
+	m.admin.expect(200, "PUT", "/v1/settings/otel", map[string]any{"content": true})
+	d := ask()
+	root, tool := spanNamed(d, "invoke_agent"), spanNamed(d, "execute_tool")
+	in, _ := root.Attrs[attrInput].(string)
+	out, _ := root.Attrs[attrOutput].(string)
+	args, _ := tool.Attrs[attrToolArgs].(string)
+	if !strings.Contains(in, "QUESTION") || !strings.Contains(in, `"role":"user"`) || !strings.Contains(out, "The answer mentions") || !strings.Contains(args, `"limit":3`) || tool.Attrs[attrToolResult] == nil {
+		t.Errorf("content: in %q out %q args %q", in, out, args)
+	}
+	if strings.Contains(in, "AKIAABCDEFGHIJKLMNOP") || strings.Contains(out, "hunter2-very-secret") || !strings.Contains(out, "[hidden]") {
+		t.Errorf("a credential or secret was kept: in %q out %q", in, out)
+	}
 }

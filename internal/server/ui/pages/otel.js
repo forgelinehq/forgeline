@@ -18,6 +18,7 @@ export async function otelPage() {
     try { v = await get('/v1/settings/otel'); } catch (e) { return mount(el, pageHeader('OpenTelemetry', ''), errorBox(e.message)); }
     const enabled = h('input', { type: 'checkbox', id: 'otel-enabled', class: 'mt-1', checked: v.enabled });
     const endpoint = h('input', { id: 'otel-endpoint', class: 'input font-mono', value: v.endpoint || '', placeholder: 'https://otlp.example.com', spellcheck: 'false' });
+    const content = h('input', { type: 'checkbox', id: 'otel-content', class: 'mt-1', checked: v.content });
     const service = h('input', { id: 'otel-service', class: 'input', value: v.service || '', placeholder: 'forgeline', maxlength: '100' });
     let headers = v.headers.map(x => ({ name: x.name, set: x.set, value: null }));
     const hbox = h('div', { class: 'space-y-2', id: 'otel-headers' });
@@ -31,7 +32,7 @@ export async function otelPage() {
     const save = h('button', { class: 'btn-primary', type: 'button', id: 'otel-save', onclick: async () => {
       save.disabled = true;
       try {
-        await put('/v1/settings/otel', { enabled: enabled.checked, endpoint: endpoint.value.trim(), service: service.value.trim(),
+        await put('/v1/settings/otel', { enabled: enabled.checked, content: content.checked, endpoint: endpoint.value.trim(), service: service.value.trim(),
           headers: headers.filter(x => x.name.trim()).map(x => (x.value ? { name: x.name.trim(), value: x.value } : { name: x.name.trim() })) });
         toast('Saved', 'ok'); load();
       } catch (e) { mount(out, errorBox(e.message)); save.disabled = false; }
@@ -53,7 +54,10 @@ export async function otelPage() {
             onclick: () => { endpoint.value = url; if (hdr && !headers.some(x => x.name.toLowerCase() === hdr.toLowerCase())) { headers.push({ name: hdr, set: false, value: '' }); drawHeaders(); } } }, n))),
           field('Service name', service, 'How Forgeline is named in your backend. Empty: forgeline.', 'otel-service'),
           h('div', {}, h('div', { class: 'label' }, 'Headers'), h('p', { class: 'muted -mt-1 mb-2 text-xs' }, 'Sent with every request, such as an API key. Values are kept in the vault and never shown again.'), hbox),
-          notice('info', 'What is sent: names, models, timings, tokens, cost, errors and roles. Never a prompt, an answer, instructions, tool arguments or a person\'s user name.'),
+          h('label', { class: 'flex items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50/60 p-3 text-sm dark:border-amber-500/30 dark:bg-amber-950/30', for: 'otel-content' }, content,
+            h('span', {}, h('span', { class: 'block font-medium' }, 'Keep prompts and answers in traces'),
+              h('span', { class: 'muted block text-xs' }, 'The question, the answer, and each tool\'s arguments and result, cut to 4 KB, with anything shaped like a credential and every stored secret hidden. They are kept here and sent with the traces. Tool results can hold anything an agent read, so turn this on only where that is acceptable.'))),
+          notice('info', 'Always sent: names, models, timings, tokens, cost, errors and roles. Never a person\'s user name; prompts and answers only with the box above ticked.'),
           out,
           h('div', { class: 'flex flex-wrap justify-end gap-2' }, test, save)),
         h('aside', { class: 'card card-pad h-fit space-y-2 text-sm', id: 'otel-stats' },

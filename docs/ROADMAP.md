@@ -23,10 +23,11 @@ in [PLAN.md](PLAN.md).
 
 ## Traces (note 049)
 
-Status: **slices 1 and 2 built (2026-11-20).** Every assistant chat, agent run and workflow run as a trace of spans (agent
-runs, model calls, tool calls, workflow nodes and waits) with the OpenTelemetry GenAI names, kept 14 days and shown
-under Agents › Runs and traces, and sent to any OpenTelemetry backend over OTLP (checked with Jaeger). Next: missions,
-teams and pipelines. Phase 1 of the product direction; evals come next. See [note 049](design/049-traces.md).
+Status: **built (2026-11-20).** Every assistant chat, agent run, workflow run, team run, mission and pipeline run is
+a trace of spans (agent runs, model calls, tool calls, workflow nodes and waits, mission stages, pipeline steps) with
+the OpenTelemetry GenAI names, kept 14 days, shown under Agents › Runs and traces and sent to any OpenTelemetry backend
+over OTLP (checked with Jaeger). Prompts and answers are kept only when an administrator turns that on. Phase 1 of
+the product direction; phase 2, evals, comes next. See [note 049](design/049-traces.md).
 
 ## Console structure and icons (note 048)
 

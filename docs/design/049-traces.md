@@ -1,6 +1,6 @@
 # 049: Traces of what agents do, with OpenTelemetry
 
-Status: **slices 1 and 2 built 2026-11-20**; slice 3 (missions, teams, pipelines, content on request) next. Phase 1 of the product direction the maintainer accepted on
+Status: **built 2026-11-20** (slices 1 to 3). Phase 1 of the product direction the maintainer accepted on
 2026-11-20 (traces, then evals, then guardrails and supply chain, then AI SRE). Evals, security alerts and incident
 investigation all read traces, so traces come first.
 
@@ -86,7 +86,12 @@ Forgeline needs; if a later need (metrics, logs, sampling rules) makes the SDK w
    trace with the right nesting, span kinds, GenAI attributes and tokens, and no user name
    (`FORGELINE_TEST_JAEGER=127.0.0.1 go test ./internal/trace -run TestSendReachesJaeger`). Not yet tried with a hosted
    backend (Grafana Cloud, Datadog, Honeycomb).
-3. Missions, teams and pipelines; proposals as events; content on request.
+3. Missions, teams and pipelines; content on request. **Built:** a team run is a trace with the lead's and members'
+   agent runs under it; a mission is one trace across its stretches, with a span per stage; a pipeline run is a
+   trace with a span per step and its exit code (checked with a real Docker run). A proposal shows as the
+   `execute_tool propose_*` span that filed it, under the stage that filed it, rather than as a span event. Keeping
+   prompts and answers is a setting under OpenTelemetry (`content`), off by default; text is passed through the
+   console's credential shapes and every stored secret's value, then cut to 4 KB.
 
 ## Decisions for the maintainer
 

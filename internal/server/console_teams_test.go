@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"github.com/forgelinehq/forgeline/internal/trace"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -118,6 +119,11 @@ func TestTeamPlansWorksAndAnswers(t *testing.T) {
 	if run.Status != trDone || len(run.Tasks) != 2 || run.Tasks[0].MemberName != "Run reader" || run.Tasks[1].MemberName != "Platform reader" ||
 		run.Tasks[0].Status != "done" || !strings.Contains(run.Tasks[0].Output, "Read the failed runs") || !strings.HasPrefix(run.Answer, "Team answer") || run.PlanNote == "" {
 		t.Fatalf("run = %+v", run)
+	}
+	// The run is one trace (note 049): the team, and the lead's and members' agent runs under it.
+	tr := waitTrace(t, h.srv, trace.IDFor("team:"+run.ID), func(d TraceDoc) bool { return spanNamed(d, "team ") != nil })
+	if tr.Kind != "team" || strings.Count(namesOf(tr), "invoke_agent ") < 3 || spanNamed(tr, "invoke_agent Run reader").ParentID != spanNamed(tr, "team ").SpanID {
+		t.Errorf("team trace: %s", namesOf(tr))
 	}
 	// The lead's answer prompt holds the members' work as data.
 	msgs := model.messages()

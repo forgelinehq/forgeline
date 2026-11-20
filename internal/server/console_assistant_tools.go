@@ -229,15 +229,28 @@ func (s *Server) runLookup(ctx context.Context, p Principal, c lookupCall) (stri
 // askWithLookups asks the model, runs any lookups it requests (up to maxLookups) and returns the
 // final answer and the names of the lookups that ran.
 func (s *Server) askWithLookups(ctx context.Context, p Principal, turns []chatTurn, ctxText string, audit func(detail string, ok bool)) (string, []string, error) {
-	var used []string
-	nudged := false
-	obs := lookupObserver(ctx)
 	ctx, span := s.startAgentSpan(ctx, p)
 	defer span.End()
 	if sink, ok := ctx.Value(lookupSinkKey{}).(*lookupSink); ok && sink.traceID == "" {
 		sink.traceID = span.TraceID()
 	}
-	defer func() { span.Set("forgeline.tool_calls", int64(len(used))) }()
+	content := s.traceContent(ctx)
+	if content && len(turns) > 0 {
+		span.Set(attrInput, s.messagesAttr(ctx, "user", turns[len(turns)-1].Content))
+	}
+	reply, used, err := s.lookupLoop(context.WithValue(ctx, traceContentKey{}, content), p, turns, ctxText, audit, span)
+	span.Set("forgeline.tool_calls", int64(len(used)))
+	if content && err == nil {
+		span.Set(attrOutput, s.messagesAttr(ctx, "assistant", reply))
+	}
+	return reply, used, err
+}
+
+// lookupLoop asks the model, runs the lookups it asks for, and returns its answer (see askWithLookups).
+func (s *Server) lookupLoop(ctx context.Context, p Principal, turns []chatTurn, ctxText string, audit func(detail string, ok bool), span *trace.Active) (string, []string, error) {
+	var used []string
+	nudged := false
+	obs := lookupObserver(ctx)
 	for i := 0; ; i++ {
 		reply, err := s.askAssistant(ctx, p.Role, turns, ctxText)
 		if err != nil {
@@ -277,6 +290,12 @@ func (s *Server) askWithLookups(ctx context.Context, p Principal, turns []chatTu
 		if lerr != nil {
 			tspan.Set(attrErrorType, "tool_error")
 			tspan.Fail("tool_error")
+		}
+		if on, _ := ctx.Value(traceContentKey{}).(bool); on {
+			tspan.Set(attrToolArgs, s.contentText(ctx, string(call.Args)))
+			if lerr == nil {
+				tspan.Set(attrToolResult, s.contentText(ctx, out))
+			}
 		}
 		tspan.End()
 		if mt := memTurnFrom(ctx); mt != nil && call.Tool != rememberTool {

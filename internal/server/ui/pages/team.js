@@ -194,6 +194,7 @@ function runView(r, nm) {
     h('div', { class: 'card card-pad' },
       h('div', { class: 'flex flex-wrap items-center gap-2' }, h('span', { class: RUN[r.status]?.[0] }, RUN[r.status]?.[1]), h('span', { class: 'muted text-xs' }, r.trigger === 'schedule' ? `given by its schedule ${relTime(r.started)}, as ${r.run_as}` : `given by ${r.by} ${relTime(r.started)}`)),
       h('p', { class: 'mt-2 font-medium' }, r.goal),
+      r.trace_id ? h('a', { class: 'muted mt-1 inline-flex items-center gap-1 text-xs hover:underline', href: '#/traces/' + r.trace_id, id: 'team-run-trace' }, icon('trace', 'size-3.5'), 'See its trace') : null,
       r.plan_note && h('p', { class: 'muted mt-2 text-sm' }, h('b', {}, r.lead_name + ' planned: '), r.plan_note),
       r.error && h('div', { class: 'mt-3' }, errorBox(r.error))),
     r.tasks.length ? h('div', { class: 'grid gap-3 xl:grid-cols-2', id: 'team-tasks' }, r.tasks.map(tt => h('article', { class: 'card border-l-4 p-4 ' + (TASK[tt.status]?.[0] || ''), 'data-task': tt.member, 'data-task-status': tt.status },

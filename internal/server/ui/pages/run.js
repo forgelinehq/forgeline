@@ -86,6 +86,7 @@ export async function runPage({ params }) {
         icon('chevron', 'size-3'), h('span', { class: 'font-mono text-xs' }, run.id.slice(0, 8))),
       pageHeader(run.pipeline, null,
         pill(run.status),
+        run.trace_id && atLeast(session.role, 'developer') ? h('a', { class: 'btn-secondary', href: '#/traces/' + run.trace_id, id: 'run-trace' }, icon('trace', 'size-3.5'), 'Trace') : null,
         live && canAct && h('button', { class: 'btn-secondary', type: 'button', onclick: cancel }, icon('stop', 'size-3.5'), 'Cancel'),
         !live && canAct && run.pipeline_id && h('button', { class: 'btn-primary', type: 'button', onclick: runAgain }, icon('play', 'size-3.5'), 'Run again')),
       run.reason && run.status !== 'succeeded' && h('div', { class: 'mb-4' }, errorBox(run.reason)),

@@ -25,10 +25,12 @@ const (
 )
 
 type otelSettings struct {
-	Enabled   bool      `json:"enabled"`
-	Endpoint  string    `json:"endpoint"`
-	Service   string    `json:"service"`
-	Headers   []string  `json:"headers"` // names; values are in the vault
+	Enabled  bool     `json:"enabled"`
+	Endpoint string   `json:"endpoint"`
+	Service  string   `json:"service"`
+	Headers  []string `json:"headers"` // names; values are in the vault
+	// Content keeps prompts, answers and tool arguments and results in traces, with credentials hidden (note 049).
+	Content   bool      `json:"content"`
 	UpdatedBy string    `json:"updated_by,omitempty"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
@@ -99,6 +101,7 @@ type otelRequest struct {
 	Enabled  bool   `json:"enabled"`
 	Endpoint string `json:"endpoint"`
 	Service  string `json:"service"`
+	Content  bool   `json:"content"`
 	Headers  []struct {
 		Name  string  `json:"name"`
 		Value *string `json:"value"` // nil keeps the stored value
@@ -168,7 +171,7 @@ func (s *Server) handlePutOTel(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	sort.Strings(names)
-	o := otelSettings{Enabled: q.Enabled, Endpoint: q.Endpoint, Service: q.Service, Headers: names, UpdatedBy: who.Name, UpdatedAt: time.Now().UTC()}
+	o := otelSettings{Enabled: q.Enabled, Endpoint: q.Endpoint, Service: q.Service, Headers: names, Content: q.Content, UpdatedBy: who.Name, UpdatedAt: time.Now().UTC()}
 	if o.Headers == nil {
 		o.Headers = []string{}
 	}
@@ -177,7 +180,7 @@ func (s *Server) handlePutOTel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.reloadOTel(ctx)
-	s.auditReq(r, "otel.update", "settings/otel", fmt.Sprintf("sending %v to %s, headers %s", o.Enabled, o.Endpoint, strings.Join(o.Headers, ", ")), true)
+	s.auditReq(r, "otel.update", "settings/otel", fmt.Sprintf("sending %v to %s, headers %s, prompts and answers kept %v", o.Enabled, o.Endpoint, strings.Join(o.Headers, ", "), o.Content), true)
 	writeJSON(w, http.StatusOK, s.otelView(ctx))
 }
 
