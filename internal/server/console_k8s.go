@@ -765,5 +765,5 @@ func (s *Server) lookupK8sResources(ctx context.Context, raw json.RawMessage) (s
 	if err != nil {
 		return "", err
 	}
-	return formatInventory(fmt.Sprintf("Cluster %s (id %q), Kubernetes %s, read %s.", c.Name, c.ID, c.Version, view.FetchedAt), view, a.Kind)
+	return formatInventory(fmt.Sprintf("Cluster %s (id %q), Kubernetes %s, read %s.", c.Name, c.ID, c.Version, view.FetchedAt), view, a.Kind, "")
 }

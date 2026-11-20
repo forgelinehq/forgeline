@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -347,10 +348,13 @@ func TestAWSResourcesLookupShowsTheExplorerViewAndSharesItsCache(t *testing.T) {
 
 	m.ask(m.dev, lookupReply("aws_resources", map[string]any{}))
 	res := m.llm.lastUser(1)
-	for _, want := range []string{"Account 111122223333", "ECS clusters (1):", "- payments [ACTIVE]", "Running tasks: 3", "ECS services (1):", "- web", "Desired: 3", "S3 buckets (1):", "Lambda functions: none"} {
+	for _, want := range []string{"Account 111122223333", "An overview", "ECS clusters (1):", "payments [ACTIVE]", "ECS services (1):", "web [ACTIVE]", "S3 buckets (1):", "Lambda functions: none"} {
 		if !strings.Contains(res, want) {
 			t.Errorf("missing %q in:\n%s", want, res)
 		}
+	}
+	if strings.Contains(res, "Running tasks") {
+		t.Errorf("the overview should leave details to a service filter:\n%s", res)
 	}
 	n := stub.count("s3api list-buckets")
 	m.v.expect(200, "GET", "/v1/infra/aws/resources", nil) // the console's own read is served from the same cache
@@ -359,8 +363,12 @@ func TestAWSResourcesLookupShowsTheExplorerViewAndSharesItsCache(t *testing.T) {
 		t.Errorf("the lookup and the console read AWS separately (%d -> %d)", n, got)
 	}
 	res = m.llm.lastUser(1)
-	if strings.Contains(res, "S3 buckets") || !strings.Contains(res, "ECS services") {
+	if strings.Contains(res, "S3 buckets") || !strings.Contains(res, "ECS services") || !strings.Contains(res, "- payments [ACTIVE]") || !strings.Contains(res, "Running tasks: 3") || !strings.Contains(res, "Desired: 3") {
 		t.Errorf("service filter: %s", res)
+	}
+	m.ask(m.dev, lookupReply("aws_resources", map[string]any{"service": "ecs", "name": "WEB"}))
+	if res = m.llm.lastUser(1); !strings.Contains(res, `ECS services (1 of 1 match "WEB")`) || strings.Contains(res, "payments [ACTIVE]") {
+		t.Errorf("name filter: %s", res)
 	}
 	m.ask(m.dev, lookupReply("aws_resources", map[string]any{"service": "nope"}))
 	if !strings.Contains(m.llm.lastUser(1), "no service matches") {
@@ -369,5 +377,30 @@ func TestAWSResourcesLookupShowsTheExplorerViewAndSharesItsCache(t *testing.T) {
 	m.ask(m.dev, lookupReply("aws_resources", map[string]any{"account": "ghost"}))
 	if !strings.Contains(m.llm.lastUser(1), "no such AWS account") {
 		t.Errorf("unknown account: %s", m.llm.lastUser(1))
+	}
+}
+
+// A big account is counted, not cut off in the middle: what does not fit says how many and how to see them.
+func TestInventoryTextFitsOneLookup(t *testing.T) {
+	d := AWSInventoryJSON{Services: []AWSServiceJSON{{ID: "ec2", Label: "EC2 instances"}, {ID: "ecr", Label: "ECR repositories"}}}
+	for i := 0; i < 400; i++ {
+		d.Services[0].Resources = append(d.Services[0].Resources, AWSResourceJSON{Name: fmt.Sprintf("instance-with-a-long-name-%03d", i), ID: fmt.Sprintf("i-%012d", i), State: "running",
+			Fields: []AWSFieldJSON{{Label: "Type", Value: "m5.large"}, {Label: "VPC", Value: "vpc-0123456789"}}})
+	}
+	d.Services[0].Count = 400
+	d.Services[1].Resources, d.Services[1].Count = []AWSResourceJSON{{Name: "submission-qa-auto", ID: "submission-qa-auto"}}, 1
+	for _, svc := range []string{"", "ec2"} {
+		out, err := formatInventory("Account x.", d, svc, "")
+		if err != nil || len(out) > maxLookupResult || !strings.Contains(out, "more not shown") || !strings.Contains(out, "did not fit in one answer") {
+			t.Errorf("service %q: %d bytes, err %v:\n%.300s", svc, len(out), err, out)
+		}
+	}
+	out, _ := formatInventory("Account x.", d, "", "dev01")
+	if strings.Contains(out, "instance-with") || strings.Contains(out, "ECR") {
+		t.Errorf("a name filter with no match lists nothing: %s", out)
+	}
+	out, _ = formatInventory("Account x.", d, "", "-007")
+	if !strings.Contains(out, `EC2 instances (1 of 400 match "-007")`) || !strings.Contains(out, "instance-with-a-long-name-007 [running]") {
+		t.Errorf("name filter: %s", out)
 	}
 }

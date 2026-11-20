@@ -92,6 +92,12 @@ section in the pull request that makes the change; a release moves it under its 
 - **Workflows refuse agents with tools their run cannot use.** Saving a workflow whose agent has a tool its run-as role
   may never use (such as `call_aws`, for administrators only, in a workflow running as a viewer) now says so, instead of
   every run quietly going without it.
+- **Big AWS accounts.** `aws_resources` gives an overview (names and states) without a service and details with one,
+  takes a `name` filter (such as `dev01`), and says how many resources did not fit instead of cutting the list off.
+  ECS services are read eight clusters at a time, so accounts with dozens of clusters no longer time out.
+- **Longer work per question.** The assistant and agents get 10 lookups per question instead of 6, and preparing a
+  card does not count, so the card a question was for always comes back. A workflow step's task may be 4,000
+  characters.
 - **Publish agent versions only when they pass.** An agent's page can name a suite a new version must pass. Saving then
   makes a candidate; Publish makes it current once the suite has passed on it, and "Run the suite, publish if it
   passes" does both. Workflows, teams and schedules keep using the current version meanwhile.

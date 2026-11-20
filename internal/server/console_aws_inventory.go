@@ -265,6 +265,7 @@ func (s *Server) lookupAWSResources(ctx context.Context, raw json.RawMessage) (s
 	var a struct {
 		Account string `json:"account"`
 		Service string `json:"service"`
+		Name    string `json:"name"`
 	}
 	if err := decodeArgs(raw, &a); err != nil {
 		return "", err
@@ -288,7 +289,7 @@ func (s *Server) lookupAWSResources(ctx context.Context, raw json.RawMessage) (s
 		return "", errors.New(d.Error)
 	}
 	d = withoutOffServices(d, off)
-	text, err := formatInventory(fmt.Sprintf("Account %s (id %q), region %s, read %s. Counts include every resource; names are listed up to %d per service.", d.Account, a.Account, d.Region, d.FetchedAt, inventoryMax), d, a.Service)
+	text, err := formatInventory(fmt.Sprintf("Account %s (id %q), region %s, read %s. Counts include every resource; at most %d are listed per service.", d.Account, a.Account, d.Region, d.FetchedAt, inventoryMax), d, a.Service, a.Name)
 	return text + offServicesNote(off), err
 }
 
@@ -308,13 +309,21 @@ func withoutOffServices(d AWSInventoryJSON, off map[string]bool) AWSInventoryJSO
 	return d
 }
 
-// formatInventory renders an inventory as compact text for the assistant and agents. A service filter
-// narrows it by id or label.
-func formatInventory(header string, d AWSInventoryJSON, service string) (string, error) {
+// formatInventory renders an inventory as text for the assistant and agents, within what one lookup may return. With
+// no service filter it is an overview: each service's count and its resources' names and states. A service filter
+// shows each resource's details. A name filter keeps resources whose name or id contains it ("dev01"). Whatever does
+// not fit is counted and said, never cut off in the middle.
+func formatInventory(header string, d AWSInventoryJSON, service, name string) (string, error) {
 	want := strings.ToLower(strings.TrimSpace(service))
+	nameWant := strings.ToLower(strings.TrimSpace(name))
+	detail := want != ""
+	budget := maxLookupResult - 600
 	var b strings.Builder
 	b.WriteString(header + "\n")
-	shown := 0
+	if !detail {
+		b.WriteString("An overview: names and states only. Ask with a service (and a name) for details such as tasks, images, sizes and settings.\n")
+	}
+	shown, left := 0, 0
 	for _, svc := range d.Services {
 		if want != "" && !strings.Contains(strings.ToLower(svc.ID), want) && !strings.Contains(strings.ToLower(svc.Label), want) {
 			continue
@@ -325,31 +334,78 @@ func formatInventory(header string, d AWSInventoryJSON, service string) (string,
 			fmt.Fprintf(&b, "\n%s: could not be listed (%s)\n", svc.Label, svc.Error)
 			continue
 		case svc.Count == 0:
-			fmt.Fprintf(&b, "\n%s: none\n", svc.Label)
+			if nameWant == "" {
+				fmt.Fprintf(&b, "\n%s: none\n", svc.Label)
+			}
 			continue
 		}
-		fmt.Fprintf(&b, "\n%s (%d):\n", svc.Label, svc.Count)
+		var lines []string
 		for _, r := range svc.Resources {
-			line := "- " + r.Name
-			if r.ID != r.Name {
+			if nameWant != "" && !strings.Contains(strings.ToLower(r.Name+" "+r.ID+" "+fieldText(r.Fields)), nameWant) {
+				continue
+			}
+			line := r.Name
+			if detail && r.ID != r.Name {
 				line += " (" + r.ID + ")"
 			}
 			if r.State != "" {
 				line += " [" + r.State + "]"
 			}
-			if r.Created != "" {
-				line += " created " + r.Created
+			if detail {
+				if r.Created != "" {
+					line += " created " + r.Created
+				}
+				for _, f := range r.Fields {
+					line += "; " + f.Label + ": " + f.Value
+				}
+				line = "- " + truncate(line, 240)
 			}
-			for _, f := range r.Fields {
-				line += "; " + f.Label + ": " + f.Value
+			lines = append(lines, line)
+		}
+		if nameWant != "" && len(lines) == 0 {
+			continue
+		}
+		count := fmt.Sprint(svc.Count)
+		if nameWant != "" {
+			count = fmt.Sprintf("%d of %d match %q", len(lines), svc.Count, name)
+		} else if len(svc.Resources) < svc.Count {
+			count = fmt.Sprintf("%d, %d listed", svc.Count, len(svc.Resources))
+		}
+		fmt.Fprintf(&b, "\n%s (%s):\n", svc.Label, count)
+		sep := "\n"
+		if !detail {
+			sep = ", "
+		}
+		for k, line := range lines {
+			if b.Len()+len(line) > budget {
+				left += len(lines) - k
+				fmt.Fprintf(&b, "%s… and %d more not shown (ask with service %q and a name to see them)\n", map[bool]string{true: "", false: "\n"}[detail], len(lines)-k, svc.ID)
+				break
 			}
-			b.WriteString(truncate(line, 240) + "\n")
+			b.WriteString(line)
+			if k < len(lines)-1 {
+				b.WriteString(sep)
+			}
+		}
+		if !detail || len(lines) == 0 {
+			b.WriteString("\n")
 		}
 	}
 	if shown == 0 {
 		return "", fmt.Errorf("no service matches %q; leave service out to see them all", service)
 	}
+	if left > 0 {
+		fmt.Fprintf(&b, "\n%d resources did not fit in one answer; narrow with service and name.\n", left)
+	}
 	return b.String(), nil
+}
+
+func fieldText(fs []AWSFieldJSON) string {
+	var b strings.Builder
+	for _, f := range fs {
+		b.WriteString(f.Value + " ")
+	}
+	return b.String()
 }
 
 func (s *Server) fetchInventory(ctx context.Context, st awsSettings) AWSInventoryJSON {
@@ -646,37 +702,58 @@ func collectECS(ctx context.Context, s *Server, st awsSettings) ([]AWSServiceJSO
 	}
 	fillService(&clusters, res)
 
-	// Services are best effort: a role that can list clusters may not be allowed to list services.
-	var svcRes []AWSResourceJSON
-	for _, arn := range lc.ClusterArns {
-		cname := lastSegment(arn)
-		lo, err := s.aws(ctx, st, "ecs", "list-services", "--cluster", cname)
-		if err != nil {
-			services.Error = inventoryError(err)
-			continue
-		}
-		var ls struct{ ServiceArns []string }
-		if json.Unmarshal(lo, &ls) != nil {
-			continue
-		}
-		for i := 0; i < len(ls.ServiceArns); i += 10 {
-			end := min(i+10, len(ls.ServiceArns))
-			do, err := s.aws(ctx, st, append([]string{"ecs", "describe-services", "--cluster", cname, "--services"}, ls.ServiceArns[i:end]...)...)
-			if err != nil {
+	// Services are best effort: a role that can list clusters may not be allowed to list services. Clusters are read
+	// eight at a time: an account with dozens of clusters needs a hundred or more calls, which one after another did
+	// not finish within the inventory's time.
+	perCluster := make([][]AWSResourceJSON, len(lc.ClusterArns))
+	var errMu sync.Mutex
+	sem := make(chan struct{}, 8)
+	var wg sync.WaitGroup
+	for ci, arn := range lc.ClusterArns {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			fail := func(err error) {
+				errMu.Lock()
 				services.Error = inventoryError(err)
-				break
+				errMu.Unlock()
 			}
-			sres, err := parseInventory(invSpec{list: "services", idPath: "serviceName", namePath: "serviceName", arnPath: "serviceArn", statePath: "status", created: "createdAt",
-				fields: [][2]string{{"Desired", "desiredCount"}, {"Running", "runningCount"}, {"Pending", "pendingCount"}, {"Launch type", "launchType"}, {"Task definition", "taskDefinition"}}}, do)
+			cname := lastSegment(arn)
+			lo, err := s.aws(ctx, st, "ecs", "list-services", "--cluster", cname)
 			if err != nil {
-				continue
+				fail(err)
+				return
 			}
-			for k := range sres {
-				sres[k].Fields = append([]AWSFieldJSON{{Label: "Cluster", Value: cname}}, sres[k].Fields...)
-				sres[k].Fields = shortTaskDef(sres[k].Fields)
+			var ls struct{ ServiceArns []string }
+			if json.Unmarshal(lo, &ls) != nil {
+				return
 			}
-			svcRes = append(svcRes, sres...)
-		}
+			for i := 0; i < len(ls.ServiceArns); i += 10 {
+				end := min(i+10, len(ls.ServiceArns))
+				do, err := s.aws(ctx, st, append([]string{"ecs", "describe-services", "--cluster", cname, "--services"}, ls.ServiceArns[i:end]...)...)
+				if err != nil {
+					fail(err)
+					return
+				}
+				sres, err := parseInventory(invSpec{list: "services", idPath: "serviceName", namePath: "serviceName", arnPath: "serviceArn", statePath: "status", created: "createdAt",
+					fields: [][2]string{{"Desired", "desiredCount"}, {"Running", "runningCount"}, {"Pending", "pendingCount"}, {"Launch type", "launchType"}, {"Task definition", "taskDefinition"}}}, do)
+				if err != nil {
+					continue
+				}
+				for k := range sres {
+					sres[k].Fields = append([]AWSFieldJSON{{Label: "Cluster", Value: cname}}, sres[k].Fields...)
+					sres[k].Fields = shortTaskDef(sres[k].Fields)
+				}
+				perCluster[ci] = append(perCluster[ci], sres...)
+			}
+		}()
+	}
+	wg.Wait()
+	var svcRes []AWSResourceJSON
+	for _, r := range perCluster {
+		svcRes = append(svcRes, r...)
 	}
 	fillService(&services, svcRes)
 	return []AWSServiceJSON{clusters, services}, nil

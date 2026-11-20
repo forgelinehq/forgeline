@@ -30,7 +30,7 @@ const (
 
 	maxWFStages        = 6
 	maxWFStepsPerStage = 4
-	maxWFTask          = 1000
+	maxWFTask          = 4000
 	maxWFRuns          = 200
 	maxStepOutput      = 6 << 10
 	minEveryMinutes    = 15

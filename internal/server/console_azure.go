@@ -369,5 +369,5 @@ func (s *Server) lookupAzureResources(ctx context.Context, raw json.RawMessage) 
 	if d.Error != "" {
 		return "", errors.New(d.Error)
 	}
-	return formatInventory(fmt.Sprintf("Azure, %s, read %s. Counts include every resource found; names are listed up to %d per service.", d.Region, d.FetchedAt, inventoryMax), d, a.Service)
+	return formatInventory(fmt.Sprintf("Azure, %s, read %s. Counts include every resource found; names are listed up to %d per service.", d.Region, d.FetchedAt, inventoryMax), d, a.Service, "")
 }
