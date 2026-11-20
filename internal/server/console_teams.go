@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/forgelinehq/forgeline/internal/trace"
 	"net/http"
 	"regexp"
 	"sort"
@@ -350,7 +351,10 @@ func (s *Server) handleGetTeamRun(w http.ResponseWriter, r *http.Request) {
 		s.defError(w, "team run", err)
 		return
 	}
-	writeJSON(w, http.StatusOK, run)
+	writeJSON(w, http.StatusOK, struct {
+		TeamRun
+		TraceID string `json:"trace_id"` // the run's trace (note 049)
+	}{run, trace.IDFor("team:" + run.ID)})
 }
 
 // handleStartTeamRun gives a team a goal. The run goes on in the background; the console follows it.
@@ -435,6 +439,18 @@ type teamPlan struct {
 
 func (s *Server) workTeamRun(ctx context.Context, p Principal, t Team, run TeamRun) {
 	var mu sync.Mutex
+	ctx, span := s.startTeamSpan(ctx, p, t, run.ID)
+	defer func() {
+		mu.Lock()
+		status := run.Status
+		mu.Unlock()
+		span.Set("forgeline.team.status", status)
+		if status == trFailed {
+			span.Set(attrErrorType, "team_failed")
+			span.Fail("team_failed")
+		}
+		span.End()
+	}()
 	save := func(change func(*TeamRun)) {
 		mu.Lock()
 		defer mu.Unlock()

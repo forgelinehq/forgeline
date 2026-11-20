@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/forgelinehq/forgeline/internal/trace"
 	"net/http"
 	"regexp"
 	"sort"
@@ -298,7 +299,10 @@ func (s *Server) handleGetMission(w http.ResponseWriter, r *http.Request) {
 		s.defError(w, "mission", err)
 		return
 	}
-	writeJSON(w, http.StatusOK, m)
+	writeJSON(w, http.StatusOK, struct {
+		Mission
+		TraceID string `json:"trace_id"` // the mission's trace (note 049)
+	}{m, trace.IDFor("mission:" + m.ID)})
 }
 
 func (s *Server) handleCancelMission(w http.ResponseWriter, r *http.Request) {
@@ -349,6 +353,21 @@ func (s *Server) driveMissionAsync(id string) {
 
 // driveMission runs stages until the mission ends or waits for approvals.
 func (s *Server) driveMission(ctx context.Context, id string) {
+	// One span per stretch (a mission waits for approvals between stretches), in the mission's own trace (note 049).
+	if m, err := s.loadMission(context.Background(), id); err == nil && !m.final() && m.Status != msWaiting {
+		var span *trace.Active
+		ctx, span = s.startMissionSpan(ctx, m)
+		defer func() {
+			if m, err := s.loadMission(context.Background(), id); err == nil {
+				span.Set("forgeline.mission.status", m.Status)
+				if m.Status == msFailed || m.Status == msStopped {
+					span.Set(attrErrorType, "mission_"+m.Status)
+					span.Fail("mission_" + m.Status)
+				}
+			}
+			span.End()
+		}()
+	}
 	for {
 		m, err := s.loadMission(context.Background(), id)
 		if err != nil || m.final() || m.Status == msWaiting {
@@ -356,18 +375,24 @@ func (s *Server) driveMission(ctx context.Context, id string) {
 		}
 		run := &missionRun{id: m.ID, account: m.Account, budget: m.Budget, used: m.Used}
 		var next string
+		sctx, stage := s.tracer.Start(ctx, "stage "+m.Stage, trace.Internal, trace.WithAttrs(map[string]any{"forgeline.mission.stage": m.Stage}))
 		switch m.Stage {
 		case msDiscover:
-			next, err = s.missionDiscover(ctx, &m, run)
+			next, err = s.missionDiscover(sctx, &m, run)
 		case msPropose:
-			next, err = s.missionPropose(ctx, &m, run)
+			next, err = s.missionPropose(sctx, &m, run)
 		case msVerify:
-			next, err = s.missionVerify(ctx, &m, run)
+			next, err = s.missionVerify(sctx, &m, run)
 		case msApproval:
 			next, err = msApproval, nil
 		default:
 			next = msReport
 		}
+		if err != nil {
+			stage.Set(attrErrorType, "stage_failed")
+			stage.Fail("stage_failed")
+		}
+		stage.End()
 		m.Used = run.snapshot()
 		if err != nil {
 			s.endMission(&m, err)

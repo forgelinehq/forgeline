@@ -217,3 +217,11 @@ func sortByStart(spans []Span) {
 		}
 	}
 }
+
+// ContextWith is ctx carrying a span, so work recorded elsewhere (a step reported by a callback) nests under it.
+func ContextWith(ctx context.Context, a *Active) context.Context {
+	if a == nil {
+		return ctx
+	}
+	return context.WithValue(ctx, ctxKey{}, a)
+}

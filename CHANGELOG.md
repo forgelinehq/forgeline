@@ -78,6 +78,9 @@ section in the pull request that makes the change; a release moves it under its 
   Workflows, Delivery, Cloud, Operations and Security, with an icon on every space, tab and Settings entry (Lucide).
   Approval rules, policy packs, resource types and the audit log moved from Settings to Security, and usage and
   budgets to Agents. Every page keeps its address.
+- **More traces, and prompts on request** (design note 049). Team runs, missions (a span per stage) and pipeline runs
+  (a span per step) are traces too, linked from their pages. Settings › OpenTelemetry can keep prompts, answers and
+  tool arguments and results in traces, with credentials and stored secrets hidden; it is off by default.
 - **Send traces to your observability tools** (design note 049). Settings › Connections › OpenTelemetry sends every
   trace over OTLP/HTTP to Grafana, Datadog, Honeycomb, Jaeger or an OpenTelemetry Collector, in the background, with
   header values (API keys) kept in the vault. A person's user name is never sent. Checked against Jaeger.

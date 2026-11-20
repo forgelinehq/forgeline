@@ -1,6 +1,6 @@
 // Forgeline web console: how a trace is drawn (design note 049). No DOM, so it runs under Node in tests.
 
-export const KIND_LABEL = { agent: 'Agent run', workflow: 'Workflow run', assistant: 'Assistant chat', model: 'Model call' };
+export const KIND_LABEL = { agent: 'Agent run', workflow: 'Workflow run', assistant: 'Assistant chat', model: 'Model call', team: 'Team run', mission: 'Mission', pipeline: 'Pipeline run' };
 
 /** Spans in the order to draw them: each parent followed by its children, oldest first, with how deep each is. */
 export function spanTree(spans) {
@@ -24,7 +24,13 @@ export function spanTree(spans) {
 export function spanLook(s) {
   const op = s.attrs && s.attrs['gen_ai.operation.name'];
   const node = s.attrs && s.attrs['forgeline.node.kind'];
-  const kind = s.kind && !['internal', 'client'].includes(s.kind) ? s.kind : '';
+  const kind = (s.attrs && s.attrs['forgeline.trace.kind']) || (s.kind && !['internal', 'client'].includes(s.kind) ? s.kind : '');
+  const slate = 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300';
+  if (kind === 'team') return { label: 'Team run', icon: 'team', tile: 'bg-teal-100 text-teal-700 dark:bg-teal-500/15 dark:text-teal-300', bar: 'bg-teal-500' };
+  if (kind === 'mission') return { label: 'Mission', icon: 'mission', tile: 'bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300', bar: 'bg-rose-500' };
+  if (kind === 'pipeline') return { label: 'Pipeline run', icon: 'pipeline', tile: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300', bar: 'bg-emerald-500' };
+  if (s.attrs && s.attrs['forgeline.step.id'] !== undefined) return { label: 'Step', icon: 'play', tile: slate, bar: 'bg-emerald-400' };
+  if (s.attrs && s.attrs['forgeline.mission.stage'] !== undefined) return { label: 'Stage (' + s.attrs['forgeline.mission.stage'] + ')', icon: 'flow', tile: slate, bar: 'bg-rose-300' };
   if (op === 'chat' || kind === 'model') return { label: 'Model call', icon: 'model', tile: 'bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300', bar: 'bg-violet-500' };
   if (op === 'execute_tool') return { label: 'Tool call', icon: 'tool', tile: 'bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300', bar: 'bg-amber-500' };
   if (op === 'invoke_workflow' || kind === 'workflow') return { label: 'Workflow', icon: 'workflows', tile: 'bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300', bar: 'bg-sky-500' };

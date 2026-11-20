@@ -23,6 +23,8 @@ eq('tree order and depth', spanTree(spans).map(r => r.span.name + ':' + r.depth)
 eq('looks', spans.map(s => spanLook(s).label), ['Tool call', 'Agent run', 'Model call', 'Agent run']);
 eq('node look', spanLook({ attrs: { 'forgeline.node.kind': 'ask' } }).icon, 'ask');
 eq('trace kinds', [spanLook({ kind: 'workflow' }).label, spanLook({ kind: 'assistant' }).label], ['Workflow', 'Assistant']);
+eq('slice 3 kinds win over the operation', [spanLook({ attrs: { 'forgeline.trace.kind': 'mission', 'gen_ai.operation.name': 'invoke_workflow' } }).label, spanLook({ kind: 'team' }).label, spanLook({ kind: 'pipeline' }).label], ['Mission', 'Team run', 'Pipeline run']);
+eq('steps and stages', [spanLook({ attrs: { 'forgeline.step.id': 'build' } }).label, spanLook({ attrs: { 'forgeline.mission.stage': 'propose' } }).label], ['Step', 'Stage (propose)']);
 eq('millis', [5, 1500, 12000, 61000, 3720000].map(fmtMillis), ['5 ms', '1.5 s', '12 s', '1 min 1 s', '1 h 2 min']);
 eq('tokens', [12, 1500, 2000000].map(fmtTokens), ['12', '1.5k', '2M']);
 eq('cost', [0, 0.004, 1.234].map(fmtCost), ['—', '<$0.01', '$1.23']);

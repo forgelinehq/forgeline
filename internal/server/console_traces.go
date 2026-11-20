@@ -2,6 +2,9 @@ package server
 
 import (
 	"context"
+	"encoding/json"
+	"github.com/forgelinehq/forgeline/internal/scheduler"
+	"github.com/forgelinehq/forgeline/internal/store"
 	"net/http"
 	"sort"
 	"strconv"
@@ -294,4 +297,80 @@ func (s *Server) traceModelCall(ctx context.Context, c ModelCall) {
 		attrs[attrErrorType] = "model_error"
 	}
 	s.tracer.Done(ctx, sp)
+}
+
+// --- prompts and answers, only when an administrator asked for them (note 049, decision 3) ---
+
+const (
+	attrInput      = "gen_ai.input.messages"
+	attrOutput     = "gen_ai.output.messages"
+	attrToolArgs   = "gen_ai.tool.call.arguments"
+	attrToolResult = "gen_ai.tool.call.result"
+	maxTraceText   = 4096
+)
+
+type traceContentKey struct{}
+
+// traceContent says whether traces keep prompts, answers and tool arguments and results.
+func (s *Server) traceContent(ctx context.Context) bool { return s.loadOTel(ctx).Content }
+
+// contentText is text as a trace may keep it: anything shaped like a credential and every stored secret's value
+// hidden, then cut to 4 KB.
+func (s *Server) contentText(ctx context.Context, text string) string {
+	out, _ := hideSecrets(text)
+	for _, v := range s.stepSecrets(ctx) {
+		if len(v) >= 6 {
+			out = strings.ReplaceAll(out, v, "[hidden]")
+		}
+	}
+	return truncate(out, maxTraceText)
+}
+
+// messagesAttr is one message in the shape the GenAI conventions give gen_ai.input.messages and
+// gen_ai.output.messages, as JSON.
+func (s *Server) messagesAttr(ctx context.Context, role, text string) string {
+	b, _ := json.Marshal([]map[string]any{{"role": role, "parts": []map[string]string{{"type": "text", "content": s.contentText(ctx, text)}}}})
+	return string(b)
+}
+
+// --- teams, missions and pipelines (slice 3) ---
+
+// startTeamSpan begins a team run's trace: the lead and its members' agent runs nest under it.
+func (s *Server) startTeamSpan(ctx context.Context, p Principal, t Team, runID string) (context.Context, *trace.Active) {
+	return s.tracer.Start(ctx, "team "+t.Name, trace.Internal, trace.WithTraceID(trace.IDFor("team:"+runID)), trace.WithAttrs(map[string]any{
+		attrOp: "invoke_workflow", attrKind: "team", attrSubject: t.ID, attrAgentName: t.Name, attrUser: p.Name, attrRole: string(p.Role), "forgeline.team.run": runID}))
+}
+
+// startMissionSpan begins one stretch of a mission (it waits for approvals between stretches), in the mission's trace.
+func (s *Server) startMissionSpan(ctx context.Context, m Mission) (context.Context, *trace.Active) {
+	return s.tracer.Start(ctx, "mission "+truncate(m.Goal, 60), trace.Internal, trace.WithTraceID(trace.IDFor("mission:"+m.ID)), trace.WithAttrs(map[string]any{
+		attrOp: "invoke_workflow", attrKind: "mission", attrSubject: m.ID, attrAgentName: m.AgentName, attrAgentID: m.Agent, attrUser: m.By, "forgeline.mission.stage": m.Stage}))
+}
+
+// startPipelineSpan begins a pipeline run's trace; each step is recorded as it finishes.
+func (s *Server) startPipelineSpan(ctx context.Context, run store.Run) (context.Context, *trace.Active) {
+	return s.tracer.Start(ctx, "pipeline "+run.PipelineName, trace.Internal, trace.WithTraceID(trace.IDFor("run:"+run.ID)), trace.WithAttrs(map[string]any{
+		attrKind: "pipeline", attrSubject: run.PipelineName, "forgeline.run.id": run.ID, "forgeline.trigger": string(run.Trigger), "forgeline.source.sha": run.SourceSHA}))
+}
+
+// traceStep records a finished pipeline step under the run's span: when it started (or, for a step that never
+// started, such as a cached or skipped one, a moment at the end), its status and exit code.
+func (s *Server) traceStep(run *trace.Active, started map[string]time.Time, mu *sync.Mutex, r scheduler.StepResult) {
+	if run == nil {
+		return
+	}
+	end := time.Now().UTC()
+	mu.Lock()
+	start, ok := started[r.ID]
+	mu.Unlock()
+	if !ok {
+		start = end.Add(-r.Duration)
+	}
+	sp := trace.Span{Name: "step " + r.ID, Kind: trace.Internal, Start: start, End: end,
+		Attrs: map[string]any{"forgeline.step.id": r.ID, "forgeline.step.status": string(r.Status), "forgeline.step.exit_code": int64(r.ExitCode)}}
+	if r.Status != scheduler.StatusSucceeded && r.Status != scheduler.StatusCached && r.Status != scheduler.StatusSkipped {
+		sp.Error = "step_" + string(r.Status)
+		sp.Attrs[attrErrorType] = sp.Error
+	}
+	s.tracer.Done(trace.ContextWith(context.Background(), run), sp)
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/forgelinehq/forgeline/internal/trace"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -58,6 +59,22 @@ func TestMissionDiscoversProposesWaitsAndVerifies(t *testing.T) {
 	ms = m.waitMission(ms.ID, msWaiting, msFailed, msDone)
 	if ms.Status != msWaiting || ms.Stage != msApproval || len(ms.Findings) != 1 || ms.Unsupported != 1 || len(ms.Proposals) != 1 {
 		t.Fatalf("after propose: %+v", ms)
+	}
+	// The mission so far is one trace (note 049): a span per stage, the agent's runs and the proposal it filed.
+	tr := waitTrace(t, m.srv, trace.IDFor("mission:"+ms.ID), func(d TraceDoc) bool { return spanNamed(d, "mission ") != nil })
+	if tr.Kind != "mission" || spanNamed(tr, "stage discover") == nil || spanNamed(tr, "stage propose") == nil || spanNamed(tr, "execute_tool propose_aws_change") == nil {
+		t.Fatalf("mission trace: %s", namesOf(tr))
+	}
+	parentOf := func(id string) string {
+		for _, sp := range tr.Spans {
+			if sp.SpanID == id {
+				return sp.ParentID
+			}
+		}
+		return ""
+	}
+	if tool := spanNamed(tr, "execute_tool propose_aws_change"); parentOf(tool.ParentID) != spanNamed(tr, "stage propose").SpanID {
+		t.Errorf("the proposal is not under the propose stage: %s", namesOf(tr))
 	}
 	if ms.Findings[0].Source != "aws_summary" || ms.Findings[0].Severity != "medium" {
 		t.Errorf("finding = %+v", ms.Findings[0])

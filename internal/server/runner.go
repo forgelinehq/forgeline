@@ -6,6 +6,7 @@ import (
 	"io"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/forgelinehq/forgeline/internal/pipeline"
@@ -91,6 +92,11 @@ func (s *Server) runGraph(runCtx context.Context, run store.Run, g *pipeline.Gra
 			s.log.Error("recording step state", "run", run.ID, "step", stepID, "err", err)
 		}
 	}
+	// The run and each step as a trace (note 049): a step is recorded when it finishes, from how long it took.
+	_, span := s.startPipelineSpan(bg, run)
+	stepStarted := map[string]time.Time{}
+	var stepMu sync.Mutex
+	defer func() { span.End() }()
 	secretsFor, denied := s.secretsFor(bg, run)
 	report := scheduler.Run(runCtx, g, s.cfg.Executor, scheduler.Options{
 		Parallelism:    s.cfg.Parallelism,
@@ -103,8 +109,14 @@ func (s *Server) runGraph(runCtx context.Context, run store.Run, g *pipeline.Gra
 		Logs: func(stepID string) io.Writer {
 			return &logWriter{log: s.log, store: s.cfg.Store, ctx: bg, runID: run.ID, stepID: stepID, limit: s.cfg.MaxLogBytes}
 		},
-		OnStepStart: func(id string) { update(id, store.StepUpdate{Status: store.StepRunning}) },
+		OnStepStart: func(id string) {
+			stepMu.Lock()
+			stepStarted[id] = time.Now().UTC()
+			stepMu.Unlock()
+			update(id, store.StepUpdate{Status: store.StepRunning})
+		},
 		OnStepDone: func(r scheduler.StepResult) {
+			s.traceStep(span, stepStarted, &stepMu, r)
 			u := store.StepUpdate{ExitCode: r.ExitCode}
 			if r.Err != nil {
 				u.Error = r.Err.Error()
@@ -128,6 +140,10 @@ func (s *Server) runGraph(runCtx context.Context, run store.Run, g *pipeline.Gra
 	s.mu.Lock()
 	userCanceled := ctl.requested
 	s.mu.Unlock()
+	if !report.OK() {
+		span.Set(attrErrorType, "run_failed")
+		span.Fail("run_failed")
+	}
 	switch {
 	case report.OK():
 		finishRun(store.RunSucceeded, "")

@@ -1,6 +1,7 @@
 package server
 
 import (
+	"github.com/forgelinehq/forgeline/internal/trace"
 	"strings"
 	"time"
 
@@ -24,6 +25,7 @@ type RunJSON struct {
 	StartedAt       *time.Time `json:"started_at,omitempty"`
 	FinishedAt      *time.Time `json:"finished_at,omitempty"`
 	Steps           []StepJSON `json:"steps,omitempty"`
+	TraceID         string     `json:"trace_id,omitempty"` // the run's trace (note 049), once it has started
 }
 
 // SourceRef says which repository state a run came from, when it came from one.
@@ -84,6 +86,9 @@ func runJSON(r store.Run, steps []store.Step) RunJSON {
 	out := RunJSON{
 		ID: r.ID, Pipeline: r.PipelineName, Status: string(r.Status), Reason: r.Reason,
 		Trigger: string(r.Trigger), CreatedAt: r.CreatedAt, StartedAt: r.StartedAt, FinishedAt: r.FinishedAt,
+	}
+	if r.StartedAt != nil {
+		out.TraceID = trace.IDFor("run:" + r.ID)
 	}
 	if r.SourceRepo != "" || r.SourceRef != "" || r.SourceSHA != "" {
 		out.Source = &SourceRef{Repo: r.SourceRepo, Ref: r.SourceRef, SHA: r.SourceSHA}

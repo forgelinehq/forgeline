@@ -111,6 +111,7 @@ export async function missionPage({ params }) {
     mount(el,
       pageHeader(m.goal, `${m.agent_name} (version ${m.agent_version}${m.may_propose ? ', may propose' : ', advises only'}) · account ${m.account} · started by ${m.by} ${relTime(m.started_at)}`,
         h('span', { class: STATUS[m.status] }, m.status),
+        m.trace_id ? h('a', { class: 'btn-secondary btn-sm', href: '#/traces/' + m.trace_id, id: 'mission-trace' }, icon('trace', 'size-3.5'), 'Trace') : null,
         mayCancel && h('button', { class: 'btn-ghost btn-sm text-rose-600 dark:text-rose-400', type: 'button', id: 'mission-cancel', onclick: async () => {
           if (!await confirmDialog({ title: 'Cancel this mission?', body: 'It stops where it is. Proposals it already filed stay for an administrator to decide.', confirmLabel: 'Cancel mission', cancelLabel: 'Keep going', danger: true })) return;
           try { await post('/v1/missions/' + encodeURIComponent(m.id) + '/cancel', {}); toast('Cancelled', 'ok'); load(); } catch (e) { toast(e.message, 'error'); }
