@@ -112,22 +112,23 @@ type Server struct {
 	awsInv     swrCache[AWSInventoryJSON]
 	awsLinks   swrCache[LinksJSON]
 	awsAlarms  swrCache[AlarmsJSON]
-	bp         bpBusy         // one blueprint preview or apply at a time
-	tofuBin    tofuState      // the OpenTofu binary, once found
-	tofuRun    tofuRunner     // tests replace OpenTofu
-	packRun    packRunner     // tests replace the policy pack containers
-	schemas    schemaCache    // the AWS provider's resource schemas, once made
-	schemaRun  schemaRunner   // tests replace `tofu providers schema -json`
-	usage      usageState     // serialises updates to the AI use ledger
-	calls      callLog        // serialises updates to the model call log and provider spend
-	tracer     *trace.Tracer  // what agents, workflows and the assistant do, as spans (note 049)
-	traces     traceStore     // serialises updates to stored traces
-	teams      teamRuns       // which teams are working on a goal
-	missions   missionState   // missions (note 037)
-	gcpInv     invCache       // Google Cloud inventories, by scope
-	approvals  approvalBook   // read calls waiting for the person who asked to approve them
-	azureInv   invCache       // Azure inventories, by subscription set
-	integTests integTestStore // the last test of each integration, kept in memory
+	bp         bpBusy          // one blueprint preview or apply at a time
+	tofuBin    tofuState       // the OpenTofu binary, once found
+	tofuRun    tofuRunner      // tests replace OpenTofu
+	packRun    packRunner      // tests replace the policy pack containers
+	schemas    schemaCache     // the AWS provider's resource schemas, once made
+	schemaRun  schemaRunner    // tests replace `tofu providers schema -json`
+	usage      usageState      // serialises updates to the AI use ledger
+	calls      callLog         // serialises updates to the model call log and provider spend
+	tracer     *trace.Tracer   // what agents, workflows and the assistant do, as spans (note 049)
+	traces     traceStore      // serialises updates to stored traces
+	otel       *trace.Exporter // sends traces to an OpenTelemetry backend, when one is set (note 049)
+	teams      teamRuns        // which teams are working on a goal
+	missions   missionState    // missions (note 037)
+	gcpInv     invCache        // Google Cloud inventories, by scope
+	approvals  approvalBook    // read calls waiting for the person who asked to approve them
+	azureInv   invCache        // Azure inventories, by subscription set
+	integTests integTestStore  // the last test of each integration, kept in memory
 	wf         wfEngine
 	guard      guardEngine
 	k8s        k8sEngine
@@ -229,7 +230,8 @@ func New(cfg Config) (*Server, error) {
 		srv.ghSource.Store("flags")
 	}
 	srv.checkouts = make(chan struct{}, maxCheckouts)
-	srv.tracer = trace.New(srv.saveTrace)
+	srv.otel = trace.NewExporter()
+	srv.tracer = trace.New(func(spans []trace.Span) { srv.saveTrace(spans); srv.otel.Add(spans) })
 	if err := srv.reloadGitHub(context.Background()); err != nil {
 		srv.log.Warn("the saved GitHub settings are not usable; GitHub triggers are off", "err", err)
 	}
@@ -272,6 +274,8 @@ func (s *Server) Start(ctx context.Context) error {
 			r.StartSweeper(ctx)
 		}
 	}
+	s.reloadOTel(ctx)
+	go s.otel.Run(ctx)
 	s.startWorkflows(ctx)
 	s.startMissions(ctx)
 	s.startAuditPruner(ctx)
