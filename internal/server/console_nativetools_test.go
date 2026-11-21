@@ -18,7 +18,7 @@ func TestSchemaFromHelpReadsTheExampleArguments(t *testing.T) {
 		t.Errorf("schema: %v / %q", schema, desc)
 	}
 	if _, has := schema["required"]; has {
-		t.Error("a tool argument is required by the schema; the tool says what it needs itself")
+		t.Errorf("an optional argument is required: %v", schema["required"])
 	}
 	if s, d := schemaFromHelp("no arguments, just does it"); len(s["properties"].(map[string]any)) != 0 || d != "no arguments, just does it" {
 		t.Errorf("a help line with no example: %v %q", s, d)
@@ -143,5 +143,27 @@ func TestArgumentsAreReadLooselyWhenAModelSendsTheWrongType(t *testing.T) {
 	}
 	if err := decodeArgs(json.RawMessage(`not json`), &a); err == nil {
 		t.Error("not JSON was accepted")
+	}
+}
+
+func TestSchemasCarryChoicesRequirementsAndNestedShapes(t *testing.T) {
+	s, _ := schemaFromHelp(`{"action":"save_pipeline|run_pipeline","title":"short label","yaml":"for save_pipeline: the file","spec":"for save_skill {\"name\"}"} prepares a card`)
+	props := s["properties"].(map[string]any)
+	act := props["action"].(map[string]any)
+	if enum, _ := act["enum"].([]string); len(enum) != 2 || enum[0] != "save_pipeline" {
+		t.Errorf("action is not a choice: %v", act)
+	}
+	req, _ := s["required"].([]string)
+	if len(req) != 2 || req[0] != "action" || req[1] != "title" {
+		t.Errorf("required: %v", req)
+	}
+	if props["spec"].(map[string]any)["type"] != "object" || props["yaml"].(map[string]any)["type"] != "string" {
+		t.Errorf("spec/yaml types: %v %v", props["spec"], props["yaml"])
+	}
+	plan, _ := schemaFromHelp(`{"items":[{"text":"short step","status":"todo|doing|done"}]} a checklist`)
+	items := plan["properties"].(map[string]any)["items"].(map[string]any)
+	obj := items["items"].(map[string]any)
+	if items["type"] != "array" || obj["type"] != "object" || obj["properties"].(map[string]any)["status"].(map[string]any)["enum"] == nil {
+		t.Errorf("a list of objects is not described: %v", items)
 	}
 }
