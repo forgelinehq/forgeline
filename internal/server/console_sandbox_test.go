@@ -88,12 +88,19 @@ func TestTheSandboxIsOffUntilAnAdministratorTurnsItOn(t *testing.T) {
 	if res := m.llm.lastUser(1); !strings.Contains(res, "turned off") || len(d.find("run")) != 0 || len(d.find("exec")) != 0 {
 		t.Errorf("off: %s", res)
 	}
+	m.ask(m.dev, "do you have a shell?")
+	if sys := m.lastSystem(); !strings.Contains(sys, "switched off") || !strings.Contains(sys, "Assistant permissions") || strings.Contains(sys, "You cannot change anything") {
+		t.Errorf("the assistant is not told the shell exists but is off:\n%s", sys)
+	}
 	m.dev.expect(403, "PUT", "/v1/assistant/sandbox", map[string]any{"enabled": true})
 	m.admin.expect(400, "PUT", "/v1/assistant/sandbox", map[string]any{"network": "everywhere"})
 	m.admin.expect(200, "PUT", "/v1/assistant/sandbox", map[string]any{"enabled": true})
 	m.ask(m.dev, shell(map[string]any{"command": "echo hi"}))
 	if res := m.llm.lastUser(1); !strings.Contains(res, "Exit 0.\nhello") {
 		t.Errorf("on: %s", res)
+	}
+	if strings.Contains(m.lastSystem(), "switched off") {
+		t.Error("the assistant is told the shell is off while it is on")
 	}
 }
 
