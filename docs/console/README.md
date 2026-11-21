@@ -307,6 +307,8 @@ update that asks for different hosts needs a fresh grant.
 | [80-assistant-remembers](80-assistant-remembers.png) | The assistant keeping a note the person asked it to (with Undo) and using it on the next question, from a scripted model |
 | [81-memory-page](81-memory-page.png) | The Memory page under Settings: notes about you (one waiting for your confirmation because it was written after a lookup), notes about the system, and your conversations |
 | [79-approval-denied](79-approval-denied.png) | After Deny: the step shows as failed, the card is gone, and the answer says the lookup was not approved |
+| [158-runbook-fix-approve](158-runbook-fix-approve.png) | A runbook fix (Docker cleanup) waiting for a different administrator: the instance, the values, why, and the exact script (note 051). The SSM calls were answered by `scripts/dev/fake-aws` |
+| [159-runbook-check](159-runbook-check.png) | A check (Disk report) run through SSM on a build server, with its output (stand-in: `scripts/dev/fake-aws`) |
 
 ## Which pictures are current
 

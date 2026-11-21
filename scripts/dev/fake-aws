@@ -126,6 +126,44 @@ if key == "cloudformation list-stack-resources":
         [("Instance", "AWS::EC2::Instance", "i-0aaa1111bbbb2222c"), ("InstanceRole", "AWS::IAM::Role", "forgeline-demo-InstanceRole-X"),
          ("SecurityGroup", "AWS::EC2::SecurityGroup", "sg-0123456789abcdef0")]]})
 
+# Runbooks (design note 051): a Jenkins server whose disk is nearly full, reached through SSM Run Command. A command
+# finishes on the second poll; what it prints depends on which example runbook it is.
+if key == "ec2 describe-instances" and "--query" in a:
+    out(["i-0jenkins0000000a"])
+
+if key == "ssm send-command":
+    params = json.loads(flag("--parameters"))
+    ids = a[a.index("--instance-ids") + 1:]
+    cid = "cmd-%04d" % (len(st.setdefault("commands", {})) + 1)
+    st["commands"][cid] = {"script": params["commands"][0], "ids": ids, "polls": 0}
+    save(st)
+    out({"Command": {"CommandId": cid, "Status": "Pending"}})
+
+if key == "ssm list-command-invocations":
+    c = st["commands"][flag("--command-id")]
+    c["polls"] += 1
+    save(st)
+    script, cleaned = c["script"], st.get("cleaned", False)
+    if "docker system df" in script:
+        use = "71%" if cleaned else "93%"
+        text = ("== Disk\nFilesystem      Size  Used Avail Use%% Mounted on\n/dev/nvme0n1p1  100G   %s   %s  %s /\n\n"
+                "== Largest folders in /var/lib/jenkins\n38G\t/var/lib/jenkins\n21G\t/var/lib/jenkins/workspace\n9.4G\t/var/lib/jenkins/jobs\n\n"
+                "== Docker\nTYPE            TOTAL     ACTIVE    SIZE      RECLAIMABLE\nImages          %s        4         %s     %s\nContainers      %s        3         1.2GB     %s\nBuild Cache     %s        0         %s     %s\n\n"
+                "== Newest backups in /var/backups/jenkins\n-rw-r--r-- 1 root root 2.1G 2026-11-20 jenkins-2026-11-20.tar.gz\n-rw-r--r-- 1 root root 2.1G 2026-11-19 jenkins-2026-11-19.tar.gz\n"
+                "Files: %s, size: %s\n") % ((("71G", "29G") if cleaned else ("93G", "7.0G")) + (use,) +
+                (("6", "5.1GB", "0B (0%)", "3", "0B", "0", "0B", "0B") if cleaned else ("48", "31.4GB", "24.9GB (79%)", "27", "1.1GB", "212", "12.3GB", "12.3GB")) +
+                (("5", "10G") if cleaned else ("31", "64G")))
+    elif "docker builder prune" in script:
+        st["cleaned"] = True; save(st)
+        text = "Before: /dev/nvme0n1p1  100G   93G  7.0G  93% /\nDeleted Containers: 26\nDeleted Images: 42\nTotal reclaimed space: 37.3GB\nAfter:  /dev/nvme0n1p1  100G   56G   44G  56% /\n"
+    elif "removing" in script:
+        text = "Before: /dev/nvme0n1p1  100G   93G  7.0G  93% /\n" + "".join("removing jenkins-2026-10-%02d.tar.gz\n" % d for d in range(1, 27)) + "After:  /dev/nvme0n1p1  100G   71G   29G  71% /\n"
+    else:
+        text = "ok\n"
+    done = c["polls"] >= 2
+    out({"CommandInvocations": [{"InstanceId": i, "Status": "Success" if done else "InProgress",
+        "CommandPlugins": [{"ResponseCode": 0 if done else -1, "Output": text if done else "", "StatusDetails": "Success" if done else "InProgress"}]} for i in c["ids"]]})
+
 if key == "ec2 describe-instances":
     want = flag("--instance-ids")
     res = []

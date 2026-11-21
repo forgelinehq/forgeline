@@ -72,7 +72,8 @@ var secretShapes = []*regexp.Regexp{
 	regexp.MustCompile(`\bflt_[A-Za-z0-9_-]{20,}\b`),
 	regexp.MustCompile(`\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b`),
 	regexp.MustCompile(`(?s)-----BEGIN [A-Z ]*PRIVATE KEY-----.*?(?:-----END [A-Z ]*PRIVATE KEY-----|$)`),
-	regexp.MustCompile(`(?i)\b(?:secret|password|passwd|token|api[_-]?key|access[_-]?key)\b\s*[:=]\s*["']?[^\s"']{8,}`),
+	// Names joined by underscores count too (aws_secret_access_key, DB_PASSWORD, GITHUB_TOKEN); max_tokens does not.
+	regexp.MustCompile(`(?i)\b(?:[a-z0-9]+_)*(?:secret|password|passwd|token|api[_-]?key|access[_-]?key)(?:_[a-z0-9]+)*\s*[:=]\s*["']?[^\s"']{8,}`),
 }
 
 // hideSecrets replaces anything shaped like a credential and reports whether it changed anything.

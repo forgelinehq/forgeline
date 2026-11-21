@@ -43,6 +43,7 @@ export const SPACES = [
     { path: '/infrastructure', label: 'Infrastructure', icon: 'infrastructure', min: 'viewer' },
     { path: '/kubernetes', label: 'Kubernetes', icon: 'kubernetes', min: 'viewer' },
     { path: '/missions', label: 'Missions', icon: 'mission', min: 'developer' },
+    { path: '/runbooks', label: 'Runbooks', icon: 'steps', min: 'developer', also: ['/runbook-runs/'] },
   ] },
   { id: 'security', label: 'Security', icon: 'security', path: '/guard', tabs: [
     { path: '/guard', label: 'Findings', icon: 'findings', min: 'viewer' },
