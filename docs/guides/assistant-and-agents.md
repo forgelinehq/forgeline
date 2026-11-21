@@ -212,3 +212,18 @@ developers and administrators, so a workflow running as a developer can use it (
 Check Anthropic's terms before using a subscription token (`setup-token`) for automation. An API key is the safer production choice. Codex and Copilot agent steps are not built yet; Copilot can already answer as the assistant.
 
 Designs: [007 agent steps](https://github.com/forgelinehq/forgeline/blob/main/docs/design/007-agent-steps.md), [008 assistant](https://github.com/forgelinehq/forgeline/blob/main/docs/design/008-assistant.md).
+
+## Plans and questions
+
+For anything that takes several steps the assistant shows a **plan**: a checklist that it ticks off as it works. A
+question may use up to 40 steps and 5 minutes; the time it spends waiting for you does not count. At the limit it says
+what is done and what is left, and you can say "continue".
+
+When the answer changes what it would do and it cannot find it out, it stops on a **question card** with two to four
+options and a box for your own words, instead of guessing (for example when two clusters match "Dev01"). The run waits
+up to ten minutes. An agent run never asks; a question that nobody can answer makes the assistant state its assumption
+and carry on. It does not ask permission to read.
+
+{: .warning }
+**Checked with a stand-in model only.** How well each real model chooses to plan and when to ask has not been
+measured yet.

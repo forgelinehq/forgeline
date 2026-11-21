@@ -309,6 +309,8 @@ update that asks for different hosts needs a fresh grant.
 | [79-approval-denied](79-approval-denied.png) | After Deny: the step shows as failed, the card is gone, and the answer says the lookup was not approved |
 | [158-runbook-fix-approve](158-runbook-fix-approve.png) | A runbook fix (Docker cleanup) waiting for a different administrator: the instance, the values, why, and the exact script (note 051). The SSM calls were answered by `scripts/dev/fake-aws` |
 | [159-runbook-check](159-runbook-check.png) | A check (Disk report) run through SSM on a build server, with its output (stand-in: `scripts/dev/fake-aws`) |
+| [160-assistant-asks](160-assistant-asks.png) | The assistant shows its plan, then stops on a question with options and a box for your own answer (note 052). Answered by a stand-in model | 
+| [161-assistant-plan](161-assistant-plan.png) | After the answer: your choice stays visible, the plan is ticked off as it works, then the answer (stand-in model) |
 
 ## Which pictures are current
 

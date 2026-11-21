@@ -181,6 +181,36 @@ function build(close, role) {
       h('div', { class: 'flex gap-2' }, btn('approve', 'Approve', 'btn-primary btn-sm'), btn('deny', 'Deny', 'btn-secondary btn-sm')));
   }
 
+  /** What the assistant stopped to ask. The answer is yours: a choice, or your own words. Nothing continues until then. */
+  function questionCard(q) {
+    const send = async (box, answer) => {
+      answer = String(answer || '').trim();
+      if (!answer) return;
+      box.querySelectorAll('button,input').forEach(b => { b.disabled = true; });
+      try { await post('/v1/assistant/questions/' + encodeURIComponent(q.id), { answer }); }
+      catch (err) { toast(err.message, 'error'); box.querySelectorAll('button,input').forEach(b => { b.disabled = false; }); }
+    };
+    const typed = h('input', { class: 'input min-w-0 flex-1 text-sm', type: 'text', maxlength: '1000', placeholder: q.options.length ? 'Or type your own answer' : 'Type your answer', 'aria-label': 'Your answer', 'data-question-input': q.id });
+    const box = h('div', { class: amber + ' flex-col', 'data-question-id': q.id, role: 'group', 'aria-label': 'A question from the assistant' },
+      h('div', { class: 'flex items-center gap-2 font-semibold' }, icon('ask', 'size-4 shrink-0'), 'The assistant needs an answer'),
+      h('div', { class: 'text-sm' }, q.question),
+      q.options.length ? h('div', { class: 'flex flex-wrap gap-2' }, q.options.map(o => h('button', { type: 'button', class: 'btn-secondary btn-sm', 'data-question-option': o, onclick: (e) => send(e.currentTarget.closest('[data-question-id]'), o) }, o))) : null,
+      h('div', { class: 'flex gap-2' }, typed, h('button', { type: 'button', class: 'btn-primary btn-sm', 'data-question-send': q.id, onclick: (e) => send(e.currentTarget.closest('[data-question-id]'), typed.value) }, 'Send')));
+    typed.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); send(box, typed.value); } });
+    return box;
+  }
+
+  /** The plan as a checklist: done, doing now, still to do. */
+  function planBlock(plan) {
+    if (!plan.length) return null;
+    const done = plan.filter(i => i.status === 'done').length;
+    return h('div', { class: 'rounded-xl border border-slate-200 p-3 dark:border-slate-700', 'data-plan': '' },
+      h('div', { class: 'mb-1 flex items-center gap-2 text-xs font-semibold' }, icon('checklist', 'size-3.5'), 'Plan', h('span', { class: 'muted font-normal' }, done + ' of ' + plan.length + ' done')),
+      h('ul', { class: 'space-y-1 text-sm' }, plan.map(i => h('li', { class: 'flex items-start gap-2', 'data-plan-item': i.status },
+        h('span', { class: 'mt-0.5 shrink-0 ' + (i.status === 'done' ? 'text-emerald-600' : i.status === 'doing' ? 'text-brand-600' : 'text-slate-400') }, icon(i.status === 'done' ? 'check' : i.status === 'doing' ? 'play' : 'minus', 'size-3.5')),
+        h('span', { class: i.status === 'done' ? 'muted line-through' : i.status === 'doing' ? 'font-medium' : '' }, i.text)))));
+  }
+
   /**
    * Something the assistant prepared inside Forgeline. Nothing has happened: the card lists the exact effects
    * (written by the server, not the model) and the file, and it only runs when you press Confirm.
@@ -230,7 +260,12 @@ function build(close, role) {
     const cardFor = (id) => { if (!cards.has(id)) cards.set(id, proposalCard(id)); return cards.get(id); };
     const label = progressLabel(run);
     return h('div', { class: 'space-y-3' },
+      planBlock(run.plan),
       stepsBlock(run, opened),
+      run.questions.map(q => {
+        if (q.state === 'waiting') { const k = 'question:' + q.id; if (!cards.has(k)) cards.set(k, questionCard(q)); return cards.get(k); }
+        return h('div', { class: 'text-sm', 'data-question-done': q.id }, h('span', { class: 'muted' }, q.question + ' '), q.state === 'answered' ? h('b', {}, '→ ' + q.answer) : h('span', { class: 'muted' }, '(no answer; it went on with its best guess)'));
+      }),
       run.approvals.filter(a => a.state === 'waiting').map(approvalCard),
       label ? h('div', { class: 'flex items-center gap-2 text-sm muted', role: 'status' }, h('span', { class: 'size-2 animate-pulse-dot rounded-full bg-brand-500' }), label,
         h('button', { class: 'btn-ghost btn-sm ml-auto', type: 'button', id: 'assistant-stop', onclick: stop }, icon('stop', 'size-3'), 'Stop')) : null,

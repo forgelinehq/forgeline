@@ -92,6 +92,10 @@ section in the pull request that makes the change; a release moves it under its 
 - **Workflows refuse agents with tools their run cannot use.** Saving a workflow whose agent has a tool its run-as role
   may never use (such as `call_aws`, for administrators only, in a workflow running as a viewer) now says so, instead of
   every run quietly going without it.
+- **The assistant plans and asks** (design note 052, slice 1). A question may take up to 40 steps and 5 minutes (it was
+  10 lookups); waiting for you does not use the time. It shows a plan as a checklist, and when the answer changes what it
+  would do (two clusters match "Dev01") it stops on a card with options and a box for your own answer, then carries on.
+  Agents never ask. Checked with a stand-in model only.
 - **Runbooks** (design note 051). Operations › Runbooks: shell scripts that check or fix servers through AWS Systems
   Manager. One administrator writes a runbook and a different one reviews it; parameters are choices or numbers,
   never free text. Checks run when asked, by people and by agents (`run_runbook`); every fix waits for a different

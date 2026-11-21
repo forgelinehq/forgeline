@@ -448,6 +448,9 @@ func (s *Server) askAssistant(ctx context.Context, role authn.Role, turns []chat
 	if role != "" {
 		system += "\n\nLookups you may use:\n" + s.lookupHelp(ctx, role)
 	}
+	if role != "" {
+		system += workGuidance(ctx)
+	}
 	if setup, _ := ctx.Value(setupKey{}).(string); setup != "" {
 		system += "\n\n" + setup
 	}
