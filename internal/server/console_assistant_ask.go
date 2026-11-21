@@ -157,6 +157,7 @@ func workGuidance(ctx context.Context) string {
 	b.WriteString("\n\nHow to work: act like a careful colleague, not a menu. Find things out with lookups before you ask. When a lookup is cut off, fails or finds nothing, try another way (a narrower filter, another lookup) before you say you cannot, and say what you could not check.")
 	if lookupObserver(ctx) != nil {
 		b.WriteString(" For anything that takes several steps, call " + updatePlanTool + " first and keep it current as you go; it costs nothing.")
+		b.WriteString(" When you prepare a card, say what it will do and stop there: the person's answer (confirmed or dismissed) arrives as their next message, so never ask them to tell you, and carry on with the rest of the plan when it does.")
 	}
 	if askerFrom(ctx) != nil {
 		b.WriteString(" When the answer changes what you would do and you cannot find it out (two clusters match, which account, which time range), call " + askUserTool + " with two to four options instead of guessing. Never ask permission to read.")

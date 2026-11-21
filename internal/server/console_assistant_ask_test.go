@@ -224,3 +224,16 @@ func TestPlanUpdatesStayFreeAfterTheStepBudget(t *testing.T) {
 		t.Error("the plan update after the budget did not run")
 	}
 }
+
+func TestTheAssistantIsToldACardAnswerArrivesAsTheNextMessage(t *testing.T) {
+	m := newMCPHarness(t)
+	m.run(m.dev, map[string]any{"message": "hello"})
+	if !strings.Contains(m.lastSystem(), "arrives as their next message") {
+		t.Error("in the chat the assistant is not told that the answer to a card comes back as the next message")
+	}
+	// A plain request has nobody to answer a card in the panel, so it is not told to wait for one.
+	m.ask(m.dev, "hello")
+	if strings.Contains(m.lastSystem(), "arrives as their next message") {
+		t.Error("a request with no panel is told to wait for a card answer")
+	}
+}

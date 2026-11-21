@@ -96,6 +96,9 @@ section in the pull request that makes the change; a release moves it under its 
   you and `/memories/org` for everyone (administrators write there), with a `memory` tool (view, create, edit, insert,
   rename, delete, search), an index of them in every prompt, and BM25 search. A file written after it read data you did
   not type waits for you to keep it. The Memory page lists, edits and deletes them; secrets and markup are refused.
+- **The assistant carries on after a card.** Pressing Confirm or Dismiss on a card in the assistant now sends your answer
+  back as your next message ("I confirmed "Save skill…". Carry on."), so the assistant continues with the rest of its
+  plan and the conversation shows which card you answered. Before, it waited and asked you to say when you had confirmed.
 - **Autopilot** (design note 052, slice 4). A switch in the assistant panel, per conversation: the assistant keeps
   working without stopping to ask, for up to 30 minutes and 100 steps you can see and stop. A change that would only have
   asked runs without a card, is shown in the chat and audited. It never covers a protected account, IAM, Organizations,
