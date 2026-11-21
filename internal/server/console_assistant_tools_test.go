@@ -42,6 +42,11 @@ func newScriptedLLM(t *testing.T, replies ...string) *scriptedLLM {
 		if blk != nil {
 			<-blk
 		}
+		if strings.HasPrefix(text, "TOOL:") { // a real tool call: TOOL:<name>:<json arguments>
+			parts := strings.SplitN(strings.TrimPrefix(text, "TOOL:"), ":", 2)
+			json.NewEncoder(w).Encode(map[string]any{"content": []map[string]any{{"type": "text", "text": "Let me look."}, {"type": "tool_use", "id": "tu1", "name": parts[0], "input": json.RawMessage(parts[1])}}, "usage": map[string]int{"input_tokens": 10, "output_tokens": 5}})
+			return
+		}
 		json.NewEncoder(w).Encode(map[string]any{"content": []map[string]string{{"type": "text", "text": text}}, "usage": map[string]int{"input_tokens": 1000, "cache_read_input_tokens": 200, "output_tokens": 300}})
 	}))
 	t.Cleanup(f.srv.Close)
@@ -106,8 +111,10 @@ func TestAssistantLookupsAreRunByTheServerAndWrappedAsData(t *testing.T) {
 		t.Errorf("a closing tag in the data escaped the block:\n%s", res)
 	}
 	for _, req := range llm.reqs {
-		if _, has := req["tools"]; has {
-			t.Error("the request carries native tools")
+		for _, x := range req["tools"].([]any) {
+			if n := x.(map[string]any)["name"].(string); n == "bash" || n == "Bash" || n == "str_replace_editor" {
+				t.Errorf("the request carries a tool the model would run itself: %s", n)
+			}
 		}
 	}
 	if !strings.Contains(string(admin.expect(200, "GET", "/v1/audit", nil)), "assistant.lookup") {

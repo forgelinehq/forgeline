@@ -36,6 +36,10 @@ func openAIChat(ctx context.Context, client *http.Client, base, key, model, syst
 	}
 	msgs = append(msgs, turns...)
 	body := map[string]any{"model": model, "messages": msgs, style.maxParam: maxTokens}
+	native := nativeToolsFrom(ctx)
+	if native != nil {
+		body["tools"], body["tool_choice"] = native.openAITools(), "auto"
+	}
 	raw, _ := json.Marshal(body)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(base, "/")+"/chat/completions", bytes.NewReader(raw))
 	if err != nil {
@@ -84,7 +88,13 @@ func openAIChat(ctx context.Context, client *http.Client, base, key, model, syst
 	var out struct {
 		Choices []struct {
 			Message struct {
-				Content *string `json:"content"`
+				Content   *string `json:"content"`
+				ToolCalls []struct {
+					Function struct {
+						Name      string `json:"name"`
+						Arguments string `json:"arguments"`
+					} `json:"function"`
+				} `json:"tool_calls"`
 			} `json:"message"`
 		} `json:"choices"`
 		Usage struct {
@@ -94,6 +104,10 @@ func openAIChat(ctx context.Context, client *http.Client, base, key, model, syst
 	}
 	if err := json.Unmarshal(data, &out); err != nil {
 		return "", modelUsage{}, resp.StatusCode, fmt.Errorf("%s sent a reply that could not be read", who)
+	}
+	if len(out.Choices) > 0 && native != nil && len(out.Choices[0].Message.ToolCalls) > 0 {
+		f := out.Choices[0].Message.ToolCalls[0].Function // one call at a time: the loop runs it and asks again
+		return native.asBlock(f.Name, json.RawMessage(f.Arguments)), modelUsage{Calls: 1, Input: out.Usage.Prompt, Output: out.Usage.Completion}, resp.StatusCode, nil
 	}
 	if len(out.Choices) == 0 || out.Choices[0].Message.Content == nil || strings.TrimSpace(*out.Choices[0].Message.Content) == "" {
 		return "", modelUsage{}, resp.StatusCode, errors.New("the model sent an empty reply")

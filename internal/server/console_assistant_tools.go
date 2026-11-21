@@ -100,9 +100,18 @@ func needsMCP(name string) bool {
 }
 
 func (s *Server) lookupHelp(ctx context.Context, role authn.Role) string {
+	var b strings.Builder
+	for _, l := range s.lookupLines(ctx, role) {
+		fmt.Fprintf(&b, "- %s %s\n", l.name, l.help)
+	}
+	return b.String()
+}
+
+// lookupLines are the tools this request may use, each with its help text.
+func (s *Server) lookupLines(ctx context.Context, role authn.Role) []helpLine {
 	mcpOn := s.loadAWSMCP(ctx).Enabled
 	blocked := s.blockedTools(ctx)
-	var b strings.Builder
+	var out []helpLine
 	for _, t := range assistantLookups() {
 		if sc := scopeFrom(ctx); sc != nil && (!sc.allows(t.name) || t.name == askAgentTool) {
 			continue // a running agent sees only its own tools, and never other agents
@@ -126,23 +135,23 @@ func (s *Server) lookupHelp(ctx context.Context, role authn.Role) string {
 			continue // one way to reach the primary account at a time: the MCP server when it is on, the CLI otherwise
 		}
 		if role.AtLeast(t.min) {
-			fmt.Fprintf(&b, "- %s %s\n", t.name, t.help)
+			out = append(out, helpLine{t.name, t.help})
 		}
 	}
 	if role.AtLeast(authn.Developer) {
 		for _, t := range s.pluginTools(ctx) {
 			if sc := scopeFrom(ctx); sc == nil || sc.allows(t.name) {
-				fmt.Fprintf(&b, "- %s %s\n", t.name, t.help)
+				out = append(out, helpLine{t.name, t.help})
 			}
 		}
 		// MCP servers (note 042): an agent sees the ones in its tool list; the assistant those marked for it.
 		for _, t := range s.extMCPTools(ctx) {
 			if sc := scopeFrom(ctx); (sc != nil && sc.allows(t.name)) || (sc == nil && t.server.ForAssistant) {
-				fmt.Fprintf(&b, "- %s %s\n", t.name, t.help)
+				out = append(out, helpLine{t.name, t.help})
 			}
 		}
 	}
-	return b.String()
+	return out
 }
 
 // parseLookup returns the call if the whole reply is exactly one lookup: a fenced block, or the
@@ -419,8 +428,39 @@ func (s *Server) lookupLoop(ctx context.Context, p Principal, turns []chatTurn, 
 // --- the lookups ---
 
 func decodeArgs(raw json.RawMessage, v any) error {
-	if err := json.Unmarshal(raw, v); err != nil {
-		return errors.New("the arguments are not valid JSON for this tool")
+	bad := errors.New("the arguments are not valid JSON for this tool")
+	err := json.Unmarshal(raw, v)
+	var te *json.UnmarshalTypeError
+	if !errors.As(err, &te) {
+		if err != nil {
+			return bad
+		}
+		return nil
+	}
+	// A model sometimes sends "30" where a number is wanted, or 30 where text is. Say that one field the other way and
+	// try again, a few times, so a field that was right is left alone.
+	var loose map[string]any
+	if json.Unmarshal(raw, &loose) != nil {
+		return bad
+	}
+	for tries := 0; tries < 8 && errors.As(err, &te); tries++ {
+		switch x := loose[te.Field].(type) {
+		case string:
+			n, e := strconv.ParseFloat(strings.TrimSpace(x), 64)
+			if e != nil {
+				return bad
+			}
+			loose[te.Field] = n
+		case float64:
+			loose[te.Field] = strconv.FormatFloat(x, 'f', -1, 64)
+		default:
+			return bad
+		}
+		b, _ := json.Marshal(loose)
+		err = json.Unmarshal(b, v)
+	}
+	if err != nil {
+		return bad
 	}
 	return nil
 }

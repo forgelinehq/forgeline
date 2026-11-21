@@ -342,7 +342,7 @@ func TestGraphRestart(t *testing.T) {
 // A lookup given arguments of the wrong shape fails saying what the tool takes (found on the Pi: "limit" as text).
 func TestGraphLookupArgumentsSayWhatTheToolTakes(t *testing.T) {
 	m := newMCPHarness(t)
-	w := newWorkflow(t, m.admin, graphBody("Args", []WFNode{{ID: "start", Kind: nodeStart}, {ID: "runs", Kind: nodeLookup, Tool: "list_runs", Args: json.RawMessage(`{"limit":"10"}`)}, {ID: "end", Kind: nodeEnd}},
+	w := newWorkflow(t, m.admin, graphBody("Args", []WFNode{{ID: "start", Kind: nodeStart}, {ID: "runs", Kind: nodeLookup, Tool: "list_runs", Args: json.RawMessage(`{"limit":"lots"}`)}, {ID: "end", Kind: nodeEnd}},
 		[]WFEdge{wire("start", "runs"), wire("runs", "end")}))
 	run := m.waitRun(m.startWF(m.dev, w.ID, 202).ID, wfSucceeded, wfFailed)
 	if run.Status != wfFailed || !strings.Contains(run.Error, "It takes {") || !strings.Contains(run.Error, "limit") {
