@@ -190,3 +190,90 @@ may use its own tools only when its calls go through our permission check.
 - Not in this slice: `az`, `gcloud` and `kubectl` (they need their own credential handling and parsers), a
   general shell or code sandbox (slice 4: a shell on the server would see every credential on the machine), and editing a
   pattern before saying "always".
+
+## Revision 2026-11-21 (evening): no limits by cloud, a real sandbox, autopilot, native memory
+
+The maintainer's answer to slice 2: the assistant must not be limited to a list of clouds or CLIs. It should download and
+install what it needs, write code in any language or SDK and run it, use Docker or micro-VMs, have shell access, have an
+**autopilot** mode, and have memory that is native to the AI rather than something we invented. This section replaces the
+narrower plan for slices 3 to 5 above; the permission check of slice 2 stays as the way anything that changes something
+is approved.
+
+### What the research says (November 2026)
+
+- **Sandboxing.** Containers share the host's kernel, so for hostile code the field uses gVisor (a user-space kernel; fits
+  container tooling) or microVMs (Firecracker, Kata, Docker Sandboxes: each session has its own kernel), with default-deny
+  network egress and runtime monitoring. Neither isolates the network or enforces permissions by itself.
+  Sources: [Northflank](https://northflank.com/blog/how-to-sandbox-ai-agents), [Vercel on gVisor vs microVMs](https://vercel.com/i/gvisor-vs-microvms),
+  [DEV: Firecracker and gVisor runtimes](https://dev.to/aiagentengineering/how-to-sandbox-ai-agents-in-2026-firecracker-gvisor-runtimes-isolation-strategies-14pk).
+- **Memory.** Anthropic's memory tool is *client-side*: the model asks to view, create, replace, insert, delete or rename
+  files in a `/memories` directory and the application performs them against storage it controls; every path must be
+  validated. Context editing and compaction clear old tool results and prompt the model to save what matters to memory
+  first. Source: [Claude Platform docs: memory tool](https://platform.claude.com/docs/en/agents-and-tools/tool-use/memory-tool).
+  Framework approaches differ: Mem0 extracts user facts (add, search, update, delete by user, agent and session); Zep and
+  Graphiti keep a temporal graph so "what was true then" can be asked; LangMem adds hot-path tools and background
+  consolidation inside LangGraph; Letta lets the agent manage its own memory blocks. Benchmarks conflict and are mostly
+  from vendors. Sources: [Atlan](https://atlan.com/know/best-ai-agent-memory-frameworks-2026/),
+  [Vectorize](https://vectorize.io/articles/best-ai-agent-memory-systems), [Graphlit](https://www.graphlit.com/blog/survey-of-ai-agent-memory-frameworks).
+
+### Decisions (proposed, building from slice 3)
+
+**A. A sandbox where it can do anything.** A tool `run_shell` runs commands, and any language or SDK, in a container that
+Forgeline starts for the conversation: a persistent workspace, the network on (so it can install with apt, pip, npm or
+curl, and call any API), CPU, memory, process and time limits, no host mounts, no Docker socket, dropped capabilities.
+Egress is closed to the host, the local network and the cloud metadata address, so a prompt-injected command cannot
+reach this machine's credentials or an instance role. Credentials are never in it unless the person names a vault secret
+for the task; the model gets the name, the container gets an environment variable, and output is scanned for it.
+The runtime is chosen from what the host has: **gVisor** (`runsc`) when installed, **a microVM** (Kata or Firecracker,
+a later slice) where available, and a hardened plain container otherwise, with the card saying which. The assistant can
+choose an image (Python, Node, Go, Ubuntu, or its own after a build), and can use Docker inside the sandbox where the
+runtime allows it. This is not a limit on what it can do; it is where it does it.
+
+**B. Asking, as before.** Running in the sandbox without credentials or secrets is allowed by default (nothing outside
+it can change). Anything that gives the sandbox a credential, a secret or a connection to an account is a **change** and
+passes the slice 2 check: administrator, chat, account marked for it, rules, a card. A command in the sandbox that then
+calls a cloud with that credential is covered by that approval, so the card says which credential and which account.
+
+**C. Autopilot.** A switch in the chat, on for one conversation with an envelope: a time (default 30 minutes), a number of
+steps, and the accounts it covers. While it is on, a change that would have shown a card runs without one if a rule
+or the envelope covers it; every such change is audited as autopilot and shown in the run. Autopilot **never** covers
+what the slice 2 check refuses (protected accounts, non-administrators, agents), a deny rule, changes under `iam`,
+`organizations`, `account`, `ssm` and `sts` (those always ask), or a host shell. Stop ends it at once, it ends itself
+when the envelope runs out, and it never carries over to another conversation. Proposed default; an administrator can
+turn autopilot off for everyone.
+
+**D. A shell on the server itself** is a separate, off-by-default mode an administrator may enable. It always asks,
+never runs in autopilot, and shows what it can reach. It exists for the cases that need the host (the Docker host, files
+on the server); for everything else the sandbox is the answer.
+
+**E. Memory, natively.** Memory becomes a small **file system per scope** (`/memories/me`, `/memories/org`, later per
+project), stored in the document store:
+- Claude models get Anthropic's **memory tool** as is (the model views, creates, edits and deletes files itself); every
+  other provider gets the same operations through a tool of ours with the same shape, so memory is the same everywhere.
+- An index file (`/memories/README.md`) is always in the prompt; the model opens files when it needs them.
+- Long runs use context clearing and compaction, and the model is told to save what matters first.
+- Safeguards: every path is validated (no `..`, one root, limits on files, size and depth); secrets are scanned out of
+  anything written; what a lookup returned, not what the person said, is saved only as a suggestion the person confirms;
+  memory is data in the prompt, never an instruction, and cannot change a permission or a rule; org memory is edited
+  by administrators or needs one to confirm; everything is listed under Assistant › What it knows, editable and
+  removable, with where it came from.
+- Search over memory: full-text (BM25) first. Facts that change over time get a validity date (the idea from Zep),
+  so "Dev01 meant X until March" is kept, not overwritten. Embeddings and a graph stay optional, for stores too big for
+  the first two.
+- Learning: after work, the assistant proposes what to save; routine facts about the person's own preferences are saved
+  at once with an undo, facts about the system wait for confirmation.
+
+### Order of work (replaces the earlier list)
+
+3. The sandbox: `run_shell`, the workspace, the network rules, the secret-by-name card, the runtime choice. Audited, traced.
+4. Autopilot (envelope, switch, stop, audit), over the slice 2 check and the sandbox.
+5. Memory as files: the store, the memory tool for Claude and ours for the rest, the index, search, learning, the page.
+6. The host shell mode (decision D), microVM runtimes, other CLIs' own login handling, then skills and MCP servers it
+   proposes for itself.
+
+### Decisions for the maintainer
+
+1. **Sandbox first, the server's own shell later and always asking** (decision D)? Proposed: yes. It keeps your work
+   credentials off any command the model writes, while the sandbox can install and run anything.
+2. **Autopilot never covers** protected accounts, deny rules, `iam`, `organizations`, `account`, `ssm`, `sts` or the host
+   shell (decision C)? Proposed: yes.
