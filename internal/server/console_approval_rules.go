@@ -225,8 +225,8 @@ func (s *Server) handlePutApprovalRules(w http.ResponseWriter, r *http.Request) 
 			}
 		}
 		for j, k := range rl.Kinds {
-			if k != approvalKindAI && k != approvalKindCons && k != approvalKindPush {
-				writeError(w, http.StatusBadRequest, fmt.Sprintf("%s.kinds[%d]: %q must be ai, cloud or publish", at, j, k))
+			if k != approvalKindAI && k != approvalKindCons && k != approvalKindPush && k != approvalKindRB {
+				writeError(w, http.StatusBadRequest, fmt.Sprintf("%s.kinds[%d]: %q must be ai, cloud, publish or runbook", at, j, k))
 				return
 			}
 		}

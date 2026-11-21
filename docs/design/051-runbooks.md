@@ -1,6 +1,8 @@
 # 051: Runbooks: fix things on servers, through SSM, with approval
 
-Status: **accepted 2026-11-20, every decision as proposed** (end of this note); being built. Starts phase 4 of the product direction (AI SRE:
+Status: **accepted 2026-11-20, every decision as proposed** (end of this note); **slice 1 built 2026-11-21**: runbooks with
+review, typed parameters, checks and approved fixes through SSM, `run_runbook` for agents, three examples, the console
+pages (see "Built" at the end). Checked against stand-ins only. Next: the alarm workflow. Starts phase 4 of the product direction (AI SRE:
 health, alerts, remediation) early, because the maintainer wants a demo now: "a Jenkins which gets out of space every
 time and I have Copilot from local who gets into the server by SSM and cleans spaces safely, docker prune and docker
 layers, db backups. I wanted to do the same from here, with a hook or even a manual run, but the system is not capable
@@ -77,3 +79,24 @@ different administrator each time (no pre-approval); read-only `call_aws` is ope
    Jenkins disk alarm fires), or does every fix need a person each time? Proposed: a person each time for now; this
    would change the decision that nothing is applied automatically.
 3. Should read-only `call_aws` be open to developers, so workflows running as developers can use it? Proposed: yes.
+
+## Built (slice 1, 2026-11-21)
+
+- `console_runbooks.go`: runbooks with versions, review by a different administrator of the exact text (by hash),
+  typed parameters (`choice` with letters, digits, spaces and `. _ / : @ + -` only; `int` in a range; names that are
+  not shell variables such as `PATH` or `LD_PRELOAD`), targets by instance id or tag (at most 20). A check runs at
+  once; a fix is a proposal under the approval rules (kind `runbook`), refused to whoever asked, for another hash, or
+  when the runbook changed since. Execution sends `AWS-RunShellScript` with the values as single-quoted environment
+  lines before the reviewed script, polls `list-command-invocations`, keeps each instance's output (8,000 characters,
+  credentials hidden) and makes a trace. A run whose status cannot be read five times in a row fails with the SSM
+  command id; one lost in a restart is reported as failed.
+- `run_runbook` for developers and agents: no id lists the reviewed runbooks; a check returns the output; a fix is
+  filed. Any field beyond `runbook`, `params` and `reason` is refused. The AWS service switches for virtual machines and
+  other services stop agents, not people. In evals the tool is recorded, never run.
+- Console: Operations › Runbooks (list, examples, editor with parameter rows, review, run form), a run page with the
+  script, output and approval, and fixes on Approvals.
+- Checked in a browser against `scripts/dev/fake-aws`: the three examples made, self-review refused, the check run with
+  its output, a fix asked for, approved by the other administrator, run, with the audit trail and the trace. Not checked
+  against a real instance.
+- While testing, `hideSecrets` was found to miss names joined by underscores (`aws_secret_access_key=`, `DB_PASSWORD:`,
+  `GITHUB_TOKEN=`); it now catches them everywhere it is used.

@@ -27,6 +27,7 @@ const VERBS = {
   github_files: ['Read files from GitHub', 'Reading files from GitHub'],
   guard_findings: ['Read the security findings', 'Reading the security findings'],
   inspector_findings: ['Read the Amazon Inspector findings', 'Reading the Amazon Inspector findings'],
+  run_runbook: ['Ran a runbook', 'Running a runbook'],
   environment_templates: ['Looked at environment templates', 'Looking at environment templates'],
   request_environment: ['Requested an environment', 'Requesting an environment'],
   list_agents: ['Listed your agents', 'Listing your agents'],

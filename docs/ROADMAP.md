@@ -21,6 +21,14 @@ in [PLAN.md](PLAN.md).
 | M6 | AI agents | Governed agent steps with scoped credentials and cost tracking; failure triage; fix suggestions as pull requests, never auto-applied | In progress: Claude Code agent steps built (note 007); Codex, Copilot, triage and cost tracking open |
 | M7 | Migration and breadth | Importers for Jenkinsfile and GitHub Actions workflows; Bitbucket and GitLab triggers; additional cloud targets | Not started |
 
+## Runbooks (note 051)
+
+Status: **slice 1 built (2026-11-21).** Scripts one administrator writes and another reviews, with typed parameters, run
+on servers through SSM: checks run when asked (by people, agents and workflows); every fix waits for a different
+administrator. Three examples for a build server whose disk fills up. Checked against stand-ins only. Next: a CloudWatch
+alarm workflow (SNS to a signed webhook), then more AI SRE checks. Starts phase 4 of the product direction early. See
+[note 051](design/051-runbooks.md).
+
 ## Evals (note 050)
 
 Status: **slices 1 and 2 built (2026-11-20).** Suites of cases per agent with fixtures and checks (text, JSON, fields,

@@ -37,7 +37,7 @@ export async function approvalRulesPage() {
         h('label', {}, h('span', { class: 'label' }, 'Needs'), approvals),
         admin && h('button', { type: 'button', class: 'btn-ghost btn-sm', 'aria-label': 'Remove this rule', onclick: () => card.remove() }, icon('trash', 'size-4'))),
       h('div', {}, h('div', { class: 'label' }, 'For changes to'), chips(accounts.map(a => [a.id, a.name]), r.accounts || [], 'data-account', !admin), h('p', { class: 'hint' }, 'None ticked: every account.')),
-      h('div', {}, h('div', { class: 'label' }, 'Made by'), chips([['ai', 'The assistant (AI-drafted changes)'], ['cloud', 'People in the console'], ['publish', 'Pushing an agent to a registry']], r.kinds || [], 'data-kind', !admin), h('p', { class: 'hint' }, 'None ticked: all three. A rule that names accounts never covers pushes.')),
+      h('div', {}, h('div', { class: 'label' }, 'Made by'), chips([['ai', 'The assistant (AI-drafted changes)'], ['cloud', 'People in the console'], ['publish', 'Pushing an agent to a registry'], ['runbook', 'Runbook fixes on servers']], r.kinds || [], 'data-kind', !admin), h('p', { class: 'hint' }, 'None ticked: all four. A rule that names accounts never covers pushes.')),
       h('label', { class: 'flex items-center gap-2 text-sm' }, high, 'Only changes rated high risk (for example deleting a stack)'),
       h('div', {}, h('div', { class: 'label' }, 'Who may approve'), admins.length || (r.approvers || []).length
         ? chips([...new Set([...admins, ...(r.approvers || [])])].map(u => [u, u]), r.approvers || [], 'data-approver', !admin)

@@ -47,6 +47,7 @@ import { watchMapPage } from './pages/watch_map.js';
 import { servicesPage, servicePage } from './pages/services.js';
 import { aiUsePage } from './pages/ai_use.js';
 import { missionsPage, missionPage } from './pages/missions.js';
+import { runbooksPage, runbookPage, runbookRunPage } from './pages/runbooks.js';
 import { builtPage } from './pages/built.js';
 import { setupPage as setupStepsPage } from './pages/setup.js';
 import { blueprintsPage, blueprintPage } from './pages/blueprints.js';
@@ -141,8 +142,9 @@ function shell() {
   const renderApprovals = () => { mount(approvalsButton, icon('check', 'size-4'), h('span', { class: 'hidden sm:inline' }, 'Approvals'), approvalsBadge(false)); approvalsButton.setAttribute('aria-label', 'Approvals, ' + waiting + ' waiting'); };
   const loadApprovals = async () => {
     const dev = atLeast(session.role, 'developer'); // viewers cannot read agent pushes
-    const [a, c, ps] = await Promise.all([get('/v1/ai/proposals').catch(() => null), get('/v1/cloud/changes').catch(() => null), dev ? get('/v1/ai/pushes').catch(() => null) : null]);
-    const n = [...(a?.proposals || []), ...(c?.changes || []), ...(ps?.pushes || [])].filter(x => x.status === 'proposed').length;
+    const [a, c, ps, rr] = await Promise.all([get('/v1/ai/proposals').catch(() => null), get('/v1/cloud/changes').catch(() => null), dev ? get('/v1/ai/pushes').catch(() => null) : null,
+      dev ? get('/v1/runbook-runs').catch(() => null) : null]);
+    const n = [...(a?.proposals || []), ...(c?.changes || []), ...(ps?.pushes || []), ...(rr?.runs || [])].filter(x => x.status === 'proposed').length;
     if (n !== waiting) { waiting = n; renderApprovals(); renderTabs(); }
   };
   renderApprovals(); loadApprovals();
@@ -280,6 +282,9 @@ async function boot() {
     route('/services/:id', guard('viewer', servicePage));
     route('/ai-use', guard('developer', aiUsePage));
     route('/missions', guard('developer', missionsPage));
+    route('/runbooks', guard('developer', runbooksPage));
+    route('/runbooks/:id', guard('developer', runbookPage));
+    route('/runbook-runs/:id', guard('developer', runbookRunPage));
     route('/schedules', guard('developer', schedulesPage));
     route('/built', guard('developer', builtPage));
     route('/setup', guard('developer', setupStepsPage));

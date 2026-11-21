@@ -92,6 +92,12 @@ section in the pull request that makes the change; a release moves it under its 
 - **Workflows refuse agents with tools their run cannot use.** Saving a workflow whose agent has a tool its run-as role
   may never use (such as `call_aws`, for administrators only, in a workflow running as a viewer) now says so, instead of
   every run quietly going without it.
+- **Runbooks** (design note 051). Operations › Runbooks: shell scripts that check or fix servers through AWS Systems
+  Manager. One administrator writes a runbook and a different one reviews it; parameters are choices or numbers,
+  never free text. Checks run when asked, by people and by agents (`run_runbook`); every fix waits for a different
+  administrator under Approvals. Three examples (Disk report, Docker cleanup, Old backups). Checked against stand-ins
+  only.
+- **Hidden credentials** now include names joined by underscores (`aws_secret_access_key=`, `DB_PASSWORD:`).
 - **`call_aws` for developers** (design note 051, decision 3). The read-only AWS CLI lookup (describe, list and get only,
   no secrets, data or logs) is open to developers, so agents in a workflow running as a developer can use it when
   Forgeline's summarised lookups do not answer.

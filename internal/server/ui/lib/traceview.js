@@ -1,6 +1,6 @@
 // Forgeline web console: how a trace is drawn (design note 049). No DOM, so it runs under Node in tests.
 
-export const KIND_LABEL = { agent: 'Agent run', workflow: 'Workflow run', assistant: 'Assistant chat', model: 'Model call', team: 'Team run', mission: 'Mission', pipeline: 'Pipeline run' };
+export const KIND_LABEL = { agent: 'Agent run', workflow: 'Workflow run', assistant: 'Assistant chat', model: 'Model call', team: 'Team run', mission: 'Mission', pipeline: 'Pipeline run', runbook: 'Runbook run' };
 
 /** Spans in the order to draw them: each parent followed by its children, oldest first, with how deep each is. */
 export function spanTree(spans) {
@@ -28,6 +28,7 @@ export function spanLook(s) {
   const slate = 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300';
   if (kind === 'team') return { label: 'Team run', icon: 'team', tile: 'bg-teal-100 text-teal-700 dark:bg-teal-500/15 dark:text-teal-300', bar: 'bg-teal-500' };
   if (kind === 'mission') return { label: 'Mission', icon: 'mission', tile: 'bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300', bar: 'bg-rose-500' };
+  if (kind === 'runbook') return { label: 'Runbook run', icon: 'steps', tile: 'bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300', bar: 'bg-amber-500' };
   if (kind === 'pipeline') return { label: 'Pipeline run', icon: 'pipeline', tile: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300', bar: 'bg-emerald-500' };
   if (s.attrs && s.attrs['forgeline.step.id'] !== undefined) return { label: 'Step', icon: 'play', tile: slate, bar: 'bg-emerald-400' };
   if (s.attrs && s.attrs['forgeline.mission.stage'] !== undefined) return { label: 'Stage (' + s.attrs['forgeline.mission.stage'] + ')', icon: 'flow', tile: slate, bar: 'bg-rose-300' };
