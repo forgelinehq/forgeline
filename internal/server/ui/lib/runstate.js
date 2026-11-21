@@ -3,7 +3,7 @@
 // (design note 024); anything not listed here is ignored, so a newer server cannot break the panel.
 
 export function newRun() {
-  return { status: 'running', context: '', steps: [], approvals: [], text: '', proposals: [], environments: [], memories: [], actions: [], plan: [], questions: [], permissions: [], conversation: '', error: '' };
+  return { status: 'running', context: '', steps: [], approvals: [], text: '', proposals: [], environments: [], memories: [], actions: [], plan: [], questions: [], permissions: [], autopilot: null, autoActions: [], conversation: '', error: '' };
 }
 
 const step = (run, id) => run.steps.find(s => s.id === id);
@@ -34,6 +34,10 @@ export function applyEvent(run, ev) {
       } else if (ev.name === 'forgeline.permission_decided') {
         const x = run.permissions.find(p => p.id === v.id);
         if (x) { x.decision = String(v.decision || ''); x.state = ['approve', 'always', 'deny', 'expired'].includes(x.decision) ? x.decision : 'deny'; }
+      } else if (ev.name === 'forgeline.autopilot') {
+        // Autopilot (design note 052, slice 4): where the envelope stands, and each change that ran without a card.
+        run.autopilot = { state: v.state === 'off' ? 'off' : 'on', used: Number(v.used) || 0, steps: Number(v.steps) || 0, untilMs: Number(v.untilMs) || 0 };
+        if (v.action) run.autoActions.push({ command: String(v.action), account: String(v.account || '') });
       } else if (ev.name === 'forgeline.proposal' && v.id && !run.proposals.includes(v.id)) run.proposals.push(String(v.id));
       else if (ev.name === 'forgeline.action' && v.id && !run.actions.some(a => a.id === v.id)) run.actions.push({ id: String(v.id), kind: String(v.kind || ''), title: String(v.title || ''), effects: Array.isArray(v.effects) ? v.effects.map(String) : [], detail: String(v.detail || ''), pipeline: String(v.pipeline || '') });
       else if (ev.name === 'forgeline.memory' && v.id && !run.memories.some(m => m.id === v.id)) run.memories.push({ id: String(v.id), text: String(v.text || ''), about: v.about === 'system' ? 'system' : 'me', status: v.status === 'pending' ? 'pending' : 'active' });

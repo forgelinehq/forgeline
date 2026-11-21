@@ -1,5 +1,5 @@
-// The assistant panel: a read-only helper that answers questions about the page you are on.
-// It cannot change anything; a pipeline it drafts is text until you save it yourself.
+// The assistant panel: a colleague that answers questions about the page you are on, looks things up, and changes
+// things only after you approve the exact action (or inside an autopilot envelope you set).
 import { h, icon, mount, errorBox, notice, copyButton, toast, pill, relTime } from './dom.js';
 import { get, post, del, atLeast, streamPost } from './api.js';
 import { currentPath, navigate } from './router.js';
@@ -71,6 +71,8 @@ function build(close, role) {
   const input = h('textarea', { id: 'assistant-input', class: 'block max-h-40 min-h-[2.5rem] flex-1 resize-none bg-transparent py-2 text-sm placeholder:text-slate-400 focus:outline-none', rows: '1', maxlength: '4000', placeholder: 'Ask anything, or tell me what to set up…', 'aria-label': 'Your question' });
   const sendBtn = h('button', { class: 'btn-primary size-9 shrink-0 rounded-xl p-0', type: 'submit', 'aria-label': 'Send', title: 'Send' }, icon('send'));
   let busy = false, ready = null;
+  // Autopilot (design note 052, slice 4): on for this conversation only, with an envelope the server enforces.
+  let apOn = false, apAllowed = true, apLeft = null;
 
   const refreshCtx = () => { ctxLabel.textContent = pageContext().label; };
   refreshCtx();
@@ -295,6 +297,7 @@ function build(close, role) {
         const said = { approve: 'Allowed once', always: 'Allowed, and always for this kind', deny: 'Not allowed', expired: 'No answer, so it did not run' }[x.state] || x.state;
         return h('div', { class: 'text-sm', 'data-permission-done': x.id }, h('b', {}, said + ': '), h('code', { class: 'break-all font-mono text-[11px]' }, x.command));
       }),
+      run.autoActions.map((x, i) => h('div', { class: 'text-sm', 'data-autopilot-action': String(i) }, h('b', {}, 'Autopilot ran: '), h('code', { class: 'break-all font-mono text-[11px]' }, x.command), x.account ? h('span', { class: 'muted' }, ' (' + x.account + ')') : null)),
       run.approvals.filter(a => a.state === 'waiting').map(approvalCard),
       label ? h('div', { class: 'flex items-center gap-2 text-sm muted', role: 'status' }, h('span', { class: 'size-2 animate-pulse-dot rounded-full bg-brand-500' }), label,
         h('button', { class: 'btn-ghost btn-sm ml-auto', type: 'button', id: 'assistant-stop', onclick: stop }, icon('stop', 'size-3'), 'Stop')) : null,
@@ -343,11 +346,13 @@ function build(close, role) {
     draw(); list.scrollTop = list.scrollHeight;
     const c = pageContext();
     try {
-      await streamPost('/v1/assistant/runs', { message: q, history, conversationId: conversation, context: { kind: c.kind, id: c.id, path: c.path, label: c.where } }, (ev) => { applyEvent(run, ev); draw(); }, ctl.signal);
+      const body = { message: q, history, conversationId: conversation, context: { kind: c.kind, id: c.id, path: c.path, label: c.where } };
+      if (apOn) body.autopilot = {};
+      await streamPost('/v1/assistant/runs', body, (ev) => { applyEvent(run, ev); if (run.autopilot) { apLeft = run.autopilot; if (run.autopilot.state === 'off') apOn = false; drawAutopilot(); } draw(); }, ctl.signal);
       if (run.status === 'running') { run.status = 'error'; run.error = 'The connection closed before the assistant finished.'; }
     } catch (e) {
       if (e && e.name === 'AbortError') run.status = 'stopped';
-      else { run.status = 'error'; run.error = e.message; }
+      else { run.status = 'error'; run.error = e.message; if (apOn && /autopilot/i.test(e.message)) { apOn = false; apAllowed = false; drawAutopilot(); } }
     }
     draw();
     if (run.conversation) conversation = run.conversation;
@@ -387,12 +392,34 @@ function build(close, role) {
     try { c = await get('/v1/assistant/conversations/' + encodeURIComponent(id)); } catch (e) { return toast(e.message, 'error'); }
     history.length = 0;
     for (const m of c.messages) history.push({ role: m.role, content: m.text });
-    conversation = c.id;
+    conversation = c.id; apOn = false; apLeft = null; drawAutopilot(); // autopilot never carries over to another conversation
     restore();
   }
 
+  const apBtn = h('button', { class: 'btn-ghost btn-sm', type: 'button', id: 'assistant-autopilot', role: 'switch', 'aria-checked': 'false', title: 'Let the assistant keep working without stopping to ask, for a limited time and number of steps. It still asks before anything on a protected account, IAM, or a rule that says no.', onclick: () => { apOn = !apOn; apLeft = null; drawAutopilot(); } });
+  const apStop = h('button', { class: 'btn-secondary btn-sm', type: 'button', id: 'assistant-autopilot-stop', onclick: async () => {
+    apOn = false; drawAutopilot();
+    try { await post('/v1/assistant/autopilot/stop', { conversation }); } catch (e) { toast(e.message, 'error'); }
+  } }, icon('stop', 'size-3'), 'Stop autopilot');
+  const apBar = h('div', { class: 'mt-1.5 flex flex-wrap items-center gap-2 px-1', id: 'assistant-autopilot-bar' }, apBtn, apStop);
+  /** The switch, and while it is on, how much of the envelope is left. */
+  function drawAutopilot() {
+    apBar.classList.toggle('hidden', !apAllowed);
+    apBtn.setAttribute('aria-checked', String(apOn));
+    apStop.classList.toggle('hidden', !apOn);
+    let text = 'Autopilot off';
+    if (apOn) {
+      text = 'Autopilot on';
+      if (apLeft && apLeft.steps) text += ' · ' + apLeft.used + ' of ' + apLeft.steps + ' steps · ' + Math.max(0, Math.ceil((apLeft.untilMs - Date.now()) / 60000)) + ' min left';
+      else text += ' · 30 min, 100 steps';
+    }
+    mount(apBtn, icon('bolt', 'size-3.5'), text);
+    apBtn.classList.toggle('text-amber-700', apOn); apBtn.classList.toggle('dark:text-amber-300', apOn);
+  }
+  get('/v1/assistant/autopilot').then(r => { apAllowed = r.allowed !== false; drawAutopilot(); }).catch(() => drawAutopilot());
   const form = h('form', { class: 'shrink-0 border-t border-slate-200 p-3 dark:border-slate-800', onsubmit: (e) => { e.preventDefault(); ask(); } },
     h('div', { class: 'flex items-end gap-2 rounded-2xl border border-slate-300 bg-white p-1.5 pl-3 shadow-sm focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-500/25 dark:border-slate-700 dark:bg-slate-900' }, input, sendBtn),
+    apBar,
     h('div', { class: 'muted mt-1.5 px-1 text-[11px]' }, 'Enter to send, Shift and Enter for a new line. Every answer is saved in your conversations.'));
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); form.requestSubmit(); } });
 
@@ -410,7 +437,7 @@ function build(close, role) {
       h('span', { class: 'flex size-8 shrink-0 items-center justify-center rounded-lg bg-brand-600 text-white' }, icon('sparkle', 'size-4')),
       h('div', { class: 'min-w-0' }, h('div', { class: 'font-display text-[15px] font-bold leading-tight' }, 'Assistant'), h('div', { class: 'muted truncate text-xs' }, 'Looking at ', ctxLabel))),
     h('div', { class: 'flex items-center gap-0.5' },
-      h('button', { class: 'btn-ghost btn-sm', type: 'button', id: 'assistant-new', title: 'Start a new conversation', onclick: () => { history.length = 0; conversation = ''; empty(); } }, icon('plus', 'size-3.5'), h('span', { class: 'hidden sm:inline' }, 'New')),
+      h('button', { class: 'btn-ghost btn-sm', type: 'button', id: 'assistant-new', title: 'Start a new conversation', onclick: () => { history.length = 0; conversation = ''; apOn = false; apLeft = null; drawAutopilot(); empty(); } }, icon('plus', 'size-3.5'), h('span', { class: 'hidden sm:inline' }, 'New')),
       hdrBtn({ id: 'assistant-history', 'aria-label': 'Your past conversations', onclick: showHistory }, 'history'),
       h('span', { class: 'mx-1 h-5 w-px bg-slate-200 dark:bg-slate-700', 'aria-hidden': 'true' }),
       wideBtn, modeBtn,

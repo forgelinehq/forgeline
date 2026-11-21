@@ -40,7 +40,7 @@ const run = (events) => events.reduce((r, e) => applyEvent(r, e), newRun());
 const call = (id, name) => [{ type: 'TOOL_CALL_START', toolCallId: id, toolCallName: name }, { type: 'TOOL_CALL_ARGS', toolCallId: id, delta: '{"a":1}' }, { type: 'TOOL_CALL_END', toolCallId: id }];
 const done = (id, content, ok = true) => [{ type: 'TOOL_CALL_RESULT', toolCallId: id, content }, { type: 'CUSTOM', name: 'forgeline.tool_status', value: { toolCallId: id, ok } }];
 
-eq('a new run is running and empty', newRun(), { status: 'running', context: '', steps: [], approvals: [], text: '', proposals: [], environments: [], memories: [], actions: [], plan: [], questions: [], permissions: [], conversation: '', error: '' });
+eq('a new run is running and empty', newRun(), { status: 'running', context: '', steps: [], approvals: [], text: '', proposals: [], environments: [], memories: [], actions: [], plan: [], questions: [], permissions: [], autopilot: null, autoActions: [], conversation: '', error: '' });
 let r = run([{ type: 'CUSTOM', name: 'forgeline.context', value: { note: 'infrastructure' } }, ...call('c1', 'aws_script')]);
 eq('a lookup in progress', [r.context, r.steps.map(s => [s.id, s.name, s.args, s.status])], ['infrastructure', [['c1', 'aws_script', '{"a":1}', 'running']]]);
 eq('progress names the lookup', progressLabel(r), 'Looking up aws_script…');
@@ -62,6 +62,10 @@ eq('a question waits, with at most four options', [r.questions.map(q => [q.id, q
 r = run([{ type: 'CUSTOM', name: 'forgeline.question', value: { id: 'q1', question: 'Which one?', options: ['A'] } }, { type: 'CUSTOM', name: 'forgeline.question', value: { id: 'q1', question: 'Again' } }, { type: 'CUSTOM', name: 'forgeline.question_answered', value: { id: 'q1', answer: 'A' } }]);
 eq('a repeated question is not a second one, and the answer is kept', r.questions.map(q => [q.question, q.state, q.answer]), [['Which one?', 'answered', 'A']]);
 eq('no answer is an expired question', run([{ type: 'CUSTOM', name: 'forgeline.question', value: { id: 'q2', question: 'x' } }, { type: 'CUSTOM', name: 'forgeline.question_answered', value: { id: 'q2', answer: '' } }]).questions.map(q => q.state), ['expired']);
+r = run([{ type: 'CUSTOM', name: 'forgeline.autopilot', value: { state: 'on', used: 2, steps: 100, untilMs: 5 } }, { type: 'CUSTOM', name: 'forgeline.autopilot', value: { state: 'on', used: 3, steps: 100, untilMs: 5, action: 'aws ecs update-service --service api', account: 'primary' } }]);
+eq('autopilot shows where the envelope stands and each change it ran', [r.autopilot, r.autoActions], [{ state: 'on', used: 3, steps: 100, untilMs: 5 }, [{ command: 'aws ecs update-service --service api', account: 'primary' }]]);
+eq('autopilot ending is shown', run([{ type: 'CUSTOM', name: 'forgeline.autopilot', value: { state: 'off', used: 100, steps: 100 } }]).autopilot.state, 'off');
+eq('no autopilot event, no autopilot', newRun().autopilot, null);
 r = run([...call('c1', 'search_audit'), ...done('c1', 'The lookup failed: not available to your role', false)]);
 eq('a refused lookup is failed', r.steps.map(s => s.status), ['failed']);
 r = run([...call('c1', 'a'), ...done('c1', 'x'), ...call('c2', 'b'), ...done('c2', 'y')]);

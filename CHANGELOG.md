@@ -92,6 +92,12 @@ section in the pull request that makes the change; a release moves it under its 
 - **Workflows refuse agents with tools their run cannot use.** Saving a workflow whose agent has a tool its run-as role
   may never use (such as `call_aws`, for administrators only, in a workflow running as a viewer) now says so, instead of
   every run quietly going without it.
+- **Autopilot** (design note 052, slice 4). A switch in the assistant panel, per conversation: the assistant keeps
+  working without stopping to ask, for up to 30 minutes and 100 steps you can see and stop. A change that would only have
+  asked runs without a card, is shown in the chat and audited. It never covers a protected account, IAM, Organizations,
+  accounts, SSM or STS, a rule that denies or asks, a secret for the sandbox, or an agent. An administrator can turn it
+  off for everyone.
+- **The assistant says it has a shell** when the sandbox is off, and where to turn it on, instead of saying it cannot change anything.
 - **A sandbox for the assistant** (design note 052, slice 3). It can run any command and write and run code in any
   language in a container Forgeline starts for you (root inside, any image, the network on, a `/work` folder that
   stays): `apt`, `pip`, `npm`, `curl`, builds. It cannot see the server's files or credentials, and gets a vault secret only

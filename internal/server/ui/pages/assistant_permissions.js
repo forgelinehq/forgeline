@@ -16,10 +16,13 @@ export async function assistantPermissionsPage() {
     const admin = atLeast(session.role, 'admin');
     let sb = null;
     try { sb = await get('/v1/assistant/sandbox'); } catch { /* the page still works without it */ }
+    let ap = null;
+    try { ap = await get('/v1/assistant/autopilot'); } catch { /* the page still works without it */ }
     mount(el,
       pageHeader('Assistant permissions', 'What the assistant may do as you. A read runs. A change shows you the exact command and waits for your answer.'),
       notice('info', 'Only an administrator can have the assistant change AWS, only in the chat (never in a background run or by an agent), and only on an account marked below. Everything else about a change stays as it was: the service switches under Connections still apply.'),
       sb ? sandboxCard(sb, admin, load) : null,
+      ap ? autopilotCard(ap, admin, load) : null,
       accountsCard(d.accounts, admin, load),
       rulesCard(d.rules, admin, load));
   }
@@ -92,4 +95,14 @@ function sandboxCard(sb, admin, reload) {
       try { await post('/v1/assistant/sandbox/reset'); toast('Your sandbox was reset.', 'ok'); } catch (e) { toast(e.message, 'error'); }
       reload();
     } }, icon('trash', 'size-4'), 'Reset my sandbox')));
+}
+
+/** Autopilot: an administrator can turn it off for everyone. It is on by default, per conversation, and limited. */
+function autopilotCard(ap, admin, reload) {
+  const set = async (allowed) => { try { await put('/v1/assistant/autopilot', { allowed }); toast(allowed ? 'Autopilot is allowed.' : 'Autopilot is off for everyone.', 'ok'); } catch (e) { toast(e.message, 'error'); } reload(); };
+  return h('section', { class: 'card card-pad mt-4', id: 'perm-autopilot' },
+    h('div', { class: 'mb-1 flex flex-wrap items-center justify-between gap-2' }, h('h2', { class: 'h-section' }, 'Autopilot'),
+      h('div', { class: 'flex items-center gap-2' }, pill(ap.allowed ? 'ok' : 'idle', ap.allowed ? 'allowed' : 'off'),
+        admin ? h('button', { type: 'button', class: 'btn-secondary btn-sm', id: 'autopilot-toggle', onclick: () => set(!ap.allowed) }, ap.allowed ? 'Turn off for everyone' : 'Allow') : null)),
+    h('p', { class: 'muted text-sm' }, 'A person can switch autopilot on for one conversation: the assistant then keeps working without stopping to ask, for up to ' + ap.default_minutes + ' minutes and ' + ap.default_steps + ' steps. A change that would only have asked runs without a card and is shown and audited. It never covers a protected account, IAM, Organizations, accounts, SSM or STS, a change a rule forbids or asks about, a secret given to the sandbox, or an agent. Stop ends it at once.'));
 }

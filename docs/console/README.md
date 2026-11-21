@@ -315,6 +315,8 @@ update that asks for different hosts needs a fresh grant.
 | [163-assistant-permissions](163-assistant-permissions.png) | Settings › Assistant permissions: which AWS accounts the assistant may change with your own approval (protected by default) and the rules |
 | [164-assistant-sandbox](164-assistant-sandbox.png) | The assistant installed Python in its sandbox, wrote a script to /work and ran it; the output is in the answer (note 052, slice 3). A real Docker container; the model was a stand-in | 
 | [165-sandbox-settings](165-sandbox-settings.png) | Settings › Assistant permissions › Sandbox: off until an administrator turns it on, the isolation in use, the network choice and the honest limits |
+| [166-assistant-autopilot](166-assistant-autopilot.png) | Autopilot on: the stop-instances change ran without a card and is shown, with the steps and time left and a Stop button. |
+| [167-autopilot-settings](167-autopilot-settings.png) | Settings › Assistant permissions › Autopilot: allowed for everyone, with the switch an administrator uses to turn it off, and what it never covers. |
 
 ## Which pictures are current
 

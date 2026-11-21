@@ -264,6 +264,11 @@ func (s *Server) lookupLoop(ctx context.Context, p Principal, turns []chatTurn, 
 	var used []string
 	nudged, spent := false, 0
 	deadline := time.Now().Add(assistantWall)
+	ap := autopilotFrom(ctx) // inside its envelope the budget is the person's, not the default
+	limit := maxLookups
+	if ap != nil {
+		limit = max(maxLookups, ap.steps)
+	}
 	obs := lookupObserver(ctx)
 	for i := 0; ; i++ {
 		reply, err := s.askAssistant(ctx, p.Role, turns, ctxText)
@@ -285,10 +290,18 @@ func (s *Server) lookupLoop(ctx context.Context, p Principal, turns []chatTurn, 
 		}
 		// Preparing a card is what the lookups were for, so it does not spend the budget; a hard stop at twice the budget
 		// keeps a model that only prepares cards from going on forever.
-		free := (call.Tool == "prepare_action" || call.Tool == askUserTool || call.Tool == updatePlanTool) && i < 2*maxLookups
-		if (spent >= maxLookups || time.Now().After(deadline)) && !free {
+		free := (call.Tool == "prepare_action" || call.Tool == askUserTool || call.Tool == updatePlanTool) && i < 2*limit
+		over := spent >= maxLookups || time.Now().After(deadline)
+		if ap != nil {
+			over = !ap.active()
+		}
+		if over && !free {
+			why := "The budget for this question is used up."
+			if ap != nil {
+				why = map[string]string{"stopped": "The person pressed Stop on autopilot.", "time": "The autopilot time is used up.", "steps": "The autopilot steps are used up."}[ap.ended()]
+			}
 			turns = append(turns, chatTurn{Role: "assistant", Content: reply},
-				chatTurn{Role: "user", Content: "The budget for this question is used up. Answer now with what you have: say what is done, what is left and what you would do next, so the person can say \"continue\". Do not start another lookup."})
+				chatTurn{Role: "user", Content: why + " Answer now with what you have: say what is done, what is left and what you would do next, so the person can say \"continue\". Do not start another lookup."})
 			reply, err = s.askAssistant(ctx, p.Role, turns, ctxText)
 			if err != nil {
 				return "", used, err
@@ -321,6 +334,9 @@ func (s *Server) lookupLoop(ctx context.Context, p Principal, turns []chatTurn, 
 			if call.Tool == askUserTool {
 				deadline = deadline.Add(time.Since(began)) // waiting for a person is not the assistant's time
 			}
+		}
+		if ap != nil && !free {
+			ap.spend() // after the call, so the last step the person allowed still runs under autopilot
 		}
 		if lerr != nil {
 			tspan.Set(attrErrorType, "tool_error")

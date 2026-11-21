@@ -97,6 +97,10 @@ func (s *Server) handleAssistantRun(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	if job.autopilot != nil && !s.autopilotAllowed(r.Context()) {
+		writeError(w, http.StatusForbidden, "an administrator has turned autopilot off")
+		return
+	}
 	h := w.Header()
 	h.Set("Content-Type", "text/event-stream")
 	h.Set("Cache-Control", "no-cache")
@@ -139,6 +143,29 @@ func (s *Server) handleAssistantRun(w http.ResponseWriter, r *http.Request) {
 	out.send("RUN_STARTED", map[string]any{"threadId": thread, "runId": runID})
 
 	sink := &lookupSink{}
+	var ap *autopilot
+	if job.autopilot != nil {
+		key := autopilotKeyFor(job.p, thread)
+		var started bool
+		ap, started = startAutopilot(key, *job.autopilot)
+		ap.mu.Lock()
+		ap.notify = func(v map[string]any) { out.send("CUSTOM", map[string]any{"name": "forgeline.autopilot", "value": v}) }
+		ap.mu.Unlock()
+		if started {
+			s.auditReq(r, "assistant.autopilot.start", "assistant", fmt.Sprintf("%d steps until %s", ap.steps, ap.until.UTC().Format(time.RFC3339)), true)
+		}
+		ap.tell("on")
+		defer func() {
+			if why := ap.ended(); why != "" {
+				if endAutopilot(key) && why != "stopped" {
+					s.auditReq(r, "assistant.autopilot.end", "assistant", fmt.Sprintf("ended: %s, %d steps used", why, ap.used), true)
+				}
+				ap.tell("off")
+			}
+		}()
+	} else {
+		endAutopilot(autopilotKeyFor(job.p, thread)) // switched off: it does not carry on
+	}
 	sentP, sentE, sentN, sentA := 0, 0, 0, 0
 	obs := assistObserver(func(ev assistEvent) {
 		switch ev.Kind {
@@ -172,6 +199,9 @@ func (s *Server) handleAssistantRun(w http.ResponseWriter, r *http.Request) {
 		}
 	})
 	ctx := context.WithValue(context.WithValue(r.Context(), lookupSinkKey{}, sink), assistObserverKey{}, obs)
+	if ap != nil {
+		ctx = context.WithValue(ctx, autopilotKey{}, ap)
+	}
 	// A person is chatting: the assistant may use and add to memory. The default overview (run ids, pipeline names, counts) is clean; a run, a pipeline or the infrastructure attached as context is text they did not type.
 	mt := &memTurn{p: job.p, question: job.message, dirty: job.ctxNote != "overview"}
 	ctx = context.WithValue(context.WithValue(ctx, memTurnKey{}, mt), setupKey{}, job.setup)
