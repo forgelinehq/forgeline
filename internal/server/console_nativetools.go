@@ -61,10 +61,11 @@ func buildNativeSet(lines []helpLine) *nativeSet {
 }
 
 // schemaFromHelp reads a tool's help line, which starts with an example of its arguments as a JSON object and goes on
-// to say what it does. Every property is optional: the tool says what it needs when it is missing.
+// to say what it does. An argument is required unless its example says it is optional or only for some cases.
 func schemaFromHelp(help string) (map[string]any, string) {
 	help = strings.TrimSpace(help)
 	props := map[string]any{}
+	var required []string
 	desc := help
 	if strings.HasPrefix(help, "{") {
 		if end := balancedEnd(help); end > 0 {
@@ -77,12 +78,19 @@ func schemaFromHelp(help string) (map[string]any, string) {
 				sort.Strings(keys)
 				for _, k := range keys {
 					props[k] = propFor(k, ex[k])
+					if !optionalExample(ex[k]) {
+						required = append(required, k)
+					}
 				}
 				desc = strings.TrimSpace(help[end:])
 			}
 		}
 	}
-	return map[string]any{"type": "object", "properties": props}, desc
+	schema := map[string]any{"type": "object", "properties": props}
+	if len(required) > 0 {
+		schema["required"] = required
+	}
+	return schema, desc
 }
 
 func propFor(key string, v any) map[string]any {
@@ -95,22 +103,41 @@ func propFor(key string, v any) map[string]any {
 	case bool:
 		return map[string]any{"type": "boolean"}
 	case []any:
-		item := "string"
+		item := map[string]any{"type": "string"}
 		if len(x) > 0 {
-			if _, isNum := x[0].(float64); isNum {
-				item = "integer"
-			}
+			item = propFor(key, x[0])
 		}
-		return map[string]any{"type": "array", "items": map[string]any{"type": item}}
+		return map[string]any{"type": "array", "items": item}
 	case map[string]any:
-		return map[string]any{"type": "object"}
+		props := map[string]any{}
+		for k, e := range x {
+			props[k] = propFor(k, e)
+		}
+		return map[string]any{"type": "object", "properties": props}
 	case string:
-		if intKeys[key] {
+		switch {
+		case intKeys[key]:
 			return map[string]any{"type": "integer", "description": x}
+		case enumRE.MatchString(x):
+			return map[string]any{"type": "string", "enum": strings.Split(x, "|")}
+		case strings.Contains(x, `{"`) || strings.Contains(x, "{\""):
+			return map[string]any{"type": "object", "description": x} // text that shows a JSON object: the argument is an object
 		}
 		return map[string]any{"type": "string", "description": x}
 	}
 	return map[string]any{"type": "string"}
+}
+
+// enumRE matches an example like "view|search|create": a choice of words.
+var enumRE = regexp.MustCompile(`^[a-z][a-z_]*(\|[a-z][a-z_]*)+$`)
+
+// optionalExample says an example value marks its argument as optional or only needed in some cases.
+func optionalExample(v any) bool {
+	s, ok := v.(string)
+	if !ok {
+		return true // a number, a list or an object in an example is a sample value, not a required one
+	}
+	return strings.HasPrefix(s, "optional") || strings.HasPrefix(s, "for ") || strings.Contains(s, "optional")
 }
 
 // balancedEnd is the index just after the JSON object that starts s, or 0.
