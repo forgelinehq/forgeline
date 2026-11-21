@@ -212,8 +212,10 @@ function build(close, role) {
       catch (err) { toast(err.message, 'error'); box.querySelectorAll('button').forEach(b => { b.disabled = false; }); }
     };
     return h('div', { class: amber + ' flex-col', 'data-permission-id': x.id, role: 'group', 'aria-label': 'Allow this change?' },
-      h('div', { class: 'flex items-center gap-2 font-semibold' }, icon('shield', 'size-4 shrink-0'), 'Allow this change?'),
-      h('div', { class: 'text-sm' }, 'The assistant wants to run this on ', h('b', {}, x.account === 'primary' ? 'the primary AWS connection' : 'AWS account ' + x.account), ', as you. Nothing has changed yet.'),
+      h('div', { class: 'flex items-center gap-2 font-semibold' }, icon('shield', 'size-4 shrink-0'), x.tool === 'run_shell' ? 'Give secrets to this command?' : 'Allow this change?'),
+      x.tool === 'run_shell'
+        ? h('div', { class: 'text-sm' }, 'The assistant wants to run this in its sandbox, ', h('b', {}, 'with secrets from your vault'), '. Nothing has run yet.')
+        : h('div', { class: 'text-sm' }, 'The assistant wants to run this on ', h('b', {}, x.account === 'primary' ? 'the primary AWS connection' : 'AWS account ' + x.account), ', as you. Nothing has changed yet.'),
       h('pre', { class: 'max-h-32 w-full overflow-auto whitespace-pre-wrap break-words rounded-lg bg-white/70 p-2 font-mono text-[11px] dark:bg-slate-900/50', 'data-permission-command': '' }, x.command),
       x.why ? h('div', { class: 'muted text-xs' }, x.why + '.') : null,
       h('div', { class: 'flex flex-wrap gap-2' },

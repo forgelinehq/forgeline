@@ -239,7 +239,7 @@ func evalFrom(ctx context.Context) *evalScope {
 
 // changesSomething is a tool whose call would change something: in an eval it is recorded, never carried out.
 func changesSomething(tool string) bool {
-	return isProposalTool(tool) || strings.HasPrefix(tool, "propose_") || tool == "prepare_action" || tool == rememberTool || tool == runRunbookTool
+	return isProposalTool(tool) || strings.HasPrefix(tool, "propose_") || tool == "prepare_action" || tool == rememberTool || tool == runRunbookTool || tool == runShellTool
 }
 
 // intercept records a call and, for a tool that changes something or has a fixture, answers it instead of running it.

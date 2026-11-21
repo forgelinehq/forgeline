@@ -29,6 +29,7 @@ const VERBS = {
   inspector_findings: ['Read the Amazon Inspector findings', 'Reading the Amazon Inspector findings'],
   run_runbook: ['Ran a runbook', 'Running a runbook'],
   ask_user: ['Asked you a question', 'Asking you a question'],
+  run_shell: ['Ran a command in its sandbox', 'Running a command in its sandbox'],
   update_plan: ['Updated its plan', 'Updating its plan'],
   environment_templates: ['Looked at environment templates', 'Looking at environment templates'],
   request_environment: ['Requested an environment', 'Requesting an environment'],

@@ -39,7 +39,8 @@ type lookupTool struct {
 }
 
 // assistantLookups is the whole list. There is no tool that writes, applies, approves or reads a
-// secret value, and adding one needs a design note (013).
+// secret value, and adding one needs a design note (013). run_shell passes a vault secret to a command only on a card the
+// administrator answers, by name, and never shows the model the value (design note 052).
 func assistantLookups() []lookupTool {
 	return []lookupTool{
 		{"list_runs", `{"pipeline":"optional name","status":"optional: failed|succeeded|running|queued","limit":"optional, up to 30"} recent runs`, authn.Viewer, (*Server).lookupListRuns},
@@ -59,6 +60,7 @@ func assistantLookups() []lookupTool {
 		{"github_repos", `{} the GitHub repositories an administrator allowed, with the branches that may run`, authn.Developer, (*Server).lookupGitHubRepos},
 		{"github_files", `{"repo":"owner/name from github_repos","path":"optional: a directory or one file, e.g. go.mod, package.json, Makefile, .github/workflows"} list a directory or read one file of an allowed repository (default branch; files that hold secrets are never read). Use it to see what a project is before writing its pipeline`, authn.Developer, (*Server).lookupGitHubFiles},
 		{"guard_findings", `{"account":"optional account id","severity":"optional: critical|high|medium|low|info"} the open security and hygiene findings from the last scan, worst first, with a suggested fix for each`, authn.Viewer, (*Server).lookupGuardFindings},
+		{runShellTool, `{"command":"bash command","timeout_seconds":120,"image":"optional, default ubuntu:24.04 (any image, such as python:3.13 or node:22)","secrets":["optional vault secret names, for a command that needs a key"]} run any command, or write and run code in any language, in your own sandbox: a container with a /work folder that is kept between calls, the network on, and root inside it, so you can apt install, pip install, npm install, curl, clone, build and run anything. Nothing in it can reach the server's own files or credentials. Giving it a secret asks the person first. Use it when no lookup answers, and say what you ran`, authn.Developer, (*Server).lookupRunShell},
 		{askUserTool, `{"question":"short","options":["2 to 4 short choices; the person can also type their own answer"]} stop and ask the person when the answer changes what you would do and you cannot find it out. It waits for them and returns their answer. Not for permission to read`, authn.Viewer, (*Server).lookupAskUser},
 		{updatePlanTool, `{"items":[{"text":"short step","status":"todo|doing|done"}]} show the person your plan as a checklist and keep it current while you work; it replaces the whole list and costs nothing`, authn.Viewer, (*Server).lookupUpdatePlan},
 		{runRunbookTool, `{"runbook":"id; leave out to list the runbooks","params":{"NAME":"value"},"reason":"why, for a fix"} run a reviewed runbook on servers through SSM: a check (it only reads, such as a disk report) runs now and returns each instance's output; a fix (such as Docker cleanup) is filed for a different administrator to approve, and nothing runs until then. You choose a runbook and its parameters; you cannot run your own commands`, authn.Developer, (*Server).lookupRunRunbook},
@@ -102,6 +104,9 @@ func (s *Server) lookupHelp(ctx context.Context, role authn.Role) string {
 	for _, t := range assistantLookups() {
 		if sc := scopeFrom(ctx); sc != nil && (!sc.allows(t.name) || t.name == askAgentTool) {
 			continue // a running agent sees only its own tools, and never other agents
+		}
+		if t.name == runShellTool && (scopeFrom(ctx) != nil || !s.loadSandbox(ctx).Enabled) {
+			continue // off until an administrator turns it on; never offered to an agent
 		}
 		if t.name == askUserTool && askerFrom(ctx) == nil || t.name == updatePlanTool && (lookupObserver(ctx) == nil || scopeFrom(ctx) != nil) {
 			continue // nobody is watching this run, so there is nobody to ask and nobody to show a plan to

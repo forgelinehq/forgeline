@@ -254,3 +254,33 @@ refused. Every decision is in the audit log.
 
 {: .warning }
 **Checked against a fake AWS CLI only**, not a real account, and only for AWS. `az`, `gcloud` and `kubectl` are next.
+
+## The sandbox: any command, any language
+
+When no lookup answers, the assistant can **run commands and write and run code** in a sandbox: a container Forgeline
+starts for you, with root inside, the network on and a `/work` folder that stays between calls. It can `apt install`,
+`pip install`, `npm install`, `curl`, clone, build and run anything, in any language, and use any Docker image
+(`python:3.13`, `node:22`, `golang`). It is removed after 30 minutes unused (its `/work` folder stays until you reset it).
+
+![The assistant ran code in its sandbox]({{ '/console/164-assistant-sandbox.png' | relative_url }})
+
+An administrator turns it on under **Settings › AI › Assistant permissions** (it is off until then). What it can and
+cannot do:
+
+- It cannot see the server's files, its credentials or the Docker socket: nothing of the host is mounted, it is not
+  privileged, and it has few capabilities, a memory limit (2 GB) and a process limit.
+- It has **no credentials** unless you give it one. A command that needs a key names a vault secret; an administrator
+  sees the command and the secret's name on a card and answers once. The value goes in as an environment variable, is hidden
+  if the command prints it, and never reaches the model.
+- It is **not offered to agents or workflows**, only to the person in the chat.
+- A command that you let it run in the sandbox is audited with its text.
+
+![Sandbox settings]({{ '/console/165-sandbox-settings.png' | relative_url }})
+
+{: .warning }
+**Know the limits.** A container shares the host's kernel unless the host runs gVisor (the page says which is in use).
+Forgeline cannot close the container's network to other machines without firewall rules on the host: on this server's
+own test, a service listening only on the loopback address was not reachable and the cloud metadata address did not
+answer, but a service listening on all interfaces or on your network could be reached. If that matters, choose **No
+network**, or point `FORGELINE_SANDBOX_NETWORK` at a Docker network you have fenced. Checked here with Docker 29.3 and
+a stand-in model; gVisor and microVMs have not been tried.
