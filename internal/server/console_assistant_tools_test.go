@@ -188,3 +188,45 @@ func TestAssistantLookupRulesAreStrict(t *testing.T) {
 		t.Errorf("model asked %d times", llm.count())
 	}
 }
+
+func TestAnInvokeStyleCallIsRunAndAMixedOneIsNotShownRaw(t *testing.T) {
+	c, ok := parseLookup(`<invoke name="prepare_action">
+<parameter name="action">save_agent</parameter>
+<parameter name="title">Update Security checker: deep review</parameter>
+<parameter name="spec">{"name":"Security checker","tier":0}</parameter>
+<parameter name="limit">5</parameter>
+</invoke>`)
+	if !ok || c.Tool != "prepare_action" {
+		t.Fatalf("not parsed: %v %v", c, ok)
+	}
+	var a map[string]any
+	json.Unmarshal(c.Args, &a)
+	spec, _ := a["spec"].(map[string]any)
+	if a["action"] != "save_agent" || a["title"] != "Update Security checker: deep review" || spec["name"] != "Security checker" || a["limit"] != float64(5) {
+		t.Errorf("arguments: %s", c.Args)
+	}
+	if _, ok := parseLookup("Sure, here it is:\n<invoke name=\"x\"><parameter name=\"a\">b</parameter></invoke>"); ok {
+		t.Error("prose around a call was run")
+	}
+	if _, ok := parseLookup(`<invoke name="x">text<parameter name="a">b</parameter></invoke>`); ok {
+		t.Error("stray text inside the call was run")
+	}
+	// In a conversation: text and a call in the wrong format is sent back once, and the right form then runs.
+	m := newMCPHarness(t)
+	bad := "I'm preparing it now.\n<invoke name=\"list_pipelines\">\n</invoke>"
+	m.run(m.dev, map[string]any{"message": "go"}, bad, lookupReply("list_pipelines", map[string]string{}), "Done.")
+	if m.llm.count() != 3 || !strings.Contains(m.llm.lastUser(1), "not run") {
+		t.Errorf("the model was not asked to resend: %d calls", m.llm.count())
+	}
+	// A model that keeps doing it is not shown its own raw call.
+	evs := m.run(m.dev, map[string]any{"message": "go"}, bad, bad, bad)
+	var text string
+	for _, f := range evs {
+		if f["type"] == "TEXT_MESSAGE_CONTENT" {
+			text += f["delta"].(string)
+		}
+	}
+	if strings.Contains(text, "<invoke") || !strings.Contains(text, "cannot run") {
+		t.Errorf("the person was shown: %q", text)
+	}
+}

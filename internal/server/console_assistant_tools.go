@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/forgelinehq/forgeline/internal/trace"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -156,6 +157,9 @@ func parseLookup(reply string) (lookupCall, bool) {
 		}
 	}
 	r = strings.TrimSpace(strings.TrimSuffix(r, "```"))
+	if c, ok := parseInvoke(r); ok {
+		return c, true
+	}
 	if !strings.HasPrefix(r, "{") || !strings.HasSuffix(r, "}") || strings.Contains(r, "```") {
 		return lookupCall{}, false
 	}
@@ -165,6 +169,43 @@ func parseLookup(reply string) (lookupCall, bool) {
 		return lookupCall{}, false
 	}
 	return c, true
+}
+
+var (
+	invokeRE = regexp.MustCompile(`(?s)^(?:<function_calls>\s*)?<invoke name="([A-Za-z0-9_.:-]+)">(.*?)</invoke>\s*(?:</function_calls>)?$`)
+	paramRE  = regexp.MustCompile(`(?s)<parameter name="([A-Za-z0-9_.-]+)">(.*?)</parameter>`)
+)
+
+// parseInvoke reads the call format some models use in place of the lookup block:
+// <invoke name="tool"><parameter name="key">value</parameter></invoke>. It must be the whole reply. A value that is a
+// JSON object, array, number or boolean is passed as that, anything else as text.
+func parseInvoke(r string) (lookupCall, bool) {
+	m := invokeRE.FindStringSubmatch(r)
+	if m == nil {
+		return lookupCall{}, false
+	}
+	args := map[string]json.RawMessage{}
+	rest := m[2]
+	for _, pm := range paramRE.FindAllStringSubmatch(rest, -1) {
+		v := strings.TrimSpace(pm[2])
+		raw := json.RawMessage(nil)
+		if c := v[:min(1, len(v))]; strings.Contains("{[-0123456789tf", c) && c != "" && json.Valid([]byte(v)) {
+			raw = json.RawMessage(v)
+		} else {
+			raw, _ = json.Marshal(pm[2])
+		}
+		args[pm[1]] = raw
+	}
+	if strings.TrimSpace(paramRE.ReplaceAllString(rest, "")) != "" {
+		return lookupCall{}, false // something other than parameters inside the call
+	}
+	b, _ := json.Marshal(args)
+	return lookupCall{Tool: m[1], Args: b}, true
+}
+
+// looksLikeCall says a reply carries a tool call in a format that is not run, so the person is never shown it raw.
+func looksLikeCall(reply string) bool {
+	return strings.Contains(reply, "<invoke name=") || strings.Contains(reply, "<function_calls>") || strings.Contains(reply, `<parameter name="`)
 }
 
 // runLookup runs one lookup as the given person. The result is text to be shown to the model as
@@ -278,13 +319,16 @@ func (s *Server) lookupLoop(ctx context.Context, p Principal, turns []chatTurn, 
 			return "", used, err
 		}
 		call, isLookup := parseLookup(reply)
-		if !isLookup && !nudged && strings.Contains(reply, lookupFence) {
+		if !isLookup && !nudged && (strings.Contains(reply, lookupFence) || looksLikeCall(reply)) {
 			// Real models sometimes write a sentence before the block. The call inside is not run (prose around a block is
 			// an answer), but the person should not be shown a raw block, so the model is asked once to send it alone.
 			nudged = true
 			turns = append(turns, chatTurn{Role: "assistant", Content: reply},
-				chatTurn{Role: "user", Content: "Your reply mixed text with a lookup block, so nothing ran. Send either only the lookup block, or only your answer."})
+				chatTurn{Role: "user", Content: "Your reply mixed text with a call, or used a call format that is not run, so nothing ran. A call is exactly one block in the form shown under the rules (```forgeline-lookup with a JSON object, nothing before or after it). Send either only that block, or only your answer."})
 			continue
+		}
+		if !isLookup && looksLikeCall(reply) {
+			return "I tried to do that but wrote the request in a form I cannot run, so nothing was done. Ask me again and I will retry.", used, nil
 		}
 		if !isLookup {
 			return reply, used, nil

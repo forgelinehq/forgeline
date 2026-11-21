@@ -171,7 +171,7 @@ func TestAReplyThatMixesTextWithALookupIsSentBackOnceAndNeverRunWithTheText(t *t
 	if len(actionsIn(evs)) != 1 {
 		t.Fatalf("no card after the nudge: %v", evs)
 	}
-	if !strings.Contains(m.llm.lastUser(2), "mixed text with a lookup block") && !strings.Contains(m.llm.lastUser(1), "mixed text with a lookup block") {
+	if !strings.Contains(m.llm.lastUser(2), "mixed text with a call") && !strings.Contains(m.llm.lastUser(1), "mixed text with a call") {
 		t.Error("the model was not told why nothing ran")
 	}
 	if tools := toolsRun(evs); len(tools) != 1 || tools[0] != "prepare_action" {
