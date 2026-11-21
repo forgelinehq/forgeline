@@ -350,3 +350,17 @@ project), stored in the document store:
 - **Not built yet:** validity dates for facts that change (the idea from Zep), a suggestion card after a task ("keep
   this?"), context clearing and compaction, moving a personal file to the organisation, embeddings. Verified with a
   scripted model only.
+
+## Built (native tool calls, 2026-11-21)
+
+- The tools were described in the prompt and the model asked for one by writing a block of text. Models get that wrong
+  in ways that depend on the model (the Claude command line wrote XML calls; others put text around the block).
+- Now, for Anthropic and OpenAI-compatible providers (Gemini, OpenAI, Azure OpenAI, local servers), each tool is also sent
+  as a tool definition: its name, its description and a schema read from the example arguments in its help line (every
+  argument optional; the tool says what it needs). When the reply is a tool call, the adapter writes it back as the block
+  the loop reads, alone, whatever else the model said. One call per step, so the loop, its budget, the permission checks,
+  autopilot and the history are untouched, and the model is still shown the conversation as text.
+- Not native: Bedrock, and the Claude Code and Copilot command-line backends (their own tool formats). They keep the text
+  block. A tool whose name providers refuse (the dots in some MCP tool names) is left to the text block as well.
+- Arguments are now read loosely: `"30"` where a number is wanted and `12` where text is are accepted.
+- Next, if the text history proves to confuse a model: send tool results back as native results too.

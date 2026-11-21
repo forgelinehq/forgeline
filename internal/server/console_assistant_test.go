@@ -121,8 +121,11 @@ func TestAssistantAnswersFromContextAndStaysReadOnly(t *testing.T) {
 	if len(msgs) != 3 || msgs[0].(map[string]any)["content"] != "earlier" { // the orphan assistant turn is dropped
 		t.Errorf("messages = %v", msgs)
 	}
-	if _, has := req["tools"]; has {
-		t.Error("the assistant request carries tools; it must have none")
+	// Tools are sent as definitions of Forgeline's own lookups, which the server runs; the model has no tools of its own.
+	for _, x := range req["tools"].([]any) {
+		if n := x.(map[string]any)["name"].(string); n == "bash" || n == "Bash" || n == "str_replace_editor" || strings.HasPrefix(n, "computer") {
+			t.Errorf("the assistant request carries a tool the model would run itself: %s", n)
+		}
 	}
 
 	// A context that does not exist is refused, not guessed at.

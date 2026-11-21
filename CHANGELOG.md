@@ -92,6 +92,11 @@ section in the pull request that makes the change; a release moves it under its 
 - **Workflows refuse agents with tools their run cannot use.** Saving a workflow whose agent has a tool its run-as role
   may never use (such as `call_aws`, for administrators only, in a workflow running as a viewer) now says so, instead of
   every run quietly going without it.
+- **Real tool calls for the assistant** (design note 052). Where a provider has tool calling (Anthropic, and OpenAI-compatible
+  APIs including Gemini), the assistant's tools are now also sent as tool definitions with their arguments, and a call
+  the model makes is run like the text block it used before. The conversation the model sees stays text, and the budget,
+  permission checks and history are unchanged. A provider without tool calling, the Claude Code and Copilot backends
+  and Bedrock keep the text block. Arguments of the wrong type (`"30"` for a number) are read instead of refused.
 - **No more raw tool calls in the chat.** Some models write a call as `<invoke name="…"><parameter …>` instead of the
   block the assistant asks for. A call that is the whole reply now runs; one mixed with text is sent back once to be
   resent in the right form; and one that still is not run is never shown to you, only a short message saying nothing was

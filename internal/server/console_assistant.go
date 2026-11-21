@@ -448,7 +448,13 @@ func (s *Server) askAssistant(ctx context.Context, role authn.Role, turns []chat
 		system += "\n\n" + sc.persona
 	}
 	if role != "" {
-		system += "\n\nLookups you may use:\n" + s.lookupHelp(ctx, role)
+		lines := s.lookupLines(ctx, role)
+		var tl strings.Builder
+		for _, l := range lines {
+			fmt.Fprintf(&tl, "- %s %s\n", l.name, l.help)
+		}
+		system += "\n\nLookups you may use:\n" + tl.String()
+		ctx = context.WithValue(ctx, nativeToolsKey{}, buildNativeSet(lines)) // sent as real tool definitions where the provider has them
 	}
 	if role != "" {
 		system += workGuidance(ctx)
@@ -570,7 +576,12 @@ func (s *Server) askAPI(ctx context.Context, st assistantSettings, model, key, s
 // anthropicMessages sends one request to the Anthropic Messages API. status is the HTTP status, or 0 when the API
 // could not be reached.
 func anthropicMessages(ctx context.Context, client *http.Client, base, key, model, system string, turns []chatTurn, maxTokens int) (string, modelUsage, int, error) {
-	body, _ := json.Marshal(map[string]any{"model": model, "max_tokens": maxTokens, "system": system, "messages": turns})
+	payload := map[string]any{"model": model, "max_tokens": maxTokens, "system": system, "messages": turns}
+	native := nativeToolsFrom(ctx)
+	if native != nil {
+		payload["tools"], payload["tool_choice"] = native.anthropicTools(), map[string]string{"type": "auto"}
+	}
+	body, _ := json.Marshal(payload)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(base, "/")+"/v1/messages", bytes.NewReader(body))
 	if err != nil {
 		return "", modelUsage{}, 0, err
@@ -602,14 +613,21 @@ func anthropicMessages(ctx context.Context, client *http.Client, base, key, mode
 		return "", modelUsage{}, resp.StatusCode, fmt.Errorf("the Anthropic API refused the request (%d): %s", resp.StatusCode, truncate(msg, 200))
 	}
 	var out struct {
-		Content []struct{ Type, Text string } `json:"content"`
-		Usage   tokenCounts                   `json:"usage"`
+		Content []struct {
+			Type, Text, Name string
+			Input            json.RawMessage
+		} `json:"content"`
+		Usage tokenCounts `json:"usage"`
 	}
 	if err := json.Unmarshal(raw, &out); err != nil {
 		return "", modelUsage{}, resp.StatusCode, errors.New("the Anthropic API sent a reply that could not be read")
 	}
 	var sb strings.Builder
 	for _, c := range out.Content {
+		if c.Type == "tool_use" && native != nil {
+			// The model made a real tool call: the loop gets it as the block it reads, alone, whatever else was said.
+			return native.asBlock(c.Name, c.Input), modelUsage{Calls: 1, Input: out.Usage.input(), Output: out.Usage.OutputTokens}, resp.StatusCode, nil
+		}
 		if c.Type == "text" {
 			sb.WriteString(c.Text)
 		}
