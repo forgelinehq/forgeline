@@ -239,8 +239,30 @@ var providerHTTPClient = func(p Provider) *http.Client {
 
 // callProvider asks provider/model. When the provider is over its monthly limit, or the call fails for a reason that
 // may pass, its fallback is asked instead, once.
+// providerRetryWait is how long a rate-limited call waits before trying again; a variable so a test is quick.
+var providerRetryWait = []time.Duration{3 * time.Second, 8 * time.Second}
+
+// retryRateLimited runs a call and, when the provider answers 429 (too many requests), waits and tries again, twice. An
+// assistant that works through a task makes many calls in a row, and a small plan's rate limit would otherwise end the
+// task halfway. Anything else, including a monthly limit set in Forgeline, is returned at once.
+func retryRateLimited(ctx context.Context, call func() (string, modelUsage, error)) (string, modelUsage, error) {
+	reply, use, err := call()
+	for _, wait := range providerRetryWait {
+		if err == nil || !strings.Contains(err.Error(), "(429)") {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			return reply, use, err
+		case <-time.After(wait):
+		}
+		reply, use, err = call()
+	}
+	return reply, use, err
+}
+
 func (s *Server) callProvider(ctx context.Context, ref, system string, turns []chatTurn) (string, modelUsage, error) {
-	reply, use, err := s.callProviderOnce(ctx, ref, system, turns)
+	reply, use, err := retryRateLimited(ctx, func() (string, modelUsage, error) { return s.callProviderOnce(ctx, ref, system, turns) })
 	var pe *providerError
 	if err == nil || !errors.As(err, &pe) || !pe.transient {
 		return reply, use, err
