@@ -326,3 +326,27 @@ project), stored in the document store:
 - Tested by breaking it: dropping the "no rule asked" check, the always-ask check, the "still running" check, the
   administrator switch, the end-on-switch-off and the step count each fails a test. Browser-checked against the fake
   AWS CLI and a scripted model only.
+
+## Built (slice 5, 2026-11-21): memory as files
+
+- One tool, `memory`, with the operations of Anthropic's memory tool (`view`, `create`, `str_replace`, `insert`,
+  `delete`, `rename`) and a `search`, over a small file system: `/memories/me/...` for one person and `/memories/org/...`
+  for everyone. Files live in the document store (so Postgres works), never on the server's disk. A path is checked
+  before anything happens: it must start with `/memories/me/` or `/memories/org/`, names are letters, digits, space, dot,
+  dash and underscore, at most four folders deep, and a file ends in `.md` or `.txt`. A file is at most 8000 characters;
+  100 per person and 200 for the organisation. Content with markup or something shaped like a secret is refused.
+- **Same for every model.** The assistant reaches its tools through a text block, not a provider's native tool call, so
+  Claude does not get the native `memory_20250818` tool yet; ours has the same commands and arguments, so moving to the
+  native one later is a change of transport, not of behaviour.
+- **An index in every prompt:** each file's path and first line (2 KB), newest first, so the model knows what it has and
+  opens what it needs. `search` is BM25 over the paths and contents the person may read.
+- **Who writes where.** A person's files: the assistant, on their behalf. The organisation's: an administrator only, and
+  not after the conversation has read data the person did not type. A file the assistant writes after such a lookup is
+  **pending**: it stays out of the index until the person keeps it on the Memory page (the rule the notes already had).
+- **Seen and editable:** the Memory page lists every file with its text, who wrote it and when; a person can edit,
+  keep or delete their own, and "Forget everything about me" removes their files too. The chat shows "Saved to memory: path".
+  Every write is audited (path, action, size, never the content). Agents and workflows do not get the tool.
+- The notes of slice 1 (`remember`, 300 characters) still work beside it.
+- **Not built yet:** validity dates for facts that change (the idea from Zep), a suggestion card after a task ("keep
+  this?"), context clearing and compaction, moving a personal file to the organisation, embeddings. Verified with a
+  scripted model only.

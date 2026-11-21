@@ -58,6 +58,7 @@ const TOOLS = {
   list_models: ['work', 'See which models are set up'],
   ask_agent: ['work', 'Hand a task to another agent'],
   remember: ['work', 'Remember a note'],
+  memory: ['work', 'Keep and read memory files'],
   aws_search_documentation: ['docs', 'Search AWS documentation'],
   aws_read_documentation: ['docs', 'Read an AWS documentation page'],
   aws_retrieve_skill: ['docs', 'Load an AWS procedure'],

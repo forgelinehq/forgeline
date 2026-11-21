@@ -297,6 +297,9 @@ function build(close, role) {
         const said = { approve: 'Allowed once', always: 'Allowed, and always for this kind', deny: 'Not allowed', expired: 'No answer, so it did not run' }[x.state] || x.state;
         return h('div', { class: 'text-sm', 'data-permission-done': x.id }, h('b', {}, said + ': '), h('code', { class: 'break-all font-mono text-[11px]' }, x.command));
       }),
+      run.memFiles.map((f, i) => h('div', { class: 'text-sm', 'data-memory-file': String(i) }, icon('sparkle', 'mr-1 inline size-3.5 text-brand-600 dark:text-brand-300'),
+        h('b', {}, { create: 'Saved to memory: ', edit: 'Updated in memory: ', rename: 'Renamed in memory: ', delete: 'Removed from memory: ' }[f.action] || 'Memory: '), h('code', { class: 'break-all font-mono text-[11px]' }, f.path),
+        f.pending ? h('span', { class: 'muted' }, ' (waiting for you to keep it, on the Memory page)') : null)),
       run.autoActions.map((x, i) => h('div', { class: 'text-sm', 'data-autopilot-action': String(i) }, h('b', {}, 'Autopilot ran: '), h('code', { class: 'break-all font-mono text-[11px]' }, x.command), x.account ? h('span', { class: 'muted' }, ' (' + x.account + ')') : null)),
       run.approvals.filter(a => a.state === 'waiting').map(approvalCard),
       label ? h('div', { class: 'flex items-center gap-2 text-sm muted', role: 'status' }, h('span', { class: 'size-2 animate-pulse-dot rounded-full bg-brand-500' }), label,

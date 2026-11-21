@@ -454,6 +454,7 @@ type lookupSink struct {
 	traceID                 string       // the trace of the run that answered (note 049)
 	notes                   []MemoryNote // notes the assistant tried to remember, for the card
 	actions                 []AssistAction
+	files                   []memFileEvent // memory files the assistant wrote or removed, for the card
 }
 
 func (s *Server) handleListProposals(w http.ResponseWriter, r *http.Request) {

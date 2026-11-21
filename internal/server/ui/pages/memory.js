@@ -11,8 +11,9 @@ export async function memoryPage() {
   mount(el, spinner());
 
   async function load() {
-    let m, chats;
+    let m, chats, ff = { files: [] };
     try { [m, chats] = await Promise.all([get('/v1/assistant/memory'), get('/v1/assistant/conversations')]); } catch (e) { return mount(el, errorBox(e.message)); }
+    try { ff = await get('/v1/assistant/memory/files'); } catch { /* the notes still work without files */ }
     const isAdmin = session.role === 'admin';
     const act = async (fn, ok) => { try { await fn(); if (ok) toast(ok, 'ok'); load(); } catch (e) { toast(e.message, 'error'); } };
 
@@ -41,6 +42,28 @@ export async function memoryPage() {
         h('button', { class: 'btn-secondary btn-sm', type: 'button', onclick: load }, 'Cancel'))));
       ta.focus();
     }
+
+    const fileRow = (f) => {
+      const body = h('pre', { class: 'mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-slate-50 p-3 font-mono text-xs dark:bg-slate-900' }, f.content);
+      const editBtn = h('button', { class: 'btn-ghost btn-sm', type: 'button', 'aria-label': 'Edit ' + f.path, onclick: () => {
+        const ta = h('textarea', { class: 'input w-full font-mono text-xs', rows: '8', maxlength: '8000', 'aria-label': 'File text' }, f.content);
+        mount(box, h('div', { class: 'space-y-2' }, h('code', { class: 'text-xs' }, f.path), ta, h('div', { class: 'flex gap-2' },
+          h('button', { class: 'btn-primary btn-sm', type: 'button', onclick: () => act(() => put('/v1/assistant/memory/files', { path: f.path, content: ta.value }), 'Saved') }, 'Save'),
+          h('button', { class: 'btn-secondary btn-sm', type: 'button', onclick: load }, 'Cancel'))));
+      } }, icon('edit', 'size-4'));
+      const box = h('li', { class: 'px-4 py-3', 'data-memfile': f.path, 'data-pending': String(!!f.pending) },
+        h('div', { class: 'flex flex-wrap items-center gap-2' },
+          h('code', { class: 'w-full break-all text-xs' }, f.path),
+          f.pending ? h('span', { class: 'pill-wait' }, 'Waiting') : null,
+          h('span', { class: 'muted text-xs' }, (f.by === 'assistant' ? 'Written by the assistant' : 'Written by a person') + ' · ' + relTime(f.updated)),
+          f.pending ? h('button', { class: 'btn-primary btn-sm', type: 'button', 'data-act': 'keep', onclick: () => act(() => put('/v1/assistant/memory/files', { path: f.path, keep: true }), 'Kept') }, 'Keep') : null,
+          f.can_edit ? editBtn : null,
+          f.can_edit ? h('button', { class: 'btn-ghost btn-sm text-rose-600 dark:text-rose-400', type: 'button', 'data-act': 'delete-file', 'aria-label': 'Delete ' + f.path, onclick: () => act(() => del('/v1/assistant/memory/files?path=' + encodeURIComponent(f.path)), 'Deleted') }, icon('trash', 'size-4')) : null),
+        f.pending ? h('p', { class: 'muted mt-1 text-xs' }, 'The assistant wrote this after reading data you did not type, so it stays out of its notes until you keep it.') : null,
+        h('details', { class: 'mt-1' }, h('summary', { class: 'cursor-pointer text-xs underline' }, 'Show the file'), body));
+      return box;
+    };
+    const fileList = (scope, none) => { const fs = ff.files.filter(f => f.scope === scope); return fs.length ? h('ul', { class: 'divide-y divide-slate-200 dark:divide-slate-800' }, fs.map(fileRow)) : h('p', { class: 'muted px-4 py-6 text-sm' }, none); };
 
     const text = h('textarea', { id: 'note-text', class: 'input w-full', rows: '2', maxlength: String(MAX), placeholder: 'For example: I work in eu-west-1, or: we call account 1111 prod' });
     const about = h('select', { id: 'note-about', class: 'input w-auto', 'aria-label': 'What the note is about' },
@@ -71,6 +94,13 @@ export async function memoryPage() {
         h('div', { class: 'border-b border-slate-200 px-4 py-3 dark:border-slate-800' }, h('h2', { id: 'mem-sys', class: 'text-base font-semibold' }, 'About this system'),
           h('p', { class: 'muted text-xs' }, 'Shared with everyone who uses the assistant. An administrator keeps or removes each one.')),
         list(m.system, () => isAdmin, 'Nothing yet.')),
+      h('section', { class: 'card', 'aria-labelledby': 'mem-files', id: 'mem-files-card' },
+        h('div', { class: 'border-b border-slate-200 px-4 py-3 dark:border-slate-800' }, h('h2', { id: 'mem-files', class: 'text-base font-semibold' }, 'Files the assistant keeps'),
+          h('p', { class: 'muted text-xs' }, 'Longer things it learned: how an environment is laid out, a procedure that worked, how you like things done. Under /memories/me only you see them; under /memories/org everyone does, and only an administrator writes there.')),
+        h('div', { class: 'px-4 pt-3 text-xs font-semibold uppercase tracking-wide muted' }, 'Yours'),
+        fileList('me', 'None yet. Ask the assistant to remember how something works, and it saves a file here.'),
+        h('div', { class: 'px-4 pt-3 text-xs font-semibold uppercase tracking-wide muted' }, 'Shared with everyone'),
+        fileList('org', 'None yet.')),
       h('section', { class: 'card', 'aria-labelledby': 'mem-chats' },
         h('div', { class: 'flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-4 py-3 dark:border-slate-800' },
           h('div', {}, h('h2', { id: 'mem-chats', class: 'text-base font-semibold' }, 'Your conversations'),
@@ -84,8 +114,8 @@ export async function memoryPage() {
             h('span', { class: 'min-w-0 flex-1 truncate' }, c.title || 'Untitled'),
             (c.refs || []).length ? h('span', { class: 'pill-idle' }, c.refs.length + (c.refs.length === 1 ? ' request filed' : ' requests filed')) : null,
             h('span', { class: 'muted shrink-0 text-xs' }, relTime(c.updated))))) : h('p', { class: 'muted px-4 py-6 text-sm' }, 'No conversations yet.')),
-      h('div', { class: 'flex justify-end' }, m.mine.length ? h('button', { class: 'btn-ghost btn-sm text-rose-600 dark:text-rose-400', type: 'button', id: 'forget-me', onclick: async () => {
-        if (!await confirmDialog({ title: 'Forget everything about you?', body: 'Every note about you is deleted. Notes about the system are not touched.', confirmLabel: 'Forget', danger: true })) return;
+      h('div', { class: 'flex justify-end' }, m.mine.length || ff.files.some(f => f.scope === 'me') ? h('button', { class: 'btn-ghost btn-sm text-rose-600 dark:text-rose-400', type: 'button', id: 'forget-me', onclick: async () => {
+        if (!await confirmDialog({ title: 'Forget everything about you?', body: 'Every note and file about you is deleted. Notes and files about the system are not touched.', confirmLabel: 'Forget', danger: true })) return;
         act(() => del('/v1/assistant/memory'), 'Forgotten');
       } }, icon('trash', 'size-4'), 'Forget everything about me') : null));
   }
