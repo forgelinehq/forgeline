@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/forgelinehq/forgeline/internal/authn"
 	"github.com/forgelinehq/forgeline/internal/docstore"
@@ -20,7 +21,7 @@ import (
 // as the person who asked, with that person's role, and returns text. The model asks by writing
 // one fenced block; the server never runs anything else the model writes.
 const (
-	maxLookups      = 10       // per question; preparing a card does not count, so the answer it was for still comes back
+	maxLookups      = 40       // steps per question (design note 052); a question to the person, a plan update or a card does not count
 	maxLookupResult = 12 << 10 // per result
 	lookupFence     = "```forgeline-lookup"
 )
@@ -58,6 +59,8 @@ func assistantLookups() []lookupTool {
 		{"github_repos", `{} the GitHub repositories an administrator allowed, with the branches that may run`, authn.Developer, (*Server).lookupGitHubRepos},
 		{"github_files", `{"repo":"owner/name from github_repos","path":"optional: a directory or one file, e.g. go.mod, package.json, Makefile, .github/workflows"} list a directory or read one file of an allowed repository (default branch; files that hold secrets are never read). Use it to see what a project is before writing its pipeline`, authn.Developer, (*Server).lookupGitHubFiles},
 		{"guard_findings", `{"account":"optional account id","severity":"optional: critical|high|medium|low|info"} the open security and hygiene findings from the last scan, worst first, with a suggested fix for each`, authn.Viewer, (*Server).lookupGuardFindings},
+		{askUserTool, `{"question":"short","options":["2 to 4 short choices; the person can also type their own answer"]} stop and ask the person when the answer changes what you would do and you cannot find it out. It waits for them and returns their answer. Not for permission to read`, authn.Viewer, (*Server).lookupAskUser},
+		{updatePlanTool, `{"items":[{"text":"short step","status":"todo|doing|done"}]} show the person your plan as a checklist and keep it current while you work; it replaces the whole list and costs nothing`, authn.Viewer, (*Server).lookupUpdatePlan},
 		{runRunbookTool, `{"runbook":"id; leave out to list the runbooks","params":{"NAME":"value"},"reason":"why, for a fix"} run a reviewed runbook on servers through SSM: a check (it only reads, such as a disk report) runs now and returns each instance's output; a fix (such as Docker cleanup) is filed for a different administrator to approve, and nothing runs until then. You choose a runbook and its parameters; you cannot run your own commands`, authn.Developer, (*Server).lookupRunRunbook},
 		{"inspector_findings", `{"account":"optional account id","severity":"optional: critical|high|medium|low","limit":"optional, up to 80"} the ACTIVE Amazon Inspector findings (software vulnerabilities and network reachability), worst first, with counts by severity and resource type, the CVE, package, fixed version, resource, whether a fix and an exploit exist, and the EPSS score`, authn.Viewer, (*Server).lookupInspectorFindings},
 		{"aws_summary", `{"account":"optional account id from aws_accounts"} the AWS account summary: stacks and instances`, authn.Viewer, (*Server).lookupAWS},
@@ -99,6 +102,9 @@ func (s *Server) lookupHelp(ctx context.Context, role authn.Role) string {
 	for _, t := range assistantLookups() {
 		if sc := scopeFrom(ctx); sc != nil && (!sc.allows(t.name) || t.name == askAgentTool) {
 			continue // a running agent sees only its own tools, and never other agents
+		}
+		if t.name == askUserTool && askerFrom(ctx) == nil || t.name == updatePlanTool && (lookupObserver(ctx) == nil || scopeFrom(ctx) != nil) {
+			continue // nobody is watching this run, so there is nobody to ask and nobody to show a plan to
 		}
 		if t.name == rememberTool && (memTurnFrom(ctx) == nil || !s.memoryOn(ctx)) {
 			continue // only where a person is chatting, and memory is on
@@ -252,6 +258,7 @@ func (s *Server) askWithLookups(ctx context.Context, p Principal, turns []chatTu
 func (s *Server) lookupLoop(ctx context.Context, p Principal, turns []chatTurn, ctxText string, audit func(detail string, ok bool), span *trace.Active) (string, []string, error) {
 	var used []string
 	nudged, spent := false, 0
+	deadline := time.Now().Add(assistantWall)
 	obs := lookupObserver(ctx)
 	for i := 0; ; i++ {
 		reply, err := s.askAssistant(ctx, p.Role, turns, ctxText)
@@ -273,10 +280,10 @@ func (s *Server) lookupLoop(ctx context.Context, p Principal, turns []chatTurn, 
 		}
 		// Preparing a card is what the lookups were for, so it does not spend the budget; a hard stop at twice the budget
 		// keeps a model that only prepares cards from going on forever.
-		free := call.Tool == "prepare_action" && i < 2*maxLookups
-		if spent >= maxLookups && !free {
+		free := (call.Tool == "prepare_action" || call.Tool == askUserTool || call.Tool == updatePlanTool) && i < 2*maxLookups
+		if (spent >= maxLookups || time.Now().After(deadline)) && !free {
 			turns = append(turns, chatTurn{Role: "assistant", Content: reply},
-				chatTurn{Role: "user", Content: "No more lookups are allowed for this question. Answer now with what you have, and say what is missing."})
+				chatTurn{Role: "user", Content: "The budget for this question is used up. Answer now with what you have: say what is done, what is left and what you would do next, so the person can say \"continue\". Do not start another lookup."})
 			reply, err = s.askAssistant(ctx, p.Role, turns, ctxText)
 			if err != nil {
 				return "", used, err
@@ -304,7 +311,11 @@ func (s *Server) lookupLoop(ctx context.Context, p Principal, turns []chatTurn, 
 			tspan.Set("forgeline.eval.answered", held)
 		}
 		if !held {
+			began := time.Now()
 			out, lerr = s.runLookup(tctx, p, call)
+			if call.Tool == askUserTool {
+				deadline = deadline.Add(time.Since(began)) // waiting for a person is not the assistant's time
+			}
 		}
 		if lerr != nil {
 			tspan.Set(attrErrorType, "tool_error")

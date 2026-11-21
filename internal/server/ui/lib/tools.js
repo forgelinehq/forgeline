@@ -39,6 +39,8 @@ const TOOLS = {
   github_files: ['github', 'Read files in a repository'],
   guard_findings: ['security', 'Read security findings'],
   inspector_findings: ['security', 'Read Amazon Inspector findings'],
+  ask_user: ['work', 'Ask you a question when it needs an answer'],
+  update_plan: ['work', 'Show its plan as a checklist'],
   run_runbook: ['security', 'Run a reviewed runbook on servers (a fix waits for approval)'],
   morning_check: ['security', 'Do the morning check'],
   search_audit: ['security', 'Search the audit log'],

@@ -33,7 +33,8 @@ func approverFrom(ctx context.Context) approver {
 type pendingApproval struct {
 	who    string
 	tool   string
-	answer chan string // approve or deny
+	kind   string      // "" for an approval, "question" for ask_user (note 052): each is answered only through its own endpoint
+	answer chan string // approve or deny; for a question, the person's answer
 }
 
 type approvalBook struct {
@@ -60,9 +61,15 @@ func (b *approvalBook) remove(id string) {
 
 // resolve hands an answer to the waiting call. It reports whether there was one for this person.
 func (b *approvalBook) resolve(id, who, decision string) bool {
+	return b.resolveKind(id, who, "", decision)
+}
+
+// resolveKind is resolve for one kind of waiting call: an approval id cannot be answered as a question, or the
+// other way round, so a typed answer can never stand in for an approval.
+func (b *approvalBook) resolveKind(id, who, kind, decision string) bool {
 	b.mu.Lock()
 	p, ok := b.pending[id]
-	if ok && p.who == who {
+	if ok && p.who == who && p.kind == kind {
 		delete(b.pending, id)
 	} else {
 		ok = false

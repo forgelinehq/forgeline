@@ -23,6 +23,7 @@ const argsMax = 400     // bytes of a lookup's arguments shown in a step card
 const (
 	evToolStart  = "tool_start"
 	evToolResult = "tool_result"
+	evPlan       = "plan" // Content is the plan as JSON (note 052)
 )
 
 // assistEvent is a step of the lookup loop, reported to whoever is watching it.
@@ -141,6 +142,11 @@ func (s *Server) handleAssistantRun(w http.ResponseWriter, r *http.Request) {
 	sentP, sentE, sentN, sentA := 0, 0, 0, 0
 	obs := assistObserver(func(ev assistEvent) {
 		switch ev.Kind {
+		case evPlan:
+			var items []planItem
+			if json.Unmarshal([]byte(ev.Content), &items) == nil {
+				out.send("CUSTOM", map[string]any{"name": "forgeline.plan", "value": map[string]any{"items": items}})
+			}
 		case evToolStart:
 			out.send("TOOL_CALL_START", map[string]any{"toolCallId": ev.ID, "toolCallName": ev.Tool})
 			out.send("TOOL_CALL_ARGS", map[string]any{"toolCallId": ev.ID, "delta": ev.Args})
@@ -186,6 +192,14 @@ func (s *Server) handleAssistantRun(w http.ResponseWriter, r *http.Request) {
 				"id": id, "tool": c.Tool, "args": argsPreview(c), "integration": integrationOfTool(c.Tool), "expiresInSeconds": int(wait.Seconds())}})
 		}, func(id, decision string) {
 			out.send("CUSTOM", map[string]any{"name": "forgeline.approval_decided", "value": map[string]any{"id": id, "decision": decision}})
+		})
+	}))
+	// A person is present, so the assistant may stop and ask them a question, here, and wait (note 052).
+	ctx = context.WithValue(ctx, askerKey{}, asker(func(q string, options []string) (string, error) {
+		return s.askPerson(r.Context(), job.p, q, options, func(id string, wait time.Duration) {
+			out.send("CUSTOM", map[string]any{"name": "forgeline.question", "value": map[string]any{"id": id, "question": q, "options": options, "expiresInSeconds": int(wait.Seconds())}})
+		}, func(id, answer string) {
+			out.send("CUSTOM", map[string]any{"name": "forgeline.question_answered", "value": map[string]any{"id": id, "answer": answer}})
 		})
 	}))
 	reply, lookups, err := s.askWithLookups(ctx, job.p, job.turns, job.ctxText, func(tool string, ok bool) {

@@ -1,6 +1,7 @@
 # 052: An assistant that works like a colleague, not a script
 
-Status: **proposed 2026-11-21, revised the same day after the maintainer's answer; two decisions open (end of this note).**
+Status: **accepted 2026-11-21: both decisions answered yes (end of this note); slice 1 built 2026-11-21** (the budgeted loop, a visible
+plan and `ask_user`; see "Built" at the end). Next: the permission check.
 Phase 4 of the product direction (AI SRE) needs it: runbooks (note 051) are the safe hands, this is the head.
 
 ## What the maintainer asked for
@@ -132,7 +133,36 @@ shorter ladder (no sandbox) and says so.
 
 ## Decisions for the maintainer
 
+Both answered **yes** on 2026-11-21.
+
 1. **Protected accounts.** Is the proposed split right: a person's own approval is enough everywhere except accounts the
    organisation marks protected, which keep a different administrator? This changes a rule in CLAUDE.md and note 006.
 2. **Memory.** Start with the index plus `recall` plus full-text search, and add embeddings only if that proves
    too weak? Proposed: yes.
+
+## Models and local CLIs (later deep dive)
+
+The maintainer added a Gemini key and asked whether the assistant can use other models and providers, and whether that
+works alongside local Claude Code, Codex or Gemini CLI. Today: any provider under Models and providers (Anthropic,
+OpenAI, Gemini, Azure OpenAI, Bedrock, OpenAI-compatible servers) can answer for the assistant; Claude Code (login or
+token) and Copilot run as CLI backends with their own tools turned off. Codex and Gemini CLI are not backends yet.
+The new loop must work across all of them: native tool calls where a provider supports them, the existing fenced
+lookup blocks otherwise, and the same permission check either way. Planned for the deep dive: Codex and Gemini CLI as
+backends, choosing a model per task (a cheap one to route and summarise, a strong one to plan), and a CLI backend that
+may use its own tools only when its calls go through our permission check.
+
+## Built (slice 1, 2026-11-21)
+
+- Budget: 40 steps a question (it was 10) and 5 minutes of wall time; time spent waiting for the person does not count.
+  A question to the person, a plan update and a prepared card are free, with a hard stop at twice the budget. At the
+  budget the model is told to say what is done, what is left and what it would do next, so the person can say "continue".
+- `update_plan`: the model keeps a checklist of up to 12 items (todo, doing, done) that the panel shows.
+- `ask_user`: a question with up to four options; the run stops on a card and waits up to ten minutes; the answer comes
+  back to the model as data, and the card keeps "question → answer" in the run. Answered only through
+  `POST /v1/assistant/questions/{id}`, by the person asked; an approval id cannot be answered as a question or the other
+  way round. Offered only where a person is watching (the chat stream); agents never get it. With nobody present the
+  model is told to assume and carry on.
+- The system prompt now says how to work: find out before asking, try another way before saying it cannot, plan, ask
+  when the answer changes the work, never ask permission to read.
+- Checked in a browser against a stand-in model that plans, asks which cluster, looks something up and finishes. Not yet
+  checked with a real model: how well Claude, Gemini or the others choose to plan and ask is the next thing to look at.

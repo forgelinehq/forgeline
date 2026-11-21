@@ -3,7 +3,7 @@
 // (design note 024); anything not listed here is ignored, so a newer server cannot break the panel.
 
 export function newRun() {
-  return { status: 'running', context: '', steps: [], approvals: [], text: '', proposals: [], environments: [], memories: [], actions: [], conversation: '', error: '' };
+  return { status: 'running', context: '', steps: [], approvals: [], text: '', proposals: [], environments: [], memories: [], actions: [], plan: [], questions: [], conversation: '', error: '' };
 }
 
 const step = (run, id) => run.steps.find(s => s.id === id);
@@ -20,7 +20,15 @@ export function applyEvent(run, ev) {
         const open = run.steps.filter(s => s.status === 'running');
         run.approvals.push({ id: String(v.id), tool: String(v.tool || ''), args: String(v.args || ''), integration: String(v.integration || ''), seconds: Number(v.expiresInSeconds) || 0, state: 'waiting', step: open.length ? open[open.length - 1].id : '' });
       } else if (ev.name === 'forgeline.approval_decided') { const a = run.approvals.find(x => x.id === v.id); if (a) a.state = ['approve', 'deny', 'expired'].includes(v.decision) ? v.decision : 'deny'; }
-      else if (ev.name === 'forgeline.proposal' && v.id && !run.proposals.includes(v.id)) run.proposals.push(String(v.id));
+      else if (ev.name === 'forgeline.plan' && Array.isArray(v.items)) {
+        // The assistant's checklist (design note 052). Each update replaces the whole list.
+        run.plan = v.items.slice(0, 12).map(i => ({ text: String((i && i.text) || ''), status: ['todo', 'doing', 'done'].includes(i && i.status) ? i.status : 'todo' })).filter(i => i.text);
+      } else if (ev.name === 'forgeline.question' && v.id && !run.questions.some(q => q.id === v.id)) {
+        run.questions.push({ id: String(v.id), question: String(v.question || ''), options: Array.isArray(v.options) ? v.options.map(String).slice(0, 4) : [], seconds: Number(v.expiresInSeconds) || 0, state: 'waiting', answer: '' });
+      } else if (ev.name === 'forgeline.question_answered') {
+        const q = run.questions.find(x => x.id === v.id);
+        if (q) { q.answer = String(v.answer || ''); q.state = q.answer ? 'answered' : 'expired'; }
+      } else if (ev.name === 'forgeline.proposal' && v.id && !run.proposals.includes(v.id)) run.proposals.push(String(v.id));
       else if (ev.name === 'forgeline.action' && v.id && !run.actions.some(a => a.id === v.id)) run.actions.push({ id: String(v.id), kind: String(v.kind || ''), title: String(v.title || ''), effects: Array.isArray(v.effects) ? v.effects.map(String) : [], detail: String(v.detail || ''), pipeline: String(v.pipeline || '') });
       else if (ev.name === 'forgeline.memory' && v.id && !run.memories.some(m => m.id === v.id)) run.memories.push({ id: String(v.id), text: String(v.text || ''), about: v.about === 'system' ? 'system' : 'me', status: v.status === 'pending' ? 'pending' : 'active' });
       else if (ev.name === 'forgeline.environment' && v.id && !run.environments.includes(v.id)) run.environments.push(String(v.id));
@@ -42,7 +50,7 @@ export function applyEvent(run, ev) {
 /** What to tell the person while nothing has arrived yet. */
 export function progressLabel(run) {
   if (run.status !== 'running') return '';
-  if (run.approvals.some(a => a.state === 'waiting')) return 'Waiting for your answer…';
+  if (run.approvals.some(a => a.state === 'waiting') || run.questions.some(q => q.state === 'waiting')) return 'Waiting for your answer…';
   const open = run.steps.filter(s => s.status === 'running');
   if (open.length) return 'Looking up ' + open[open.length - 1].name + '…';
   return run.steps.length ? 'Writing the answer…' : 'Thinking…';

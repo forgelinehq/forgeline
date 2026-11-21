@@ -153,7 +153,7 @@ func TestACardAfterTheLookupBudget(t *testing.T) {
 	replies = replies[:maxLookups]
 	replies = append(replies, lookupReply("list_runs", map[string]any{}), "Answer.")
 	m.run(m.admin, map[string]any{"message": "look more"}, replies...)
-	if !strings.Contains(m.llm.lastUser(m.llm.count()-1), "No more lookups") {
+	if !strings.Contains(m.llm.lastUser(m.llm.count()-1), "budget for this question is used up") {
 		t.Errorf("a lookup beyond the budget ran: %s", m.llm.lastUser(m.llm.count()-1))
 	}
 }

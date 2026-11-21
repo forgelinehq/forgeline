@@ -79,7 +79,9 @@ what to do next**. The project is pre-alpha and maintained by one person.
 - Security rules are tested by breaking them: after adding a check, remove it and confirm a test
   fails. Several checks in this repository were found to be untested that way.
 - Cloud changes only happen through proposal and approval (note 006). Do not add a path that
-  changes the cloud directly.
+  changes the cloud directly. Exception, accepted by the maintainer on 2026-11-21 (note 052): the assistant may act as
+  the person, after the person approves the exact action, on an account an administrator has marked "allow with my own
+  approval". Every other account is "protected" (the default) and keeps a proposal and a different administrator.
 
 ## Working here
 
