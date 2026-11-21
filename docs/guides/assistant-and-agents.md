@@ -227,3 +227,30 @@ and carry on. It does not ask permission to read.
 {: .warning }
 **Checked with a stand-in model only.** How well each real model chooses to plan and when to ask has not been
 measured yet.
+
+## Changing AWS from the chat
+
+The assistant can change AWS as you, after you approve the exact command. A read runs at once. For a change it shows a
+card with the command, the account and why it is asking, and you choose **Allow once**, **Always allow** that kind of
+command (for example `aws ecs update-service *`; the rule is yours, listed under **Settings › AI › Assistant
+permissions**, and you can remove it), or **Deny**. No answer in five minutes is a no.
+
+![The permission card]({{ '/console/162-assistant-permission.png' | relative_url }})
+
+It only happens when all of these are true:
+
+- you are an **administrator** (a developer is told to propose the change instead);
+- it is the **chat** with you present (an agent or a background run never changes anything this way);
+- the account is marked **allow with my own approval** by an administrator on the same page (every account is
+  *protected* by default: a change to it is a proposal that a different administrator approves, as before);
+- the service is not switched off or set to Look only under Connections › AWS.
+
+Rules let you decide ahead of time: allow, ask or deny a command pattern for yourself, or (administrators) for
+everyone. A deny always wins; an organisation "ask" cannot be skipped by your own allow. Changes under `iam`,
+`organizations`, `account`, `ssm` and `sts` always ask, and operations that would hand a secret to the assistant are
+refused. Every decision is in the audit log.
+
+![Assistant permissions]({{ '/console/163-assistant-permissions.png' | relative_url }})
+
+{: .warning }
+**Checked against a fake AWS CLI only**, not a real account, and only for AWS. `az`, `gcloud` and `kubectl` are next.

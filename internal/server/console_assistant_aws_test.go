@@ -112,10 +112,10 @@ func TestAssistantCallAWSRunsAReadWithTheConsoleConnection(t *testing.T) {
 		t.Errorf("command line = %q", line)
 	}
 
-	// A refused command never reaches the CLI, and the model is told why.
+	// A change to a protected account (the default) never reaches the CLI, and the model is told why.
 	reset()
 	ask(admin, lookupReply("call_aws", map[string]string{"cli_command": "aws ecs delete-cluster --cluster payments"}))
-	if len(calls()) != 0 || !strings.Contains(llm.lastUser(1), "not a read operation") {
+	if len(calls()) != 0 || !strings.Contains(llm.lastUser(1), "this account is protected") {
 		t.Errorf("a write reached the CLI: %v / %s", calls(), llm.lastUser(1))
 	}
 

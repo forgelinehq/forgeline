@@ -311,6 +311,8 @@ update that asks for different hosts needs a fresh grant.
 | [159-runbook-check](159-runbook-check.png) | A check (Disk report) run through SSM on a build server, with its output (stand-in: `scripts/dev/fake-aws`) |
 | [160-assistant-asks](160-assistant-asks.png) | The assistant shows its plan, then stops on a question with options and a box for your own answer (note 052). Answered by a stand-in model | 
 | [161-assistant-plan](161-assistant-plan.png) | After the answer: your choice stays visible, the plan is ticked off as it works, then the answer (stand-in model) |
+| [162-assistant-permission](162-assistant-permission.png) | The assistant wants to change something: the exact command, the account, why it asks, and Allow once, Always allow this kind, or Deny (note 052). Answered by a stand-in model; the AWS call went to `scripts/dev/fake-aws` |
+| [163-assistant-permissions](163-assistant-permissions.png) | Settings › Assistant permissions: which AWS accounts the assistant may change with your own approval (protected by default) and the rules |
 
 ## Which pictures are current
 

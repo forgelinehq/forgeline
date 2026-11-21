@@ -248,7 +248,7 @@ func (e *evalScope) intercept(c lookupCall) (string, bool) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	e.calls = append(e.calls, c)
-	if changesSomething(c.Tool) {
+	if changesSomething(c.Tool) || isCLIChange(c) {
 		e.held = append(e.held, c.Tool)
 		return "Recorded by an eval run; nothing was filed or changed. Carry on as if it had been filed.", true
 	}

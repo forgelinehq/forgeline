@@ -131,7 +131,7 @@ func awsCallServices(c lookupCall) (switches []string, ok bool) {
 		if json.Unmarshal(c.Args, &a) != nil {
 			return nil, false
 		}
-		args, _, err := parseAWSCommand(a.Command)
+		args, _, _, err := parseAWSCall(a.Command)
 		if err != nil || len(args) == 0 {
 			return nil, false // the tool refuses it itself
 		}
@@ -197,7 +197,7 @@ func (s *Server) servicesGate(ctx context.Context, p Principal, c lookupCall) er
 		switch {
 		case off[id]:
 			why = fmt.Sprintf("%s is turned off for the AI in Settings › Connections › AWS, so %s is refused", awsServiceName(id), c.Tool)
-		case readOnly[id] && isWriteTool(c.Tool):
+		case readOnly[id] && (isWriteTool(c.Tool) || isCLIChange(c)):
 			why = fmt.Sprintf("%s is set to Look only for the AI in Settings › Connections › AWS, so no change to it can be proposed", awsServiceName(id))
 		}
 		if why != "" {
