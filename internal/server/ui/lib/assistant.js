@@ -248,7 +248,13 @@ function build(close, role) {
     const busy = (on) => box.querySelectorAll('button').forEach(b => { b.disabled = on; });
     const send = async (verb) => {
       busy(true);
-      try { const r = await post('/v1/assistant/actions/' + encodeURIComponent(a.id) + '/' + verb); verb === 'confirm' ? done(r.result || 'Done.', r.link) : done('Dismissed.'); }
+      try {
+        const r = await post('/v1/assistant/actions/' + encodeURIComponent(a.id) + '/' + verb);
+        verb === 'confirm' ? done(r.result || 'Done.', r.link) : done('Dismissed.');
+        // Your answer goes back to the assistant as your next message, so it carries on with the rest of its plan and the
+        // conversation shows which card you confirmed or dismissed.
+        follow(verb === 'confirm' ? 'I confirmed "' + (a.title || 'that') + '". ' + (r.result || '') + ' Carry on.' : 'I dismissed "' + (a.title || 'that') + '". Carry on without it.');
+      }
       catch (err) { toast(err.message, 'error'); busy(false); }
     };
     box.append(
@@ -333,6 +339,10 @@ function build(close, role) {
             icon('sparkle', 'size-3.5 shrink-0 text-brand-600 dark:text-brand-300'), h('span', {}, q)))))));
   }
 
+  let queued = '';
+  /** Sends your answer to a card as your next message, now or when the assistant has finished what it is saying. */
+  function follow(text) { if (busy) queued = text; else ask(text); }
+
   async function ask(question) {
     const q = (question ?? input.value).trim();
     if (!q || busy) return;
@@ -361,6 +371,7 @@ function build(close, role) {
     if (run.conversation) conversation = run.conversation;
     if (run.status === 'finished') history.push({ role: 'user', content: q }, { role: 'assistant', content: run.text });
     busy = false; sendBtn.disabled = false; input.focus();
+    if (queued) { const q2 = queued; queued = ''; ask(q2); }
   }
 
   /** Your saved conversations: open one to carry on from it, or delete it. They are private to you. */

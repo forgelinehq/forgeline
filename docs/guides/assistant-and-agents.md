@@ -55,6 +55,9 @@ administrator. **Confirm** saves it as version 1, through the same checks as the
 log says it was written by the assistant and confirmed by you. A developer can ask for one, but only an administrator gets
 the card, as in the console.
 
+When you press Confirm or Dismiss on a card in the assistant, your answer goes back to it as your next message, so it
+carries on with the rest of what you asked and the conversation shows which card you answered.
+
 ![The assistant writes an agent]({{ '/console/134-assistant-writes-agent.png' | relative_url }})
 
 ## Teams
