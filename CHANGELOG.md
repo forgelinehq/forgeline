@@ -92,6 +92,12 @@ section in the pull request that makes the change; a release moves it under its 
 - **Workflows refuse agents with tools their run cannot use.** Saving a workflow whose agent has a tool its run-as role
   may never use (such as `call_aws`, for administrators only, in a workflow running as a viewer) now says so, instead of
   every run quietly going without it.
+- **The assistant can change AWS, after you approve the exact command** (design note 052, slice 2). `call_aws` is no
+  longer read-only. A change shows a card with the command and Allow once, Always allow this kind, or Deny. Only an
+  administrator, only in the chat, only on an AWS account marked "allow with my own approval" (Settings › Assistant
+  permissions; every account is protected by default, and a protected account keeps a proposal and a different
+  administrator). Rules (allow, ask, deny) for you or the organisation; iam, organizations, account, ssm and sts always
+  ask. Checked against a fake AWS CLI only.
 - **The assistant plans and asks** (design note 052, slice 1). A question may take up to 40 steps and 5 minutes (it was
   10 lookups); waiting for you does not use the time. It shows a plan as a checklist, and when the answer changes what it
   would do (two clusters match "Dev01") it stops on a card with options and a box for your own answer, then carries on.

@@ -200,6 +200,28 @@ function build(close, role) {
     return box;
   }
 
+  /**
+   * A change the assistant wants to make, with the exact command. Nothing runs until you answer: once, always for this
+   * kind of command (shown, and listed under Settings › Assistant permissions where you can remove it), or no.
+   */
+  function permissionCard(x) {
+    const send = async (e, decision) => {
+      const box = e.currentTarget.closest('[data-permission-id]');
+      box.querySelectorAll('button').forEach(b => { b.disabled = true; });
+      try { await post('/v1/assistant/approvals/' + encodeURIComponent(x.id), { decision }); }
+      catch (err) { toast(err.message, 'error'); box.querySelectorAll('button').forEach(b => { b.disabled = false; }); }
+    };
+    return h('div', { class: amber + ' flex-col', 'data-permission-id': x.id, role: 'group', 'aria-label': 'Allow this change?' },
+      h('div', { class: 'flex items-center gap-2 font-semibold' }, icon('shield', 'size-4 shrink-0'), 'Allow this change?'),
+      h('div', { class: 'text-sm' }, 'The assistant wants to run this on ', h('b', {}, x.account === 'primary' ? 'the primary AWS connection' : 'AWS account ' + x.account), ', as you. Nothing has changed yet.'),
+      h('pre', { class: 'max-h-32 w-full overflow-auto whitespace-pre-wrap break-words rounded-lg bg-white/70 p-2 font-mono text-[11px] dark:bg-slate-900/50', 'data-permission-command': '' }, x.command),
+      x.why ? h('div', { class: 'muted text-xs' }, x.why + '.') : null,
+      h('div', { class: 'flex flex-wrap gap-2' },
+        h('button', { type: 'button', class: 'btn-primary btn-sm', 'data-permission': 'approve', onclick: (e) => send(e, 'approve') }, 'Allow once'),
+        x.pattern ? h('button', { type: 'button', class: 'btn-secondary btn-sm', 'data-permission': 'always', title: 'You can remove this rule under Settings › Assistant permissions', onclick: (e) => send(e, 'always') }, 'Always allow ', h('code', { class: 'ml-1 font-mono text-[11px]' }, x.pattern)) : null,
+        h('button', { type: 'button', class: 'btn-ghost btn-sm', 'data-permission': 'deny', onclick: (e) => send(e, 'deny') }, 'Deny')));
+  }
+
   /** The plan as a checklist: done, doing now, still to do. */
   function planBlock(plan) {
     if (!plan.length) return null;
@@ -266,6 +288,11 @@ function build(close, role) {
         if (q.state === 'waiting') { const k = 'question:' + q.id; if (!cards.has(k)) cards.set(k, questionCard(q)); return cards.get(k); }
         return h('div', { class: 'text-sm', 'data-question-done': q.id }, h('span', { class: 'muted' }, q.question + ' '), q.state === 'answered' ? h('b', {}, '→ ' + q.answer) : h('span', { class: 'muted' }, '(no answer; it went on with its best guess)'));
       }),
+      run.permissions.map(x => {
+        if (x.state === 'waiting') { const k = 'permission:' + x.id; if (!cards.has(k)) cards.set(k, permissionCard(x)); return cards.get(k); }
+        const said = { approve: 'Allowed once', always: 'Allowed, and always for this kind', deny: 'Not allowed', expired: 'No answer, so it did not run' }[x.state] || x.state;
+        return h('div', { class: 'text-sm', 'data-permission-done': x.id }, h('b', {}, said + ': '), h('code', { class: 'break-all font-mono text-[11px]' }, x.command));
+      }),
       run.approvals.filter(a => a.state === 'waiting').map(approvalCard),
       label ? h('div', { class: 'flex items-center gap-2 text-sm muted', role: 'status' }, h('span', { class: 'size-2 animate-pulse-dot rounded-full bg-brand-500' }), label,
         h('button', { class: 'btn-ghost btn-sm ml-auto', type: 'button', id: 'assistant-stop', onclick: stop }, icon('stop', 'size-3'), 'Stop')) : null,
@@ -291,7 +318,7 @@ function build(close, role) {
       h('ul', { class: 'space-y-3' },
         can('search', 'Explain', 'Why a run failed, what is running in your cloud, what needs attention.'),
         can('flow', 'Prepare', 'Pipelines, runs and environments. Nothing happens until you press Confirm.'),
-        can('shield', 'Propose', 'Cloud changes go to a different administrator to approve. I cannot change your cloud myself.')),
+        can('shield', 'Change', 'On an account you marked for it, I show you the exact command and wait for your yes. On every other account a change is a proposal that a different administrator approves.')),
       h('div', {}, h('div', { class: 'h-section mb-2' }, 'Try asking'),
         h('div', { class: 'flex flex-col gap-2' }, (SUGGESTIONS[c.kind] || SUGGESTIONS.none).map(q =>
           h('button', { class: 'flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-left text-sm transition-colors hover:border-brand-300 hover:bg-brand-50/50 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-brand-500/50', type: 'button', onclick: () => ask(q) },

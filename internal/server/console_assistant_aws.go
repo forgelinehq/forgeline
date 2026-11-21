@@ -8,6 +8,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/forgelinehq/forgeline/internal/authn"
 )
 
 // call_aws lets the assistant read the connected AWS account with the AWS CLI, the way the AWS
@@ -77,6 +79,31 @@ func tokenize(s string) ([]string, error) {
 // parseAWSCommand checks a command and returns the CLI arguments after "aws" (service,
 // operation, options) and the region the person asked for, if any.
 func parseAWSCommand(cmd string) (args []string, region string, err error) {
+	args, region, change, err := parseAWS(cmd, false)
+	_ = change
+	return args, region, err
+}
+
+// parseAWSCall is parseAWSCommand for a call that may change something (design note 052). Everything else about the
+// command is held to the same rules: one plain command, no pipes or substitution, no options that redirect it, read
+// local files or fetch addresses, and no operation that returns a secret. change says it is not a describe, list or get.
+func parseAWSCall(cmd string) (args []string, region string, change bool, err error) {
+	return parseAWS(cmd, true)
+}
+
+// awsNeverChange names changes that return a secret to whoever made them, so the secret would land in the model's
+// context. They are refused, not asked about.
+var awsNeverChange = regexp.MustCompile(`(?i)(create-access-key|create-login-profile|update-login-profile|service-specific-credential|create-virtual-mfa|rotate-secret|get-credential|put-secret-value|create-secret)`)
+
+func parseAWS(cmd string, allowChange bool) (args []string, region string, change bool, err error) {
+	args, region, err = parseAWSChecked(cmd, allowChange)
+	if err != nil {
+		return nil, "", false, err
+	}
+	return args, region, len(args) >= 2 && !awsReadOp.MatchString(args[1]), nil
+}
+
+func parseAWSChecked(cmd string, allowChange bool) (args []string, region string, err error) {
 	cmd = strings.TrimSpace(cmd)
 	switch {
 	case cmd == "":
@@ -102,8 +129,10 @@ func parseAWSCommand(cmd string) (args []string, region string, err error) {
 		return nil, "", fmt.Errorf("the %s service is not available to the assistant", service)
 	case service == "sts" && op != "get-caller-identity":
 		return nil, "", errors.New("for sts only get-caller-identity is available")
-	case !awsReadOp.MatchString(op):
+	case !awsReadOp.MatchString(op) && !allowChange:
 		return nil, "", fmt.Errorf("%s is not a read operation; only describe-*, list-* and get-* are allowed. To change something, propose a change in the console", op)
+	case !awsReadOp.MatchString(op) && awsNeverChange.MatchString(service+" "+op):
+		return nil, "", fmt.Errorf("%s %s returns a secret or a credential, which must not pass through the assistant; create it in the console or with a runbook", service, op)
 	case awsNeverOp.MatchString(service + " " + op):
 		return nil, "", fmt.Errorf("%s %s can return secrets, credentials, code or data and is not available", service, op)
 	}
@@ -162,7 +191,7 @@ func (s *Server) lookupCallAWS(ctx context.Context, raw json.RawMessage) (string
 	if err := decodeArgs(raw, &a); err != nil {
 		return "", err
 	}
-	args, region, err := parseAWSCommand(a.Command)
+	args, region, change, err := parseAWSCall(a.Command)
 	if err != nil {
 		return "", err
 	}
@@ -172,6 +201,11 @@ func (s *Server) lookupCallAWS(ctx context.Context, raw json.RawMessage) (string
 	}
 	if !st.Enabled {
 		return "", errors.New("AWS is not connected to this Forgeline server")
+	}
+	if change {
+		if err := s.permitChange(ctx, a.Account, args); err != nil {
+			return "", err
+		}
 	}
 	if region != "" {
 		st.Region = region
@@ -206,4 +240,102 @@ func lookupDetail(c lookupCall) string {
 		return "call_aws [" + truncate(a.Account, 40) + "]: " + truncate(strings.TrimSpace(a.Command), 200)
 	}
 	return "call_aws: " + truncate(strings.TrimSpace(a.Command), 200)
+}
+
+// isCLIChange says whether a call_aws call would change something (the command is not a describe, list or get).
+func isCLIChange(c lookupCall) bool {
+	if c.Tool != "call_aws" {
+		return false
+	}
+	var a struct {
+		Command string `json:"cli_command"`
+	}
+	if json.Unmarshal(c.Args, &a) != nil {
+		return false
+	}
+	_, _, change, err := parseAWSCall(a.Command)
+	return err == nil && change
+}
+
+// permitChange decides whether the assistant may make this change as the person who is chatting (design note 052).
+// Everything it refuses here is said plainly, so the person can fix the cause or use the proposal route.
+func (s *Server) permitChange(ctx context.Context, account string, args []string) error {
+	p := principalFrom(ctx)
+	command := "aws " + strings.Join(args, " ")
+	if account == "" {
+		account = primaryAccount
+	}
+	refuse := func(msg string) error {
+		_ = s.audit(ctx, p, "", "assistant.cli.change", "aws/"+account, "refused: "+truncate(command, 300)+": "+msg, false)
+		return errors.New(msg)
+	}
+	switch {
+	case scopeFrom(ctx) != nil:
+		return refuse("an agent cannot change anything this way; propose the change (propose_aws_change) and a person approves it")
+	case !p.Role.AtLeast(authn.Admin):
+		return refuse("changing AWS needs an administrator; propose the change (propose_aws_change) for one to approve")
+	case !s.ownApproval(ctx, account):
+		return refuse("this account is protected: a change to it is a proposal (propose_aws_change) that a different administrator approves. An administrator can mark it \"allow with my own approval\" under Settings › Assistant permissions")
+	}
+	d, err := s.loadPermissions(ctx)
+	if err != nil {
+		return refuse("the permission rules could not be read, so nothing is changed until they can")
+	}
+	dec := d.decide(p, permToolAWS, command)
+	switch dec.Effect {
+	case permDeny:
+		return refuse(dec.Why)
+	case permAllow:
+		_ = s.audit(ctx, p, "", "assistant.cli.change", "aws/"+account, "allowed by rule: "+truncate(command, 300), true)
+		return nil
+	}
+	ask := permAskerFrom(ctx)
+	if ask == nil {
+		return refuse("this change needs the person's approval and nobody is here to give it; ask in the chat, or propose it")
+	}
+	choice, err := ask(permRequest{Tool: "call_aws", Command: command, Account: account, Why: dec.Why, Pattern: alwaysPattern(command)})
+	if err != nil || choice == decisionDenied {
+		msg := "you said no, so it did not run"
+		if err != nil {
+			msg = err.Error()
+		}
+		return refuse(msg)
+	}
+	if choice == decisionAlways {
+		if pat := alwaysPattern(command); pat != "" {
+			if err := s.addAlwaysRule(ctx, p, pat); err != nil {
+				return refuse("it was not run, because the rule could not be saved: " + err.Error())
+			}
+		}
+	}
+	_ = s.audit(ctx, p, "", "assistant.cli.change", "aws/"+account, map[string]string{decisionOnce: "approved once", decisionAlways: "approved, and always allowed for this kind"}[choice]+": "+truncate(command, 300), true)
+	return nil
+}
+
+// addAlwaysRule records "always allow this kind" as the person's own rule, which they can see and remove.
+func (s *Server) addAlwaysRule(ctx context.Context, p Principal, pattern string) error {
+	permMu.Lock()
+	defer permMu.Unlock()
+	d, err := s.loadPermissions(ctx)
+	if err != nil {
+		return err
+	}
+	n := 0
+	for _, x := range d.Rules {
+		if x.Scope == scopePerson && x.Owner == p.UserID {
+			if x.Pattern == pattern && x.Effect == permAllow {
+				return nil
+			}
+			n++
+		}
+	}
+	if n >= maxPermRules {
+		return fmt.Errorf("you already have %d rules", maxPermRules)
+	}
+	r := PermRule{ID: authn.NewID(), Scope: scopePerson, Owner: p.UserID, OwnerName: p.Name, Tool: permToolAWS, Pattern: pattern, Effect: permAllow, Note: "from \"always allow\" in the chat", By: p.Name, At: time.Now().UTC()}
+	if msg := ruleProblem(r); msg != "" {
+		return errors.New(msg)
+	}
+	d.Rules = append(d.Rules, r)
+	return s.docs.Put(ctx, kindSettings, idPermissions, d)
 }

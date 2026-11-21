@@ -18,6 +18,7 @@ import (
 // ssmStub answers the AWS CLI calls a runbook makes: the tagged instances, send-command, and how each instance did.
 type ssmStub struct {
 	mu      sync.Mutex
+	calls   []string // every call, as "service operation options"
 	sent    []string // the --parameters JSON of each send-command
 	targets [][]string
 	status  string // what list-command-invocations reports; "" = Success
@@ -27,6 +28,7 @@ func (st *ssmStub) run(_ context.Context, name string, args ...string) ([]byte, 
 	st.mu.Lock()
 	defer st.mu.Unlock()
 	key := strings.Join(args, " ")
+	st.calls = append(st.calls, key)
 	switch {
 	case strings.Contains(key, "sts get-caller-identity"):
 		return []byte(`{"Account":"111122223333","Arn":"arn:aws:sts::111122223333:assumed-role/Admin/ada","UserId":"AROA:ada"}`), "", nil
@@ -55,6 +57,19 @@ func (st *ssmStub) run(_ context.Context, name string, args ...string) ([]byte, 
 		return []byte(`{"CommandInvocations":[` + strings.Join(inv, ",") + `]}`), "", nil
 	}
 	return []byte(`{}`), "", nil
+}
+
+// count is how many calls contained the text.
+func (st *ssmStub) count(text string) int {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	n := 0
+	for _, c := range st.calls {
+		if strings.Contains(c, text) {
+			n++
+		}
+	}
+	return n
 }
 
 func (st *ssmStub) sends() int {

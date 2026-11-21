@@ -3,7 +3,7 @@
 // (design note 024); anything not listed here is ignored, so a newer server cannot break the panel.
 
 export function newRun() {
-  return { status: 'running', context: '', steps: [], approvals: [], text: '', proposals: [], environments: [], memories: [], actions: [], plan: [], questions: [], conversation: '', error: '' };
+  return { status: 'running', context: '', steps: [], approvals: [], text: '', proposals: [], environments: [], memories: [], actions: [], plan: [], questions: [], permissions: [], conversation: '', error: '' };
 }
 
 const step = (run, id) => run.steps.find(s => s.id === id);
@@ -28,6 +28,12 @@ export function applyEvent(run, ev) {
       } else if (ev.name === 'forgeline.question_answered') {
         const q = run.questions.find(x => x.id === v.id);
         if (q) { q.answer = String(v.answer || ''); q.state = q.answer ? 'answered' : 'expired'; }
+      } else if (ev.name === 'forgeline.permission' && v.id && !run.permissions.some(x => x.id === v.id)) {
+        // The assistant wants to change something and shows the exact command (design note 052, slice 2).
+        run.permissions.push({ id: String(v.id), tool: String(v.tool || ''), command: String(v.command || ''), account: String(v.account || ''), why: String(v.why || ''), pattern: String(v.pattern || ''), seconds: Number(v.expiresInSeconds) || 0, state: 'waiting', decision: '' });
+      } else if (ev.name === 'forgeline.permission_decided') {
+        const x = run.permissions.find(p => p.id === v.id);
+        if (x) { x.decision = String(v.decision || ''); x.state = ['approve', 'always', 'deny', 'expired'].includes(x.decision) ? x.decision : 'deny'; }
       } else if (ev.name === 'forgeline.proposal' && v.id && !run.proposals.includes(v.id)) run.proposals.push(String(v.id));
       else if (ev.name === 'forgeline.action' && v.id && !run.actions.some(a => a.id === v.id)) run.actions.push({ id: String(v.id), kind: String(v.kind || ''), title: String(v.title || ''), effects: Array.isArray(v.effects) ? v.effects.map(String) : [], detail: String(v.detail || ''), pipeline: String(v.pipeline || '') });
       else if (ev.name === 'forgeline.memory' && v.id && !run.memories.some(m => m.id === v.id)) run.memories.push({ id: String(v.id), text: String(v.text || ''), about: v.about === 'system' ? 'system' : 'me', status: v.status === 'pending' ? 'pending' : 'active' });
@@ -50,7 +56,7 @@ export function applyEvent(run, ev) {
 /** What to tell the person while nothing has arrived yet. */
 export function progressLabel(run) {
   if (run.status !== 'running') return '';
-  if (run.approvals.some(a => a.state === 'waiting') || run.questions.some(q => q.state === 'waiting')) return 'Waiting for your answer…';
+  if (run.approvals.some(a => a.state === 'waiting') || run.questions.some(q => q.state === 'waiting') || run.permissions.some(x => x.state === 'waiting')) return 'Waiting for your answer…';
   const open = run.steps.filter(s => s.status === 'running');
   if (open.length) return 'Looking up ' + open[open.length - 1].name + '…';
   return run.steps.length ? 'Writing the answer…' : 'Thinking…';

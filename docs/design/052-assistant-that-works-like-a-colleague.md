@@ -1,7 +1,8 @@
 # 052: An assistant that works like a colleague, not a script
 
-Status: **accepted 2026-11-21: both decisions answered yes (end of this note); slice 1 built 2026-11-21** (the budgeted loop, a visible
-plan and `ask_user`; see "Built" at the end). Next: the permission check.
+Status: **accepted 2026-11-21: both decisions answered yes (end of this note); slices 1 and 2 built 2026-11-21** (the budgeted loop, a visible
+plan and `ask_user`; the permission check for AWS; see "Built" at the end). Next: the same check for `az`, `gcloud` and
+`kubectl`, then memory.
 Phase 4 of the product direction (AI SRE) needs it: runbooks (note 051) are the safe hands, this is the head.
 
 ## What the maintainer asked for
@@ -166,3 +167,26 @@ may use its own tools only when its calls go through our permission check.
   when the answer changes the work, never ask permission to read.
 - Checked in a browser against a stand-in model that plans, asks which cluster, looks something up and finishes. Not yet
   checked with a real model: how well Claude, Gemini or the others choose to plan and ask is the next thing to look at.
+
+## Built (slice 2, 2026-11-21): the permission check, for AWS
+
+- `call_aws` is no longer read-only. A describe, list or get still runs at once. Anything else is a **change**, and goes
+  through one check (`permitChange`): an agent never (it has nobody to ask); a person who is not an administrator never
+  (propose it instead); an account that is not marked "allow with my own approval" never (it stays protected, and the
+  answer names `propose_aws_change`, note 006); then the rules; then, unless a rule allows it, a card in the chat showing
+  the exact command with **Allow once**, **Always allow `aws <service> <operation> *`** and **Deny**. No answer in five
+  minutes is a no. The AWS service switches (off, look only) still apply to a change, and an eval records a change
+  without running it. Every decision is audited (`assistant.cli.change`).
+- Still refused outright, not asked about: the shape rules (no pipes, substitution, redirecting options, local files or
+  addresses), the services that stay out of reach, operations that return a secret to the model (`create-access-key`,
+  `create-login-profile`, and the existing list), and, for an allow rule, anything under `iam`, `organizations`,
+  `account`, `ssm` and `sts`, which always ask, so no rule or "always" can skip the card. (`ssm send-command` runs
+  commands on machines; a reviewed runbook, note 051, is the way to do that repeatedly.)
+- Rules: allow, ask or deny, for one person or for the organisation. A deny from anyone wins; an organisation ask cannot
+  be skipped by a person's allow; an allow must name its service and operation. Settings › Assistant permissions lists
+  them, removes them, and lets an administrator mark accounts. "Always allow" in the chat makes the person's own rule.
+- Checked in a browser against `scripts/dev/fake-aws`: refused while protected; after marking the account, the card;
+  "Always allow" ran the change, made the rule, and the audit shows each step. Not checked against a real account.
+- Not in this slice: `az`, `gcloud` and `kubectl` (they need their own credential handling and parsers), a
+  general shell or code sandbox (slice 4: a shell on the server would see every credential on the machine), and editing a
+  pattern before saying "always".

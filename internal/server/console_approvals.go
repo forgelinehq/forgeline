@@ -33,7 +33,8 @@ func approverFrom(ctx context.Context) approver {
 type pendingApproval struct {
 	who    string
 	tool   string
-	kind   string      // "" for an approval, "question" for ask_user (note 052): each is answered only through its own endpoint
+	kind   string      // "" for a read that needs approval, "permission" for a change the assistant asks to make, "question" for ask_user (note 052)
+	always bool        // a permission the person may answer "always" to
 	answer chan string // approve or deny; for a question, the person's answer
 }
 
@@ -62,6 +63,23 @@ func (b *approvalBook) remove(id string) {
 // resolve hands an answer to the waiting call. It reports whether there was one for this person.
 func (b *approvalBook) resolve(id, who, decision string) bool {
 	return b.resolveKind(id, who, "", decision)
+}
+
+// resolveApproval answers an approval or a permission (never a question). "always" is only for a permission that
+// offered it.
+func (b *approvalBook) resolveApproval(id, who, decision string) bool {
+	b.mu.Lock()
+	p, ok := b.pending[id]
+	if ok && p.who == who && (p.kind == "" || p.kind == "permission") && (decision != decisionAlways || p.kind == "permission" && p.always) {
+		delete(b.pending, id)
+	} else {
+		ok = false
+	}
+	b.mu.Unlock()
+	if ok {
+		p.answer <- decision
+	}
+	return ok
 }
 
 // resolveKind is resolve for one kind of waiting call: an approval id cannot be answered as a question, or the
@@ -111,12 +129,12 @@ func (s *Server) handleAssistantApproval(w http.ResponseWriter, r *http.Request)
 	if !readJSON(w, r, &req) {
 		return
 	}
-	if req.Decision != "approve" && req.Decision != "deny" {
-		writeError(w, http.StatusBadRequest, "decision must be approve or deny")
+	if req.Decision != "approve" && req.Decision != "deny" && req.Decision != decisionAlways {
+		writeError(w, http.StatusBadRequest, "decision must be approve, always or deny")
 		return
 	}
 	p := principalFrom(r.Context())
-	if !s.approvals.resolve(r.PathValue("id"), p.Name, req.Decision) {
+	if !s.approvals.resolveApproval(r.PathValue("id"), p.Name, req.Decision) {
 		writeError(w, http.StatusNotFound, "no question of yours is waiting for that answer (it may have expired)")
 		return
 	}
