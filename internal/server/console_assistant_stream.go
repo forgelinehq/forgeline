@@ -166,7 +166,7 @@ func (s *Server) handleAssistantRun(w http.ResponseWriter, r *http.Request) {
 	} else {
 		endAutopilot(autopilotKeyFor(job.p, thread)) // switched off: it does not carry on
 	}
-	sentP, sentE, sentN, sentA := 0, 0, 0, 0
+	sentP, sentE, sentN, sentA, sentF := 0, 0, 0, 0, 0
 	obs := assistObserver(func(ev assistEvent) {
 		switch ev.Kind {
 		case evPlan:
@@ -191,6 +191,10 @@ func (s *Server) handleAssistantRun(w http.ResponseWriter, r *http.Request) {
 			for ; sentA < len(sink.actions); sentA++ {
 				a := sink.actions[sentA]
 				out.send("CUSTOM", map[string]any{"name": "forgeline.action", "value": map[string]any{"id": a.ID, "kind": a.Kind, "title": a.Title, "effects": a.Effects, "detail": truncate(a.Detail, 8<<10), "pipeline": a.Pipeline}})
+			}
+			for ; sentF < len(sink.files); sentF++ {
+				f := sink.files[sentF]
+				out.send("CUSTOM", map[string]any{"name": "forgeline.memory_file", "value": map[string]any{"path": f.Path, "action": f.Action, "pending": f.Pending}})
 			}
 			for ; sentN < len(sink.notes); sentN++ {
 				n := sink.notes[sentN]

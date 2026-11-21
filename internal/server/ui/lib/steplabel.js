@@ -44,6 +44,7 @@ const VERBS = {
   list_models: ['Listed the models', 'Listing the models'],
   ask_agent: ['Asked an agent', 'Asking an agent'],
   remember: ['Saved a note to memory', 'Saving a note to memory'],
+  memory: ['Worked with its memory files', 'Working with its memory files'],
   prepare_action: ['Prepared something for you to confirm', 'Preparing something for you to confirm'],
   search_audit: ['Searched the audit log', 'Searching the audit log'],
   aws_search_documentation: ['Searched the AWS documentation', 'Searching the AWS documentation'],

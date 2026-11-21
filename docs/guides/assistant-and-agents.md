@@ -255,6 +255,19 @@ refused. Every decision is in the audit log.
 {: .warning }
 **Checked against a fake AWS CLI only**, not a real account, and only for AWS. `az`, `gcloud` and `kubectl` are next.
 
+## Memory files: what it learns stays
+
+Besides short notes, the assistant keeps **files**: how an environment is laid out, what a name like "Dev01" means, a
+procedure that worked, how you like things done. It saves them itself, looks at them at the start of related work, and
+searches them. `/memories/me/…` is only yours; `/memories/org/…` is shared, and only an administrator writes there.
+
+![Files the assistant keeps, on the Memory page]({{ '/console/168-memory-files.png' | relative_url }})
+
+Settings › Memory lists every file with its text: edit, delete or keep any of yours. A file it writes after reading logs or
+cloud data you did not type waits for you to keep it, and is not used until you do. Files are background for the assistant,
+never instructions: they cannot change what it may do. It never saves a secret (that is refused), and "Forget everything
+about me" removes your files too.
+
 ## Autopilot: keep going without asking
 
 Switch **Autopilot** on under the message box and the assistant works on your task without stopping to ask, for up to 30

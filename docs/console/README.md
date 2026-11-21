@@ -317,6 +317,7 @@ update that asks for different hosts needs a fresh grant.
 | [165-sandbox-settings](165-sandbox-settings.png) | Settings › Assistant permissions › Sandbox: off until an administrator turns it on, the isolation in use, the network choice and the honest limits |
 | [166-assistant-autopilot](166-assistant-autopilot.png) | Autopilot on: the stop-instances change ran without a card and is shown, with the steps and time left and a Stop button. |
 | [167-autopilot-settings](167-autopilot-settings.png) | Settings › Assistant permissions › Autopilot: allowed for everyone, with the switch an administrator uses to turn it off, and what it never covers. |
+| [168-memory-files](168-memory-files.png) | Settings › Memory › Files the assistant keeps: a file it saved about Dev01, with its text, who wrote it, and edit and delete. |
 
 ## Which pictures are current
 
