@@ -183,6 +183,8 @@ func validTools(tools []string, tier string, extra ...string) error {
 		switch {
 		case t == askAgentTool:
 			return errors.New("an agent cannot call other agents")
+		case t == runShellTool:
+			return errors.New("an agent cannot use the sandbox yet; it runs in the chat, for the person who is there")
 		case !known[t]:
 			return fmt.Errorf("%q is not a tool the assistant has", t)
 		case seen[t]:

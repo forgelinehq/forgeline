@@ -32,7 +32,6 @@ const (
 	permToolAWS    = "call_aws"
 	maxPermRules   = 100 // per person, and for the organisation
 	maxPermPattern = 200
-	permAskTimeout = 5 * time.Minute
 	decisionOnce   = "approve"
 	decisionAlways = "always"
 	decisionDenied = "deny"
@@ -59,6 +58,9 @@ type permissionsDoc struct {
 	// listed is protected: a change to it is a proposal that a different administrator approves.
 	OwnApproval map[string]bool `json:"own_approval,omitempty"`
 }
+
+// How long a change waits for the person; a variable so a test that fails early does not wait it out.
+var permAskTimeout = 5 * time.Minute
 
 var permMu sync.Mutex
 

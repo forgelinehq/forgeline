@@ -44,7 +44,11 @@ func withExtraEnv(ctx context.Context, env []string) context.Context {
 }
 
 func execRunner(ctx context.Context, name string, args ...string) ([]byte, string, error) {
-	ctx, cancel := context.WithTimeout(ctx, cmdTimeout)
+	limit := cmdTimeout
+	if l, ok := ctx.Value(cmdLimitKey{}).(time.Duration); ok && l > limit {
+		limit = l // a long install in the sandbox (design note 052)
+	}
+	ctx, cancel := context.WithTimeout(ctx, limit)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Env = append(cmd.Environ(), "AWS_PAGER=", "AWS_RETRY_MODE=standard", "AWS_MAX_ATTEMPTS=2")

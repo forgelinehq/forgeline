@@ -228,6 +228,18 @@ func (s *Server) lookupCallAWS(ctx context.Context, raw json.RawMessage) (string
 
 // lookupDetail is what the audit log records for a lookup: the tool, and for call_aws the command.
 func lookupDetail(c lookupCall) string {
+	if c.Tool == runShellTool {
+		var a struct {
+			Command string   `json:"command"`
+			Secrets []string `json:"secrets"`
+		}
+		_ = json.Unmarshal(c.Args, &a)
+		cmd, _ := hideSecrets(truncate(strings.TrimSpace(a.Command), 200))
+		if len(a.Secrets) > 0 {
+			return runShellTool + " [secrets " + truncate(strings.Join(a.Secrets, ","), 80) + "]: " + cmd
+		}
+		return runShellTool + ": " + cmd
+	}
 	if c.Tool != "call_aws" {
 		return c.Tool
 	}

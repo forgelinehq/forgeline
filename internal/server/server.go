@@ -283,6 +283,7 @@ func (s *Server) Start(ctx context.Context) error {
 	s.startWorkflows(ctx)
 	s.startMissions(ctx)
 	s.startAuditPruner(ctx)
+	s.startSandboxReaper(ctx)
 	s.failStaleTeamRuns(ctx)
 	s.startMarketGit(ctx)
 	for i := 0; i < s.cfg.MaxRuns; i++ {

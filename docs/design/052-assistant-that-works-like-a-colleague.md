@@ -1,8 +1,8 @@
 # 052: An assistant that works like a colleague, not a script
 
-Status: **accepted 2026-11-21: both decisions answered yes (end of this note); slices 1 and 2 built 2026-11-21** (the budgeted loop, a visible
-plan and `ask_user`; the permission check for AWS; see "Built" at the end). Next: the same check for `az`, `gcloud` and
-`kubectl`, then memory.
+Status: **accepted 2026-11-21: both decisions answered yes (end of this note); slices 1, 2 and 3 built 2026-11-21** (the budgeted loop, a visible
+plan and `ask_user`; the permission check for AWS; the sandbox; see "Built" at the end). Next: autopilot, then memory as
+files. The `az`, `gcloud` and `kubectl` parsers are no longer needed: the sandbox runs any CLI.
 Phase 4 of the product direction (AI SRE) needs it: runbooks (note 051) are the safe hands, this is the head.
 
 ## What the maintainer asked for
@@ -277,3 +277,32 @@ project), stored in the document store:
    credentials off any command the model writes, while the sandbox can install and run anything.
 2. **Autopilot never covers** protected accounts, deny rules, `iam`, `organizations`, `account`, `ssm`, `sts` or the host
    shell (decision C)? Proposed: yes.
+
+## Built (slice 3, 2026-11-21): the sandbox
+
+- `run_shell` runs a command, with a timeout up to 15 minutes, in a container Forgeline starts for the person (one per
+  image, a persistent `/work` volume, root inside, any image, the network on). The command is one argument to
+  `bash -c` under `timeout` inside the container; no host shell sees it. Output keeps its start and end (12 KB), with
+  credentials and any secret value hidden. The container is removed after 30 minutes unused; the workspace stays.
+- What makes it a sandbox, checked by reading the exact `docker run` arguments: one volume (its own workspace), no host
+  mounts, no Docker socket, not privileged, `--cap-drop ALL` plus six capabilities (`apt` and file work need them),
+  `no-new-privileges`, 2 GB of memory, 2 CPUs, 512 processes. gVisor (`--runtime runsc`) is used when Docker has it;
+  this machine has only runc, so the page says "hardened container (shares the host kernel)".
+- Off until an administrator turns it on (Settings › Assistant permissions). Not offered to agents.
+- **A secret reaches a command only on a card.** The model names vault secrets; an administrator, in the chat, sees the
+  command and the names and answers once (never "always"). The value goes through the environment of the docker
+  process, never its arguments, is hidden in the output, and is not in the audit log. Internal secrets (names with a
+  dot) cannot be named.
+- **What I could not do, and the design said I would.** The network is not closed to other machines. A container on
+  Docker's bridge reaches whatever the host's firewall lets it. Measured here: a service that listens only on the loopback
+  address (Forgeline on 8080) is not reachable from the container, and the metadata address did not answer; a service
+  listening on all interfaces or on the LAN would be reachable. Closing that needs firewall rules on the host, which an
+  unprivileged server cannot add. Instead: `FORGELINE_SANDBOX_NETWORK` names a Docker network an operator has fenced,
+  the setting `none` turns the network off, and the page says so.
+- Checked for real, with Docker 29.3 on this machine: `apt` installed Python 3.12 and git under the dropped
+  capabilities, the network worked, `/work` persisted, the capability mask had the six, and there was no socket and no host
+  folder. In the browser a stand-in model installed Python, wrote a script and ran it, and a reset removed the container
+  and the volume. Not checked: gVisor or any microVM runtime, a second person's sandbox in parallel under load, and
+  the secret card in a browser (covered by tests).
+- Not in this slice: autopilot, memory, a general host shell (decision D), installing a runtime for the person, and
+  running Docker inside the sandbox.

@@ -92,6 +92,12 @@ section in the pull request that makes the change; a release moves it under its 
 - **Workflows refuse agents with tools their run cannot use.** Saving a workflow whose agent has a tool its run-as role
   may never use (such as `call_aws`, for administrators only, in a workflow running as a viewer) now says so, instead of
   every run quietly going without it.
+- **A sandbox for the assistant** (design note 052, slice 3). It can run any command and write and run code in any
+  language in a container Forgeline starts for you (root inside, any image, the network on, a `/work` folder that
+  stays): `apt`, `pip`, `npm`, `curl`, builds. It cannot see the server's files or credentials, and gets a vault secret only
+  when an administrator approves a card that names it. Off until an administrator turns it on under Settings ›
+  Assistant permissions. A container shares the host's kernel unless the host has gVisor, and it can reach other
+  machines the host's firewall allows; see the page.
 - **The assistant can change AWS, after you approve the exact command** (design note 052, slice 2). `call_aws` is no
   longer read-only. A change shows a card with the command and Allow once, Always allow this kind, or Deny. Only an
   administrator, only in the chat, only on an AWS account marked "allow with my own approval" (Settings › Assistant

@@ -65,6 +65,17 @@ func (b *approvalBook) resolve(id, who, decision string) bool {
 	return b.resolveKind(id, who, "", decision)
 }
 
+// offersAlways says whether this person has a waiting permission that may be answered "always".
+func (b *approvalBook) waiting(id, who string) (exists, always bool) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	p, ok := b.pending[id]
+	if !ok || p.who != who {
+		return false, false
+	}
+	return true, p.kind == "permission" && p.always
+}
+
 // resolveApproval answers an approval or a permission (never a question). "always" is only for a permission that
 // offered it.
 func (b *approvalBook) resolveApproval(id, who, decision string) bool {
@@ -134,6 +145,12 @@ func (s *Server) handleAssistantApproval(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	p := principalFrom(r.Context())
+	if req.Decision == decisionAlways {
+		if exists, always := s.approvals.waiting(r.PathValue("id"), p.Name); exists && !always {
+			writeError(w, http.StatusBadRequest, "this cannot be allowed ahead of time; answer once or deny")
+			return
+		}
+	}
 	if !s.approvals.resolveApproval(r.PathValue("id"), p.Name, req.Decision) {
 		writeError(w, http.StatusNotFound, "no question of yours is waiting for that answer (it may have expired)")
 		return

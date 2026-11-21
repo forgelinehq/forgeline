@@ -313,6 +313,8 @@ update that asks for different hosts needs a fresh grant.
 | [161-assistant-plan](161-assistant-plan.png) | After the answer: your choice stays visible, the plan is ticked off as it works, then the answer (stand-in model) |
 | [162-assistant-permission](162-assistant-permission.png) | The assistant wants to change something: the exact command, the account, why it asks, and Allow once, Always allow this kind, or Deny (note 052). Answered by a stand-in model; the AWS call went to `scripts/dev/fake-aws` |
 | [163-assistant-permissions](163-assistant-permissions.png) | Settings › Assistant permissions: which AWS accounts the assistant may change with your own approval (protected by default) and the rules |
+| [164-assistant-sandbox](164-assistant-sandbox.png) | The assistant installed Python in its sandbox, wrote a script to /work and ran it; the output is in the answer (note 052, slice 3). A real Docker container; the model was a stand-in | 
+| [165-sandbox-settings](165-sandbox-settings.png) | Settings › Assistant permissions › Sandbox: off until an administrator turns it on, the isolation in use, the network choice and the honest limits |
 
 ## Which pictures are current
 
