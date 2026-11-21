@@ -3,11 +3,13 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestSchemaFromHelpReadsTheExampleArguments(t *testing.T) {
@@ -165,5 +167,49 @@ func TestSchemasCarryChoicesRequirementsAndNestedShapes(t *testing.T) {
 	obj := items["items"].(map[string]any)
 	if items["type"] != "array" || obj["type"] != "object" || obj["properties"].(map[string]any)["status"].(map[string]any)["enum"] == nil {
 		t.Errorf("a list of objects is not described: %v", items)
+	}
+}
+
+func TestARateLimitedCallIsRetriedAndNothingElseIs(t *testing.T) {
+	old := providerRetryWait
+	providerRetryWait = []time.Duration{time.Millisecond, time.Millisecond}
+	defer func() { providerRetryWait = old }()
+	calls := 0
+	limited := func() (string, modelUsage, error) {
+		calls++
+		if calls < 3 {
+			return "", modelUsage{}, errors.New("the Gemini API refused the request (429): 429 Too Many Requests")
+		}
+		return "ok", modelUsage{Calls: 1}, nil
+	}
+	if r, _, err := retryRateLimited(context.Background(), limited); err != nil || r != "ok" || calls != 3 {
+		t.Errorf("rate limited: %q %v after %d calls", r, err, calls)
+	}
+	calls = 0
+	always := func() (string, modelUsage, error) {
+		calls++
+		return "", modelUsage{}, errors.New("refused the request (429)")
+	}
+	if _, _, err := retryRateLimited(context.Background(), always); err == nil || calls != 3 {
+		t.Errorf("a persistent limit: %v after %d calls", err, calls)
+	}
+	calls = 0
+	other := func() (string, modelUsage, error) {
+		calls++
+		return "", modelUsage{}, errors.New("provider \"x\" reached its monthly limit of $5.00")
+	}
+	if _, _, err := retryRateLimited(context.Background(), other); err == nil || calls != 1 {
+		t.Errorf("a monthly limit was retried: %d calls", calls)
+	}
+	calls = 0
+	if _, _, err := retryRateLimited(context.Background(), func() (string, modelUsage, error) { calls++; return "", modelUsage{}, errors.New("refused (500)") }); err == nil || calls != 1 {
+		t.Errorf("a server error was retried: %d calls", calls)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	calls = 0
+	providerRetryWait = []time.Duration{time.Hour}
+	if _, _, err := retryRateLimited(ctx, always); err == nil || calls != 1 {
+		t.Errorf("a cancelled request waited: %d calls", calls)
 	}
 }
