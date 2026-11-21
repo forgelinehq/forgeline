@@ -301,6 +301,12 @@ func (s *Server) permitChange(ctx context.Context, account string, args []string
 		_ = s.audit(ctx, p, "", "assistant.cli.change", "aws/"+account, "allowed by rule: "+truncate(command, 300), true)
 		return nil
 	}
+	if autopilotAllowsChange(ctx, dec, command) {
+		a := autopilotFrom(ctx)
+		_ = s.audit(ctx, p, "", "assistant.cli.change", "aws/"+account, "autopilot, no card: "+truncate(command, 300), true)
+		a.announce(truncate(command, 300), account)
+		return nil
+	}
 	ask := permAskerFrom(ctx)
 	if ask == nil {
 		return refuse("this change needs the person's approval and nobody is here to give it; ask in the chat, or propose it")

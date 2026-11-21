@@ -306,3 +306,23 @@ project), stored in the document store:
   the secret card in a browser (covered by tests).
 - Not in this slice: autopilot, memory, a general host shell (decision D), installing a runtime for the person, and
   running Docker inside the sandbox.
+
+## Built (slice 4, 2026-11-21): autopilot
+
+- A switch in the chat panel, **per conversation**. On, each message carries `autopilot` and the server holds an
+  envelope in memory: 30 minutes and 100 steps by default (up to 240 and 300), shown as "Autopilot on, 12 of 100 steps,
+  28 min left". It is not stored, so a restart ends it; a new or another conversation starts with it off; a message sent
+  with the switch off ends it for good. **Stop** ends it at once (a run in flight stops at its next step).
+- Inside the envelope the loop's budget is the person's, not 40 steps and 5 minutes, and the model is told to carry on
+  without asking unless it is blocked on something only the person knows, to say what it chose, and to install or write
+  a tool in the sandbox when none exists.
+- It skips a card only where nothing but the default said "ask": the command is not matched by any rule (a person's or the
+  organisation's "ask", or a deny, still hold), the service is not one that always asks (`iam`, `organizations`,
+  `account`, `ssm`, `sts`, `sso-admin`, `identitystore`), the account is marked "allow with my own approval", the person
+  is an administrator, and nobody is an agent. Every such change is shown in the chat ("Autopilot ran: ...") and audited
+  as `autopilot, no card`, with `assistant.autopilot.start`, `.stop` and `.end` around it.
+- A secret given to the sandbox still needs its card. Preparing a pipeline, an agent or a workflow still waits for Confirm.
+- An administrator can turn autopilot off for everyone (Settings › Assistant permissions).
+- Tested by breaking it: dropping the "no rule asked" check, the always-ask check, the "still running" check, the
+  administrator switch, the end-on-switch-off and the step count each fails a test. Browser-checked against the fake
+  AWS CLI and a scripted model only.

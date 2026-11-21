@@ -255,6 +255,19 @@ refused. Every decision is in the audit log.
 {: .warning }
 **Checked against a fake AWS CLI only**, not a real account, and only for AWS. `az`, `gcloud` and `kubectl` are next.
 
+## Autopilot: keep going without asking
+
+Switch **Autopilot** on under the message box and the assistant works on your task without stopping to ask, for up to 30
+minutes and 100 steps (the bar shows what is left; **Stop autopilot** ends it at once). A change that would only have
+asked runs without a card, and the chat shows each one ("Autopilot ran: …") and the audit log records it.
+
+![Autopilot on: the change ran without a card]({{ '/console/166-assistant-autopilot.png' | relative_url }})
+
+It is on for **one conversation** and never carries over to another, or past a restart. It does **not** cover a protected
+account, IAM, Organizations, accounts, SSM or STS, a change one of your rules or your organisation's rules denies or asks
+about, a secret handed to the sandbox, or an agent. An administrator can turn it off for everyone under Settings ›
+Assistant permissions.
+
 ## The sandbox: any command, any language
 
 When no lookup answers, the assistant can **run commands and write and run code** in a sandbox: a container Forgeline

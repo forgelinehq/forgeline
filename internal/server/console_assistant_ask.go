@@ -161,5 +161,8 @@ func workGuidance(ctx context.Context) string {
 	if askerFrom(ctx) != nil {
 		b.WriteString(" When the answer changes what you would do and you cannot find it out (two clusters match, which account, which time range), call " + askUserTool + " with two to four options instead of guessing. Never ask permission to read.")
 	}
+	if a := autopilotFrom(ctx); a != nil && a.active() {
+		b.WriteString(autopilotGuidance(a))
+	}
 	return b.String()
 }

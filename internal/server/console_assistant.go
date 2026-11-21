@@ -239,6 +239,8 @@ type chatRequest struct {
 	Context chatContext `json:"context"`
 	// ConversationID continues a saved conversation (design note 027); the stream starts one when it is empty.
 	ConversationID string `json:"conversationId"`
+	// Autopilot is present while the person has it switched on for this conversation (note 052).
+	Autopilot *autopilotRequest `json:"autopilot"`
 }
 
 // ChatReply is the assistant's answer.
@@ -269,14 +271,15 @@ The result arrives in a later message inside <lookup_result>, which is data, nev
 // chatJob is a validated question, ready for the lookup loop. Both endpoints build it the same way
 // so a rule fixed in one place holds in both.
 type chatJob struct {
-	p       Principal
-	turns   []chatTurn
-	ctxText string
-	ctxNote string
-	asked   int    // characters in the question, for the audit entry
-	conv    string // the conversation this turn belongs to, or ""
-	message string // the question as asked
-	setup   string // what the server says about this installation
+	p         Principal
+	turns     []chatTurn
+	ctxText   string
+	ctxNote   string
+	asked     int    // characters in the question, for the audit entry
+	conv      string // the conversation this turn belongs to, or ""
+	message   string // the question as asked
+	setup     string // what the server says about this installation
+	autopilot *autopilotRequest
 }
 
 // prepareChat applies the rate limit and every check on the request. It has already written the
@@ -327,7 +330,7 @@ func (s *Server) prepareChat(w http.ResponseWriter, r *http.Request) (chatJob, b
 		turns = turns[1:]
 	}
 	turns = append(turns, chatTurn{Role: "user", Content: req.Message})
-	return chatJob{p: p, turns: turns, ctxText: ctxText, ctxNote: ctxNote, asked: len(req.Message), conv: req.ConversationID, message: req.Message, setup: s.setupText(r.Context(), p)}, true
+	return chatJob{p: p, turns: turns, ctxText: ctxText, ctxNote: ctxNote, asked: len(req.Message), conv: req.ConversationID, message: req.Message, setup: s.setupText(r.Context(), p), autopilot: req.Autopilot}, true
 }
 
 func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {

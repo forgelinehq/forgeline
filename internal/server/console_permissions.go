@@ -57,6 +57,8 @@ type permissionsDoc struct {
 	// OwnApproval holds the accounts an administrator marked "allow with my own approval", by account id. An account not
 	// listed is protected: a change to it is a proposal that a different administrator approves.
 	OwnApproval map[string]bool `json:"own_approval,omitempty"`
+	// AutopilotOff is an administrator turning autopilot off for everyone (note 052).
+	AutopilotOff bool `json:"autopilot_off,omitempty"`
 }
 
 // How long a change waits for the person; a variable so a test that fails early does not wait it out.
