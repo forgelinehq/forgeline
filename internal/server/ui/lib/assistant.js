@@ -66,7 +66,7 @@ function build(close, role) {
   const history = []; // {role, content}
   let conversation = ''; // the saved conversation this panel continues; the server starts one on the first question
   const prefs = loadPrefs();
-  const list = h('div', { class: 'min-h-0 flex-1 space-y-5 overflow-y-auto px-4 py-4', 'aria-live': 'polite', id: 'assistant-thread' });
+  const list = h('div', { class: 'min-h-0 flex-1 space-y-5 overflow-y-auto overflow-x-hidden break-words px-4 py-4', 'aria-live': 'polite', id: 'assistant-thread' });
   const ctxLabel = h('span', { class: 'font-medium' });
   const input = h('textarea', { id: 'assistant-input', class: 'block max-h-40 min-h-[2.5rem] flex-1 resize-none bg-transparent py-2 text-sm placeholder:text-slate-400 focus:outline-none', rows: '1', maxlength: '4000', placeholder: 'Ask anything, or tell me what to set up…', 'aria-label': 'Your question' });
   const sendBtn = h('button', { class: 'btn-primary size-9 shrink-0 rounded-xl p-0', type: 'submit', 'aria-label': 'Send', title: 'Send' }, icon('send'));

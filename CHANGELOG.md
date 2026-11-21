@@ -92,6 +92,10 @@ section in the pull request that makes the change; a release moves it under its 
 - **Workflows refuse agents with tools their run cannot use.** Saving a workflow whose agent has a tool its run-as role
   may never use (such as `call_aws`, for administrators only, in a workflow running as a viewer) now says so, instead of
   every run quietly going without it.
+- **No more raw tool calls in the chat.** Some models write a call as `<invoke name="…"><parameter …>` instead of the
+  block the assistant asks for. A call that is the whole reply now runs; one mixed with text is sent back once to be
+  resent in the right form; and one that still is not run is never shown to you, only a short message saying nothing was
+  done. The chat panel also no longer scrolls sideways: long unbroken text wraps.
 - **Memory as files** (design note 052, slice 5). The assistant keeps what it learns as small files, `/memories/me` for
   you and `/memories/org` for everyone (administrators write there), with a `memory` tool (view, create, edit, insert,
   rename, delete, search), an index of them in every prompt, and BM25 search. A file written after it read data you did
