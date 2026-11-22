@@ -35,6 +35,7 @@ Role = the minimum role. A test (`internal/server/apidocs_test.go`) fails if a r
 | `POST /v1/tokens` | viewer | Body: `name`, `role` (at most your own; default yours), `days` (1 to 365, default 90). Needs a browser session, not a token. Returns the secret once. At most 10 each. |
 | `DELETE /v1/tokens/{id}` | viewer | Revoke your token (an administrator can revoke any). |
 | `POST /mcp` | public | The MCP endpoint (it checks the caller itself) (streamable HTTP, one JSON-RPC message per request). Only a personal API token works here (not the server token, not a session), so it answers 401 to anything else. See note 020. |
+| `POST /mcp/engine/{token}` | public | The agent engine's own endpoint (note 053): the Claude Code program Forgeline started for one chat message calls Forgeline's tools and its permission prompt here. The random token in the path identifies one running message and stops working when it ends; only the same machine (loopback) is answered, so it is not for clients. |
 
 ## Runs
 

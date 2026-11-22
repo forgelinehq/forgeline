@@ -245,9 +245,19 @@ func (s *Server) handleAssistantRun(w http.ResponseWriter, r *http.Request) {
 			out.send("CUSTOM", map[string]any{"name": "forgeline.question_answered", "value": map[string]any{"id": id, "answer": answer}})
 		})
 	}))
-	reply, lookups, err := s.askWithLookups(ctx, job.p, job.turns, job.ctxText, func(tool string, ok bool) {
-		s.auditReq(r, "assistant.lookup", "assistant", tool, ok)
-	})
+	var (
+		reply   string
+		lookups []string
+		err     error
+	)
+	if s.loadAssistant(ctx).Backend == assistEngine {
+		// A real agent harness does the thinking and the doing; Forgeline is its tools, its permission prompt and its log.
+		reply, err = s.askEngine(ctx, job.p, conv, job.message, job.ctxText, s.lookupLines(ctx, job.p.Role), obs)
+	} else {
+		reply, lookups, err = s.askWithLookups(ctx, job.p, job.turns, job.ctxText, func(tool string, ok bool) {
+			s.auditReq(r, "assistant.lookup", "assistant", tool, ok)
+		})
+	}
 	s.auditReq(r, "assistant.chat", "assistant", fmt.Sprintf("%s, %d chars asked, %d lookups, %v", job.ctxNote, job.asked, len(lookups), err == nil), err == nil)
 	if err != nil {
 		out.send("RUN_ERROR", map[string]any{"message": err.Error()})

@@ -12,6 +12,7 @@ export async function assistantSettings(box, admin) {
     h('option', { value: 'provider', selected: cfg.backend === 'provider' }, 'A model from Models and providers'),
     h('option', { value: 'api', selected: cfg.backend === 'api' }, 'Anthropic API key (recommended for teams)'),
     h('option', { value: 'claude-token', selected: cfg.backend === 'claude-token' }, 'Claude Code login token (from claude setup-token)'),
+    h('option', { value: 'claude-agent', selected: cfg.backend === 'claude-agent' }, 'Claude Code as the agent (full tools, recommended for one team)'),
     h('option', { value: 'cli', selected: cfg.backend === 'cli' }, 'The claude program on this server (one person only)'),
     h('option', { value: 'copilot', selected: cfg.backend === 'copilot' }, 'The copilot program on this server (GitHub Copilot, one person only)'));
   const model = h('input', { id: 'as-model', class: 'input font-mono', value: cfg.backend === 'provider' ? '' : cfg.model, disabled: !admin });
@@ -27,6 +28,7 @@ export async function assistantSettings(box, admin) {
   const tokField = field('Claude Code token', tok, 'Stored encrypted and never shown again. It is the same secret (CLAUDE_CODE_OAUTH_TOKEN) that Claude Code agent steps use. The program runs in a scratch home directory, so the server user\'s own login is not touched.');
   const cliWarn = notice('warn', 'This runs the ', h('code', { class: 'font-mono text-xs' }, 'claude'), ' program on the server as the server\'s own user, with that user\'s login, for everyone who can use the assistant. Use it only on a server for one person (a laptop). For a team, use an API key: sharing one personal subscription is not what it is licensed for.');
   const copilotWarn = notice('warn', 'This runs GitHub\'s ', h('code', { class: 'font-mono text-xs' }, 'copilot'), ' program on the server with the server user\'s login (run ', h('code', { class: 'font-mono text-xs' }, 'copilot login'), ' there first), with no tools. Each question uses one Copilot premium request; a free plan has only a few a month. Leave the model empty to let Copilot choose. Use it only on a server for one person.');
+  const agentNote = notice('info', 'Claude Code itself does the thinking and the work: it plans, uses subagents, reads files and runs commands in a workspace kept for each person, and calls Forgeline\'s tools (AWS, Kubernetes, findings, runs, memory, cards). Its own Bash, Edit and Write ask you on a card first, and every Forgeline tool keeps its permission checks and audit. It needs the claude program on the server and a Claude Code token above, or the server user\'s login.');
   const err = h('div', { class: 'mt-4 hidden' });
   const out = h('div', { class: 'mt-4' });
   // Copilot picks its own model when the field is empty; a Claude name left from another backend would only be
@@ -35,7 +37,7 @@ export async function assistantSettings(box, admin) {
     if (backend.value === 'copilot' && /^(claude-|sonnet$|opus$|haiku$)/.test(model.value.trim())) model.value = '';
     model.placeholder = backend.value === 'copilot' ? 'Empty: Copilot chooses' : '';
   };
-  const sync = () => { fitModel(); provField.classList.toggle('hidden', backend.value !== 'provider'); modelField.classList.toggle('hidden', backend.value === 'provider'); keyField.classList.toggle('hidden', backend.value !== 'api'); tokField.classList.toggle('hidden', backend.value !== 'claude-token'); cliWarn.classList.toggle('hidden', backend.value !== 'cli'); copilotWarn.classList.toggle('hidden', backend.value !== 'copilot'); };
+  const sync = () => { fitModel(); provField.classList.toggle('hidden', backend.value !== 'provider'); modelField.classList.toggle('hidden', backend.value === 'provider'); keyField.classList.toggle('hidden', backend.value !== 'api'); tokField.classList.toggle('hidden', backend.value !== 'claude-token' && backend.value !== 'claude-agent'); agentNote.classList.toggle('hidden', backend.value !== 'claude-agent'); cliWarn.classList.toggle('hidden', backend.value !== 'cli'); copilotWarn.classList.toggle('hidden', backend.value !== 'copilot'); };
   backend.addEventListener('change', sync); sync();
 
   const save = h('button', { class: 'btn-primary', type: 'submit', disabled: !admin }, icon('check', 'size-4'), 'Save');
@@ -57,6 +59,6 @@ export async function assistantSettings(box, admin) {
     h('div', { class: 'mb-5 flex items-center justify-between' }, h('h2', { class: 'flex items-center gap-2 text-base font-semibold' }, icon('sparkle'), 'Assistant'),
       cfg.ready ? h('span', { class: 'pill-ok' }, 'Ready') : h('span', { class: 'pill-idle' }, cfg.backend === 'off' ? 'Off' : 'Needs a key or token')),
     h('p', { class: 'muted mb-5 text-sm' }, 'A helper in the top bar that answers questions about the page you are on: why a run failed, what a pipeline does, what is running in AWS. It can only read, never sees secret values, and anything it drafts is text until you save it.'),
-    h('div', { class: 'space-y-5' }, field('Which assistant to use', backend), cliWarn, copilotWarn, keyField, tokField, provField, modelField),
+    h('div', { class: 'space-y-5' }, field('Which assistant to use', backend), agentNote, cliWarn, copilotWarn, keyField, tokField, provField, modelField),
     err, admin && h('div', { class: 'mt-6 flex items-center gap-2' }, save, test), out));
 }

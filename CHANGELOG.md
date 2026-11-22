@@ -92,6 +92,12 @@ section in the pull request that makes the change; a release moves it under its 
 - **Workflows refuse agents with tools their run cannot use.** Saving a workflow whose agent has a tool its run-as role
   may never use (such as `call_aws`, for administrators only, in a workflow running as a viewer) now says so, instead of
   every run quietly going without it.
+- **Claude Code as the assistant's agent** (design note 053). A new assistant choice, "Claude Code as the agent", runs the real
+  Claude Code for each chat message: its own planning loop, subagents, file reading and sessions that continue from message to
+  message, with Forgeline as its tools (AWS, Kubernetes, findings, runs, memory, cards, the doctor) and as its permission prompt.
+  Its own Bash, Edit and Write show you a card with the exact command and wait for your answer; every Forgeline tool keeps its
+  role checks, approval cards and audit entries. It works in a workspace of its own for each person, kept between conversations.
+  Today the commands you approve run on the server; running them in the sandbox container is next.
 - **The assistant looks after its own setup.** A new `doctor` tool checks what holds the assistant back: a model that
   cannot make real tool calls (a command-line backend, no provider), the shell sandbox being off, AWS accounts being
   protected, memory or autopilot being off, and recent model errors and rate limits. It says what is blocking it and prepares
