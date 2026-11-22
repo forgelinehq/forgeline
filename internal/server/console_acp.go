@@ -1,0 +1,546 @@
+package server
+
+import (
+	"bufio"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"time"
+)
+
+// Agents over the Agent Client Protocol (design note 053, slice 3). ACP is the protocol editors use to drive a coding agent:
+// JSON-RPC over the agent's standard input and output. It is the same two seams as the Claude Code engine, in a standard
+// form, so one client serves Antigravity (`agy acp`), the Copilot CLI, Codex and any other agent that speaks it: Forgeline gives
+// the agent its tools as an MCP server in `session/new`, and answers its `session/request_permission` with the same card the
+// person sees for every other tool. The agent runs in the person's sandbox container.
+
+const (
+	acpProtocolVersion = 1
+	acpMaxSeconds      = 3600
+)
+
+// harnessCommands are the ready-made agents: the command, run by `sh -c` in the container, that starts one in ACP mode. The
+// program has to be installed in the sandbox (the assistant can do it: "install the Antigravity CLI").
+var harnessCommands = map[string]string{
+	"antigravity": `PATH=/work/.antigravity/bin:$HOME/.local/bin:$PATH exec agy acp`,
+	"copilot":     `exec copilot --acp`,
+	"codex":       `exec codex-acp`,
+}
+
+// checkHarness validates the choice of agent; "" when it is fine.
+func checkHarness(harness, cmd string) string {
+	if harness == "custom" {
+		cmd = strings.TrimSpace(cmd)
+		switch {
+		case cmd == "":
+			return "a custom agent needs the command that starts it in ACP mode, such as `myagent acp`"
+		case len(cmd) > 300 || strings.ContainsAny(cmd, "\r\n\x00"):
+			return "the command must be one line of at most 300 characters"
+		}
+		return ""
+	}
+	if _, ok := harnessCommands[harness]; !ok {
+		return `harness must be "antigravity", "copilot", "codex" or "custom"`
+	}
+	return ""
+}
+
+func (s *Server) harnessCommand(st assistantSettings) string {
+	if st.Harness == "custom" {
+		return strings.TrimSpace(st.HarnessCmd)
+	}
+	return harnessCommands[st.Harness]
+}
+
+// --- a small JSON-RPC client over the agent's pipes ---
+
+type acpError struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+}
+
+func (e *acpError) Error() string { return fmt.Sprintf("%s (%d)", e.Message, e.Code) }
+
+type acpMsg struct {
+	ID     json.RawMessage `json:"id,omitempty"`
+	Method string          `json:"method,omitempty"`
+	Params json.RawMessage `json:"params,omitempty"`
+	Result json.RawMessage `json:"result,omitempty"`
+	Error  *acpError       `json:"error,omitempty"`
+}
+
+type acpConn struct {
+	w       io.Writer
+	wmu     sync.Mutex
+	mu      sync.Mutex
+	next    int
+	pending map[string]chan acpMsg
+	closed  chan struct{}
+	onNote  func(method string, params json.RawMessage)
+	onReq   func(method string, params json.RawMessage) (any, *acpError)
+}
+
+func newACPConn(r io.Reader, w io.Writer, onNote func(string, json.RawMessage), onReq func(string, json.RawMessage) (any, *acpError)) *acpConn {
+	c := &acpConn{w: w, pending: map[string]chan acpMsg{}, closed: make(chan struct{}), onNote: onNote, onReq: onReq}
+	go func() {
+		defer close(c.closed)
+		sc := bufio.NewScanner(r)
+		sc.Buffer(make([]byte, 1<<20), 16<<20)
+		for sc.Scan() {
+			var m acpMsg
+			if json.Unmarshal(sc.Bytes(), &m) != nil {
+				continue
+			}
+			switch {
+			case m.Method != "" && len(m.ID) > 0: // a request from the agent
+				go func(m acpMsg) {
+					res, rerr := c.onReq(m.Method, m.Params)
+					out := map[string]any{"jsonrpc": "2.0", "id": m.ID}
+					if rerr != nil {
+						out["error"] = rerr
+					} else {
+						out["result"] = res
+					}
+					c.write(out)
+				}(m)
+			case m.Method != "": // a notification
+				c.onNote(m.Method, m.Params)
+			default: // an answer to one of ours
+				c.mu.Lock()
+				ch := c.pending[string(m.ID)]
+				delete(c.pending, string(m.ID))
+				c.mu.Unlock()
+				if ch != nil {
+					ch <- m
+				}
+			}
+		}
+	}()
+	return c
+}
+
+func (c *acpConn) write(v any) {
+	b, _ := json.Marshal(v)
+	c.wmu.Lock()
+	defer c.wmu.Unlock()
+	c.w.Write(append(b, '\n'))
+}
+
+// call sends a request and waits for its answer, the end of the agent, or the context.
+func (c *acpConn) call(ctx context.Context, method string, params any) (json.RawMessage, error) {
+	c.mu.Lock()
+	c.next++
+	id := c.next
+	ch := make(chan acpMsg, 1)
+	c.pending[fmt.Sprint(id)] = ch
+	c.mu.Unlock()
+	c.write(map[string]any{"jsonrpc": "2.0", "id": id, "method": method, "params": params})
+	select {
+	case m := <-ch:
+		if m.Error != nil {
+			return nil, m.Error
+		}
+		return m.Result, nil
+	case <-c.closed:
+		return nil, errors.New("the agent ended before answering")
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+func (c *acpConn) notify(method string, params any) {
+	c.write(map[string]any{"jsonrpc": "2.0", "method": method, "params": params})
+}
+
+// --- one message to an ACP agent ---
+
+// askACP runs the chosen agent in the person's sandbox for one chat message and returns its answer.
+func (s *Server) askACP(ctx context.Context, p Principal, conv, message, pageContext string, lines []helpLine, obs assistObserver) (string, error) {
+	st := s.loadAssistant(ctx)
+	command := s.harnessCommand(st)
+	if command == "" {
+		return "", errors.New("no agent is chosen: pick one under Settings › Assistant model")
+	}
+	if !s.engineInContainer(ctx) {
+		return "", errors.New("agents over ACP run in the sandbox: an administrator turns it on under Settings › Assistant permissions")
+	}
+	sbx := s.loadSandbox(ctx)
+	if sbx.Network == sandboxNetNone {
+		return "", errors.New("the agent must reach its model, so the sandbox network cannot be set to none")
+	}
+	run := &engineRun{ctx: ctx, p: p, lines: lines, set: buildNativeSet(lines), obs: obs}
+	tok := engineToken()
+	engineRuns.mu.Lock()
+	engineRuns.m[tok] = run
+	engineRuns.mu.Unlock()
+	defer func() { engineRuns.mu.Lock(); delete(engineRuns.m, tok); engineRuns.mu.Unlock() }()
+
+	if err := s.ensureEngineImage(ctx); err != nil {
+		return "", err
+	}
+	bridge := engineBridgeDir(s.cfg.DataDir, p)
+	if err := s.engineSocket(bridge); err != nil {
+		return "", fmt.Errorf("opening the agent's socket: %v", err)
+	}
+	bin, err := s.engineBinary()
+	if err != nil {
+		return "", fmt.Errorf("preparing the bridge: %v", err)
+	}
+	ctr, err := s.ensureSandboxWith(ctx, p, engineImage, sbx, "-v", bridge+":/run/forgeline:ro", "-v", bin+":/opt/forgeline:ro")
+	if err != nil {
+		return "", err
+	}
+	argv := []string{"exec", "-i", "-w", "/work", "-e", "HOME=/work/.agent"}
+	env := []string{"PATH=" + os.Getenv("PATH"), "HOME=" + os.Getenv("HOME")}
+	apiKey, haveKey := s.internalSecretValue(ctx, geminiKeyName)
+	if haveKey { // the Gemini API key, for an agent that signs in with one
+		argv = append(argv, "-e", geminiKeyName)
+		env = append(env, geminiKeyName+"="+apiKey)
+	}
+	argv = append(argv, ctr, "sh", "-c", command)
+	wall := time.Duration(acpMaxSeconds) * time.Second
+	if ap := liveAutopilot(ctx, p); ap != nil {
+		wall = 12 * time.Hour
+	}
+	cctx, cancel := context.WithTimeout(ctx, wall)
+	defer cancel()
+	cmd := s.engineCmd(cctx, "docker", argv...)
+	cmd.Env = env
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		return "", err
+	}
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return "", err
+	}
+	var errb limitedBuffer
+	errb.max = 1 << 14
+	cmd.Stderr = &errb
+	if err := cmd.Start(); err != nil {
+		return "", err
+	}
+	defer func() { stdin.Close(); _ = cmd.Wait() }()
+
+	var (
+		mu      sync.Mutex
+		answer  strings.Builder
+		replay  bool
+		toolIDs = map[string]string{}
+	)
+	conn := newACPConn(stdout, stdin,
+		func(method string, params json.RawMessage) {
+			if method != "session/update" {
+				return
+			}
+			mu.Lock()
+			defer mu.Unlock()
+			if replay {
+				return // a resumed session replays its history; it is not this answer
+			}
+			s.acpUpdate(params, &answer, toolIDs, obs)
+		},
+		func(method string, params json.RawMessage) (any, *acpError) {
+			if method == "session/request_permission" {
+				return s.acpPermission(run, params), nil
+			}
+			return nil, &acpError{Code: -32601, Message: "Forgeline does not provide " + method + "; use the tools you were given"}
+		})
+
+	initRes, err := conn.call(cctx, "initialize", map[string]any{
+		"protocolVersion":    acpProtocolVersion,
+		"clientCapabilities": map[string]any{"fs": map[string]bool{"readTextFile": false, "writeTextFile": false}, "terminal": false},
+		"clientInfo":         map[string]string{"name": "forgeline", "title": "Forgeline", "version": "1"},
+	})
+	if err != nil {
+		return "", s.acpFail("starting the agent", err, errb.b.String())
+	}
+	var caps struct {
+		AgentCapabilities struct {
+			LoadSession         bool `json:"loadSession"`
+			SessionCapabilities struct {
+				Resume json.RawMessage `json:"resume"`
+			} `json:"sessionCapabilities"`
+		} `json:"agentCapabilities"`
+		AuthMethods []struct {
+			ID string `json:"id"`
+		} `json:"authMethods"`
+	}
+	_ = json.Unmarshal(initRes, &caps)
+
+	mcp := []any{map[string]any{"name": "forgeline", "command": "/opt/forgeline/forgeline", "args": []string{"mcp"},
+		"env": []map[string]string{{"name": "FORGELINE_MCP_SOCKET", "value": "/run/forgeline/engine.sock"}, {"name": "FORGELINE_MCP_PATH", "value": "/mcp/engine/" + tok}}}}
+	newSession := func() (string, error) {
+		res, err := conn.call(cctx, "session/new", map[string]any{"cwd": "/work", "mcpServers": mcp})
+		if err != nil {
+			return "", err
+		}
+		var out struct {
+			SessionID string `json:"sessionId"`
+		}
+		_ = json.Unmarshal(res, &out)
+		if out.SessionID == "" {
+			return "", errors.New("the agent did not start a session")
+		}
+		return out.SessionID, nil
+	}
+	authenticate := func() error {
+		for _, m := range caps.AuthMethods {
+			if m.ID == "gemini-api-key" && haveKey {
+				_, err := conn.call(cctx, "authenticate", map[string]string{"methodId": m.ID})
+				return err
+			}
+		}
+		return errors.New("the agent is not signed in. Sign in once inside the sandbox: run `docker exec -it -e HOME=/work/.agent " + ctr + " sh -c '" + command + "'` on the server and follow the agent's sign-in, or store a Gemini API key in the vault as " + geminiKeyName)
+	}
+	sid := s.acpSession(ctx, conv, st.Harness)
+	var sessionID string
+	if sid != "" && (caps.AgentCapabilities.LoadSession || len(caps.AgentCapabilities.SessionCapabilities.Resume) > 0) {
+		method := "session/load"
+		if len(caps.AgentCapabilities.SessionCapabilities.Resume) > 0 {
+			method = "session/resume"
+		}
+		mu.Lock()
+		replay = true
+		mu.Unlock()
+		_, rerr := conn.call(cctx, method, map[string]any{"sessionId": sid, "cwd": "/work", "mcpServers": mcp})
+		mu.Lock()
+		replay = false
+		mu.Unlock()
+		if rerr == nil {
+			sessionID = sid
+		}
+	}
+	if sessionID == "" {
+		sessionID, err = newSession()
+		var ae *acpError
+		if errors.As(err, &ae) && (ae.Code == -32000 || strings.Contains(strings.ToLower(ae.Message), "auth")) {
+			if aerr := authenticate(); aerr != nil {
+				return "", aerr
+			}
+			sessionID, err = newSession()
+		}
+		if err != nil {
+			return "", s.acpFail("starting a session", err, errb.b.String())
+		}
+	}
+	s.saveACPSession(ctx, conv, st.Harness, sessionID)
+
+	prompt := message
+	if sys := s.engineInstructions(ctx, pageContext); sys != "" {
+		prompt = sys + "\n\n---\n\nThe person's message:\n" + message
+	}
+	done := make(chan struct{})
+	go func() { // a person who leaves cancels the turn
+		select {
+		case <-ctx.Done():
+			conn.notify("session/cancel", map[string]string{"sessionId": sessionID})
+		case <-done:
+		}
+	}()
+	res, err := conn.call(cctx, "session/prompt", map[string]any{"sessionId": sessionID, "prompt": []map[string]string{{"type": "text", "text": prompt}}})
+	close(done)
+	if err != nil {
+		if ctx.Err() != nil {
+			return "", errors.New("the person left before the agent finished")
+		}
+		return "", s.acpFail("the agent stopped", err, errb.b.String())
+	}
+	var out struct {
+		StopReason string `json:"stopReason"`
+	}
+	_ = json.Unmarshal(res, &out)
+	mu.Lock()
+	text := strings.TrimSpace(answer.String())
+	mu.Unlock()
+	switch {
+	case text == "" && out.StopReason == "refusal":
+		return "", errors.New("the agent refused to answer")
+	case text == "":
+		return "", errors.New("the agent ended its turn without an answer (" + out.StopReason + ")")
+	}
+	return text, nil
+}
+
+func (s *Server) acpFail(what string, err error, stderr string) error {
+	msg := what + ": " + err.Error()
+	if line := firstLine(stderr); line != "" {
+		msg += " (" + truncate(line, 200) + ")"
+	}
+	return errors.New(msg)
+}
+
+const geminiKeyName = "GEMINI_API_KEY"
+
+func (s *Server) acpSession(ctx context.Context, conv, harness string) string {
+	return s.engineSession(ctx, "acp-"+harness+"-"+conv)
+}
+
+func (s *Server) saveACPSession(ctx context.Context, conv, harness, sid string) {
+	s.saveEngineSession(ctx, "acp-"+harness+"-"+conv, sid)
+}
+
+// engineInstructions is what the agent is told about Forgeline, the person's notes and the page they are on, sent with the
+// message because an ACP agent has its own system prompt.
+func (s *Server) engineInstructions(ctx context.Context, pageContext string) string {
+	sys := engineSystem
+	if mt := memTurnFrom(ctx); mt != nil && mt.block != "" {
+		sys += "\n\n<memory>\n" + memoryPreamble + strings.ReplaceAll(mt.block, "</memory>", "") + "</memory>"
+	}
+	if pageContext != "" {
+		sys += "\n\n<untrusted_context>\n" + strings.ReplaceAll(pageContext, "</untrusted_context>", "</untrusted_context_>") + "\n</untrusted_context>"
+	}
+	return "<forgeline_instructions>\n" + sys + "\n</forgeline_instructions>"
+}
+
+// acpUpdate turns one session/update into what the chat shows.
+func (s *Server) acpUpdate(params json.RawMessage, answer *strings.Builder, toolIDs map[string]string, obs assistObserver) {
+	var in struct {
+		Update struct {
+			Kind       string          `json:"sessionUpdate"`
+			Content    json.RawMessage `json:"content"`
+			ToolCallID string          `json:"toolCallId"`
+			Title      string          `json:"title"`
+			Name       string          `json:"name"`
+			ToolKind   string          `json:"kind"`
+			Status     string          `json:"status"`
+			RawInput   json.RawMessage `json:"rawInput"`
+			Entries    []struct {
+				Content string `json:"content"`
+				Status  string `json:"status"`
+			} `json:"entries"`
+		} `json:"update"`
+	}
+	if json.Unmarshal(params, &in) != nil {
+		return
+	}
+	u := in.Update
+	switch u.Kind {
+	case "agent_message_chunk":
+		var c struct {
+			Type string `json:"type"`
+			Text string `json:"text"`
+		}
+		if json.Unmarshal(u.Content, &c) == nil && c.Type == "text" {
+			answer.WriteString(c.Text)
+		}
+	case "tool_call":
+		name := firstOf(u.Name, u.ToolKind, "tool")
+		if isForgelineTool(u.Name) || isForgelineTool(u.Title) {
+			toolIDs[u.ToolCallID] = "" // Forgeline shows its own tools when they run
+			return
+		}
+		toolIDs[u.ToolCallID] = name
+		if obs != nil {
+			obs(assistEvent{Kind: evToolStart, ID: "acp-" + u.ToolCallID, Tool: name, Args: truncate(firstOf(u.Title, string(u.RawInput)), argsMax)})
+		}
+	case "tool_call_update":
+		name, known := toolIDs[u.ToolCallID]
+		if !known || name == "" || obs == nil {
+			return
+		}
+		if u.Status == "completed" || u.Status == "failed" {
+			obs(assistEvent{Kind: evToolResult, ID: "acp-" + u.ToolCallID, Tool: name, Content: truncate(acpContentText(u.Content), previewMax), OK: u.Status == "completed"})
+		}
+	case "plan":
+		if obs != nil && len(u.Entries) > 0 {
+			var items []planItem
+			for _, e := range u.Entries {
+				st := map[string]string{"completed": "done", "in_progress": "doing"}[e.Status]
+				if st == "" {
+					st = "todo"
+				}
+				items = append(items, planItem{Text: truncate(e.Content, maxPlanText), Status: st})
+			}
+			if b, err := json.Marshal(items); err == nil {
+				obs(assistEvent{Kind: evPlan, Content: string(b)})
+			}
+		}
+	}
+}
+
+func isForgelineTool(s string) bool { return strings.Contains(strings.ToLower(s), "forgeline") }
+
+func acpContentText(raw json.RawMessage) string {
+	var blocks []struct {
+		Content struct {
+			Text string `json:"text"`
+		} `json:"content"`
+	}
+	if json.Unmarshal(raw, &blocks) != nil {
+		return ""
+	}
+	var b strings.Builder
+	for _, x := range blocks {
+		b.WriteString(x.Content.Text)
+	}
+	return b.String()
+}
+
+// acpPermission answers the agent's request to use one of its own tools: the person's card, or autopilot inside the sandbox.
+func (s *Server) acpPermission(run *engineRun, params json.RawMessage) any {
+	var in struct {
+		ToolCall struct {
+			Title    string         `json:"title"`
+			Kind     string         `json:"kind"`
+			RawInput map[string]any `json:"rawInput"`
+		} `json:"toolCall"`
+		Options []struct {
+			ID   string `json:"optionId"`
+			Kind string `json:"kind"`
+		} `json:"options"`
+	}
+	_ = json.Unmarshal(params, &in)
+	pick := func(kinds ...string) any {
+		for _, k := range kinds {
+			for _, o := range in.Options {
+				if o.Kind == k {
+					return map[string]any{"outcome": map[string]any{"outcome": "selected", "optionId": o.ID}}
+				}
+			}
+		}
+		return map[string]any{"outcome": map[string]any{"outcome": "cancelled"}}
+	}
+	tool := map[string]string{"execute": "Bash", "edit": "Write", "delete": "Write", "move": "Write", "fetch": "WebFetch", "search": "WebSearch"}[in.ToolCall.Kind]
+	if tool == "" {
+		tool = firstOf(in.ToolCall.Kind, "tool")
+	}
+	desc := in.ToolCall.Title
+	if c, ok := in.ToolCall.RawInput["command"].(string); ok && c != "" {
+		desc = c
+	}
+	if ap := liveAutopilot(run.ctx, run.p); ap != nil {
+		ap.spend()
+		_ = s.audit(run.ctx, run.p, "", "assistant.engine.tool", tool, "autopilot, no card: "+truncate(desc, 300), true)
+		ap.announce(truncate(desc, 300), "")
+		return pick("allow_once", "allow_always")
+	}
+	ask := permAskerFrom(run.ctx)
+	if ask == nil {
+		return pick("reject_once", "reject_always")
+	}
+	choice, err := ask(permRequest{Tool: tool, Command: desc, Why: "the agent wants to run its own tool in your sandbox. Autopilot runs these without asking"})
+	if err != nil || choice == decisionDenied {
+		_ = s.audit(run.ctx, run.p, "", "assistant.engine.tool", tool, "refused: "+truncate(desc, 300), false)
+		return pick("reject_once", "reject_always")
+	}
+	_ = s.audit(run.ctx, run.p, "", "assistant.engine.tool", tool, "approved: "+truncate(desc, 300), true)
+	return pick("allow_once", "allow_always")
+}
+
+var _ = filepath.Join
+
+func firstOf(v ...string) string {
+	for _, s := range v {
+		if s != "" {
+			return s
+		}
+	}
+	return ""
+}

@@ -72,3 +72,28 @@ Not built, in this order:
   the server as in slice 1, and the doctor says so.
 - Not checked in a unit test: that the container's user can connect to the socket (the server's own user is the same user in
   the tests). That is checked by a real run on the Pi.
+
+## Built (slice 3, 2026-11-22): any agent over the Agent Client Protocol
+
+- The Claude Code engine is two seams: Forgeline's tools handed to the agent as an MCP server, and Forgeline answering the agent's
+  permission requests. ACP (agentclientprotocol.com) is the standard form of both: JSON-RPC over the agent's standard input and
+  output; `session/new` takes the MCP servers; the agent asks `session/request_permission` before a tool and streams
+  `session/update`. VS Code's harnesses (Copilot, Claude, Codex) and Zed work the same way, so one client serves them all.
+- A new backend, `acp-agent`, with a choice of agent: Antigravity (`agy acp`), GitHub Copilot CLI (`copilot --acp`), Codex
+  (`codex-acp`), or a custom one-line command. The agent runs in the person's sandbox container, as the Claude Code engine does,
+  and gets Forgeline's tools over the same socket and bridge. Sandbox on is required.
+- The client: `initialize` (no file or terminal methods offered, so the agent uses its own tools in the container), `session/new`,
+  or `session/resume`/`session/load` to continue the conversation's session (the replayed history is dropped), `session/prompt`
+  with the Forgeline instructions, the person's notes and the page in front of the message, `session/cancel` if the person leaves.
+  `agent_message_chunk` is the answer; thoughts are not shown; `tool_call` and `tool_call_update` become steps (Forgeline's
+  own tools are shown by Forgeline, not twice); `plan` becomes the plan.
+- A permission request becomes the same card, worded by kind (execute is a command, edit a file change, fetch a web request).
+  Allow once selects the agent's `allow_once`, deny its `reject_once`; nobody to ask is a rejection. Autopilot answers it inside the
+  sandbox, audited.
+- **Signing in.** The container is separate from the server: a login on the server host is not seen inside it, by design. Sign in
+  once inside the sandbox (`docker exec -it -e HOME=/work/.agent <container> ...`, the message names the exact command), or give
+  the agent a Gemini API key by storing `GEMINI_API_KEY` in the vault: Forgeline passes it in the environment and calls
+  `authenticate` with the `gemini-api-key` method. Checked against the real `agy acp` for `initialize` (it lists Google, Gemini
+  Enterprise, API key and Agent Platform sign-ins) and `session/new` (it answers "Authentication required" until signed in).
+- Not yet: streaming the answer as it is written, other sign-in methods from the console, and a real turn against a signed-in
+  agent (all tested so far with a stand-in agent that speaks ACP).

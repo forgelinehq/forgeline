@@ -52,16 +52,22 @@ const (
 	// assistToken runs the claude program with the vault's Claude Code token, in a scratch home
 	// directory, so it does not depend on (or touch) the server user's own login.
 	assistToken = "claude-token"
+	// assistACP runs an agent that speaks the Agent Client Protocol (Antigravity, Copilot CLI, Codex, others) in the sandbox.
+	assistACP = "acp-agent"
 	// assistCopilot runs GitHub's copilot program on the server with the login of the server's user (copilot login).
 	assistCopilot = "copilot"
 )
 
 type assistantSettings struct {
-	Backend   string    `json:"backend"`
-	Model     string    `json:"model,omitempty"`
-	APIBase   string    `json:"api_base,omitempty"`
-	UpdatedAt time.Time `json:"updated_at"`
-	UpdatedBy string    `json:"updated_by"`
+	Backend string `json:"backend"`
+	Model   string `json:"model,omitempty"`
+	APIBase string `json:"api_base,omitempty"`
+	// Harness and HarnessCmd choose the agent when the backend is "acp-agent" (design note 053): antigravity, copilot,
+	// codex, or custom with a command that speaks the Agent Client Protocol on its standard input and output.
+	Harness    string    `json:"harness,omitempty"`
+	HarnessCmd string    `json:"harness_cmd,omitempty"`
+	UpdatedAt  time.Time `json:"updated_at"`
+	UpdatedBy  string    `json:"updated_by"`
 }
 
 func (s *Server) loadAssistant(ctx context.Context) assistantSettings {
@@ -76,25 +82,27 @@ func (s *Server) loadAssistant(ctx context.Context) assistantSettings {
 
 // AssistantJSON is the assistant's configuration; the key is never returned.
 type AssistantJSON struct {
-	Backend   string `json:"backend"`
-	Model     string `json:"model"`
-	HasKey    bool   `json:"has_key"`
-	HasToken  bool   `json:"has_token"`
-	APIBase   string `json:"api_base,omitempty"`
-	Ready     bool   `json:"ready"`
-	UpdatedBy string `json:"updated_by,omitempty"`
-	UpdatedAt string `json:"updated_at,omitempty"`
+	Backend    string `json:"backend"`
+	Model      string `json:"model"`
+	HasKey     bool   `json:"has_key"`
+	HasToken   bool   `json:"has_token"`
+	APIBase    string `json:"api_base,omitempty"`
+	Ready      bool   `json:"ready"`
+	Harness    string `json:"harness,omitempty"`
+	HarnessCmd string `json:"harness_cmd,omitempty"`
+	UpdatedBy  string `json:"updated_by,omitempty"`
+	UpdatedAt  string `json:"updated_at,omitempty"`
 }
 
 func (s *Server) assistantView(ctx context.Context) AssistantJSON {
 	st := s.loadAssistant(ctx)
 	_, hasKey := s.internalSecretValue(ctx, assistantKeyName)
 	_, hasToken := s.internalSecretValue(ctx, claudeTokenName)
-	v := AssistantJSON{Backend: st.Backend, Model: st.Model, HasKey: hasKey, HasToken: hasToken, APIBase: st.APIBase}
+	v := AssistantJSON{Backend: st.Backend, Model: st.Model, HasKey: hasKey, HasToken: hasToken, APIBase: st.APIBase, Harness: st.Harness, HarnessCmd: st.HarnessCmd}
 	if v.Model == "" {
 		v.Model = defaultAssistModel
 	}
-	v.Ready = (st.Backend == assistProvider && s.checkModelRef(ctx, st.Model) == "") || st.Backend == assistCLI || st.Backend == assistCopilot || (st.Backend == assistAPI && hasKey) || (st.Backend == assistToken && hasToken) || st.Backend == assistEngine
+	v.Ready = (st.Backend == assistProvider && s.checkModelRef(ctx, st.Model) == "") || st.Backend == assistCLI || st.Backend == assistCopilot || (st.Backend == assistAPI && hasKey) || (st.Backend == assistToken && hasToken) || st.Backend == assistEngine || (st.Backend == assistACP && s.harnessCommand(st) != "")
 	if !st.UpdatedAt.IsZero() {
 		v.UpdatedBy, v.UpdatedAt = st.UpdatedBy, st.UpdatedAt.Format(time.RFC3339)
 	}
@@ -114,6 +122,8 @@ type putAssistantRequest struct {
 	// ClaudeToken is write-only too: the output of `claude setup-token`. It is stored under the
 	// name agent steps request, so one login serves both. Empty keeps the stored token.
 	ClaudeToken string `json:"claude_token"`
+	Harness     string `json:"harness"`
+	HarnessCmd  string `json:"harness_cmd"`
 }
 
 func (s *Server) handlePutAssistant(w http.ResponseWriter, r *http.Request) {
@@ -124,9 +134,9 @@ func (s *Server) handlePutAssistant(w http.ResponseWriter, r *http.Request) {
 	req.Model, req.APIBase, req.APIKey = strings.TrimSpace(req.Model), strings.TrimSpace(req.APIBase), strings.TrimSpace(req.APIKey)
 	req.ClaudeToken = strings.TrimSpace(req.ClaudeToken)
 	switch req.Backend {
-	case assistOff, assistAPI, assistCLI, assistToken, assistCopilot, assistProvider, assistEngine:
+	case assistOff, assistAPI, assistCLI, assistToken, assistCopilot, assistProvider, assistEngine, assistACP:
 	default:
-		writeError(w, http.StatusBadRequest, `backend must be "off", "api", "claude-token", "cli", "copilot", "provider" or "claude-agent"`)
+		writeError(w, http.StatusBadRequest, `backend must be "off", "api", "claude-token", "cli", "copilot", "provider", "claude-agent" or "acp-agent"`)
 		return
 	}
 	if _, _, ref := splitModelRef(req.Model); ref != (req.Backend == assistProvider) {
@@ -178,7 +188,13 @@ func (s *Server) handlePutAssistant(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "this backend needs a Claude Code token")
 		return
 	}
-	st := assistantSettings{Backend: req.Backend, Model: req.Model, APIBase: req.APIBase, UpdatedAt: time.Now().UTC(), UpdatedBy: p.Name}
+	if req.Backend == assistACP {
+		if msg := checkHarness(req.Harness, req.HarnessCmd); msg != "" {
+			writeError(w, http.StatusBadRequest, msg)
+			return
+		}
+	}
+	st := assistantSettings{Backend: req.Backend, Model: req.Model, APIBase: req.APIBase, Harness: req.Harness, HarnessCmd: strings.TrimSpace(req.HarnessCmd), UpdatedAt: time.Now().UTC(), UpdatedBy: p.Name}
 	if err := s.docs.Put(r.Context(), kindSettings, idAssistant, st); err != nil {
 		s.internalError(w, "saving the settings", err)
 		return
