@@ -11,7 +11,7 @@ import (
 // The plain-words labels for assistant steps (ui/lib/steplabel.js) and agent tools (ui/lib/tools.js)
 // are DOM-free, so they run under Node. Skipped where Node is not installed.
 const labelCases = `
-import { stepLabel, stepsSummary } from './steplabel.mjs';
+import { stepLabel, stepsSummary, permissionWording } from './steplabel.mjs';
 import { toolInfo, groupTools, plainHelp, TOOL_GROUPS, TIERS, tierTitle } from './tools.mjs';
 import { NAMES } from './names.mjs';
 
@@ -30,6 +30,22 @@ eq('bad args are ignored', stepLabel('get_run', 'not json', 'done').detail, '');
 eq('long values are cut', stepLabel('github_files', JSON.stringify({ repo: 'x'.repeat(80) }), 'done').detail.length, 40);
 eq('summary', [stepsSummary([{ status: 'done' }]), stepsSummary([{ status: 'done' }, { status: 'failed' }]), stepsSummary([{ status: 'running' }])],
   ['Looked at 1 thing', 'Looked at 2 things (1 could not finish)', 'Working']);
+
+// A permission card is about what is asked. Only an AWS change talks about AWS; a command, a file change and a web request
+// do not (they used to all say "run this on the primary AWS connection").
+for (const [x, title, mustHave, mustNot] of [
+  [{ tool: 'Bash', command: 'ls' }, 'Allow this command?', 'run this command', 'AWS'],
+  [{ tool: 'Write' }, 'Allow this file change?', 'file', 'AWS'],
+  [{ tool: 'Edit' }, 'Allow this file change?', 'file', 'AWS'],
+  [{ tool: 'WebFetch' }, 'Allow this web request?', 'web', 'AWS'],
+  [{ tool: 'call_aws', account: 'primary' }, 'Allow this change?', 'primary AWS connection', null],
+  [{ tool: 'call_aws', account: '111122223333' }, 'Allow this change?', 'AWS account 111122223333', null],
+  [{ tool: 'run_shell' }, 'Give secrets to this command?', 'secrets', 'AWS'],
+  [{ tool: 'Mystery' }, 'Allow this?', 'Mystery', 'AWS'],
+]) {
+  const w = permissionWording(x);
+  if (w.title !== title || !w.lead.includes(mustHave) || (mustNot && w.lead.includes(mustNot))) { failed++; console.error('FAIL card wording for ' + x.tool + ': ' + JSON.stringify(w)); }
+}
 
 // Every tool the server offers has a plain title and a real group (not Other).
 for (const n of NAMES) {
