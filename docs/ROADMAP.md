@@ -4,9 +4,10 @@ Each milestone has exit criteria. A milestone is done only when its criteria are
 demonstrated, not when the code exists. The order puts the trust model early because it is
 the project's differentiator.
 
-Status as of 2026-10-28: M0, M1 and M2 are built; M2c (the console) is built; M3 slices 1 and 2 are
-built. The current state, what is verified only against stand-ins, and the ordered next steps are
-in [PLAN.md](PLAN.md).
+Status as of 2026-11-22: M0, M1, M2 and M2c (the console) are built; M3 slices 1 and 2 are built and 3 to 5 are not
+started; M4 and M6 are partly built through agents, traces, evals and the sandboxed assistant (see the sections below the
+table); M5 and M7 are not started. The current state, what is verified only against stand-ins, and the ordered next steps
+are in [PLAN.md](PLAN.md).
 
 | # | Milestone | Exit criteria | Status |
 | --- | --- | --- | --- |
@@ -15,11 +16,22 @@ in [PLAN.md](PLAN.md).
 | M2 | Control plane and UI | Single-binary server with Postgres; run history and live logs; GitHub webhook trigger with commit status; a DAG run view in the UI | Built. The GitHub round trip is verified only against a stand-in; see PLAN.md |
 | M2b | Onboarding and connectors | Sign-in wizard: connect GitHub and AWS, discover ECS resources, reviewable plan, approved setup, connection tests, and a GitHub-to-AWS deploy workflow; see [design/004](design/004-onboarding-and-connectors.md) | Partly overtaken by the console (AWS read-only view, GitHub connection); to be re-scoped |
 | M2c | Web console | Sign-in and roles; pipelines edited in the browser; secrets, GitHub and AWS connected from the UI; platform and cloud overview; cloud changes through proposal and approval; an audit log; see [design/006](design/006-console.md) | Built; see its list of what was not checked. Redesign for non-specialists in progress: [design/029](design/029-console-spaces-and-home.md) and [030](design/030-service-switches.md): Home, grouped sidebar, AWS service switches, visual system, assistant panel, agent screens, five spaces with tabs, the new Home and the Connections page built. Single sign-on (OIDC, roles from groups) built: [design/031](design/031-single-sign-on.md), not yet checked against a real provider. Approval rules built: [design/032](design/032-approval-rules.md). Audit export and retention built: [design/033](design/033-audit-export.md) |
-| M3 | Trust and sandbox model | Per-step declared permissions; secrets scoped to steps; untrusted input isolated from secrets; audit log; a published threat model with tests that try to break it | In progress: slices 1 and 2 done; 3 to 5 open |
-| M4 | Security gates | Scanner orchestration; findings normalized from SARIF; policy gates with expiring waivers; SBOM and image signing | In progress: Claude Code agent steps built (note 007); Codex, Copilot, triage and cost tracking open |
+| M3 | Trust and sandbox model | Per-step declared permissions; secrets scoped to steps; untrusted input isolated from secrets; audit log; a published threat model with tests that try to break it | In progress: slices 1 and 2 done (network permission, secrets scoped to steps); slice 3 (trust of the run), 4 (audit of secret grants) and 5 (limits, capability drop) not started; slices 3 and 5 wait on decisions in [note 005](design/005-threat-model.md). Separate from step containers, the assistant's sandbox (note 052) already drops capabilities and has no Docker socket |
+| M4 | Security gates | Scanner orchestration; findings normalized from SARIF; policy gates with expiring waivers; SBOM and image signing | Mostly not started. Policy packs (Trivy, Checkov, Conftest) check every blueprint preview (note 040) and Inspector and Guard findings are read in the console; scanner steps in pipelines, SARIF, waivers, SBOM and signing are open |
 | M5 | Progressive delivery | One declaration for canary and blue-green on Kubernetes with metric-driven rollback | Not started |
-| M6 | AI agents | Governed agent steps with scoped credentials and cost tracking; failure triage; fix suggestions as pull requests, never auto-applied | In progress: Claude Code agent steps built (note 007); Codex, Copilot, triage and cost tracking open |
+| M6 | AI agents | Governed agent steps with scoped credentials and cost tracking; failure triage; fix suggestions as pull requests, never auto-applied | Largely built beyond the original wording: agent steps (note 007), agent graphs, teams, schedules, Agent Studio with six model providers, budgets and cost per agent, traces, evals with a publish gate, missions, runbooks, and the assistant as a sandboxed agent (notes 044 to 053). Open: eval attack suites and a pipeline eval step, failure triage as pull requests, Codex and Copilot as pipeline steps |
 | M7 | Migration and breadth | Importers for Jenkinsfile and GitHub Actions workflows; Bitbucket and GitLab triggers; additional cloud targets | Not started |
+
+## Assistant as a colleague and Claude Code as the agent (notes 052 and 053)
+
+Status: **built in slices (2026-11-21 and 22).** The Claude Code engine in the sandbox and native Claude tool calls were run on the Pi; the Agent Client Protocol path is tested against a stand-in agent only, and no real Copilot, Codex or Antigravity session has run. Note 052: a budgeted loop with a plan and `ask_user`,
+AWS changes after the person approves the exact command, a sandbox container for commands and code, autopilot, memory as
+files, and native tool calls for Anthropic and OpenAI-compatible providers. Note 053: Claude Code as the assistant's agent,
+with Forgeline as its tools and its permission prompt, running inside the sandbox container; any coding agent over the Agent
+Client Protocol (presets for Copilot, Codex and Antigravity); one autopilot gate for every approval point. Open: the sandbox is off by
+default (an administrator switch); validity dates, a "keep this" card and memory compaction; a host shell mode; a microVM;
+streaming partial answers; Antigravity (`agy`) needs sign-in before it opens a session. A bug to check: the card confirm endpoint marks an action failed before it executes it. See
+[note 052](design/052-assistant-that-works-like-a-colleague.md) and [note 053](design/053-claude-code-as-the-agent.md).
 
 ## Runbooks (note 051)
 

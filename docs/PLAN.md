@@ -12,9 +12,31 @@ Open this repository in Claude Code and paste:
 > pull request and stop so I can review. Update docs/PLAN.md and docs/ROADMAP.md as part of the
 > change. Tell me what you verified and what you did not.
 
-## Where things stand (updated 2026-10-28)
+## Where things stand (updated 2026-11-22)
 
-`main` contains everything below. Pull requests #1 to #4 are merged; the agent-step PR is open.
+`main` is at pull request #212. Everything listed below under "Built" is merged. The section after this one, "Since
+2026-10-28", summarises what was added after the detailed lists were last written; the detailed lists are kept as the record
+up to that date. The per-feature status is in [ROADMAP.md](ROADMAP.md) and each design note ends with what was and was not
+checked.
+
+### Since 2026-10-28 (design notes 029 to 053)
+
+- **Console:** five, then seven spaces (Home, Agents, Workflows, Delivery, Cloud, Operations, Security), Lucide icons, search
+  (Ctrl K), single sign-on, approval rules, audit export (notes 029 to 033, 048).
+- **Cloud:** blueprints on OpenTofu with preview, approval and apply of exactly that plan; more blocks; removal; templates,
+  policy packs, a generic resource block and a library; repositories linked to blocks; native image builds (notes 035, 039
+  to 043). AWS only. Real AWS checks are in `docs/testing/`.
+- **Agents:** graphs as workflows with a canvas, teams, schedules, Agent Studio with six model providers, export and import,
+  registry push, budgets, MCP servers (notes 036, 042, 044 to 047).
+- **Observability and quality:** traces with OTLP, evals with a publish gate (notes 049, 050). Slice 3 of evals is next.
+- **Operations:** runbooks over SSM with review and approval (note 051).
+- **Assistant:** sandbox, autopilot, memory as files, native tool calls, Claude Code as the agent in the sandbox, any agent over
+  ACP (notes 052, 053).
+- **Still only against stand-ins:** providers other than Anthropic, SSO with a real provider, a real GitHub webhook round trip,
+  `docker agent run`, ACP with real Copilot, Codex or Antigravity, the work VDI (proxy, Copilot, Inspector), demo-stack teardown,
+  TLS cookies behind a proxy.
+- **Not started:** M3 slices 3 to 5, M4 scanner steps and signing, M5, M7, the light helper model (note 038), audit forwarding,
+  a lead agent, other clouds.
 
 **Built and verified on real Docker**
 - M1: typed pipeline spec, YAML loader, DAG planner, Docker executor, scheduler, step caching,
@@ -304,6 +326,19 @@ Design: [docs/design/006-console.md](design/006-console.md). Pictures: [docs/con
   server processes on one database. The list is in the design note.
 
 ## Next steps (in order)
+
+> **Order as of 2026-11-22** (the older lists below stay for the record; where they disagree, this one wins):
+>
+> 1. **Evals slice 3** (note 050): attack suites per OWASP agentic risk on fixtures, and an eval step for pipelines.
+> 2. **Fix the card confirm order** in the assistant (it marks an action failed before it executes it); then the open items of
+>    notes 052 and 053 (validity dates, "keep this" card, memory compaction, partial answers, host shell mode, microVM).
+> 3. **Runbooks next** (note 051): CloudWatch alarm to SNS to signed webhook workflow. A real-instance test creates AWS resources
+>    and needs the maintainer's go-ahead.
+> 4. **M3 slices 3 to 5**: need the maintainer's decisions (same-repository pull requests untrusted; compatibility cost of
+>    capability drop). Ask once with a recommendation.
+> 5. **Workflow canvas** follow-ups (note 044): run data per node, Team and sub-workflow nodes, re-run from a node.
+> 6. **Verify against real services** where only stand-ins have run (list above), as the maintainer allows.
+> 7. Then M4 scanner steps, audit forwarding, the lead agent, cost estimates, the light helper model, other clouds.
 
 > Agentic missions (discover, propose, approve, apply, verify; ECS to IaC, CI/CD and canary as the worked example) are in `docs/design/014-agentic-missions.md`. AI use cases and how Claude can reach our infrastructure safely are in `docs/design/013-ai-use-cases.md`. Market research (2026-10-30) is in `docs/design/012-market-research.md`: pain points, enterprise gaps, integrations, a UI plan and a ranked backlog of 16 items. Pick from its ranking once the items below that need a real-service check are done or blocked.
 
