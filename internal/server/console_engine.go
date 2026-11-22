@@ -241,8 +241,10 @@ type engineSettings struct{}
 // askEngine runs the claude program for one message and returns its final answer.
 func (s *Server) askEngine(ctx context.Context, p Principal, conv, message, pageContext string, lines []helpLine, obs assistObserver) (string, error) {
 	token, haveToken := s.internalSecretValue(ctx, claudeTokenName)
-	if _, err := exec.LookPath("claude"); err != nil {
-		return "", errors.New("the claude program is not installed on the server")
+	if !s.engineInContainer(ctx) && s.engineExec == nil {
+		if _, err := exec.LookPath("claude"); err != nil {
+			return "", errors.New("the claude program is not installed on the server")
+		}
 	}
 	work, home := engineWorkspace(s.cfg.DataDir, p)
 	for _, d := range []string{work, home} {

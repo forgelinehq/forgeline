@@ -74,18 +74,6 @@ func TestTheAgentRunsInTheSandboxContainerAndReachesForgelineThroughASocket(t *t
 	m.admin.expect(200, "PUT", "/v1/integrations/assistant", map[string]any{"backend": "claude-agent", "model": ""})
 
 	st := m.streamWith(m.dev, map[string]any{"message": "deploy it"}, "unused")
-	for i := 0; i < 100 && st.body == nil; i++ {
-		m.srv.approvals.mu.Lock()
-		n := len(m.srv.approvals.pending)
-		m.srv.approvals.mu.Unlock()
-		if n > 0 {
-			break
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
-	if st.body != nil {
-		t.Fatalf("the run ended without a card: %s\nstarted: %v", st.body, started)
-	}
 	id := m.waitPending(t)
 	time.Sleep(30 * time.Millisecond)
 	m.dev.expect(200, "POST", "/v1/assistant/approvals/"+id, map[string]any{"decision": "deny"})
@@ -181,7 +169,9 @@ func TestTheContainerAgentNeedsATokenAndOnlyBuildsTheImageWhenItIsMissing(t *tes
 	short, _ := os.MkdirTemp("/tmp", "flT")
 	t.Cleanup(func() { os.RemoveAll(short) })
 	m.srv.cfg.DataDir = short
-	m.srv.engineExec = func(ctx context.Context, name string, args ...string) *exec.Cmd { return exec.CommandContext(ctx, "true") }
+	m.srv.engineExec = func(ctx context.Context, name string, args ...string) *exec.Cmd {
+		return exec.CommandContext(ctx, "true")
+	}
 	m.admin.expect(200, "PUT", "/v1/assistant/sandbox", map[string]any{"enabled": true})
 	m.admin.expect(200, "PUT", "/v1/integrations/assistant", map[string]any{"backend": "claude-agent", "model": ""})
 	// No Claude Code token: the server user's login is not carried into a container.
