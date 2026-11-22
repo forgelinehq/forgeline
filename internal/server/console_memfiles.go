@@ -52,6 +52,39 @@ type MemFile struct {
 	// Pending is a file the assistant wrote after reading data the person did not type. It is not summarised in the
 	// prompt until the person keeps it.
 	Pending bool `json:"pending,omitempty"`
+	// ValidUntil, a date (YYYY-MM-DD), is the last day the file is true. After it the file is kept, not deleted ("Dev01
+	// meant X until March"), but it is left out of the index and of search, and a view says it no longer holds.
+	ValidUntil string `json:"valid_until,omitempty"`
+}
+
+const memDate = "2006-01-02"
+
+// checkValidUntil returns a clean date, or "" for none.
+func checkValidUntil(s string) (string, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return "", nil
+	}
+	if _, err := time.Parse(memDate, s); err != nil {
+		return "", errors.New("valid_until is a date such as 2026-12-31 (the last day the file is true)")
+	}
+	return s, nil
+}
+
+// expired says whether the file's last valid day is before now's day.
+func (f MemFile) expired(now time.Time) bool {
+	return f.ValidUntil != "" && f.ValidUntil < now.UTC().Format(memDate)
+}
+
+// currentMemFiles is the files that still hold.
+func currentMemFiles(files []MemFile, now time.Time) []MemFile {
+	var out []MemFile
+	for _, f := range files {
+		if !f.expired(now) {
+			out = append(out, f)
+		}
+	}
+	return out
 }
 
 var memNameRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._ -]{0,63}$`)
@@ -223,7 +256,7 @@ func (s *Server) memIndex(ctx context.Context, p Principal) string {
 	sort.SliceStable(files, func(i, j int) bool { return files[i].Updated.After(files[j].Updated) })
 	var b strings.Builder
 	for _, f := range files {
-		if f.Pending {
+		if f.Pending || f.expired(time.Now()) {
 			continue
 		}
 		line := "- " + f.Path + ": " + fileGist(f.Content) + "\n"
@@ -253,6 +286,7 @@ type memArgs struct {
 	NewPath    string `json:"new_path"`
 	ViewRange  []int  `json:"view_range"`
 	Query      string `json:"query"`
+	ValidUntil string `json:"valid_until"`
 }
 
 func (s *Server) lookupMemory(ctx context.Context, raw json.RawMessage) (string, error) {
@@ -277,9 +311,9 @@ func (s *Server) lookupMemory(ctx context.Context, raw json.RawMessage) (string,
 	case "view":
 		return s.memView(a, vis)
 	case "search":
-		hits := bm25(vis, a.Query)
+		hits := bm25(currentMemFiles(vis, time.Now()), a.Query)
 		if len(hits) == 0 {
-			return "Nothing in memory matches that.", nil
+			return "Nothing current in memory matches that. (Files that no longer hold are kept; view " + memRoot + " to list them.)", nil
 		}
 		var b strings.Builder
 		for i, h := range hits {
@@ -289,11 +323,11 @@ func (s *Server) lookupMemory(ctx context.Context, raw json.RawMessage) (string,
 			fmt.Fprintf(&b, "%s: %s\n", h.f.Path, fileGist(h.f.Content))
 		}
 		return b.String(), nil
-	case "create", "str_replace", "insert", "delete", "rename":
+	case "create", "str_replace", "insert", "delete", "rename", "expire":
 		out, err := s.memWrite(ctx, t, a, vis)
 		return out, err
 	}
-	return "", errors.New(`command is one of view, search, create, str_replace, insert, delete, rename`)
+	return "", errors.New(`command is one of view, search, create, str_replace, insert, delete, rename, expire`)
 }
 
 func (s *Server) memView(a memArgs, vis []MemFile) (string, error) {
@@ -321,6 +355,11 @@ func (s *Server) memView(a memArgs, vis []MemFile) (string, error) {
 		if f.Pending {
 			b.WriteString("(written after reading data the person did not type; not confirmed yet)\n")
 		}
+		if f.expired(time.Now()) {
+			fmt.Fprintf(&b, "(no longer valid since %s: kept as history; do not rely on it as current)\n", f.ValidUntil)
+		} else if f.ValidUntil != "" {
+			fmt.Fprintf(&b, "(valid until %s)\n", f.ValidUntil)
+		}
 		for i := from; i <= to && i <= len(lines); i++ {
 			fmt.Fprintf(&b, "%6d\t%s\n", i, lines[i-1])
 		}
@@ -333,7 +372,11 @@ func (s *Server) memView(a memArgs, vis []MemFile) (string, error) {
 	n := 0
 	for _, f := range vis {
 		if path == memRoot || strings.HasPrefix(f.Path, prefix) {
-			fmt.Fprintf(&b, "%s (%d characters): %s\n", f.Path, len(f.Content), fileGist(f.Content))
+			note := ""
+			if f.expired(time.Now()) {
+				note = " [no longer valid since " + f.ValidUntil + "]"
+			}
+			fmt.Fprintf(&b, "%s (%d characters)%s: %s\n", f.Path, len(f.Content), note, fileGist(f.Content))
 			n++
 		}
 	}
@@ -404,8 +447,12 @@ func (s *Server) memWrite(ctx context.Context, t *memTurn, a memArgs, vis []MemF
 		if err != nil {
 			return "", err
 		}
+		until, err := checkValidUntil(a.ValidUntil)
+		if err != nil {
+			return "", err
+		}
 		now := time.Now().UTC()
-		f := MemFile{ID: memID(scope, owner, path), Scope: scope, Owner: owner, OwnerName: t.p.Name, Path: path, Content: text, Created: now}
+		f := MemFile{ID: memID(scope, owner, path), Scope: scope, Owner: owner, OwnerName: t.p.Name, Path: path, Content: text, Created: now, ValidUntil: until}
 		if err := save(f, "create"); err != nil {
 			return "", err
 		}
@@ -470,6 +517,24 @@ func (s *Server) memWrite(ctx context.Context, t *memTurn, a memArgs, vis []MemF
 			}
 		}
 		return fmt.Sprintf("Deleted %s (%d file%s).", path, len(gone), map[bool]string{true: "", false: "s"}[len(gone) == 1]), nil
+	case "expire":
+		f, ok := find(path)
+		if !ok {
+			return "", fmt.Errorf("the file %s does not exist", path)
+		}
+		until, err := checkValidUntil(a.ValidUntil)
+		if err != nil {
+			return "", err
+		}
+		if until == "" {
+			// No date given: it stopped holding yesterday, so it drops out of the index and search now.
+			until = time.Now().UTC().AddDate(0, 0, -1).Format(memDate)
+		}
+		f.ValidUntil = until
+		if err := save(f, "expire"); err != nil {
+			return "", err
+		}
+		return "The file " + path + " is marked as valid until " + until + "; it is kept as history and left out of search." + pendingNote(t.dirty && scope == "me"), nil
 	case "rename":
 		f, ok := find(path)
 		if !ok {
@@ -527,6 +592,9 @@ type memFileJSON struct {
 	Pending   bool      `json:"pending"`
 	OwnerName string    `json:"owner_name,omitempty"`
 	CanEdit   bool      `json:"can_edit"`
+	// ValidUntil is the last day the file is true; Expired says that day has passed.
+	ValidUntil string `json:"valid_until,omitempty"`
+	Expired    bool   `json:"expired"`
 }
 
 func (s *Server) handleListMemFiles(w http.ResponseWriter, r *http.Request) {
@@ -538,7 +606,7 @@ func (s *Server) handleListMemFiles(w http.ResponseWriter, r *http.Request) {
 	}
 	out := []memFileJSON{}
 	for _, f := range visibleMemFiles(all, p) {
-		out = append(out, memFileJSON{f.Path, f.Scope, f.Content, f.Updated, f.By, f.Pending, f.OwnerName, f.Scope == "me" || p.Role.AtLeast(authn.Admin)})
+		out = append(out, memFileJSON{f.Path, f.Scope, f.Content, f.Updated, f.By, f.Pending, f.OwnerName, f.Scope == "me" || p.Role.AtLeast(authn.Admin), f.ValidUntil, f.expired(time.Now())})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"files": out, "memory_on": s.memoryOn(r.Context())})
 }
@@ -549,6 +617,8 @@ func (s *Server) handlePutMemFile(w http.ResponseWriter, r *http.Request) {
 		Path    string  `json:"path"`
 		Content *string `json:"content"`
 		Keep    bool    `json:"keep"`
+		// ValidUntil sets, changes or (with an empty string) clears the last day the file is true. Omit it to leave it.
+		ValidUntil *string `json:"valid_until"`
 	}
 	if !readJSON(w, r, &q) {
 		return
@@ -596,13 +666,25 @@ func (s *Server) handlePutMemFile(w http.ResponseWriter, r *http.Request) {
 		}
 		f.Content = text
 	}
+	if q.ValidUntil != nil {
+		until, err := checkValidUntil(*q.ValidUntil)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		if !exists && q.Content == nil {
+			writeError(w, http.StatusBadRequest, "no such file")
+			return
+		}
+		f.ValidUntil = until
+	}
 	f.Pending, f.By, f.Updated = false, "person", time.Now().UTC()
 	if err := s.docs.Put(r.Context(), kindMemFile, id, f); err != nil {
 		s.internalError(w, "saving the file", err)
 		return
 	}
 	s.auditReq(r, "assistant.memory.file", path, "saved by the person ("+strconv.Itoa(len(f.Content))+" characters, "+scope+")", true)
-	writeJSON(w, http.StatusOK, memFileJSON{f.Path, f.Scope, f.Content, f.Updated, f.By, false, f.OwnerName, true})
+	writeJSON(w, http.StatusOK, memFileJSON{f.Path, f.Scope, f.Content, f.Updated, f.By, false, f.OwnerName, true, f.ValidUntil, f.expired(time.Now())})
 }
 
 func (s *Server) handleDeleteMemFile(w http.ResponseWriter, r *http.Request) {

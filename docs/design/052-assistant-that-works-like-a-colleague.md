@@ -347,9 +347,19 @@ project), stored in the document store:
   keep or delete their own, and "Forget everything about me" removes their files too. The chat shows "Saved to memory: path".
   Every write is audited (path, action, size, never the content). Agents and workflows do not get the tool.
 - The notes of slice 1 (`remember`, 300 characters) still work beside it.
-- **Not built yet:** validity dates for facts that change (the idea from Zep), a suggestion card after a task ("keep
+- **Not built yet:** a suggestion card after a task ("keep
   this?"), context clearing and compaction, moving a personal file to the organisation, embeddings. Verified with a
   scripted model only.
+
+## Built (validity dates, 2026-11-22)
+
+- A file has an optional `valid_until` (a date, the last day it is true). The `memory` tool takes it on `create` and has an
+  `expire` command (with a date, or none for "stopped holding yesterday"); the Memory page shows it and a date field in the
+  editor sets or clears it. After that day the file is **kept**, not deleted ("Dev01 meant X until March"), but it leaves
+  the prompt's index and `search`; a `view` says it no longer holds, and a folder listing marks it. The model is told to
+  expire and write a new file instead of overwriting. Checked with a scripted model: each of the index, search, the date
+  check, the expired test and the boundary (the last day still counts) was removed in turn and a test failed.
+  Not built: validity on the short notes of slice 1, and "valid from".
 
 ## Built (native tool calls, 2026-11-21)
 
