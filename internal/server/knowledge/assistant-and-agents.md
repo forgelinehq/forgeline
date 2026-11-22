@@ -258,6 +258,14 @@ refused. Every decision is in the audit log.
 {: .warning }
 **Checked against a fake AWS CLI only**, not a real account, and only for AWS. `az`, `gcloud` and `kubectl` are next.
 
+## When it says it cannot: the doctor
+
+If something stops the assistant (no shell, an AWS account that is protected, memory off, a model that cannot make real
+tool calls), it checks its own setup with the **doctor**, tells you what is holding it back and, where an administrator can
+fix it with one answer, prepares a card: **Turn on the sandbox** or **Allow changes to AWS account … with my approval**.
+Press Confirm and it carries on. Neither card widens anything beyond what the settings pages already offer: a change to
+AWS still shows you the exact command first, and IAM, Organizations, accounts, SSM and STS always ask.
+
 ## Memory files: what it learns stays
 
 Besides short notes, the assistant keeps **files**: how an environment is laid out, what a name like "Dev01" means, a

@@ -165,5 +165,6 @@ func workGuidance(ctx context.Context) string {
 	if a := autopilotFrom(ctx); a != nil && a.active() {
 		b.WriteString(autopilotGuidance(a))
 	}
+	b.WriteString(" Look after your own setup. When something you need is held back (the shell, changing AWS, memory, a model that cannot make tool calls), call " + doctorTool + ", say plainly what is holding you back and prepare the card that turns it on, so the person answers once instead of being told you cannot. When a tool fails and you then work out what works (a command form, an argument, a service quirk), save a short lesson with the " + memoryTool + " tool in /memories/me/lessons.md, and read that file when you start related work, so you do not make the same mistake again.")
 	return b.String()
 }
