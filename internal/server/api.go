@@ -157,6 +157,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("PUT /v1/ai/evals/{id}", s.requireRole(authn.Developer, s.handleSaveSuite))
 	mux.Handle("DELETE /v1/ai/evals/{id}", s.requireRole(authn.Developer, s.handleDeleteSuite))
 	mux.Handle("POST /v1/ai/evals/{id}/run", s.requireRole(authn.Developer, s.handleRunSuite))
+	mux.Handle("POST /v1/ai/evals/attack-suite", s.requireRole(authn.Developer, s.handleAttackSuite))
 	mux.Handle("POST /v1/ai/evals/case-from-trace", s.requireRole(authn.Developer, s.handleCaseFromTrace))
 	mux.Handle("GET /v1/ai/eval-runs", s.requireRole(authn.Developer, s.handleListEvalRuns))
 	mux.Handle("GET /v1/ai/eval-runs/{id}", s.requireRole(authn.Developer, s.handleGetEvalRun))

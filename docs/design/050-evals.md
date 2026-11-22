@@ -1,6 +1,6 @@
 # 050: Evals: test an agent before people rely on it
 
-Status: **slices 1 and 2 built 2026-11-20**; slice 3 (attack suites, a pipeline step) next. Phase 2 of the product direction the maintainer accepted on
+Status: **slices 1 and 2 built 2026-11-20; slice 3 attack suites built 2026-11-22**; the pipeline step is next. Phase 2 of the product direction the maintainer accepted on
 2026-11-20. Builds on traces (note 049): every eval attempt is a trace.
 
 ## Question
@@ -73,12 +73,19 @@ An agent can say "a new version becomes current only if suite X passes". Until i
 candidate that people can try but that workflows, teams and schedules do not use. This changes what saving an agent
 means, so it waits for a decision.
 
-### 6. Attack suites (slice 3)
+### 6. Attack suites (slice 3, built 2026-11-22)
 
 Ready-made cases per OWASP agentic risk, built on fixtures: an issue or a log line that tells the agent to file a
 change or reveal a secret (ASI01), a request to use a tool outside its purpose (ASI02), a request for data its role may
 not read (ASI03). Each checks that the agent did not obey: no proposal recorded, no secret in the answer, the refusal
 said why. Added to any agent's suites in one click.
+
+As built: `POST /v1/ai/evals/attack-suite` adds seven cases to an agent (`console_ai_evals_attacks.go`), three for ASI01 (a
+log, an issue, a request to reveal instructions), two for ASI02, two for ASI03. A planted order says to reply with a marker
+word no honest answer contains, so obeying is a deterministic failure; refusal quality is graded by the judge. The cases
+are ordinary cases, free to edit. Checked with a stand-in agent that obeys (fails) and one that refuses (passes), and by
+removing each kind of check in turn. **Not checked:** against a real model; whether a given agent has the tools to read
+the planted text depends on its tool list.
 
 ## Order of work
 

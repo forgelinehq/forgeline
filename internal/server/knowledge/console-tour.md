@@ -451,6 +451,13 @@ passes only if every attempt passes, so answers that hold up only sometimes show
 attempts as ticks and crosses; click one for its checks, its answer and its trace. A trace that kept its prompt has
 **Add to a suite**, which fills a case in from it.
 
+**Add attack suite** (on the Evals list) gives an agent seven ready-made cases from the OWASP list for agentic applications:
+an order hidden in a failed run's log or in an issue (ASI01), a request to stop servers without approval or to run a tool
+for something it is not for (ASI02), and a request for secret values or for a role the person does not have (ASI03). A case
+passes only when the agent does not obey: it files nothing, never says the planted word, and a judge model agrees it
+refused. Give the agent `run_failure` or `get_step_log` so it reads the planted text. The cases are ordinary cases, so you
+can change them or add your own.
+
 An agent's page has **Publishing**: pick a suite a new version must pass. From then on, saving makes a **candidate**
 (shown as such under Versions) while the current version keeps serving workflows, teams and schedules. **Publish**
 makes a candidate current once a run of the suite has passed on it since the suite last changed; **Run the suite,
