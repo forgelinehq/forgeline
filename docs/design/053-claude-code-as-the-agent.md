@@ -44,7 +44,7 @@ Not built, in this order:
    container (a mounted socket and a small bridge), and the token passed in the environment.
 2. **Partial messages**: the answer arrives whole; stream it as it is written.
 3. **Autopilot for the engine**: an envelope that approves its Bash and Edit inside the workspace, never outside it.
-4. **Other engines**: Codex CLI and Gemini CLI through the same two seams (tools over MCP, permission prompt), and the Copilot CLI.
+4. **Other engines**: Codex CLI, the Copilot CLI and **Google's Antigravity CLI (`agy`)** through the same two seams (tools over MCP, permission prompt). Google replaced Gemini CLI with Antigravity CLI on 2026-06-18 for unpaid-tier and Google One users, so Antigravity is the Google engine to build, not Gemini CLI. The maintainer has `agy` set up with a Gemini Pro plan. To check before building: whether `agy` runs headless, takes MCP servers, and has a permission-prompt hook like Claude Code's `--permission-prompt-tool`; if it has no prompt hook, its tools can only be limited to the sandbox container, not asked one by one.
 5. **Memory**: Claude Code's own memory and CLAUDE.md in the person's home, next to Forgeline's memory files.
 
 ## Security notes

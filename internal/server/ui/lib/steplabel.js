@@ -92,3 +92,19 @@ export function stepsSummary(steps) {
   const head = running ? 'Working' : 'Looked at ' + n + ' thing' + (n === 1 ? '' : 's');
   return failed ? head + ' (' + failed + ' could not finish)' : head;
 }
+
+const FILE_TOOLS = ['Write', 'Edit', 'MultiEdit', 'NotebookEdit'];
+
+/**
+ * What a permission card says. It depends on what is being asked: a command for the agent's shell, a file change, a web
+ * request, an AWS change, or secrets for a command in the sandbox. It is only about AWS when it is an AWS change.
+ */
+export function permissionWording(x) {
+  const t = x.tool || '';
+  if (t === 'run_shell') return { title: 'Give secrets to this command?', lead: 'The assistant wants to run this in its sandbox, with secrets from your vault. Nothing has run yet.' };
+  if (t === 'Bash') return { title: 'Allow this command?', lead: 'The agent wants to run this command. Nothing has run yet.' };
+  if (FILE_TOOLS.includes(t)) return { title: 'Allow this file change?', lead: 'The agent wants to change a file in its workspace. Nothing has changed yet.' };
+  if (t === 'WebFetch' || t === 'WebSearch') return { title: 'Allow this web request?', lead: 'The agent wants to reach the web. Nothing has been sent yet.' };
+  if (t === 'call_aws' || x.account) return { title: 'Allow this change?', lead: 'The assistant wants to run this on ' + (x.account === 'primary' ? 'the primary AWS connection' : 'AWS account ' + x.account) + ', as you. Nothing has changed yet.' };
+  return { title: 'Allow this?', lead: 'The agent wants to use its ' + (t || 'tool') + '. Nothing has run yet.' };
+}

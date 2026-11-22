@@ -92,6 +92,11 @@ section in the pull request that makes the change; a release moves it under its 
 - **Workflows refuse agents with tools their run cannot use.** Saving a workflow whose agent has a tool its run-as role
   may never use (such as `call_aws`, for administrators only, in a workflow running as a viewer) now says so, instead of
   every run quietly going without it.
+- **Permission cards say what they are about.** A card for the agent's command now says "Allow this command?", one for a file
+  "Allow this file change?", one for the web "Allow this web request?". Before, every card that was not a secrets card said it
+  would run on your AWS account. Only an AWS change talks about AWS.
+- **Slim scrollbars.** All scrollbars in the console are now thin with no track, and the assistant panel no longer scrolls
+  sideways.
 - **Autopilot has no limit, and works while the assistant waits.** It runs until you stop it; a time or step limit is optional
   ("Set a limit"). It can be switched on at any moment, including while the assistant is waiting for an answer, and it then
   answers what is waiting and runs what comes next. With Claude Code as the agent and the sandbox on, it covers the agent's own

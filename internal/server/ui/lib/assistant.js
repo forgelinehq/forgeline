@@ -7,7 +7,7 @@ import { pageContext as contextOf } from './pagectx.js';
 import { renderReply } from './mdview.js';
 import { newRun, applyEvent, progressLabel } from './runstate.js';
 import { dockWidth, wideDockWidth, floatRect, readPrefs } from './panelgeom.js';
-import { stepLabel, stepsSummary } from './steplabel.js';
+import { stepLabel, stepsSummary, permissionWording } from './steplabel.js';
 
 // What the card's detail holds, by kind of action (note 028).
 const DETAIL_LABEL = { save_skill: 'Show the steps', save_agent: 'Show the instructions', save_workflow: 'Show the stages' };
@@ -33,7 +33,7 @@ const PREF_KEY = 'forgeline-assistant';
 const loadPrefs = () => { try { return readPrefs(localStorage.getItem(PREF_KEY)); } catch { return readPrefs(''); } };
 const savePrefs = (p) => { try { localStorage.setItem(PREF_KEY, JSON.stringify(p)); } catch { /* storage may be blocked */ } };
 
-const DOCK_CLASS = 'fixed bottom-0 right-0 top-0 z-40 flex w-full flex-col border-l border-slate-200 bg-white shadow-xl lg:top-14 lg:w-[var(--assistant-w)] dark:border-slate-700 dark:bg-slate-900';
+const DOCK_CLASS = 'fixed bottom-0 right-0 top-0 z-40 flex w-full flex-col overflow-hidden border-l border-slate-200 bg-white shadow-xl lg:top-14 lg:w-[var(--assistant-w)] dark:border-slate-700 dark:bg-slate-900';
 const FLOAT_CLASS = 'fixed z-40 flex resize flex-col overflow-hidden rounded-xl border border-slate-300 bg-white shadow-2xl dark:border-slate-600 dark:bg-slate-900';
 
 let opener = null; // set by the button that owns the panel
@@ -214,10 +214,8 @@ function build(close, role) {
       catch (err) { toast(err.message, 'error'); box.querySelectorAll('button').forEach(b => { b.disabled = false; }); }
     };
     return h('div', { class: amber + ' flex-col', 'data-permission-id': x.id, role: 'group', 'aria-label': 'Allow this change?' },
-      h('div', { class: 'flex items-center gap-2 font-semibold' }, icon('shield', 'size-4 shrink-0'), x.tool === 'run_shell' ? 'Give secrets to this command?' : 'Allow this change?'),
-      x.tool === 'run_shell'
-        ? h('div', { class: 'text-sm' }, 'The assistant wants to run this in its sandbox, ', h('b', {}, 'with secrets from your vault'), '. Nothing has run yet.')
-        : h('div', { class: 'text-sm' }, 'The assistant wants to run this on ', h('b', {}, x.account === 'primary' ? 'the primary AWS connection' : 'AWS account ' + x.account), ', as you. Nothing has changed yet.'),
+      h('div', { class: 'flex items-center gap-2 font-semibold' }, icon('shield', 'size-4 shrink-0'), permissionWording(x).title),
+      h('div', { class: 'text-sm' }, permissionWording(x).lead),
       h('pre', { class: 'max-h-32 w-full overflow-auto whitespace-pre-wrap break-words rounded-lg bg-white/70 p-2 font-mono text-[11px] dark:bg-slate-900/50', 'data-permission-command': '' }, x.command),
       x.why ? h('div', { class: 'muted text-xs' }, x.why + '.') : null,
       h('div', { class: 'flex flex-wrap gap-2' },
