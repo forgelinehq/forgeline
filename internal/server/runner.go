@@ -106,6 +106,8 @@ func (s *Server) runGraph(runCtx context.Context, run store.Run, g *pipeline.Gra
 		Workflow:       s.workflowStep(run),
 		WorkflowDenied: workflowDeniedFor(run),
 		Build:          s.buildStep(run),
+		Eval:           s.evalStep(run),
+		EvalDenied:     evalDeniedFor(run),
 		Logs: func(stepID string) io.Writer {
 			return &logWriter{log: s.log, store: s.cfg.Store, ctx: bg, runID: run.ID, stepID: stepID, limit: s.cfg.MaxLogBytes}
 		},

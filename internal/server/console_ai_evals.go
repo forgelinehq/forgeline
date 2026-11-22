@@ -475,6 +475,22 @@ func (s *Server) handleRunSuite(w http.ResponseWriter, r *http.Request) {
 // startSuiteRun saves a new run and runs it in the background. publish, when not 0, is the version to make current
 // if every case passes.
 func (s *Server) startSuiteRun(ctx context.Context, p Principal, x EvalSuite, a AIAgent, v AgentVersion, model string, publish int) (EvalRun, int, string) {
+	run, status, msg := s.beginSuiteRun(ctx, p, x, a, v, model, publish)
+	if msg != "" {
+		return EvalRun{}, status, msg
+	}
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		defer s.evals.done(x.ID)
+		s.runSuite(context.WithoutCancel(ctx), p, x, a, v, &run)
+	}()
+	return run, 0, ""
+}
+
+// beginSuiteRun claims the suite, saves a new run and audits it. The caller must run it with runSuite and then release
+// the suite with s.evals.done.
+func (s *Server) beginSuiteRun(ctx context.Context, p Principal, x EvalSuite, a AIAgent, v AgentVersion, model string, publish int) (EvalRun, int, string) {
 	if !s.evals.start(x.ID) {
 		return EvalRun{}, http.StatusConflict, errEvalBusy.Error()
 	}
@@ -486,12 +502,6 @@ func (s *Server) startSuiteRun(ctx context.Context, p Principal, x EvalSuite, a 
 	}
 	s.audit(ctx, p, "", "ai.eval.run", "eval/"+x.ID, fmt.Sprintf("v%d of %s%s, %d cases × %d%s", v.N, a.ID, map[bool]string{true: " on " + model, false: ""}[model != ""], len(x.Cases), x.Attempts,
 		map[bool]string{true: ", publishing it if every case passes", false: ""}[publish != 0]), true)
-	s.wg.Add(1)
-	go func() {
-		defer s.wg.Done()
-		defer s.evals.done(x.ID)
-		s.runSuite(context.WithoutCancel(ctx), p, x, a, v, &run)
-	}()
 	return run, 0, ""
 }
 

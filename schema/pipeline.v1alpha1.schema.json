@@ -85,6 +85,29 @@
       },
       "type": "object"
     },
+    "Eval": {
+      "additionalProperties": false,
+      "properties": {
+        "model": {
+          "description": "Test on this model instead of the version's own, as provider/model, to compare models on the same cases.",
+          "type": "string"
+        },
+        "suite": {
+          "description": "The suite's id, as shown in Agents › Evals, such as triage-regression.",
+          "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+          "type": "string"
+        },
+        "version": {
+          "description": "The agent version to test. Empty means its current version.",
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "suite"
+      ],
+      "type": "object"
+    },
     "Permissions": {
       "additionalProperties": false,
       "properties": {
@@ -144,6 +167,10 @@
           },
           "description": "Environment variables for the step. Names must be valid identifiers.",
           "type": "object"
+        },
+        "eval": {
+          "$ref": "#/$defs/Eval",
+          "description": "Run an agent's eval suite and fail unless every case passes, instead of running a container (design note 050). Only the Forgeline server can do this (it holds the agents and the model); the step has no image, script, environment or permissions. Set this or run or command or agent or workflow or build."
         },
         "id": {
           "description": "Unique step identifier: lowercase letters, digits and hyphens.",

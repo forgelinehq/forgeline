@@ -43,11 +43,10 @@ alarm workflow (SNS to a signed webhook), then more AI SRE checks. Starts phase 
 
 ## Evals (note 050)
 
-Status: **slices 1 and 2 built (2026-11-20); attack suites built (2026-11-22).** Suites of cases per agent with fixtures and checks (text, JSON, fields,
+Status: **slices 1 and 2 built (2026-11-20); attack suites and the `eval` pipeline step built (2026-11-22).** Suites of cases per agent with fixtures and checks (text, JSON, fields,
 tools called or never called, budgets, an LLM judge), runs of one to five attempts per case (pass only if all pass)
 on any version and model, with nothing changed, and cases from traces; and a gate: a new version is a candidate until
-its suite passes on it and it is published. Attack suites: seven ready-made cases from the OWASP agentic list, added to an agent in one click, checked with stand-in agents only. Next: an eval step for
-pipelines. Phase 2 of the product direction. See [note 050](design/050-evals.md).
+its suite passes on it and it is published. Attack suites: seven ready-made cases from the OWASP agentic list, added to an agent in one click, checked with stand-in agents only. An `eval` pipeline step runs a suite and fails the step unless every case passes (2026-11-22). Next: slice 4, none designed. Phase 2 of the product direction. See [note 050](design/050-evals.md).
 
 ## Traces (note 049)
 

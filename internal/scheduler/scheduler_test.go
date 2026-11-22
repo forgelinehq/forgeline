@@ -457,3 +457,35 @@ func TestBuildStepGoesToTheBuilderNeverTheExecutor(t *testing.T) {
 		t.Errorf("timeout: %+v", res)
 	}
 }
+
+func TestEvalStepGoesToTheServerNeverTheExecutor(t *testing.T) {
+	es := pipeline.Step{ID: "gate", Eval: &pipeline.Eval{Suite: "triage-regression"}, Timeout: "50ms"}
+	f := &executor.Fake{}
+	r := Run(context.Background(), plan(t, es, st("after", "gate")), f, Options{})
+	if s := statuses(r); s["gate"] != StatusFailed || s["after"] != StatusSkipped || len(f.Calls()) != 0 || !strings.Contains(r.Steps[0].Err.Error(), "only on a Forgeline server") {
+		t.Fatalf("without a server: %v, %v", s, r.Steps[0].Err)
+	}
+	called := false
+	hook := func(context.Context, *pipeline.Step, io.Writer) error { called = true; return nil }
+	r = Run(context.Background(), plan(t, es), f, Options{EvalDenied: "runs started by GitHub may not run evals", Eval: hook})
+	if called || len(f.Calls()) != 0 || statuses(r)["gate"] != StatusFailed || !strings.Contains(r.Steps[0].Err.Error(), "may not run evals") {
+		t.Fatalf("denied: called=%v report=%+v", called, r.Steps)
+	}
+	var got *pipeline.Step
+	r = Run(context.Background(), plan(t, es), f, Options{Eval: func(_ context.Context, s *pipeline.Step, w io.Writer) error {
+		got = s
+		io.WriteString(w, "3 of 3 cases passed")
+		return nil
+	}})
+	if got == nil || got.Eval.Suite != "triage-regression" || statuses(r)["gate"] != StatusSucceeded || len(f.Calls()) != 0 {
+		t.Fatalf("with a server: got=%v report=%+v calls=%v", got, r.Steps, f.Calls())
+	}
+	failing := func(context.Context, *pipeline.Step, io.Writer) error { return errors.New("1 of 3 cases failed") }
+	if res := Run(context.Background(), plan(t, es), f, Options{Eval: failing}).Steps[0]; res.Status != StatusFailed || res.Err.Error() != "1 of 3 cases failed" {
+		t.Errorf("failure: %+v", res)
+	}
+	wait := func(ctx context.Context, _ *pipeline.Step, _ io.Writer) error { <-ctx.Done(); return ctx.Err() }
+	if res := Run(context.Background(), plan(t, es), f, Options{Eval: wait}).Steps[0]; res.Status != StatusFailed || !strings.Contains(res.Err.Error(), "timed out") {
+		t.Errorf("timeout: %+v", res)
+	}
+}

@@ -39,7 +39,7 @@ steps:
 | --- | --- |
 | `id` | Unique name inside the pipeline. |
 | `image` | Container image. Required. |
-| `run` / `command` / `agent` / `workflow` / `build` | **Exactly one.** `run` is a shell script, `command` an argument list with no shell, `agent` a coding agent, `workflow` starts a [GitHub Actions workflow]({{ '/guides/github-actions/' | relative_url }}) and waits for it, `build` builds a container image (see below). `workflow` and `build` steps have no image or permissions. |
+| `run` / `command` / `agent` / `workflow` / `build` / `eval` | **Exactly one.** `run` is a shell script, `command` an argument list with no shell, `agent` a coding agent, `workflow` starts a [GitHub Actions workflow]({{ '/guides/github-actions/' | relative_url }}) and waits for it, `build` builds a container image (see below), `eval` runs an agent's test suite (see below). `workflow`, `build` and `eval` steps have no image or permissions. |
 | `needs` | Steps that must succeed first. Steps with no dependency between them run in parallel. |
 | `inputs` | Files the step reads. If none changed since the last good run, the step is served from the cache (`--no-cache` turns that off). |
 | `env`, `workdir`, `timeout` | Environment, working directory, and a time limit such as `10m`. |
@@ -89,6 +89,29 @@ not deploy: a deploy still goes through an approval. `forgeline run` builds and 
 
 On a machine with an ARM processor (a Raspberry Pi, say), building for `linux/amd64` needs QEMU emulation installed in
 Docker (`docker run --privileged --rm tonistiigi/binfmt --install amd64`, run once by whoever manages that machine).
+
+## Test an agent
+
+An `eval` step runs a suite from **Agents › Evals** and fails unless every case passes, so the pipeline that ships a change
+to an agent can test it first:
+
+```yaml
+  - id: gate
+    eval:
+      suite: triage-regression   # the suite's id, shown in its address in Agents › Evals
+      version: 3                 # optional: the agent version to test; empty means its current version
+      model: openai/gpt-5        # optional: test on another model as provider/model
+  - id: deploy
+    needs: [gate]
+    image: alpine:3.20
+    run: ./deploy.sh
+```
+
+The step runs on the server, as the run, with the same safety as a run started in the console: nothing the agent does is
+carried out, and every attempt is a trace that counts against the agent's budget. The log lists each case as `pass` or
+`FAIL`; a failure names the failing cases and stops every step that needs the gate. **A run started by GitHub cannot run
+an eval**, because it spends model tokens and its pipeline came from a push or a pull request. `forgeline run` on a laptop
+cannot either: the agents live on the server.
 
 ## Secrets
 Add one under **Secrets** (name in capitals, value of at least 8 characters). Request it with

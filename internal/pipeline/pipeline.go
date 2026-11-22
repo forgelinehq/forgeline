@@ -33,6 +33,7 @@ type Step struct {
 	Agent    *Agent            `json:"agent,omitempty" doc:"Run a coding agent with a prompt instead of a script. The image must contain the agent's command line. Set this or run or command."`
 	Workflow *Workflow         `json:"workflow,omitempty" doc:"Start a GitHub Actions workflow and wait for it, instead of running a container. Only the Forgeline server can do this (it holds the GitHub credentials); the step has no image, script, environment or permissions. Set this or run or command or agent."`
 	Build    *Build            `json:"build,omitempty" doc:"Build a container image from the workspace with BuildKit, and optionally push it, instead of running a container (design note 043). The step has no image, script, environment or permissions. Set this or run or command or agent or workflow."`
+	Eval     *Eval             `json:"eval,omitempty" doc:"Run an agent's eval suite and fail unless every case passes, instead of running a container (design note 050). Only the Forgeline server can do this (it holds the agents and the model); the step has no image, script, environment or permissions. Set this or run or command or agent or workflow or build."`
 	Needs    []string          `json:"needs,omitempty" doc:"IDs of steps that must succeed before this one starts." itemPattern:"^[a-z][a-z0-9-]{0,62}$"`
 	Env      map[string]string `json:"env,omitempty" doc:"Environment variables for the step. Names must be valid identifiers."`
 	WorkDir  string            `json:"workdir,omitempty" doc:"Absolute working directory inside the container." pattern:"^/"`
@@ -69,6 +70,15 @@ type Build struct {
 	Network    string            `json:"network,omitempty" doc:"Network for the Dockerfile's RUN lines: egress (the default) or none." enum:"none,egress"`
 	Push       string            `json:"push,omitempty" doc:"Repository to push to, such as 123456789012.dkr.ecr.ap-south-1.amazonaws.com/web. The server pushes only when a push rule allows this repository for the run's source repository and branch."`
 	Tags       []string          `json:"tags,omitempty" doc:"Tags to push. Empty means the first 12 characters of the commit. At most 5." maxItems:"5" itemPattern:"^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$"`
+}
+
+// Eval runs a suite of cases for one agent (design note 050) as a step, so a change to an agent can be tested in the
+// same pipeline that ships it. The suite lives in the console (Agents › Evals). The run is as safe as one started
+// there: nothing it does changes anything. Runs started by GitHub cannot use it, because it spends model tokens.
+type Eval struct {
+	Suite   string `json:"suite" doc:"The suite's id, as shown in Agents › Evals, such as triage-regression." pattern:"^[a-z0-9]+(-[a-z0-9]+)*$"`
+	Version int    `json:"version,omitempty" doc:"The agent version to test. Empty means its current version." minimum:"1"`
+	Model   string `json:"model,omitempty" doc:"Test on this model instead of the version's own, as provider/model, to compare models on the same cases."`
 }
 
 // Workflow describes a GitHub Actions workflow started by a step (design note 011, slice 2). The

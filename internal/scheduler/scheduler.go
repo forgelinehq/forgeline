@@ -82,6 +82,11 @@ type Options struct {
 	// Build runs a build step (design note 043): it builds an image from the workspace and, where the caller allows
 	// it, pushes it. Nil means this runner cannot build, and such steps fail with a message saying so.
 	Build func(ctx context.Context, s *pipeline.Step, logs io.Writer) error
+	// Eval runs an eval step (design note 050): it runs an agent's suite and returns an error unless every case
+	// passes. Only a Forgeline server can; nil means this runner cannot.
+	Eval func(ctx context.Context, s *pipeline.Step, logs io.Writer) error
+	// EvalDenied, if not empty, refuses every eval step and says why, like WorkflowDenied.
+	EvalDenied string
 	// OnStepStart, if set, is called just before a step is handed to the executor.
 	OnStepStart func(stepID string)
 	// OnStepDone, if set, is called once for every step with its final result, including
@@ -164,6 +169,15 @@ func runStep(ctx context.Context, s *pipeline.Step, ex executor.Executor, opts O
 		}
 		return runServerStep(ctx, s, opts, opts.Build)
 	}
+	if s.Eval != nil {
+		switch {
+		case opts.EvalDenied != "":
+			return StepResult{ID: s.ID, Status: StatusFailed, Err: fmt.Errorf("eval step refused: %s", opts.EvalDenied)}
+		case opts.Eval == nil:
+			return StepResult{ID: s.ID, Status: StatusFailed, Err: errors.New("eval steps run only on a Forgeline server with its agents and a model, not here")}
+		}
+		return runServerStep(ctx, s, opts, opts.Eval)
+	}
 	run, err := toStepRun(s, opts.Workspace)
 	if err != nil {
 		return StepResult{ID: s.ID, Status: StatusFailed, Err: err}
@@ -216,7 +230,7 @@ func runWorkflowStep(ctx context.Context, s *pipeline.Step, opts Options) StepRe
 	return runServerStep(ctx, s, opts, opts.Workflow)
 }
 
-// runServerStep runs a step whose work is a function of the runner (a workflow or a build), not a container the
+// runServerStep runs a step whose work is a function of the runner (a workflow, a build or an eval), not a container the
 // pipeline chose, with the step's timeout, its log and the masking of secret values.
 func runServerStep(ctx context.Context, s *pipeline.Step, opts Options, work func(context.Context, *pipeline.Step, io.Writer) error) StepResult {
 	fail := func(err error) StepResult { return StepResult{ID: s.ID, Status: StatusFailed, Err: err} }
