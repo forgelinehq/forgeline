@@ -42,7 +42,7 @@ export function applyEvent(run, ev) {
         run.autopilot = { state: v.state === 'off' ? 'off' : 'on', used: Number(v.used) || 0, steps: Number(v.steps) || 0, untilMs: Number(v.untilMs) || 0 };
         if (v.action) run.autoActions.push({ command: String(v.action), account: String(v.account || '') });
       } else if (ev.name === 'forgeline.proposal' && v.id && !run.proposals.includes(v.id)) run.proposals.push(String(v.id));
-      else if (ev.name === 'forgeline.action' && v.id && !run.actions.some(a => a.id === v.id)) run.actions.push({ id: String(v.id), kind: String(v.kind || ''), title: String(v.title || ''), effects: Array.isArray(v.effects) ? v.effects.map(String) : [], detail: String(v.detail || ''), pipeline: String(v.pipeline || '') });
+      else if (ev.name === 'forgeline.action' && v.id && !run.actions.some(a => a.id === v.id)) run.actions.push({ id: String(v.id), kind: String(v.kind || ''), title: String(v.title || ''), effects: Array.isArray(v.effects) ? v.effects.map(String) : [], detail: String(v.detail || ''), pipeline: String(v.pipeline || ''), done: !!v.done, result: String(v.result || ''), link: String(v.link || '') });
       else if (ev.name === 'forgeline.memory' && v.id && !run.memories.some(m => m.id === v.id)) run.memories.push({ id: String(v.id), text: String(v.text || ''), about: v.about === 'system' ? 'system' : 'me', status: v.status === 'pending' ? 'pending' : 'active' });
       else if (ev.name === 'forgeline.environment' && v.id && !run.environments.includes(v.id)) run.environments.push(String(v.id));
       break;

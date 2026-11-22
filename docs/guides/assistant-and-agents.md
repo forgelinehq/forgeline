@@ -273,6 +273,19 @@ through a socket, not the network. The first message builds the image, which tak
 token under Assistant model. With the sandbox off it runs on the server itself, as the server's user, so approve each command as
 you would in a terminal.
 
+## Changing what exists
+
+The assistant (and Claude Code or an ACP agent working through it) can **update what you already have**, not only create new
+things: it calls the console's own API as you with the `forgeline_api` tool. It can read anything, and change agents (a new
+version, archive, restore), skills, teams, workflows, pipelines and memory. The same checks as the console apply (your role, the
+validation, the audit entry), and **a change asks you first** with the exact request, unless autopilot is on. It cannot touch
+users, API tokens, secrets, permission and sandbox settings, sign-in, approvals, or start runs: those stay in the console.
+
+**Autopilot** is one rule for all of this. When it is on it approves: AWS changes the permission check left as a plain ask, the
+agent's own commands and file changes inside the sandbox, changes made through the API above, and cards that save a pipeline,
+skill, agent or workflow (they show as done). It never approves running a pipeline, turning the sandbox or AWS changes on, a
+secret for a command, a protected account, a rule that denies or asks, or IAM, Organizations, accounts, SSM and STS.
+
 ## Other agents: Antigravity, Copilot, Codex
 
 Under Settings › Assistant model, choose **An agent over ACP**, then the agent: **Antigravity CLI (agy)**, **GitHub Copilot CLI**,

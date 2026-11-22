@@ -515,10 +515,7 @@ func (s *Server) acpPermission(run *engineRun, params json.RawMessage) any {
 	if c, ok := in.ToolCall.RawInput["command"].(string); ok && c != "" {
 		desc = c
 	}
-	if ap := liveAutopilot(run.ctx, run.p); ap != nil {
-		ap.spend()
-		_ = s.audit(run.ctx, run.p, "", "assistant.engine.tool", tool, "autopilot, no card: "+truncate(desc, 300), true)
-		ap.announce(truncate(desc, 300), "")
+	if s.autopilotApproves(run.ctx, run.p, gateRequest{Kind: gateAgentTool, Tool: tool, Detail: desc}) {
 		return pick("allow_once", "allow_always")
 	}
 	ask := permAskerFrom(run.ctx)

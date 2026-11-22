@@ -188,14 +188,7 @@ func (s *Server) enginePermission(run *engineRun, raw json.RawMessage) string {
 	if json.Unmarshal(raw, &in) != nil || in.ToolName == "" {
 		return deny("the request could not be read")
 	}
-	// Autopilot, switched on at any time in this conversation: inside the sandbox container the agent's own tools run without a
-	// card, and each one is shown and audited. On the server itself autopilot does not cover them: a command there runs as the
-	// server's user, so the person still answers each.
-	if ap := liveAutopilot(run.ctx, run.p); ap != nil && s.engineInContainer(run.ctx) {
-		desc := describeEngineTool(in.ToolName, in.Input)
-		ap.spend()
-		_ = s.audit(run.ctx, run.p, "", "assistant.engine.tool", in.ToolName, "autopilot, no card: "+truncate(desc, 300), true)
-		ap.announce(truncate(desc, 300), "")
+	if s.autopilotApproves(run.ctx, run.p, gateRequest{Kind: gateAgentTool, Tool: in.ToolName, Detail: describeEngineTool(in.ToolName, in.Input)}) {
 		b, _ := json.Marshal(map[string]any{"behavior": "allow", "updatedInput": in.Input})
 		return string(b)
 	}
@@ -247,7 +240,7 @@ const engineSystem = `You are the assistant built into Forgeline, a self-hostabl
 How Forgeline works for you:
 - Forgeline's tools run as the signed-in person with their role, and every use is audited. A change to AWS shows the person the exact command and waits for their answer. Do not try to get around that.
 - Your own Bash, Edit and Write ask the person first; say what you are about to do and why. Your workspace is the current directory and it is kept between conversations.
-- To change Forgeline itself (save a pipeline, skill, agent or workflow, turn on a capability) use prepare_action: it shows a card and nothing happens until the person confirms. The answer comes back as their next message; never ask them to tell you.
+- To change Forgeline itself use forgeline_api: it calls the console's own API as the person (read anything; update, version, archive or delete agents, skills, teams, workflows, pipelines and memory), so update what exists instead of creating a copy. It asks first, or runs at once under autopilot. Use prepare_action for a new pipeline, skill, agent or workflow when you want the person to see the exact file on a card, and to turn on a capability. The answer comes back as their next message; never ask them to tell you.
 - When something you need is held back (no shell, an AWS account that is protected, memory off), call the doctor tool, say plainly what is holding you back and prepare the card that turns it on.
 - To ask the person something use the ask_user tool, not AskUserQuestion. Keep a plan with update_plan for anything with several steps.
 - Keep what you learn: use the memory tool to save short facts and lessons (how an environment is laid out, a command that worked, what failed and why), and look there first when you start related work.

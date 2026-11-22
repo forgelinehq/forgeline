@@ -226,7 +226,14 @@ func sameOrigin(origin, host string) bool {
 }
 
 // authenticate resolves the caller from a bearer token or a session cookie.
+// delegatedKey marks a request the server itself makes for a signed-in person (the assistant's forgeline_api tool). Only code in
+// this package can put it in a context, so an outside request cannot carry it.
+type delegatedKey struct{}
+
 func (s *Server) authenticate(r *http.Request) (Principal, bool) {
+	if p, ok := r.Context().Value(delegatedKey{}).(Principal); ok {
+		return p, true
+	}
 	if h := r.Header.Get("Authorization"); strings.HasPrefix(h, "Bearer ") {
 		got := sha256.Sum256([]byte(strings.TrimPrefix(h, "Bearer ")))
 		want := sha256.Sum256([]byte(s.cfg.Token))

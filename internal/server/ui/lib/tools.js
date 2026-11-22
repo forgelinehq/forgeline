@@ -59,6 +59,7 @@ const TOOLS = {
   ask_agent: ['work', 'Hand a task to another agent'],
   remember: ['work', 'Remember a note'],
   memory: ['work', 'Keep and read memory files'],
+  forgeline_api: ['work', 'Change things in Forgeline'],
   doctor: ['work', 'Check its own setup'],
   aws_search_documentation: ['docs', 'Search AWS documentation'],
   aws_read_documentation: ['docs', 'Read an AWS documentation page'],

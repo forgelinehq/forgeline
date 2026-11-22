@@ -113,24 +113,26 @@ type Server struct {
 	awsInv      swrCache[AWSInventoryJSON]
 	awsLinks    swrCache[LinksJSON]
 	awsAlarms   swrCache[AlarmsJSON]
-	bp          bpBusy                                             // one blueprint preview or apply at a time
-	tofuBin     tofuState                                          // the OpenTofu binary, once found
-	tofuRun     tofuRunner                                         // tests replace OpenTofu
-	packRun     packRunner                                         // tests replace the policy pack containers
-	schemas     schemaCache                                        // the AWS provider's resource schemas, once made
-	schemaRun   schemaRunner                                       // tests replace `tofu providers schema -json`
-	usage       usageState                                         // serialises updates to the AI use ledger
-	calls       callLog                                            // serialises updates to the model call log and provider spend
-	tracer      *trace.Tracer                                      // what agents, workflows and the assistant do, as spans (note 049)
-	traces      traceStore                                         // serialises updates to stored traces
-	evals       evalBook                                           // which eval suites are running (note 050)
-	agentMu     sync.Mutex                                         // serialises publishing agent versions (note 050)
-	runbookMu   sync.Mutex                                         // serialises runbook reviews and fix decisions (note 051)
-	runbookPoll time.Duration                                      // how often a runbook run asks SSM how it went; tests make it short
-	otel        *trace.Exporter                                    // sends traces to an OpenTelemetry backend, when one is set (note 049)
-	teams       teamRuns                                           // which teams are working on a goal
-	missions    missionState                                       // missions (note 037)
-	gcpInv      invCache                                           // Google Cloud inventories, by scope
+	bp          bpBusy          // one blueprint preview or apply at a time
+	tofuBin     tofuState       // the OpenTofu binary, once found
+	tofuRun     tofuRunner      // tests replace OpenTofu
+	packRun     packRunner      // tests replace the policy pack containers
+	schemas     schemaCache     // the AWS provider's resource schemas, once made
+	schemaRun   schemaRunner    // tests replace `tofu providers schema -json`
+	usage       usageState      // serialises updates to the AI use ledger
+	calls       callLog         // serialises updates to the model call log and provider spend
+	tracer      *trace.Tracer   // what agents, workflows and the assistant do, as spans (note 049)
+	traces      traceStore      // serialises updates to stored traces
+	evals       evalBook        // which eval suites are running (note 050)
+	agentMu     sync.Mutex      // serialises publishing agent versions (note 050)
+	runbookMu   sync.Mutex      // serialises runbook reviews and fix decisions (note 051)
+	runbookPoll time.Duration   // how often a runbook run asks SSM how it went; tests make it short
+	otel        *trace.Exporter // sends traces to an OpenTelemetry backend, when one is set (note 049)
+	teams       teamRuns        // which teams are working on a goal
+	missions    missionState    // missions (note 037)
+	gcpInv      invCache        // Google Cloud inventories, by scope
+	inproc      http.Handler    // the console API, called in-process for the assistant (note 052)
+	inprocOnce  sync.Once
 	listenAddr  string                                             // where HTTPServer was asked to listen, so the agent engine can call back on loopback
 	engineBase  string                                             // overrides it in tests
 	engineExec  func(context.Context, string, ...string) *exec.Cmd // tests replace how the agent program is started

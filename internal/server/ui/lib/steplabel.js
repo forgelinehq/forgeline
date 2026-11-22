@@ -45,6 +45,7 @@ const VERBS = {
   ask_agent: ['Asked an agent', 'Asking an agent'],
   remember: ['Saved a note to memory', 'Saving a note to memory'],
   memory: ['Worked with its memory files', 'Working with its memory files'],
+  forgeline_api: ['Changed something in Forgeline', 'Working in Forgeline'],
   doctor: ['Checked what is held back in its setup', 'Checking what is held back in its setup'],
   prepare_action: ['Prepared something for you to confirm', 'Preparing something for you to confirm'],
   search_audit: ['Searched the audit log', 'Searching the audit log'],
@@ -104,6 +105,7 @@ export function permissionWording(x) {
   if (t === 'run_shell') return { title: 'Give secrets to this command?', lead: 'The assistant wants to run this in its sandbox, with secrets from your vault. Nothing has run yet.' };
   if (t === 'Bash') return { title: 'Allow this command?', lead: 'The agent wants to run this command. Nothing has run yet.' };
   if (FILE_TOOLS.includes(t)) return { title: 'Allow this file change?', lead: 'The agent wants to change a file in its workspace. Nothing has changed yet.' };
+  if (t === 'forgeline_api') return { title: 'Allow this change in Forgeline?', lead: 'The assistant wants to change this in Forgeline, as you. Nothing has changed yet.' };
   if (t === 'WebFetch' || t === 'WebSearch') return { title: 'Allow this web request?', lead: 'The agent wants to reach the web. Nothing has been sent yet.' };
   if (t === 'call_aws' || x.account) return { title: 'Allow this change?', lead: 'The assistant wants to run this on ' + (x.account === 'primary' ? 'the primary AWS connection' : 'AWS account ' + x.account) + ', as you. Nothing has changed yet.' };
   return { title: 'Allow this?', lead: 'The agent wants to use its ' + (t || 'tool') + '. Nothing has run yet.' };
