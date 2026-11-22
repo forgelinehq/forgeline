@@ -429,7 +429,7 @@ func (s *Server) noteCall(ctx context.Context, c ModelCall) {
 	}
 }
 
-var backendNames = map[string]bool{assistAPI: true, assistCLI: true, assistToken: true, assistCopilot: true, assistEngine: true}
+var backendNames = map[string]bool{assistAPI: true, assistCLI: true, assistToken: true, assistCopilot: true, assistEngine: true, assistACP: true}
 
 func (s *Server) providerSpend(ctx context.Context, id, month string) ProviderUse {
 	u := ProviderUse{Provider: id, Month: month}

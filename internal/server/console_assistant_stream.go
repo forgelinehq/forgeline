@@ -251,7 +251,9 @@ func (s *Server) handleAssistantRun(w http.ResponseWriter, r *http.Request) {
 		lookups []string
 		err     error
 	)
-	if s.loadAssistant(ctx).Backend == assistEngine {
+	if be := s.loadAssistant(ctx).Backend; be == assistACP {
+		reply, err = s.askACP(ctx, job.p, conv, job.message, job.ctxText, s.lookupLines(ctx, job.p.Role), obs)
+	} else if be == assistEngine {
 		// A real agent harness does the thinking and the doing; Forgeline is its tools, its permission prompt and its log.
 		reply, err = s.askEngine(ctx, job.p, conv, job.message, job.ctxText, s.lookupLines(ctx, job.p.Role), obs)
 	} else {

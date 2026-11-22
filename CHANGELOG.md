@@ -92,6 +92,10 @@ section in the pull request that makes the change; a release moves it under its 
 - **Workflows refuse agents with tools their run cannot use.** Saving a workflow whose agent has a tool its run-as role
   may never use (such as `call_aws`, for administrators only, in a workflow running as a viewer) now says so, instead of
   every run quietly going without it.
+- **Any coding agent over ACP** (design note 053). A new assistant choice runs an agent that speaks the Agent Client Protocol
+  (the standard VS Code and Zed use): Antigravity CLI, GitHub Copilot CLI, Codex, or your own command, inside your sandbox.
+  Forgeline gives it its tools as an MCP server and answers its permission requests with the same cards; autopilot covers it
+  in the sandbox. Sign in once inside the sandbox, or store a Gemini API key in the vault as `GEMINI_API_KEY`.
 - **Permission cards say what they are about.** A card for the agent's command now says "Allow this command?", one for a file
   "Allow this file change?", one for the web "Allow this web request?". Before, every card that was not a secrets card said it
   would run on your AWS account. Only an AWS change talks about AWS.

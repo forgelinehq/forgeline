@@ -273,6 +273,17 @@ through a socket, not the network. The first message builds the image, which tak
 token under Assistant model. With the sandbox off it runs on the server itself, as the server's user, so approve each command as
 you would in a terminal.
 
+## Other agents: Antigravity, Copilot, Codex
+
+Under Settings › Assistant model, choose **An agent over ACP**, then the agent: **Antigravity CLI (agy)**, **GitHub Copilot CLI**,
+**Codex**, or your own command. They run in your sandbox (turn it on first), speak the Agent Client Protocol, and get Forgeline's
+tools and its permission cards, just as Claude Code does. Each has to be installed in the sandbox: ask the assistant to "install
+the Antigravity CLI", for example.
+
+An agent signs in **inside the sandbox**, not on the server: a login on the server is not visible in the container. Either run the
+command the error shows (`docker exec -it … agy`) once and follow its sign-in, or store a Gemini API key in the vault as
+`GEMINI_API_KEY` and Forgeline signs the agent in with it.
+
 ## When it says it cannot: the doctor
 
 If something stops the assistant (no shell, an AWS account that is protected, memory off, a model that cannot make real
