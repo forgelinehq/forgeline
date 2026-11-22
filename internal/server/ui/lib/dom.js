@@ -206,6 +206,7 @@ const BRANDS = {
   'azure-openai': ['Az', 'bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-200'],
   'openai-compatible': ['{ }', 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200'],
   'claude-token': ['CC', 'bg-orange-100 text-orange-900 dark:bg-orange-950 dark:text-orange-200'],
+  'claude-agent': ['CC', 'bg-orange-100 text-orange-900 dark:bg-orange-950 dark:text-orange-200'],
   cli: ['CC', 'bg-orange-100 text-orange-900 dark:bg-orange-950 dark:text-orange-200'],
   api: ['A', 'bg-orange-100 text-orange-900 dark:bg-orange-950 dark:text-orange-200'],
   copilot: ['Co', 'bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900'],

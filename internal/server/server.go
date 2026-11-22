@@ -130,6 +130,8 @@ type Server struct {
 	teams       teamRuns        // which teams are working on a goal
 	missions    missionState    // missions (note 037)
 	gcpInv      invCache        // Google Cloud inventories, by scope
+	listenAddr  string          // where HTTPServer was asked to listen, so the agent engine can call back on loopback
+	engineBase  string          // overrides it in tests
 	approvals   approvalBook    // read calls waiting for the person who asked to approve them
 	azureInv    invCache        // Azure inventories, by subscription set
 	integTests  integTestStore  // the last test of each integration, kept in memory
@@ -306,6 +308,7 @@ func (s *Server) Stop() {
 
 // HTTPServer returns an http.Server with conservative timeouts for the given address.
 func (s *Server) HTTPServer(addr string) *http.Server {
+	s.listenAddr = addr
 	return &http.Server{
 		Addr:              addr,
 		Handler:           s.Handler(),

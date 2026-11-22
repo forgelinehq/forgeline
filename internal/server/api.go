@@ -37,6 +37,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /v1/tokens", s.requireRole(authn.Viewer, s.handleCreateToken))
 	mux.Handle("DELETE /v1/tokens/{id}", s.requireRole(authn.Viewer, s.handleRevokeToken))
 	mux.HandleFunc("POST /mcp", s.handleMCP)
+	mux.HandleFunc("POST /mcp/engine/{token}", s.handleEngineMCP) // the agent engine's own program, on this machine only
 	mux.Handle("GET /v1/runs/{id}/failure", s.requireRole(authn.Viewer, s.handleRunFailure))
 	mux.Handle("POST /v1/runs/{id}/cancel", s.requireRole(authn.Developer, s.handleCancel))
 	mux.Handle("GET /v1/runs/{id}/steps/{step}/logs", s.requireRole(authn.Viewer, s.handleLogs))

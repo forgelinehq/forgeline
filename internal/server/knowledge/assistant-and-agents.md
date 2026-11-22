@@ -258,6 +258,18 @@ refused. Every decision is in the audit log.
 {: .warning }
 **Checked against a fake AWS CLI only**, not a real account, and only for AWS. `az`, `gcloud` and `kubectl` are next.
 
+## Claude Code as the agent
+
+Under Settings › Assistant model, choose **Claude Code as the agent**. Instead of Forgeline's own loop, the real Claude Code does
+the thinking and the work: it plans, uses subagents, reads files, runs commands in a workspace kept for you, and carries on from
+message to message. Forgeline is its tools and its permission prompt: it can look at AWS, Kubernetes, findings and runs, keep
+memory, and prepare cards, and each of those keeps its role checks and audit entry. Its own **Bash, Edit and Write ask you on a
+card** with the exact command first; say no and it does not run.
+
+It needs the `claude` program on the server and a Claude Code token (the same one agent steps use) or the server user's login.
+For now a command you approve runs on the server, as the server's user, in your workspace, so approve it as you would in a
+terminal. Running it in the sandbox container is next.
+
 ## When it says it cannot: the doctor
 
 If something stops the assistant (no shell, an AWS account that is protected, memory off, a model that cannot make real

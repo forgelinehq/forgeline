@@ -94,7 +94,7 @@ func (s *Server) assistantView(ctx context.Context) AssistantJSON {
 	if v.Model == "" {
 		v.Model = defaultAssistModel
 	}
-	v.Ready = (st.Backend == assistProvider && s.checkModelRef(ctx, st.Model) == "") || st.Backend == assistCLI || st.Backend == assistCopilot || (st.Backend == assistAPI && hasKey) || (st.Backend == assistToken && hasToken)
+	v.Ready = (st.Backend == assistProvider && s.checkModelRef(ctx, st.Model) == "") || st.Backend == assistCLI || st.Backend == assistCopilot || (st.Backend == assistAPI && hasKey) || (st.Backend == assistToken && hasToken) || st.Backend == assistEngine
 	if !st.UpdatedAt.IsZero() {
 		v.UpdatedBy, v.UpdatedAt = st.UpdatedBy, st.UpdatedAt.Format(time.RFC3339)
 	}
@@ -124,9 +124,9 @@ func (s *Server) handlePutAssistant(w http.ResponseWriter, r *http.Request) {
 	req.Model, req.APIBase, req.APIKey = strings.TrimSpace(req.Model), strings.TrimSpace(req.APIBase), strings.TrimSpace(req.APIKey)
 	req.ClaudeToken = strings.TrimSpace(req.ClaudeToken)
 	switch req.Backend {
-	case assistOff, assistAPI, assistCLI, assistToken, assistCopilot, assistProvider:
+	case assistOff, assistAPI, assistCLI, assistToken, assistCopilot, assistProvider, assistEngine:
 	default:
-		writeError(w, http.StatusBadRequest, `backend must be "off", "api", "claude-token", "cli", "copilot" or "provider"`)
+		writeError(w, http.StatusBadRequest, `backend must be "off", "api", "claude-token", "cli", "copilot", "provider" or "claude-agent"`)
 		return
 	}
 	if _, _, ref := splitModelRef(req.Model); ref != (req.Backend == assistProvider) {
@@ -553,6 +553,11 @@ func (s *Server) callBackend(ctx context.Context, st assistantSettings, model, s
 		return askCLI(ctx, model, system, turns, "")
 	case assistCopilot:
 		return askCopilot(ctx, st.Model, system, turns)
+	case assistEngine:
+		// Outside the chat panel (the test button, a plain request) there is nobody to approve a tool, so the engine answers
+		// as the single-turn program does; the full agent runs in the chat.
+		tok, _ := s.internalSecretValue(ctx, claudeTokenName)
+		return askCLI(ctx, model, system, turns, tok)
 	case assistToken:
 		tok, ok := s.internalSecretValue(ctx, claudeTokenName)
 		if !ok {
