@@ -98,7 +98,7 @@ func (s *Server) sandboxRuntime(ctx context.Context) (flag, label string) {
 }
 
 // sandboxRunArgs is the whole `docker run`. Everything that makes it a sandbox is here, so a test can read it.
-func sandboxRunArgs(name, volume, owner, image, network, runtime string) []string {
+func sandboxRunArgs(name, volume, owner, image, network, runtime string, extra ...string) []string {
 	args := []string{"run", "-d", "--name", name, "--label", "forgeline.sandbox=1", "--label", "forgeline.owner=" + owner,
 		"-v", volume + ":/work", "-w", "/work", "--hostname", "sandbox",
 		"--memory", "2g", "--memory-swap", "2g", "--cpus", "2", "--pids-limit", "512",
@@ -110,10 +110,15 @@ func sandboxRunArgs(name, volume, owner, image, network, runtime string) []strin
 	if runtime != "" {
 		args = append(args, "--runtime", runtime)
 	}
+	args = append(args, extra...) // read-only mounts for the agent engine (note 053)
 	return append(args, image, "sleep", "infinity")
 }
 
 func (s *Server) ensureSandbox(ctx context.Context, p Principal, image string, st SandboxSettings) (string, error) {
+	return s.ensureSandboxWith(ctx, p, image, st)
+}
+
+func (s *Server) ensureSandboxWith(ctx context.Context, p Principal, image string, st SandboxSettings, extra ...string) (string, error) {
 	name, volume, owner := sandboxNames(p, image)
 	sandboxMu.Lock()
 	defer sandboxMu.Unlock()
@@ -136,7 +141,7 @@ func (s *Server) ensureSandbox(ctx context.Context, p Principal, image string, s
 	}
 	runtime, _ := s.sandboxRuntime(ctx)
 	lctx := context.WithValue(ctx, cmdLimitKey{}, 10*time.Minute) // pulling an image can take a while
-	if _, e, err := s.run(lctx, "docker", sandboxRunArgs(name, volume, owner, image, network, runtime)...); err != nil {
+	if _, e, err := s.run(lctx, "docker", sandboxRunArgs(name, volume, owner, image, network, runtime, extra...)...); err != nil {
 		return "", fmt.Errorf("starting the sandbox: %s", dockerError(e, err))
 	}
 	return name, nil

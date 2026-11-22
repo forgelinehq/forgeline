@@ -92,6 +92,10 @@ section in the pull request that makes the change; a release moves it under its 
 - **Workflows refuse agents with tools their run cannot use.** Saving a workflow whose agent has a tool its run-as role
   may never use (such as `call_aws`, for administrators only, in a workflow running as a viewer) now says so, instead of
   every run quietly going without it.
+- **Claude Code runs in your sandbox container.** With the sandbox on, Claude Code as the agent runs inside it (its commands and
+  files are in the container, not on the server), and reaches Forgeline's tools through a unix socket and a small bridge instead
+  of the network. The image (Node, Claude Code, git, python) is built the first time. It needs a Claude Code token; with the
+  sandbox off it runs on the server as before.
 - **Claude Code as the assistant's agent** (design note 053). A new assistant choice, "Claude Code as the agent", runs the real
   Claude Code for each chat message: its own planning loop, subagents, file reading and sessions that continue from message to
   message, with Forgeline as its tools (AWS, Kubernetes, findings, runs, memory, cards, the doctor) and as its permission prompt.

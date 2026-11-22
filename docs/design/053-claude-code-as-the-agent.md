@@ -39,7 +39,7 @@ for every check (each removed in turn and a test failed), the guide.
 
 Not built, in this order:
 
-1. **Run it in the sandbox container**, so Bash is in a container and not on the server. Today a Bash the person approved runs as
+1. **Run it in the sandbox container** (built, slice 2, 2026-11-22; see below), so Bash is in a container and not on the server. Today a Bash the person approved runs as
    the server's user in the person's workspace. Needs `claude` in the image, the loopback endpoint reachable from the
    container (a mounted socket and a small bridge), and the token passed in the environment.
 2. **Partial messages**: the answer arrives whole; stream it as it is written.
@@ -53,3 +53,22 @@ Not built, in this order:
   person's tools for the length of a run: it is random, never logged, and removed when the run ends.
 - Claude Code's tools on the host are only as safe as the person's answer on each card until step 1 is done. The settings page says
   so, and the sandbox, not the host, is where this should end up.
+
+## Built (slice 2, 2026-11-22): the agent in the sandbox
+
+- With the sandbox on, `claude` runs inside the person's sandbox container (`docker exec`), in `/work`, with its home at
+  `/work/.agent` so sessions persist. Its Bash and file tools therefore act on the container, not the server. The container
+  is the same kind as `run_shell`'s (no host mounts of the server's files, dropped capabilities, no Docker socket), from an
+  image Forgeline builds once on first use (`forgeline/agent:1`: Node 24, Claude Code 2.1.330, git, curl, python, ripgrep).
+- The container has no route to the Forgeline server. Its tools come through a **unix socket** the server serves per person and
+  mounts read-only into the container, with a copy of the server's own binary mounted read-only as the stdio MCP bridge in
+  front of it (`forgeline mcp` with `FORGELINE_MCP_SOCKET`). The socket serves only the engine endpoint, and the path carries a
+  token for one running message. The binary is copied to the data directory first, because the updater replaces the running
+  binary by name and a container outlives a version.
+- The token goes in through the environment of `docker exec`, never an argument; the system prompt (which may hold log text and
+  memory) goes in a file in the mounted directory and is removed after the run. The server user's login is not carried into a
+  container: it needs the Claude Code token in the vault.
+- If the sandbox network is set to none, the agent cannot reach its model and says so. With the sandbox off, the engine runs on
+  the server as in slice 1, and the doctor says so.
+- Not checked in a unit test: that the container's user can connect to the socket (the server's own user is the same user in
+  the tests). That is checked by a real run on the Pi.

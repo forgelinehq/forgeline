@@ -46,6 +46,12 @@ func (s *Server) lookupDoctor(ctx context.Context, _ json.RawMessage) (string, e
 		} else {
 			line(true, "model "+st.Model+" through a provider: it makes real tool calls.")
 		}
+	case assistEngine:
+		if s.loadSandbox(ctx).Enabled {
+			line(true, "Claude Code runs as the agent, inside your sandbox container.")
+		} else {
+			line(false, "Claude Code runs as the agent on the server itself, so a command you approve runs as the server's user. Fix: prepare_action turn_on_sandbox (an administrator confirms), and it moves into the container.")
+		}
 	default:
 		line(false, "the assistant runs through the "+st.Backend+" backend (a command-line program with its tools turned off). It has to write tool calls as text, which fails in ways that depend on the program and cannot use native tool calling. Fix: an administrator adds an Anthropic, OpenAI or Gemini API key under Settings › Models and providers and picks it under Assistant model.")
 	}

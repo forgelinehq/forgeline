@@ -3,9 +3,12 @@ package main
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -105,5 +108,43 @@ func TestMCPProxyAnswersAnOversizedMessageAndKeepsGoing(t *testing.T) {
 	lines := strings.Split(strings.TrimSpace(out.String()), "\n")
 	if code != 0 || len(lines) != 2 || !strings.Contains(lines[0], "larger than 1 MiB") || !strings.Contains(lines[1], `"id":2`) {
 		t.Errorf("code %d, out %q", code, out.String())
+	}
+}
+
+func TestTheMCPBridgeCanTalkToAUnixSocketWithTheEngineToken(t *testing.T) {
+	sock := filepath.Join(t.TempDir(), "e.sock")
+	ln, err := net.Listen("unix", sock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var gotPath, gotAuth string
+	srv := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath, gotAuth = r.URL.Path, r.Header.Get("Authorization")
+		b, _ := io.ReadAll(r.Body)
+		if strings.Contains(string(b), "notifications/") {
+			w.WriteHeader(http.StatusAccepted)
+			return
+		}
+		fmt.Fprint(w, `{"jsonrpc":"2.0","id":1,"result":{"ok":true}}`)
+	})}
+	go srv.Serve(ln)
+	defer srv.Close()
+	var out, errb bytes.Buffer
+	in := strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"ping"}` + "\n" + `{"jsonrpc":"2.0","method":"notifications/initialized"}` + "\n")
+	env := map[string]string{"FORGELINE_MCP_SOCKET": sock, "FORGELINE_MCP_PATH": "/mcp/engine/abc123"}
+	if code := runMCP(t.Context(), nil, in, &out, &errb, func(k string) string { return env[k] }); code != 0 {
+		t.Fatalf("exit %d: %s", code, errb.String())
+	}
+	if gotPath != "/mcp/engine/abc123" || gotAuth != "" {
+		t.Errorf("path %q, authorization %q", gotPath, gotAuth)
+	}
+	if got := strings.TrimSpace(out.String()); got != `{"jsonrpc":"2.0","id":1,"result":{"ok":true}}` {
+		t.Errorf("output: %q (a notification must print nothing)", got)
+	}
+	// Only the engine's own path is allowed: the socket is not a way to reach anything else on the server.
+	env["FORGELINE_MCP_PATH"] = "/v1/users"
+	errb.Reset()
+	if code := runMCP(t.Context(), nil, strings.NewReader(""), &out, &errb, func(k string) string { return env[k] }); code != 2 || !strings.Contains(errb.String(), "/mcp/engine/") {
+		t.Errorf("another path: %d %s", code, errb.String())
 	}
 }

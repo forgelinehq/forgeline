@@ -22,6 +22,7 @@ type dockerStub struct {
 	stderr   string
 	runtimes string
 	ps       string
+	noImage  bool // the agent image is not built until docker build is called
 }
 
 func (d *dockerStub) run(ctx context.Context, name string, args ...string) ([]byte, string, error) {
@@ -49,6 +50,14 @@ func (d *dockerStub) run(ctx context.Context, name string, args ...string) ([]by
 		}
 		d.exists[args[3]] = true
 		return []byte("abc123\n"), "", nil
+	case "image":
+		if d.noImage {
+			return nil, "No such image", exec.Command("false").Run()
+		}
+		return nil, "", nil
+	case "build":
+		d.noImage = false
+		return nil, "", nil
 	case "exec":
 		return []byte(d.out), d.stderr, d.exitErr
 	case "ps":

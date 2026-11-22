@@ -37,6 +37,9 @@ func runMCP(ctx context.Context, args []string, stdin io.Reader, stdout, stderr 
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
+	if sock := getenv("FORGELINE_MCP_SOCKET"); sock != "" {
+		return runMCPSocket(ctx, sock, getenv("FORGELINE_MCP_PATH"), stdin, stdout, stderr)
+	}
 	token := getenv("FORGELINE_MCP_TOKEN")
 	if *server == "" || token == "" {
 		fmt.Fprintln(stderr, "forgeline: set --server (or FORGELINE_SERVER) and FORGELINE_MCP_TOKEN")
@@ -52,6 +55,30 @@ func runMCP(ctx context.Context, args []string, stdin io.Reader, stdout, stderr 
 		return 2
 	}
 	client := &http.Client{Timeout: 90 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	return bridge(ctx, client, u.String(), token, stdin, stdout, stderr)
+}
+
+// runMCPSocket is the same bridge for the agent engine (design note 053): Claude Code runs in the sandbox container, which has
+// no network route to the Forgeline server, and reaches it through a unix socket the server mounted into the container. The
+// path carries a token for one running message, so there is no bearer token here.
+func runMCPSocket(ctx context.Context, sock, path string, stdin io.Reader, stdout, stderr io.Writer) int {
+	if !strings.HasPrefix(path, "/mcp/engine/") || strings.ContainsAny(path, " ?#\n") {
+		fmt.Fprintln(stderr, "forgeline: FORGELINE_MCP_PATH must be /mcp/engine/<token>")
+		return 2
+	}
+	client := &http.Client{
+		Timeout: 10 * time.Minute, // a tool can wait for the person to answer a card
+		Transport: &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+			var d net.Dialer
+			return d.DialContext(ctx, "unix", sock)
+		}},
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+	}
+	return bridge(ctx, client, "http://forgeline"+path, "", stdin, stdout, stderr)
+}
+
+// bridge reads one JSON-RPC message per line, sends each to the endpoint and prints the answers.
+func bridge(ctx context.Context, client *http.Client, endpoint, token string, stdin io.Reader, stdout, stderr io.Writer) int {
 	rd := bufio.NewReaderSize(stdin, 64<<10)
 	for {
 		line, tooLong, err := readLine(rd)
@@ -59,7 +86,7 @@ func runMCP(ctx context.Context, args []string, stdin io.Reader, stdout, stderr 
 			// The id is unknowable, so answer with a null id like a parse error, and carry on.
 			stdout.Write([]byte(`{"jsonrpc":"2.0","id":null,"error":{"code":-32600,"message":"message larger than 1 MiB"}}` + "\n"))
 		} else if line = bytes.TrimSpace(line); len(line) > 0 {
-			if out := forwardMCP(ctx, client, u.String(), token, line); out != nil {
+			if out := forwardMCP(ctx, client, endpoint, token, line); out != nil {
 				stdout.Write(append(out, '\n'))
 			}
 		}
@@ -121,7 +148,9 @@ func forwardMCP(ctx context.Context, c *http.Client, endpoint, token string, msg
 		return fail("bad server address")
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
 	resp, err := c.Do(req)
 	if err != nil {
 		return fail("could not reach the Forgeline server")
