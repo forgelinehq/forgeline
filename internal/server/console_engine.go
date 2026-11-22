@@ -75,9 +75,13 @@ func (s *Server) engineURL() string {
 // --- the MCP endpoint the program calls ---
 
 func (s *Server) handleEngineMCP(w http.ResponseWriter, r *http.Request) {
-	if ip := net.ParseIP(clientIP(r)); ip == nil || !ip.IsLoopback() {
-		writeError(w, http.StatusForbidden, "this endpoint is for the program Forgeline started, on the same machine")
-		return
+	// Two ways in: the person's unix socket (which only their sandbox container has), or the loopback address for the program
+	// running on the server itself.
+	if viaSocket, _ := r.Context().Value(engineSocketKey{}).(bool); !viaSocket {
+		if ip := net.ParseIP(clientIP(r)); ip == nil || !ip.IsLoopback() {
+			writeError(w, http.StatusForbidden, "this endpoint is for the program Forgeline started, on the same machine")
+			return
+		}
 	}
 	engineRuns.mu.Lock()
 	run := engineRuns.m[r.PathValue("token")]
@@ -237,8 +241,10 @@ type engineSettings struct{}
 // askEngine runs the claude program for one message and returns its final answer.
 func (s *Server) askEngine(ctx context.Context, p Principal, conv, message, pageContext string, lines []helpLine, obs assistObserver) (string, error) {
 	token, haveToken := s.internalSecretValue(ctx, claudeTokenName)
-	if _, err := exec.LookPath("claude"); err != nil {
-		return "", errors.New("the claude program is not installed on the server")
+	if !s.engineInContainer(ctx) && s.engineExec == nil {
+		if _, err := exec.LookPath("claude"); err != nil {
+			return "", errors.New("the claude program is not installed on the server")
+		}
 	}
 	work, home := engineWorkspace(s.cfg.DataDir, p)
 	for _, d := range []string{work, home} {
@@ -269,13 +275,19 @@ func (s *Server) askEngine(ctx context.Context, p Principal, conv, message, page
 	if err := os.WriteFile(sysFile, []byte(system), 0o600); err != nil {
 		return "", err
 	}
+	inContainer := s.engineInContainer(ctx)
 	mcpCfg, _ := json.Marshal(map[string]any{"mcpServers": map[string]any{"forgeline": map[string]any{"type": "http", "url": s.engineURL() + "/mcp/engine/" + tok}}})
+	sysArg := sysFile
+	if inContainer {
+		mcpCfg = []byte(engineMCPConfig(tok))
+		sysArg = "/run/forgeline/system-" + tok[:12] + ".md"
+	}
 	args := []string{"-p", "--output-format", "stream-json", "--verbose", "--max-turns", fmt.Sprint(engineMaxTurns),
 		"--strict-mcp-config", "--mcp-config", string(mcpCfg),
 		"--permission-prompt-tool", "mcp__forgeline__" + engineApproveTool,
 		"--allowedTools", "Read", "Glob", "Grep", "TodoWrite", "mcp__forgeline",
 		"--disallowedTools", "AskUserQuestion",
-		"--append-system-prompt-file", sysFile}
+		"--append-system-prompt-file", sysArg}
 	if sid := s.engineSession(ctx, conv); sid != "" {
 		args = append(args, "--resume", sid)
 	}
@@ -284,12 +296,27 @@ func (s *Server) askEngine(ctx context.Context, p Principal, conv, message, page
 	}
 	cctx, cancel := context.WithTimeout(ctx, engineMaxSeconds*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(cctx, "claude", args...)
-	cmd.Dir = work
-	// A clean environment: nothing of the server's token, master key or cloud credentials. The program's own home is the
-	// person's engine home, so its sessions persist and none of the server user's settings or hooks load.
-	cmd.Env = []string{"HOME=" + home, "PATH=" + os.Getenv("PATH"), "LANG=C.UTF-8"}
-	if haveToken {
+	var cmd *exec.Cmd
+	if inContainer {
+		// Claude Code runs in the person's sandbox container: its commands and files are in /work there, and it reaches
+		// Forgeline's tools through the socket, not the network.
+		var bridge string
+		c, br, cerr := s.containerEngine(cctx, p, token, args, map[string]string{"system-" + tok[:12] + ".md": system})
+		if cerr != nil {
+			return "", cerr
+		}
+		cmd, bridge = c, br
+		defer os.Remove(filepath.Join(bridge, "system-"+tok[:12]+".md"))
+	} else {
+		cmd = s.engineCmd(cctx, "claude", args...)
+		cmd.Dir = work
+		// A clean environment: nothing of the server's token, master key or cloud credentials. The program's own home is the
+		// person's engine home, so its sessions persist and none of the server user's settings or hooks load.
+		cmd.Env = []string{"HOME=" + home, "PATH=" + os.Getenv("PATH"), "LANG=C.UTF-8"}
+	}
+	if inContainer {
+		// the environment was set with the container command
+	} else if haveToken {
 		cmd.Env = append(cmd.Env, claudeTokenName+"="+token)
 	} else if real := os.Getenv("HOME"); real != "" {
 		// No token in the vault: use the server user's own login, by copying only its credentials into the engine home, so

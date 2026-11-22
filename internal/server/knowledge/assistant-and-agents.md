@@ -267,8 +267,11 @@ memory, and prepare cards, and each of those keeps its role checks and audit ent
 card** with the exact command first; say no and it does not run.
 
 It needs the `claude` program on the server and a Claude Code token (the same one agent steps use) or the server user's login.
-For now a command you approve runs on the server, as the server's user, in your workspace, so approve it as you would in a
-terminal. Running it in the sandbox container is next.
+With the **sandbox on** (Settings › Assistant permissions) the whole of Claude Code runs inside your sandbox container: its
+commands and files are in the container's /work, which also holds its memory and sessions, and Forgeline's tools reach it
+through a socket, not the network. The first message builds the image, which takes a few minutes. This needs a Claude Code
+token under Assistant model. With the sandbox off it runs on the server itself, as the server's user, so approve each command as
+you would in a terminal.
 
 ## When it says it cannot: the doctor
 
