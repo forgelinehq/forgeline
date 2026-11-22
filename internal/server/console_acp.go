@@ -28,7 +28,7 @@ const (
 // harnessCommands are the ready-made agents: the command, run by `sh -c` in the container, that starts one in ACP mode. The
 // program has to be installed in the sandbox (the assistant can do it: "install the Antigravity CLI").
 var harnessCommands = map[string]string{
-	"antigravity": `PATH=/work/.antigravity/bin:$HOME/.local/bin:$PATH exec agy acp`,
+	"antigravity": `export PATH=/work/.antigravity/bin:$HOME/.local/bin:$PATH; exec agy acp`,
 	"copilot":     `exec copilot --acp`,
 	"codex":       `exec codex-acp`,
 }
