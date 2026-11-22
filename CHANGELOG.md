@@ -92,6 +92,9 @@ section in the pull request that makes the change; a release moves it under its 
 - **Workflows refuse agents with tools their run cannot use.** Saving a workflow whose agent has a tool its run-as role
   may never use (such as `call_aws`, for administrators only, in a workflow running as a viewer) now says so, instead of
   every run quietly going without it.
+- **No duplicate cards.** If the assistant prepares a card you already have waiting (the same pipeline, skill, agent or
+  workflow), you get that card again instead of a second one; a changed version replaces the old one, which is marked
+  dismissed. Before, asking twice left two cards and the question of which to confirm.
 - **A rate-limited model call is retried.** When a provider answers 429 (too many requests), the call waits 3 and then 8
   seconds and tries again before giving up, so a task that makes many calls is not ended halfway by a small plan's limit
   (found with Gemini's free tier). A monthly limit set in Forgeline is not retried.

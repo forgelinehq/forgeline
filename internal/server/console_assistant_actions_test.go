@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/forgelinehq/forgeline/internal/authn"
+	"github.com/forgelinehq/forgeline/internal/docstore"
 	"strings"
 	"testing"
 	"time"
@@ -200,5 +201,37 @@ func TestMorningCheckSummarisesWhatNeedsAPerson(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Errorf("morning check lacks %q:\n%s", want, out)
 		}
+	}
+}
+
+func TestTheSameCardTwiceIsOneCardAndAChangedOneReplacesIt(t *testing.T) {
+	m := newMCPHarness(t)
+	card := func(body string) string {
+		return lookupReply("prepare_action", map[string]string{"action": "save_pipeline", "title": "Save dup", "yaml": "version: v1alpha1\nname: dup\nsteps:\n  - id: a\n    image: alpine:3.20\n    run: " + body + "\n"})
+	}
+	waiting := func() []AssistAction {
+		var out []AssistAction
+		docs, _ := m.srv.docs.List(t.Context(), kindAssistAction, docstore.ListOptions{})
+		all, _ := docstore.Decode[AssistAction](docs)
+		for _, a := range all {
+			if a.Status == actPending {
+				out = append(out, a)
+			}
+		}
+		return out
+	}
+	first := actionsIn(m.run(m.dev, map[string]any{"message": "save it"}, card("echo one")))
+	again := actionsIn(m.run(m.dev, map[string]any{"message": "save it again"}, card("echo one")))
+	if len(first) != 1 || len(again) != 1 || first[0]["id"] != again[0]["id"] || len(waiting()) != 1 {
+		t.Fatalf("the same card made a second one: %d then %d, %d waiting", len(first), len(again), len(waiting()))
+	}
+	changed := actionsIn(m.run(m.dev, map[string]any{"message": "change it"}, card("echo two")))
+	if len(changed) != 1 || changed[0]["id"] == first[0]["id"] || len(waiting()) != 1 || waiting()[0].ID != changed[0]["id"] {
+		t.Errorf("a changed card did not replace the old one: %d waiting", len(waiting()))
+	}
+	var old AssistAction
+	m.srv.docs.Get(t.Context(), kindAssistAction, first[0]["id"].(string), &old)
+	if old.Status != actDismissed {
+		t.Errorf("the replaced card is %s", old.Status)
 	}
 }

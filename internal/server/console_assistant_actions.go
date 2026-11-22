@@ -133,6 +133,18 @@ func (s *Server) lookupPrepareAction(ctx context.Context, raw json.RawMessage) (
 	default:
 		return "", errors.New(`action must be "save_pipeline", "run_pipeline", "save_skill", "save_agent" or "save_workflow"`)
 	}
+	// The same card twice is one card: if the person already has this one waiting, show that one again. A changed version
+	// of a waiting card replaces it, so they are never asked to choose between two cards for one thing.
+	if old, ok := s.waitingCardFor(ctx, t.p.UserID, act); ok {
+		if old.Detail == act.Detail && string(old.Spec) == string(act.Spec) {
+			if sink, ok := ctx.Value(lookupSinkKey{}).(*lookupSink); ok {
+				sink.actions = append(sink.actions, old)
+			}
+			return "This card is already waiting for the person (the same one, prepared earlier). Do not prepare it again; tell them it waits for Confirm.", nil
+		}
+		old.Status, old.Result = actDismissed, "replaced by a newer version"
+		_ = s.docs.Put(ctx, kindAssistAction, old.ID, old)
+	}
 	if n := s.pendingActionCount(ctx, t.p.UserID); n >= maxPendingAction {
 		return "", errors.New("too many actions are waiting for the person; ask them to confirm or dismiss some")
 	}
@@ -167,6 +179,22 @@ func pipelineEffects(text string) []string {
 		out = append(out, line+".")
 	}
 	return out
+}
+
+// waitingCardFor is the person's card that is still waiting and is for the same thing as act: the same kind of action on
+// the same pipeline, skill, agent or workflow.
+func (s *Server) waitingCardFor(ctx context.Context, owner string, act AssistAction) (AssistAction, bool) {
+	docs, err := s.docs.List(ctx, kindAssistAction, docstore.ListOptions{Desc: true, Limit: 200})
+	if err != nil {
+		return AssistAction{}, false
+	}
+	all, _ := docstore.Decode[AssistAction](docs)
+	for _, a := range all {
+		if a.Owner == owner && a.Status == actPending && time.Now().Before(a.Expires) && a.Kind == act.Kind && a.Pipeline == act.Pipeline {
+			return a, true
+		}
+	}
+	return AssistAction{}, false
 }
 
 func (s *Server) pendingActionCount(ctx context.Context, owner string) int {
