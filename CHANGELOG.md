@@ -7,6 +7,10 @@ section in the pull request that makes the change; a release moves it under its 
 ## [Unreleased]
 
 ### Added
+- **An `eval` pipeline step** (design note 050, slice 3). `eval: {suite: triage-regression}` runs an agent's suite from Agents ›
+  Evals and fails unless every case passes, so the pipeline that ships a change to an agent tests it first. Optional
+  `version` and `model`. It runs on the server as the run, nothing it does is carried out, and each attempt is a trace.
+  Runs started by GitHub and `forgeline run` cannot use it.
 - **Attack suites for agents** (design note 050, slice 3). Agents › Evals › **Add attack suite** adds seven ready-made cases
   from the OWASP list for agentic applications: orders planted in a log or an issue, a change asked for without approval,
   a tool used for something it is not for, secret values, and a role the person does not have. A case passes only if

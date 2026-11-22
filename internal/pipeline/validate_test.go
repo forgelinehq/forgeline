@@ -325,3 +325,39 @@ func TestValidateBuildStep(t *testing.T) {
 		}
 	}
 }
+
+func evalStep(mut func(*Step)) *Pipeline {
+	p := validPipeline()
+	p.Steps = []Step{{ID: "gate", Eval: &Eval{Suite: "triage-regression"}}}
+	if mut != nil {
+		mut(&p.Steps[0])
+	}
+	return &p
+}
+
+func TestValidateEvalStep(t *testing.T) {
+	if err := evalStep(nil).Validate(); err != nil {
+		t.Fatalf("a good eval step: %v", err)
+	}
+	if err := evalStep(func(s *Step) { s.Eval.Version = 3; s.Eval.Model = "openai/gpt-5"; s.Timeout = "20m" }).Validate(); err != nil {
+		t.Fatalf("version, model, timeout: %v", err)
+	}
+	bad := map[string]func(*Step){
+		"no suite":                 func(s *Step) { s.Eval.Suite = "" },
+		"suite with a slash":       func(s *Step) { s.Eval.Suite = "../x" },
+		"suite in capitals":        func(s *Step) { s.Eval.Suite = "Triage" },
+		"negative version":         func(s *Step) { s.Eval.Version = -1 },
+		"model without a provider": func(s *Step) { s.Eval.Model = "gpt-5" },
+		"with an image":            func(s *Step) { s.Image = "alpine" },
+		"with a script":            func(s *Step) { s.Run = "echo hi" },
+		"with a workflow":          func(s *Step) { s.Workflow = &Workflow{Repo: "a/b", Workflow: "ci.yml", Ref: "main"} },
+		"with secrets":             func(s *Step) { s.Permissions.Secrets = []string{"TOKEN"} },
+		"with a network":           func(s *Step) { s.Permissions.Network = NetworkEgress },
+		"with env":                 func(s *Step) { s.Env = map[string]string{"A": "b"} },
+	}
+	for name, mut := range bad {
+		if err := evalStep(mut).Validate(); err == nil {
+			t.Errorf("%s: accepted", name)
+		}
+	}
+}

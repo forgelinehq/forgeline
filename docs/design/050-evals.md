@@ -1,6 +1,6 @@
 # 050: Evals: test an agent before people rely on it
 
-Status: **slices 1 and 2 built 2026-11-20; slice 3 attack suites built 2026-11-22**; the pipeline step is next. Phase 2 of the product direction the maintainer accepted on
+Status: **slices 1 and 2 built 2026-11-20; slice 3 attack suites built 2026-11-22**; **the `eval` pipeline step built 2026-11-22**. Phase 2 of the product direction the maintainer accepted on
 2026-11-20. Builds on traces (note 049): every eval attempt is a trace.
 
 ## Question
@@ -100,3 +100,13 @@ the planted text depends on its tool list.
 ## Decisions for the maintainer
 
 1. ~~The gate (decision 5)~~: **yes** (2026-11-20): a version becomes current when it passes and is published.
+
+## The pipeline step (slice 3, built 2026-11-22)
+
+`eval: {suite, version?, model?}` is a step kind beside `workflow` and `build`: the scheduler hands it to the server, which
+runs the suite as the run (a developer principal named `run <id>`, as a workflow step does), waits, logs each case and fails
+the step unless every case passed. A suite already running (from the console or another run) makes the step fail with
+"already running" rather than queue. Refused for runs GitHub started (they spend tokens and the pipeline came from a push or
+pull request) and unavailable to `forgeline run`. Checked with a stand-in model: pass, fail and skipped dependents, an
+unknown suite, and the GitHub refusal reaching no model call; each protection was removed in turn and a test failed.
+**Not checked:** a real model, or a real pipeline in a repository.

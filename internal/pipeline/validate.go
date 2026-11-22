@@ -76,17 +76,17 @@ func (p *Pipeline) Validate() error {
 	for i, s := range p.Steps {
 		path := fmt.Sprintf("steps[%d]", i)
 
-		if s.Workflow == nil && s.Build == nil && (strings.TrimSpace(s.Image) == "" || strings.ContainsAny(s.Image, " \t\n")) {
+		if s.Workflow == nil && s.Build == nil && s.Eval == nil && (strings.TrimSpace(s.Image) == "" || strings.ContainsAny(s.Image, " \t\n")) {
 			add(path+".image", "is required and must not contain whitespace, got %q", s.Image)
 		}
 
 		hasRun := strings.TrimSpace(s.Run) != ""
 		hasCommand := len(s.Command) > 0
 		switch {
-		case countTrue(hasRun, hasCommand, s.Agent != nil, s.Workflow != nil, s.Build != nil) > 1:
-			add(path, "set exactly one of run, command, agent, workflow or build, not several")
-		case !hasRun && !hasCommand && s.Agent == nil && s.Workflow == nil && s.Build == nil:
-			add(path, "set exactly one of run, command, agent, workflow or build")
+		case countTrue(hasRun, hasCommand, s.Agent != nil, s.Workflow != nil, s.Build != nil, s.Eval != nil) > 1:
+			add(path, "set exactly one of run, command, agent, workflow, build or eval, not several")
+		case !hasRun && !hasCommand && s.Agent == nil && s.Workflow == nil && s.Build == nil && s.Eval == nil:
+			add(path, "set exactly one of run, command, agent, workflow, build or eval")
 		case hasCommand && strings.TrimSpace(s.Command[0]) == "":
 			add(path+".command[0]", "the program name must not be empty")
 		}
@@ -99,6 +99,9 @@ func (p *Pipeline) Validate() error {
 		}
 		if s.Build != nil {
 			validateBuild(s, path, add)
+		}
+		if s.Eval != nil {
+			validateEval(s, path, add)
 		}
 
 		seenNeeds := make(map[string]bool, len(s.Needs))
@@ -245,6 +248,26 @@ func validateWorkflow(s Step, path string, add func(path, format string, args ..
 	}
 	if s.Image != "" || len(s.Env) > 0 || s.WorkDir != "" || len(s.Inputs) > 0 || s.Permissions.Network != "" || len(s.Permissions.Secrets) > 0 {
 		add(path, "a workflow step runs on GitHub: it takes no image, env, workdir, inputs or permissions")
+	}
+}
+
+var evalSuiteRE = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
+
+// validateEval checks an eval step. The server looks the suite up when the step runs.
+func validateEval(s Step, path string, add func(path, format string, args ...any)) {
+	e := s.Eval
+	epath := path + ".eval"
+	if !evalSuiteRE.MatchString(e.Suite) || len(e.Suite) > 100 {
+		add(epath+".suite", "must be a suite id such as triage-regression, got %q", e.Suite)
+	}
+	if e.Version < 0 {
+		add(epath+".version", "must be a version number from 1, got %d", e.Version)
+	}
+	if e.Model != "" && (strings.Count(e.Model, "/") < 1 || strings.ContainsAny(e.Model, " \t\n") || len(e.Model) > 200) {
+		add(epath+".model", "must look like provider/model, got %q", e.Model)
+	}
+	if s.Image != "" || len(s.Env) > 0 || s.WorkDir != "" || len(s.Inputs) > 0 || s.Permissions.Network != "" || len(s.Permissions.Secrets) > 0 {
+		add(path, "an eval step runs on the server: it takes no image, env, workdir, inputs or permissions")
 	}
 }
 
