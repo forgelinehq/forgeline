@@ -17,6 +17,10 @@ section in the pull request that makes the change; a release moves it under its 
   the agent does not obey it. Checked with a stand-in agent that obeys (the case fails) and one that refuses (it passes).
 
 ### Fixed
+- **A card the assistant prepared could be pressed twice after a stop.** Confirming a card said it marked the card first, but
+  only did so in memory: if the server stopped, or the browser closed, part-way through the action, the card stayed
+  pending and pressing it again could do the action a second time (a second run, say). The card is now saved as not
+  pending before the action starts, and the result is saved even if the browser has gone away.
 - **Agent answers show as Markdown** in workflow runs, missions and an agent's chat, instead of raw `**` and `-`.
 - **Two tests that failed now and then on CI.** The plugin sweeper test ended while the sweeper could still write into
   its directory (it now waits for the sweeper to stop), and the server tests waited only 5 seconds for background work

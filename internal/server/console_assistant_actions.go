@@ -265,18 +265,26 @@ func (s *Server) handleConfirmAction(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, "this action expired; ask the assistant again")
 		return
 	}
-	// Mark it first: if anything below fails, it cannot be replayed by pressing again.
-	a.Status = actFailed
+	// Save it as failed first, before anything is done: if the server stops, or the browser goes away, part-way
+	// through, the card is not pending any more and pressing it again cannot do the action twice. The answer is
+	// written afterwards without the request's context, so a closed browser cannot leave the card pending after
+	// the action ran.
+	a.Status, a.Result = actFailed, "interrupted before it finished; check what was done, then ask the assistant again"
+	if err := s.docs.Put(r.Context(), kindAssistAction, a.ID, a); err != nil {
+		writeError(w, http.StatusInternalServerError, "could not record the action; nothing was done")
+		return
+	}
 	result, link, apiErr := s.performAction(r.Context(), p, clientIP(r), a)
+	save := context.WithoutCancel(r.Context())
 	if apiErr != nil {
 		a.Result = apiErr.body.Error
-		s.docs.Put(r.Context(), kindAssistAction, a.ID, a)
+		s.docs.Put(save, kindAssistAction, a.ID, a)
 		s.auditReq(r, "assistant.action.confirm", "action/"+a.ID, a.Kind+" failed: "+truncate(apiErr.body.Error, 160), false)
 		apiErr.write(w)
 		return
 	}
 	a.Status, a.Result, a.Link = actDone, result, link
-	s.docs.Put(r.Context(), kindAssistAction, a.ID, a)
+	s.docs.Put(save, kindAssistAction, a.ID, a)
 	s.auditReq(r, "assistant.action.confirm", "action/"+a.ID, a.Kind+" "+a.Pipeline, true)
 	writeJSON(w, http.StatusOK, a)
 }
