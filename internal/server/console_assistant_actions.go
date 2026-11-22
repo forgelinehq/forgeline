@@ -76,6 +76,7 @@ func (s *Server) lookupPrepareAction(ctx context.Context, raw json.RawMessage) (
 		Description string          `json:"description"`
 		Pipeline    string          `json:"pipeline"`
 		Spec        json.RawMessage `json:"spec"`
+		Account     string          `json:"account"`
 	}
 	if err := decodeArgs(raw, &a); err != nil {
 		return "", err
@@ -130,8 +131,12 @@ func (s *Server) lookupPrepareAction(ctx context.Context, raw json.RawMessage) (
 		if act.Title == "" {
 			act.Title = map[string]string{actSaveSkill: "Create skill ", actSaveAgent: "Create agent ", actSaveWorkflow: "Create workflow "}[a.Action] + name
 		}
+	case actEnableShell, actAllowChanges:
+		if err := s.prepareCapability(ctx, t.p, &act, a.Account); err != nil {
+			return "", err
+		}
 	default:
-		return "", errors.New(`action must be "save_pipeline", "run_pipeline", "save_skill", "save_agent" or "save_workflow"`)
+		return "", errors.New(`action must be "save_pipeline", "run_pipeline", "save_skill", "save_agent", "save_workflow", "turn_on_sandbox" or "allow_aws_changes"`)
 	}
 	// The same card twice is one card: if the person already has this one waiting, show that one again. A changed version
 	// of a waiting card replaces it, so they are never asked to choose between two cards for one thing.
@@ -250,6 +255,8 @@ func (s *Server) handleConfirmAction(w http.ResponseWriter, r *http.Request) {
 		result, link, apiErr = s.doRunPipeline(r.Context(), p, a)
 	case actSaveSkill, actSaveAgent, actSaveWorkflow:
 		result, link, apiErr = s.doSaveDefinition(r.Context(), p, clientIP(r), a)
+	case actEnableShell, actAllowChanges:
+		result, link, apiErr = s.doCapability(r.Context(), p, a)
 	default:
 		apiErr = badRequest("unknown action")
 	}

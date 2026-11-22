@@ -45,6 +45,7 @@ const VERBS = {
   ask_agent: ['Asked an agent', 'Asking an agent'],
   remember: ['Saved a note to memory', 'Saving a note to memory'],
   memory: ['Worked with its memory files', 'Working with its memory files'],
+  doctor: ['Checked what is held back in its setup', 'Checking what is held back in its setup'],
   prepare_action: ['Prepared something for you to confirm', 'Preparing something for you to confirm'],
   search_audit: ['Searched the audit log', 'Searching the audit log'],
   aws_search_documentation: ['Searched the AWS documentation', 'Searching the AWS documentation'],

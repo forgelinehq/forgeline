@@ -92,6 +92,12 @@ section in the pull request that makes the change; a release moves it under its 
 - **Workflows refuse agents with tools their run cannot use.** Saving a workflow whose agent has a tool its run-as role
   may never use (such as `call_aws`, for administrators only, in a workflow running as a viewer) now says so, instead of
   every run quietly going without it.
+- **The assistant looks after its own setup.** A new `doctor` tool checks what holds the assistant back: a model that
+  cannot make real tool calls (a command-line backend, no provider), the shell sandbox being off, AWS accounts being
+  protected, memory or autopilot being off, and recent model errors and rate limits. It says what is blocking it and prepares
+  a card to fix it: "Turn on the sandbox" and "Allow changes to AWS account … with my approval", which an administrator
+  confirms once. It is also told to save a short lesson in memory when a tool failed and it worked out what works, and to
+  read those lessons next time. Before, it said it could not and left you to find the setting.
 - **Ready-made agents that are written out properly.** The Library's security, cost, cluster and failed-run agents were
   one or two lines each. They now have a role, how to work, what they never do and the shape of the answer, with skills that
   are real procedures: "Deep AWS security review" (accounts, Guard and Inspector findings, network, data, identity,
