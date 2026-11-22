@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -222,4 +223,120 @@ func TestAnEndedAutopilotAllowsNothingAndAStoppedOneIsNotResumed(t *testing.T) {
 	if left != 0 {
 		t.Errorf("a message without the switch left the autopilot standing: %v", autopilots)
 	}
+}
+
+func TestAutopilotHasNoLimitUnlessOneIsSet(t *testing.T) {
+	a, _ := startAutopilot("free|x|c", autopilotRequest{})
+	for i := 0; i < 5000; i++ {
+		a.spend()
+	}
+	if !a.active() || a.ended() != "" {
+		t.Error("autopilot with no limit ended")
+	}
+	b, _ := startAutopilot("steps|x|c", autopilotRequest{Steps: 3})
+	for i := 0; i < 3; i++ {
+		b.spend()
+	}
+	if b.active() || b.ended() != "steps" {
+		t.Error("a step limit did not end it")
+	}
+	c, _ := startAutopilot("time|x|c", autopilotRequest{Minutes: 1})
+	c.until = time.Now().Add(-time.Second)
+	if c.active() || c.ended() != "time" {
+		t.Error("a time limit did not end it")
+	}
+	endAutopilot("free|x|c")
+	endAutopilot("steps|x|c")
+	endAutopilot("time|x|c")
+	m := newMCPHarness(t)
+	var g struct {
+		Allowed bool `json:"allowed"`
+	}
+	json.Unmarshal(m.dev.expect(200, "GET", "/v1/assistant/autopilot", nil), &g)
+	if !g.Allowed || strings.Contains(string(m.dev.expect(200, "GET", "/v1/assistant/autopilot", nil)), "default_") {
+		t.Error("the page still talks about default limits")
+	}
+}
+
+func TestAutopilotRunsTheAgentsOwnToolsInTheContainerWithoutACardAndNotOnTheServer(t *testing.T) {
+	m, _, _ := containerEngineHarness(t)
+	start := func(c *browser) {
+		c.expect(200, "POST", "/v1/assistant/autopilot/start", map[string]any{"conversation": apConv})
+	}
+	answerText := func(st *streamed) string {
+		events, _ := answerOf(t, st)
+		var text string
+		for _, f := range events {
+			if f["type"] == "TEXT_MESSAGE_CONTENT" {
+				text += f["delta"].(string)
+			}
+		}
+		return text
+	}
+	// Switched on before the message: no card, the tool is allowed, and it is audited.
+	start(m.dev)
+	st := m.streamWith(m.dev, map[string]any{"message": "deploy", "conversationId": apConv, "autopilot": map[string]any{}}, "unused")
+	if text := answerText(st); !strings.Contains(text, "in container: allow") {
+		t.Errorf("autopilot: %q", text)
+	}
+	if aud := string(m.admin.expect(200, "GET", "/v1/audit?limit=60", nil)); !strings.Contains(aud, "autopilot, no card") {
+		t.Error("the audit log does not say autopilot allowed it")
+	}
+	endAutopilot(autopilotKeyFor(Principal{UserID: "dev", Name: "dev"}, apConv))
+	m.dev.expect(200, "POST", "/v1/assistant/autopilot/stop", map[string]any{"conversation": apConv})
+
+	// Switched on while the agent is waiting for an answer: the waiting request is answered yes.
+	st = m.streamWith(m.dev, map[string]any{"message": "deploy again", "conversationId": apConv}, "unused")
+	m.waitPending(t)
+	var out struct{ Answered int }
+	json.Unmarshal(m.dev.expect(200, "POST", "/v1/assistant/autopilot/start", map[string]any{"conversation": apConv}), &out)
+	if out.Answered != 1 {
+		t.Errorf("answered %d waiting requests", out.Answered)
+	}
+	if text := answerText(st); !strings.Contains(text, "in container: allow") {
+		t.Errorf("switched on while waiting: %q", text)
+	}
+	m.dev.expect(200, "POST", "/v1/assistant/autopilot/stop", map[string]any{"conversation": apConv})
+
+	// An administrator's switch-off holds, and autopilot does not touch another person's waiting request.
+	m.admin.expect(200, "PUT", "/v1/assistant/autopilot", map[string]any{"allowed": false})
+	m.dev.expect(403, "POST", "/v1/assistant/autopilot/start", map[string]any{"conversation": apConv})
+	m.admin.expect(200, "PUT", "/v1/assistant/autopilot", map[string]any{"allowed": true})
+	st = m.streamWith(m.dev, map[string]any{"message": "again", "conversationId": apConv}, "unused")
+	id := m.waitPending(t)
+	m.admin.expect(200, "POST", "/v1/assistant/autopilot/start", map[string]any{"conversation": apConv})
+	time.Sleep(50 * time.Millisecond)
+	if !m.srv.approvals.stillWaiting(id) {
+		t.Error("another person's autopilot answered my waiting request")
+	}
+	m.dev.expect(200, "POST", "/v1/assistant/approvals/"+id, map[string]any{"decision": "deny"})
+	if text := answerText(st); !strings.Contains(text, "deny") {
+		t.Errorf("a refused request: %q", text)
+	}
+	m.admin.expect(200, "POST", "/v1/assistant/autopilot/stop", map[string]any{"conversation": apConv})
+}
+
+func TestAutopilotDoesNotCoverTheAgentsToolsOnTheServerItself(t *testing.T) {
+	m := engineHarness(t) // the sandbox is off: the agent runs on the server
+	m.dev.expect(200, "POST", "/v1/assistant/autopilot/start", map[string]any{"conversation": apConv})
+	st := m.streamWith(m.dev, map[string]any{"message": "run it", "conversationId": apConv, "autopilot": map[string]any{}}, "unused")
+	id := m.waitPending(t) // still asks
+	m.dev.expect(200, "POST", "/v1/assistant/approvals/"+id, map[string]any{"decision": "approve"})
+	answerOf(t, st)
+	m.dev.expect(200, "POST", "/v1/assistant/autopilot/stop", map[string]any{"conversation": apConv})
+}
+
+func TestAutopilotWithoutALimitDoesNotStopAtTheUsualBudget(t *testing.T) {
+	m := newMCPHarness(t)
+	look := lookupReply("list_pipelines", map[string]any{})
+	var many []string
+	for i := 0; i < 70; i++ {
+		many = append(many, look)
+	}
+	many = append(many, "Finished.")
+	answerOf(t, m.streamWith(m.dev, map[string]any{"autopilot": map[string]any{}}, many...))
+	if n := m.llm.count(); n < 71 {
+		t.Errorf("autopilot with no limit stopped after %d model calls", n)
+	}
+	m.dev.expect(200, "POST", "/v1/assistant/autopilot/stop", map[string]any{"conversation": apConv})
 }

@@ -360,7 +360,7 @@ function build(close, role) {
     const c = pageContext();
     try {
       const body = { message: q, history, conversationId: conversation, context: { kind: c.kind, id: c.id, path: c.path, label: c.where } };
-      if (apOn) body.autopilot = {};
+      if (apOn) body.autopilot = limitsBody();
       await streamPost('/v1/assistant/runs', body, (ev) => { applyEvent(run, ev); if (run.autopilot) { apLeft = run.autopilot; if (run.autopilot.state === 'off') apOn = false; drawAutopilot(); } draw(); }, ctl.signal);
       if (run.status === 'running') { run.status = 'error'; run.error = 'The connection closed before the assistant finished.'; }
     } catch (e) {
@@ -410,13 +410,25 @@ function build(close, role) {
     restore();
   }
 
-  const apBtn = h('button', { class: 'btn-ghost btn-sm', type: 'button', id: 'assistant-autopilot', role: 'switch', 'aria-checked': 'false', title: 'Let the assistant keep working without stopping to ask, for a limited time and number of steps. It still asks before anything on a protected account, IAM, or a rule that says no.', onclick: () => { apOn = !apOn; apLeft = null; drawAutopilot(); } });
+  // Autopilot has no limit unless you set one here (minutes and/or steps). It can be switched on at any time, also while the
+  // assistant is working: what it is waiting to ask is answered, and what it asks next runs.
+  const apMin = h('input', { class: 'input h-7 w-20 px-2 text-xs', type: 'number', min: '1', placeholder: 'minutes', id: 'assistant-autopilot-minutes', 'aria-label': 'Optional time limit in minutes' });
+  const apSteps = h('input', { class: 'input h-7 w-20 px-2 text-xs', type: 'number', min: '1', placeholder: 'steps', id: 'assistant-autopilot-steps', 'aria-label': 'Optional limit in steps' });
+  const apLimits = h('span', { class: 'hidden items-center gap-1 text-xs', id: 'assistant-autopilot-limits' }, h('span', { class: 'muted' }, 'Optional limit:'), apMin, apSteps);
+  const apLimitBtn = h('button', { class: 'btn-ghost btn-sm text-xs', type: 'button', id: 'assistant-autopilot-limit-btn', onclick: () => { apLimits.classList.toggle('hidden'); apLimits.classList.toggle('flex'); } }, 'Set a limit');
+  const limitsBody = () => { const o = {}; if (Number(apMin.value) > 0) o.minutes = Number(apMin.value); if (Number(apSteps.value) > 0) o.steps = Number(apSteps.value); return o; };
+  const apBtn = h('button', { class: 'btn-ghost btn-sm', type: 'button', id: 'assistant-autopilot', role: 'switch', 'aria-checked': 'false', title: 'Let the assistant keep working without stopping to ask, until you stop it. Inside the sandbox its commands run without a card; it still asks before anything on a protected account, IAM, or a rule that says no.', onclick: async () => {
+    apOn = !apOn; apLeft = null; drawAutopilot();
+    if (apOn && conversation) { // switched on mid-conversation, maybe mid-answer: tell the server now
+      try { await post('/v1/assistant/autopilot/start', { conversation, ...limitsBody() }); } catch (e) { toast(e.message, 'error'); apOn = false; drawAutopilot(); }
+    } else if (!apOn && conversation) { try { await post('/v1/assistant/autopilot/stop', { conversation }); } catch { /* it ends with the next message anyway */ } }
+  } });
   const apStop = h('button', { class: 'btn-secondary btn-sm', type: 'button', id: 'assistant-autopilot-stop', onclick: async () => {
     apOn = false; drawAutopilot();
     try { await post('/v1/assistant/autopilot/stop', { conversation }); } catch (e) { toast(e.message, 'error'); }
   } }, icon('stop', 'size-3'), 'Stop autopilot');
-  const apBar = h('div', { class: 'mt-1.5 flex flex-wrap items-center gap-2 px-1', id: 'assistant-autopilot-bar' }, apBtn, apStop);
-  /** The switch, and while it is on, how much of the envelope is left. */
+  const apBar = h('div', { class: 'mt-1.5 flex flex-wrap items-center gap-2 px-1', id: 'assistant-autopilot-bar' }, apBtn, apStop, apLimitBtn, apLimits);
+  /** The switch, and while it is on, what is left of a limit if one was set. */
   function drawAutopilot() {
     apBar.classList.toggle('hidden', !apAllowed);
     apBtn.setAttribute('aria-checked', String(apOn));
@@ -424,8 +436,12 @@ function build(close, role) {
     let text = 'Autopilot off';
     if (apOn) {
       text = 'Autopilot on';
-      if (apLeft && apLeft.steps) text += ' · ' + apLeft.used + ' of ' + apLeft.steps + ' steps · ' + Math.max(0, Math.ceil((apLeft.untilMs - Date.now()) / 60000)) + ' min left';
-      else text += ' · 30 min, 100 steps';
+      const parts = [];
+      if (apLeft && apLeft.steps) parts.push(apLeft.used + ' of ' + apLeft.steps + ' steps');
+      if (apLeft && apLeft.untilMs) parts.push(Math.max(0, Math.ceil((apLeft.untilMs - Date.now()) / 60000)) + ' min left');
+      const l = limitsBody();
+      if (!parts.length && !(apLeft && apLeft.state) && (l.minutes || l.steps)) parts.push('limit: ' + [l.minutes && l.minutes + ' min', l.steps && l.steps + ' steps'].filter(Boolean).join(', '));
+      text += ' · ' + (parts.length ? parts.join(' · ') : 'no limit');
     }
     mount(apBtn, icon('bolt', 'size-3.5'), text);
     apBtn.classList.toggle('text-amber-700', apOn); apBtn.classList.toggle('dark:text-amber-300', apOn);

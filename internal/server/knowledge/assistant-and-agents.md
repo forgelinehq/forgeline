@@ -296,9 +296,14 @@ about me" removes your files too.
 
 ## Autopilot: keep going without asking
 
-Switch **Autopilot** on under the message box and the assistant works on your task without stopping to ask, for up to 30
-minutes and 100 steps (the bar shows what is left; **Stop autopilot** ends it at once). A change that would only have
-asked runs without a card, and the chat shows each one ("Autopilot ran: …") and the audit log records it.
+Switch **Autopilot** on under the message box and the assistant works on your task without stopping to ask, **until you stop
+it**: there is no time or step limit unless you set one (**Set a limit**: minutes, steps, or both). You can switch it on at
+any time, also while the assistant is waiting for an answer: what it is waiting on is answered yes, and what it asks next
+runs. **Stop autopilot** ends it at once. A change that would only have asked runs without a card, and the chat shows each one
+("Autopilot ran: …") and the audit log records it.
+
+With **Claude Code as the agent** and the sandbox on, autopilot also covers the agent's own Bash, Edit, Write and fetches: they
+run inside your container without a card, each one shown and audited. On the server itself (sandbox off) they still ask.
 
 ![Autopilot on: the change ran without a card]({{ '/console/166-assistant-autopilot.png' | relative_url }})
 

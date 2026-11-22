@@ -320,6 +320,9 @@ func (s *Server) lookupLoop(ctx context.Context, p Principal, turns []chatTurn, 
 	limit := maxLookups
 	if ap != nil {
 		limit = max(maxLookups, ap.steps)
+		if ap.steps == 0 {
+			limit = 1 << 20 // autopilot with no limit set
+		}
 	}
 	obs := lookupObserver(ctx)
 	for i := 0; ; i++ {

@@ -92,6 +92,10 @@ section in the pull request that makes the change; a release moves it under its 
 - **Workflows refuse agents with tools their run cannot use.** Saving a workflow whose agent has a tool its run-as role
   may never use (such as `call_aws`, for administrators only, in a workflow running as a viewer) now says so, instead of
   every run quietly going without it.
+- **Autopilot has no limit, and works while the assistant waits.** It runs until you stop it; a time or step limit is optional
+  ("Set a limit"). It can be switched on at any moment, including while the assistant is waiting for an answer, and it then
+  answers what is waiting and runs what comes next. With Claude Code as the agent and the sandbox on, it covers the agent's own
+  Bash, Edit, Write and fetches inside the container (each shown and audited); on the server itself those still ask.
 - **Claude Code runs in your sandbox container.** With the sandbox on, Claude Code as the agent runs inside it (its commands and
   files are in the container, not on the server), and reaches Forgeline's tools through a unix socket and a small bridge instead
   of the network. The image (Node, Claude Code, git, python) is built the first time. It needs a Claude Code token; with the

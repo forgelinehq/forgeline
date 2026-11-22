@@ -206,6 +206,7 @@ func (s *Server) handleAssistantRun(w http.ResponseWriter, r *http.Request) {
 	if ap != nil {
 		ctx = context.WithValue(ctx, autopilotKey{}, ap)
 	}
+	ctx = context.WithValue(ctx, autopilotConvKey{}, thread) // so autopilot switched on while this runs applies at once
 	// A person is chatting: the assistant may use and add to memory. The default overview (run ids, pipeline names, counts) is clean; a run, a pipeline or the infrastructure attached as context is text they did not type.
 	mt := &memTurn{p: job.p, question: job.message, dirty: job.ctxNote != "overview"}
 	ctx = context.WithValue(context.WithValue(ctx, memTurnKey{}, mt), setupKey{}, job.setup)

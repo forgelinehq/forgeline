@@ -304,6 +304,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /v1/assistant/sandbox/reset", s.requireRole(authn.Developer, s.handleResetSandbox))
 	mux.Handle("GET /v1/assistant/autopilot", s.requireRole(authn.Developer, s.handleGetAutopilot))
 	mux.Handle("PUT /v1/assistant/autopilot", s.requireRole(authn.Admin, s.handlePutAutopilot))
+	mux.Handle("POST /v1/assistant/autopilot/start", s.requireRole(authn.Developer, s.handleStartAutopilot))
 	mux.Handle("POST /v1/assistant/autopilot/stop", s.requireRole(authn.Developer, s.handleStopAutopilot))
 	mux.Handle("GET /v1/assistant/permissions", s.requireRole(authn.Developer, s.handleGetPermissions))
 	mux.Handle("POST /v1/assistant/permissions/rules", s.requireRole(authn.Developer, s.handleAddPermissionRule))
