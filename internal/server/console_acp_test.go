@@ -139,7 +139,7 @@ func TestAnACPAgentRunsInTheSandboxWithForgelineAsItsToolsAndPermissionPrompt(t 
 		t.Errorf("plan events: %v", plans)
 	}
 	line := strings.Join(*started, " ")
-	for _, want := range []string{"docker exec -i -w /work", "-e HOME=/work/.agent", "-e " + geminiKeyName + " ", "sh -c PATH=/work/.antigravity/bin", "agy acp"} {
+	for _, want := range []string{"docker exec -i -w /work", "-e HOME=/work/.agent", "-e " + geminiKeyName + " ", "sh -c export PATH=/work/.antigravity/bin", "agy acp"} {
 		if !strings.Contains(line, want) {
 			t.Errorf("the agent was not started with %q:\n%s", want, line)
 		}
@@ -252,5 +252,33 @@ func TestAnACPAgentNeedsTheSandboxNetworkAndRejectsWhenNobodyCanAnswer(t *testin
 	out, _ := json.Marshal(m.srv.acpPermission(run, json.RawMessage(`{"toolCall":{"title":"rm","kind":"execute"},"options":[{"optionId":"a","kind":"allow_once"},{"optionId":"r","kind":"reject_once"}]}`)))
 	if !strings.Contains(string(out), `"optionId":"r"`) {
 		t.Errorf("nobody to ask: %s", out)
+	}
+}
+
+// The preset commands are run by `sh -c` in the container, so each is run here for real with a stand-in program where the
+// agent lives, to be sure the shell finds it.
+func TestEachAgentPresetFindsItsProgramWhenRunByTheShell(t *testing.T) {
+	home := t.TempDir()
+	bin := filepath.Join(home, ".local", "bin")
+	os.MkdirAll(bin, 0o755)
+	for _, prog := range []string{"agy", "copilot", "codex-acp"} {
+		os.WriteFile(filepath.Join(bin, prog), []byte("#!/bin/sh\necho \"ran "+prog+" $*\"\n"), 0o755)
+	}
+	for harness, want := range map[string]string{"antigravity": "ran agy acp", "copilot": "ran copilot --acp", "codex": "ran codex-acp"} {
+		cmd := exec.Command("sh", "-c", harnessCommands[harness])
+		cmd.Env = []string{"HOME=" + home, "PATH=" + bin + ":/usr/bin:/bin"}
+		if harness == "antigravity" {
+			cmd.Env = []string{"HOME=" + home, "PATH=/usr/bin:/bin"} // agy is found through the command's own PATH
+		}
+		out, err := cmd.CombinedOutput()
+		if err != nil || !strings.Contains(string(out), want) {
+			t.Errorf("%s: %q %v", harness, out, err)
+		}
+	}
+	// The Antigravity installer's own folder is searched too.
+	cmd := exec.Command("sh", "-c", strings.ReplaceAll(harnessCommands["antigravity"], "/work/.antigravity/bin", home+"/.local/bin"))
+	cmd.Env = []string{"HOME=" + t.TempDir(), "PATH=/usr/bin:/bin"}
+	if out, err := cmd.CombinedOutput(); err != nil || !strings.Contains(string(out), "ran agy acp") {
+		t.Errorf("the installer's folder: %q %v", out, err)
 	}
 }
