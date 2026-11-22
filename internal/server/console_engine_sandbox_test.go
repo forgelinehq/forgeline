@@ -43,7 +43,9 @@ dec = json.loads(rpc('tools/call', {'name': 'approve', 'arguments': {'tool_name'
 print(json.dumps({'type': 'result', 'subtype': 'success', 'is_error': False, 'result': 'in container: ' + dec['behavior'] + ' ' + str(len(tools)) + ' tools; token=' + os.environ.get('CLAUDE_CODE_OAUTH_TOKEN', '')[:6], 'session_id': 'c-1'}), flush=True)
 `
 
-func TestTheAgentRunsInTheSandboxContainerAndReachesForgelineThroughASocket(t *testing.T) {
+// containerEngineHarness is a server with the sandbox on and the agent set to run in it, with a stand-in program.
+func containerEngineHarness(t *testing.T) (*mcpHarness, *dockerStub, *[]string) {
+	t.Helper()
 	bin := t.TempDir()
 	if err := os.WriteFile(filepath.Join(bin, "claude"), []byte(fakeClaudeSocket), 0o755); err != nil {
 		t.Fatal(err)
@@ -54,9 +56,9 @@ func TestTheAgentRunsInTheSandboxContainerAndReachesForgelineThroughASocket(t *t
 	short, _ := os.MkdirTemp("/tmp", "flE")
 	t.Cleanup(func() { os.RemoveAll(short) })
 	m.srv.cfg.DataDir = short
-	var started []string
+	started := new([]string)
 	m.srv.engineExec = func(ctx context.Context, name string, args ...string) *exec.Cmd {
-		started = append([]string{name}, args...)
+		*started = append([]string{name}, args...)
 		i := 0
 		for j, a := range args {
 			if a == "claude" && j > 0 && args[j-1] != "-e" {
@@ -73,6 +75,14 @@ func TestTheAgentRunsInTheSandboxContainerAndReachesForgelineThroughASocket(t *t
 	m.admin.expect(200, "PUT", "/v1/assistant/sandbox", map[string]any{"enabled": true})
 	m.admin.expect(200, "PUT", "/v1/integrations/assistant", map[string]any{"backend": "claude-agent", "model": ""})
 
+	return m, d, started
+}
+
+func TestTheAgentRunsInTheSandboxContainerAndReachesForgelineThroughASocket(t *testing.T) {
+	m, d, startedP := containerEngineHarness(t)
+	short := m.srv.cfg.DataDir
+	started := *startedP
+	_ = short
 	st := m.streamWith(m.dev, map[string]any{"message": "deploy it"}, "unused")
 	id := m.waitPending(t)
 	time.Sleep(30 * time.Millisecond)
@@ -103,6 +113,7 @@ func TestTheAgentRunsInTheSandboxContainerAndReachesForgelineThroughASocket(t *t
 			t.Errorf("docker run lacks %q:\n%s", want, run)
 		}
 	}
+	started = *startedP
 	line := strings.Join(started, " ")
 	for _, want := range []string{"docker exec -i -w /work", "-e HOME=/work/.agent", "-e " + claudeTokenName + " ", "--permission-prompt-tool mcp__forgeline__approve", "--append-system-prompt-file /run/forgeline/system-", "/opt/forgeline/forgeline", "FORGELINE_MCP_SOCKET", "/run/forgeline/engine.sock"} {
 		if !strings.Contains(line, want) {

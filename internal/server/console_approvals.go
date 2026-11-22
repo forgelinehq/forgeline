@@ -157,3 +157,31 @@ func (s *Server) handleAssistantApproval(w http.ResponseWriter, r *http.Request)
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"decision": req.Decision})
 }
+
+// approveWaitingEngine answers yes to the permission cards the agent is waiting on for this person, which is what switching
+// autopilot on while it waits means. It reports how many.
+func (b *approvalBook) approveWaitingEngine(who string) int {
+	b.mu.Lock()
+	var ids []string
+	for id, p := range b.pending {
+		if p.who == who && p.kind == "permission" && engineTools[p.tool] {
+			ids = append(ids, id)
+		}
+	}
+	b.mu.Unlock()
+	n := 0
+	for _, id := range ids {
+		if b.resolveKind(id, who, "permission", decisionOnce) {
+			n++
+		}
+	}
+	return n
+}
+
+// stillWaiting says whether a request is still waiting for an answer.
+func (b *approvalBook) stillWaiting(id string) bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	_, ok := b.pending[id]
+	return ok
+}

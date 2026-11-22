@@ -49,6 +49,9 @@ var engineRuns = struct {
 
 const engineApproveTool = "approve"
 
+// engineTools are Claude Code's own tools that ask Forgeline before they run.
+var engineTools = map[string]bool{"Bash": true, "Write": true, "Edit": true, "MultiEdit": true, "NotebookEdit": true, "WebFetch": true, "WebSearch": true}
+
 func engineToken() string { return randomID() + randomID() }
 
 func engineWorkspace(dataDir string, p Principal) (work, home string) {
@@ -185,11 +188,26 @@ func (s *Server) enginePermission(run *engineRun, raw json.RawMessage) string {
 	if json.Unmarshal(raw, &in) != nil || in.ToolName == "" {
 		return deny("the request could not be read")
 	}
+	// Autopilot, switched on at any time in this conversation: inside the sandbox container the agent's own tools run without a
+	// card, and each one is shown and audited. On the server itself autopilot does not cover them: a command there runs as the
+	// server's user, so the person still answers each.
+	if ap := liveAutopilot(run.ctx, run.p); ap != nil && s.engineInContainer(run.ctx) {
+		desc := describeEngineTool(in.ToolName, in.Input)
+		ap.spend()
+		_ = s.audit(run.ctx, run.p, "", "assistant.engine.tool", in.ToolName, "autopilot, no card: "+truncate(desc, 300), true)
+		ap.announce(truncate(desc, 300), "")
+		b, _ := json.Marshal(map[string]any{"behavior": "allow", "updatedInput": in.Input})
+		return string(b)
+	}
 	ask := permAskerFrom(run.ctx)
 	if ask == nil {
 		return deny("nobody is here to approve " + in.ToolName + ", so it did not run")
 	}
-	choice, err := ask(permRequest{Tool: in.ToolName, Command: describeEngineTool(in.ToolName, in.Input), Why: "the agent wants to run its own " + in.ToolName + " tool in your workspace"})
+	why := "the agent wants to run its own " + in.ToolName + " tool in your sandbox. Autopilot runs these without asking"
+	if !s.engineInContainer(run.ctx) {
+		why = "the agent wants to run its own " + in.ToolName + " tool on the server itself, as the server's user. Autopilot does not cover that; turn on the sandbox to run it in a container"
+	}
+	choice, err := ask(permRequest{Tool: in.ToolName, Command: describeEngineTool(in.ToolName, in.Input), Why: why})
 	if err != nil || choice == decisionDenied {
 		msg := "the person said no, so it did not run"
 		if err != nil {
@@ -282,7 +300,20 @@ func (s *Server) askEngine(ctx context.Context, p Principal, conv, message, page
 		mcpCfg = []byte(engineMCPConfig(tok))
 		sysArg = "/run/forgeline/system-" + tok[:12] + ".md"
 	}
-	args := []string{"-p", "--output-format", "stream-json", "--verbose", "--max-turns", fmt.Sprint(engineMaxTurns),
+	maxTurns, wall := engineMaxTurns, time.Duration(engineMaxSeconds)*time.Second
+	if ap := liveAutopilot(ctx, p); ap != nil {
+		// Autopilot is not limited unless the person set a limit, so a long job is not cut off at the usual 60 turns and 15 minutes.
+		maxTurns, wall = 2000, 12*time.Hour
+		ap.mu.Lock()
+		if ap.steps > 0 {
+			maxTurns = max(ap.steps-ap.used, 1)
+		}
+		if !ap.until.IsZero() {
+			wall = max(time.Until(ap.until), time.Minute)
+		}
+		ap.mu.Unlock()
+	}
+	args := []string{"-p", "--output-format", "stream-json", "--verbose", "--max-turns", fmt.Sprint(maxTurns),
 		"--strict-mcp-config", "--mcp-config", string(mcpCfg),
 		"--permission-prompt-tool", "mcp__forgeline__" + engineApproveTool,
 		"--allowedTools", "Read", "Glob", "Grep", "TodoWrite", "mcp__forgeline",
@@ -294,7 +325,7 @@ func (s *Server) askEngine(ctx context.Context, p Principal, conv, message, page
 	if st := s.loadAssistant(ctx); st.Model != "" {
 		args = append(args, "--model", st.Model)
 	}
-	cctx, cancel := context.WithTimeout(ctx, engineMaxSeconds*time.Second)
+	cctx, cancel := context.WithTimeout(ctx, wall)
 	defer cancel()
 	var cmd *exec.Cmd
 	if inContainer {
@@ -344,7 +375,7 @@ func (s *Server) askEngine(ctx context.Context, p Principal, conv, message, page
 	}
 	switch {
 	case cctx.Err() != nil && ctx.Err() == nil:
-		return "", errors.New("the agent took too long (over 15 minutes)")
+		return "", fmt.Errorf("the agent took too long (over %s)", wall.Round(time.Minute))
 	case perr != nil:
 		return "", perr
 	case isErr:
