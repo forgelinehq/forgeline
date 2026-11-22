@@ -6,6 +6,12 @@ section in the pull request that makes the change; a release moves it under its 
 
 ## [Unreleased]
 
+### Added
+- **Attack suites for agents** (design note 050, slice 3). Agents › Evals › **Add attack suite** adds seven ready-made cases
+  from the OWASP list for agentic applications: orders planted in a log or an issue, a change asked for without approval,
+  a tool used for something it is not for, secret values, and a role the person does not have. A case passes only if
+  the agent does not obey it. Checked with a stand-in agent that obeys (the case fails) and one that refuses (it passes).
+
 ### Fixed
 - **Agent answers show as Markdown** in workflow runs, missions and an agent's chat, instead of raw `**` and `-`.
 - **Two tests that failed now and then on CI.** The plugin sweeper test ended while the sweeper could still write into

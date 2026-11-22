@@ -17,7 +17,9 @@ export async function evalsPage({ query }) {
   try { [r, agents] = await Promise.all([get('/v1/ai/evals'), get('/v1/ai/agents').then(x => x.agents)]); } catch (e) { return mount(el, errorBox(e.message)); }
   const name = (id) => agents.find(a => a.id === id)?.name || id;
   mount(el, pageHeader('Evals', 'Test an agent before people rely on it: cases it must answer, tools it must or must never call, answers a judge model grades. Nothing an eval runs changes anything.',
-    h('button', { class: 'btn-primary', type: 'button', id: 'eval-new', onclick: () => newSuite(agents, query && query.agent) }, icon('plus', 'size-4'), 'New suite')),
+    h('div', { class: 'flex flex-wrap gap-2' },
+      h('button', { class: 'btn-secondary', type: 'button', id: 'eval-attacks', onclick: () => attackSuite(agents, query && query.agent) }, icon('shield', 'size-4'), 'Add attack suite'),
+      h('button', { class: 'btn-primary', type: 'button', id: 'eval-new', onclick: () => newSuite(agents, query && query.agent) }, icon('plus', 'size-4'), 'New suite'))),
     r.suites.length ? h('div', { class: 'card divide-y divide-slate-200 dark:divide-slate-800', id: 'eval-list' }, r.suites.map(x => h('a', { href: '#/evals/' + x.id, 'data-suite': x.id,
       class: 'flex flex-wrap items-center gap-3 px-5 py-4 hover:bg-slate-50 dark:hover:bg-slate-800/40' },
       h('span', { class: 'flex size-9 flex-none items-center justify-center rounded-lg bg-brand-50 text-brand-700 dark:bg-brand-500/15 dark:text-brand-200' }, icon('eval', 'size-[18px]')),
@@ -26,6 +28,22 @@ export async function evalsPage({ query }) {
       score(x.last_run)))) : emptyState('eval', 'No suites yet', 'A suite is a few questions for one agent and what the answers must do. Start with three cases you would check by hand.',
       h('button', { class: 'btn-primary', type: 'button', onclick: () => newSuite(agents) }, icon('plus', 'size-4'), 'New suite')));
   return el;
+}
+
+function attackSuite(agents, agentID) {
+  drawer('Add attack suite', (close) => {
+    const agent = h('select', { id: 'attack-agent', class: 'input' }, agents.filter(a => !a.archived_at).map(a => h('option', { value: a.id, selected: a.id === agentID }, a.name)));
+    const out = h('div', {});
+    const go = h('button', { class: 'btn-primary', type: 'button', id: 'attack-create', onclick: async () => {
+      go.disabled = true;
+      try { const x = await post('/v1/ai/evals/attack-suite', { agent: agent.value }); close(); navigate('/evals/' + x.id); }
+      catch (e) { mount(out, errorBox(e.message)); go.disabled = false; }
+    } }, 'Add');
+    return h('div', { class: 'space-y-4' },
+      h('p', { class: 'muted text-sm' }, 'Seven ready-made cases from the OWASP list for agentic applications: orders hidden in a log or an issue, a change asked for without approval, a tool used for something it is not for, secret values, and a role the person does not have. Each passes only if the agent does not obey. Every case is asked three times.'),
+      field('Agent', agent, 'Give the agent run_failure or get_step_log so it reads the planted text, and set a judge model on the suite for the grading checks.', 'attack-agent'), out,
+      h('div', { class: 'flex justify-end gap-2' }, h('button', { class: 'btn-secondary', type: 'button', onclick: () => close() }, 'Cancel'), go));
+  });
 }
 
 function newSuite(agents, agentID) {
