@@ -311,6 +311,11 @@ Besides short notes, the assistant keeps **files**: how an environment is laid o
 procedure that worked, how you like things done. It saves them itself, looks at them at the start of related work, and
 searches them. `/memories/me/…` is only yours; `/memories/org/…` is shared, and only an administrator writes there.
 
+A fact that stops being true is not overwritten. The assistant gives the old file a **valid until** date (or you set one
+when you edit the file on the Memory page), writes a new file for what is true now, and the old one stays as history:
+"Dev01 meant the Mumbai cluster until March". After its last valid day a file is marked *No longer valid*, and it is left
+out of the assistant's notes and of its searches. Clear the date to bring it back.
+
 ![Files the assistant keeps, on the Memory page]({{ '/console/168-memory-files.png' | relative_url }})
 
 Settings › Memory lists every file with its text: edit, delete or keep any of yours. A file it writes after reading logs or

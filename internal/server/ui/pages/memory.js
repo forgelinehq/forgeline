@@ -47,14 +47,18 @@ export async function memoryPage() {
       const body = h('pre', { class: 'mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-slate-50 p-3 font-mono text-xs dark:bg-slate-900' }, f.content);
       const editBtn = h('button', { class: 'btn-ghost btn-sm', type: 'button', 'aria-label': 'Edit ' + f.path, onclick: () => {
         const ta = h('textarea', { class: 'input w-full font-mono text-xs', rows: '8', maxlength: '8000', 'aria-label': 'File text' }, f.content);
-        mount(box, h('div', { class: 'space-y-2' }, h('code', { class: 'text-xs' }, f.path), ta, h('div', { class: 'flex gap-2' },
-          h('button', { class: 'btn-primary btn-sm', type: 'button', onclick: () => act(() => put('/v1/assistant/memory/files', { path: f.path, content: ta.value }), 'Saved') }, 'Save'),
+        const until = h('input', { class: 'input w-auto', type: 'date', value: f.valid_until || '', 'aria-label': 'Valid until' });
+        mount(box, h('div', { class: 'space-y-2' }, h('code', { class: 'text-xs' }, f.path), ta,
+          h('label', { class: 'flex flex-wrap items-center gap-2 text-xs' }, 'Valid until', until, h('span', { class: 'muted' }, 'The last day this is true. Leave empty if it does not run out. After it the file is kept as history and left out of the assistant\'s notes.')),
+          h('div', { class: 'flex gap-2' },
+          h('button', { class: 'btn-primary btn-sm', type: 'button', onclick: () => act(() => put('/v1/assistant/memory/files', { path: f.path, content: ta.value, valid_until: until.value }), 'Saved') }, 'Save'),
           h('button', { class: 'btn-secondary btn-sm', type: 'button', onclick: load }, 'Cancel'))));
       } }, icon('edit', 'size-4'));
-      const box = h('li', { class: 'px-4 py-3', 'data-memfile': f.path, 'data-pending': String(!!f.pending) },
+      const box = h('li', { class: 'px-4 py-3', 'data-memfile': f.path, 'data-pending': String(!!f.pending), 'data-expired': String(!!f.expired) },
         h('div', { class: 'flex flex-wrap items-center gap-2' },
           h('code', { class: 'w-full break-all text-xs' }, f.path),
           f.pending ? h('span', { class: 'pill-wait' }, 'Waiting') : null,
+          f.expired ? h('span', { class: 'pill-idle', title: 'Kept as history; the assistant does not use it' }, 'No longer valid since ' + f.valid_until) : (f.valid_until ? h('span', { class: 'pill-idle' }, 'Valid until ' + f.valid_until) : null),
           h('span', { class: 'muted text-xs' }, (f.by === 'assistant' ? 'Written by the assistant' : 'Written by a person') + ' · ' + relTime(f.updated)),
           f.pending ? h('button', { class: 'btn-primary btn-sm', type: 'button', 'data-act': 'keep', onclick: () => act(() => put('/v1/assistant/memory/files', { path: f.path, keep: true }), 'Kept') }, 'Keep') : null,
           f.can_edit ? editBtn : null,

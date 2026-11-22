@@ -7,6 +7,10 @@ section in the pull request that makes the change; a release moves it under its 
 ## [Unreleased]
 
 ### Added
+- **Memory files can stop being valid.** A file the assistant keeps can have a *valid until* date. The assistant expires an
+  old fact and writes a new file instead of overwriting it, so "Dev01 meant X until March" is kept as history. After its
+  last day a file is marked *No longer valid* on the Memory page and left out of the assistant's notes and searches; you
+  can set or clear the date there.
 - **An `eval` pipeline step** (design note 050, slice 3). `eval: {suite: triage-regression}` runs an agent's suite from Agents ›
   Evals and fails unless every case passes, so the pipeline that ships a change to an agent tests it first. Optional
   `version` and `model`. It runs on the server as the run, nothing it does is carried out, and each attempt is a trace.

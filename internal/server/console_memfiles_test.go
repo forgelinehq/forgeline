@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 func mem(args map[string]any) string { return lookupReply(memoryTool, args) }
@@ -226,4 +227,88 @@ func TestForgetMeAlsoRemovesMyFilesAndNotTheOrganisations(t *testing.T) {
 	if len(f.Files) != 2 {
 		t.Errorf("another person's files went too: %+v", f.Files)
 	}
+}
+
+// A fact that stops being true is kept as history, not overwritten: after its last valid day it leaves the index and
+// search, and a view says it no longer holds. A fact with a future date still counts.
+func TestMemoryFilesCanStopBeingValid(t *testing.T) {
+	m := newMCPHarness(t)
+	r := m.memRun(m.dev,
+		map[string]any{"command": "create", "path": "/memories/me/old-dev01.md", "file_text": "Dev01 means the Mumbai cluster.", "valid_until": "2020-03-31"},
+		map[string]any{"command": "create", "path": "/memories/me/new-dev01.md", "file_text": "Dev01 means the Singapore cluster.", "valid_until": "2999-01-01"},
+		map[string]any{"command": "create", "path": "/memories/me/bad.md", "file_text": "x", "valid_until": "March"},
+		map[string]any{"command": "search", "query": "dev01 cluster"},
+		map[string]any{"command": "view", "path": "/memories/me/old-dev01.md"},
+		map[string]any{"command": "view", "path": "/memories/me/new-dev01.md"},
+		map[string]any{"command": "view"})
+	if !strings.Contains(r[0], "File created") || !strings.Contains(r[1], "File created") {
+		t.Fatalf("create: %q", r[:2])
+	}
+	if !strings.Contains(r[2], "last day") {
+		t.Errorf("a bad date was accepted: %s", r[2])
+	}
+	if strings.Contains(r[3], "old-dev01") || !strings.Contains(r[3], "new-dev01") {
+		t.Errorf("search should skip the expired file and find the current one: %s", r[3])
+	}
+	if !strings.Contains(r[4], "no longer valid since 2020-03-31") || !strings.Contains(r[4], "Mumbai") {
+		t.Errorf("view of an expired file: %s", r[4])
+	}
+	if !strings.Contains(r[5], "valid until 2999-01-01") {
+		t.Errorf("view of a dated file: %s", r[5])
+	}
+	if !strings.Contains(r[6], "old-dev01.md (") || !strings.Contains(r[6], "[no longer valid since 2020-03-31]") {
+		t.Errorf("the listing should still show the expired file, marked: %s", r[6])
+	}
+	// The index in the prompt leaves the expired file out.
+	m.run(m.dev, map[string]any{"message": "hello"})
+	if sys := m.lastSystem(); strings.Contains(sys, "old-dev01") || !strings.Contains(sys, "new-dev01") {
+		t.Errorf("the index should hold only the current file:\n%s", sys)
+	}
+
+	// The last valid day still counts; the day after it does not.
+	today := time.Now().UTC().Format("2006-01-02")
+	r = m.memRun(m.dev,
+		map[string]any{"command": "create", "path": "/memories/me/ends-today.md", "file_text": "Freeze window runs until end of day.", "valid_until": today},
+		map[string]any{"command": "search", "query": "freeze window"})
+	if !strings.Contains(r[1], "ends-today") {
+		t.Errorf("a file valid until today was treated as expired: %s", r[1])
+	}
+	if (MemFile{ValidUntil: today}).expired(time.Now()) || !(MemFile{ValidUntil: today}).expired(time.Now().AddDate(0, 0, 1)) {
+		t.Error("expired() is off by a day")
+	}
+
+	// expire: with a date, and with none (it stops holding now).
+	r = m.memRun(m.dev,
+		map[string]any{"command": "expire", "path": "/memories/me/new-dev01.md"},
+		map[string]any{"command": "search", "query": "singapore"},
+		map[string]any{"command": "expire", "path": "/memories/me/new-dev01.md", "valid_until": "nope"},
+		map[string]any{"command": "expire", "path": "/memories/me/missing.md"})
+	if !strings.Contains(r[0], "marked as valid until") {
+		t.Errorf("expire: %s", r[0])
+	}
+	if strings.Contains(r[1], "new-dev01") {
+		t.Errorf("an expired file was found by search: %s", r[1])
+	}
+	if !strings.Contains(r[2], "last day") || !strings.Contains(r[3], "does not exist") {
+		t.Errorf("expire checks: %q", r[2:])
+	}
+
+	// The Memory page lists them with the date, and a person can change or clear it.
+	var list struct {
+		Files []memFileJSON `json:"files"`
+	}
+	json.Unmarshal(m.dev.expect(200, "GET", "/v1/assistant/memory/files", nil), &list)
+	got := map[string]memFileJSON{}
+	for _, f := range list.Files {
+		got[f.Path] = f
+	}
+	if f := got["/memories/me/old-dev01.md"]; !f.Expired || f.ValidUntil != "2020-03-31" {
+		t.Errorf("old file: %+v", f)
+	}
+	var back memFileJSON
+	json.Unmarshal(m.dev.expect(200, "PUT", "/v1/assistant/memory/files", map[string]any{"path": "/memories/me/old-dev01.md", "keep": true, "valid_until": ""}), &back)
+	if back.Expired || back.ValidUntil != "" {
+		t.Errorf("clearing the date: %+v", back)
+	}
+	m.dev.expect(400, "PUT", "/v1/assistant/memory/files", map[string]any{"path": "/memories/me/old-dev01.md", "keep": true, "valid_until": "soon"})
 }
