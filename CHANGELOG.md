@@ -92,6 +92,12 @@ section in the pull request that makes the change; a release moves it under its 
 - **Workflows refuse agents with tools their run cannot use.** Saving a workflow whose agent has a tool its run-as role
   may never use (such as `call_aws`, for administrators only, in a workflow running as a viewer) now says so, instead of
   every run quietly going without it.
+- **Ready-made agents that are written out properly.** The Library's security, cost, cluster and failed-run agents were
+  one or two lines each. They now have a role, how to work, what they never do and the shape of the answer, with skills that
+  are real procedures: "Deep AWS security review" (accounts, Guard and Inspector findings, network, data, identity,
+  compute and logging checks, a ranked report with exact fixes and what could not be checked), "Review an account for waste"
+  (with sizes and confidence), "Check a cluster" and "Triage a failed run" (with the kind of cause named). Installed copies
+  update from the Library as new versions.
 - **No duplicate cards.** If the assistant prepares a card you already have waiting (the same pipeline, skill, agent or
   workflow), you get that card again instead of a second one; a changed version replaces the old one, which is marked
   dismissed. Before, asking twice left two cards and the question of which to confirm.

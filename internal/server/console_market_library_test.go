@@ -277,3 +277,32 @@ func TestPackagedPackIsInstalledOff(t *testing.T) {
 		}
 	}
 }
+
+// The ready-made agents the product ships are the first thing a person tries. They are written out in full: a role, how to
+// work, what never to do and what the answer looks like, with a skill that is a real procedure. A one-line agent is a bug.
+func TestTheDeepAgentsAreNotOneLiners(t *testing.T) {
+	for id, min := range map[string][2]int{"security-review": {1200, 2500}, "cost-watch": {900, 2000}, "cluster-health": {600, 1500}, "failed-run-triage": {600, 1500}} {
+		b, err := marketFS.ReadFile("market/" + id + ".json")
+		if err != nil {
+			t.Fatal(err)
+		}
+		var p MarketPackage
+		if err := json.Unmarshal(b, &p); err != nil {
+			t.Fatal(err)
+		}
+		if len(p.Agents) == 0 || len(p.Skills) == 0 {
+			t.Fatalf("%s has no agent or no skill", id)
+		}
+		if n := len(p.Agents[0].Instructions); n < min[0] {
+			t.Errorf("%s: the agent's instructions are %d characters, want at least %d", id, n, min[0])
+		}
+		if n := len(p.Skills[0].Body); n < min[1] {
+			t.Errorf("%s: the skill is %d characters, want at least %d", id, n, min[1])
+		}
+		for _, l := range strings.Split(p.Skills[0].Body, "\n") {
+			if strings.HasPrefix(l, "   - ") {
+				t.Errorf("%s: a nested list item renders as numbered steps in the console: %q", id, truncate(l, 50))
+			}
+		}
+	}
+}
