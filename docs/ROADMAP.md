@@ -30,7 +30,7 @@ files, and native tool calls for Anthropic and OpenAI-compatible providers. Note
 with Forgeline as its tools and its permission prompt, running inside the sandbox container; any coding agent over the Agent
 Client Protocol (presets for Copilot, Codex and Antigravity); one autopilot gate for every approval point. Open: the sandbox is off by
 default (an administrator switch); validity dates, a "keep this" card and memory compaction; a host shell mode; a microVM;
-streaming partial answers; Antigravity (`agy`) needs sign-in before it opens a session. A bug to check: the card confirm endpoint marks an action failed before it executes it. See
+streaming partial answers; Antigravity (`agy`) needs sign-in before it opens a session. See
 [note 052](design/052-assistant-that-works-like-a-colleague.md) and [note 053](design/053-claude-code-as-the-agent.md).
 
 ## Runbooks (note 051)
