@@ -92,6 +92,14 @@ section in the pull request that makes the change; a release moves it under its 
 - **Workflows refuse agents with tools their run cannot use.** Saving a workflow whose agent has a tool its run-as role
   may never use (such as `call_aws`, for administrators only, in a workflow running as a viewer) now says so, instead of
   every run quietly going without it.
+- **The assistant can change anything you can, and autopilot is one rule.** A new `forgeline_api` tool lets the assistant, and
+  any agent running through it (Claude Code, an ACP agent), do in Forgeline what you do in the console, by calling the
+  console's own API as you: read anything; update, version, archive or delete agents, skills, teams, workflows, pipelines and
+  memory. Before, it could only create copies (an "update" made a sixteenth agent and left the old one). The same role checks,
+  validation and audit entries apply, and a change asks first. It cannot touch users, tokens, secrets, permissions, sign-in,
+  approvals or starting runs. Autopilot is decided in one place now: AWS changes, an agent's own tools, an ACP agent's requests,
+  cards that save something and these changes all ask one gate, and a card autopilot approves shows as done. Running a pipeline,
+  turning on a capability and handing a secret to a command still wait for you.
 - **Any coding agent over ACP** (design note 053). A new assistant choice runs an agent that speaks the Agent Client Protocol
   (the standard VS Code and Zed use): Antigravity CLI, GitHub Copilot CLI, Codex, or your own command, inside your sandbox.
   Forgeline gives it its tools as an MCP server and answers its permission requests with the same cards; autopilot covers it

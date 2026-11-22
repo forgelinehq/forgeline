@@ -263,6 +263,7 @@ function build(close, role) {
       h('div', { class: 'flex gap-2' },
         h('button', { type: 'button', class: 'btn-primary btn-sm', 'data-action': 'confirm', onclick: () => send('confirm') }, 'Confirm'),
         h('button', { type: 'button', class: 'btn-secondary btn-sm', 'data-action': 'dismiss', onclick: () => send('dismiss') }, 'Dismiss')));
+    if (a.done) done(a.result || 'Done.', a.link); // autopilot already confirmed it
     return box;
   }
 

@@ -364,3 +364,16 @@ project), stored in the document store:
   block. A tool whose name providers refuse (the dots in some MCP tool names) is left to the text block as well.
 - Arguments are now read loosely: `"30"` where a number is wanted and `12` where text is are accepted.
 - Next, if the text history proves to confuse a model: send tool results back as native results too.
+
+## Built (2026-11-22): one gate for autopilot, and the console API as a tool
+
+- Autopilot had been added approval point by approval point (AWS changes, then the agent's tools, then ACP, then cards), each with
+  its own copy of the rule. It is now one function, `autopilotApproves` in `console_gate.go`, with one table of what is covered
+  (`autopilotCovers`): AWS changes the permission check left as a plain ask, an agent's own tool in the sandbox, saving a
+  definition from a card, and a change through the console API. Every approval point asks it, so a new assistant or agent gets the
+  same behaviour by calling it. Never covered, by the table: running a pipeline, a capability card, a secret.
+- `forgeline_api` (method, path, body) calls the console's own API in-process as the person: the server marks a request as made for
+  a signed-in person with a context key only this package can set, so the same handlers, role checks, validation and audit run.
+  Reads are open. Writes are limited to agents, skills, teams, workflows, team schedules, evals, pipelines and memory, and a path
+  that decides who may do what or approves, applies or starts work is refused for every method. It replaces one tool per object, and
+  every assistant backend gets it, because the Claude Code and ACP engines are handed the assistant's tool list.

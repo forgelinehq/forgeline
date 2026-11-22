@@ -158,6 +158,27 @@ func (s *Server) lookupPrepareAction(ctx context.Context, raw json.RawMessage) (
 	}
 	ip, _ := ctx.Value(mcpIPKey{}).(string)
 	s.audit(ctx, t.p, ip, "assistant.action.prepare", "action/"+act.ID, act.Kind+" "+act.Pipeline, true)
+	// A card autopilot approves is confirmed for the person through the same checks, and shown as done.
+	if s.autopilotApproves(ctx, t.p, gateRequest{Kind: gateOfAction(act.Kind), Tool: prepareTool, Detail: act.Title}) {
+		actionMu.Lock()
+		act.Status = actFailed
+		result, link, apiErr := s.performAction(ctx, t.p, ip, act)
+		if apiErr != nil {
+			act.Result = apiErr.body.Error
+			s.docs.Put(ctx, kindAssistAction, act.ID, act)
+			actionMu.Unlock()
+			_ = s.audit(ctx, t.p, ip, "assistant.action.confirm", "action/"+act.ID, act.Kind+" failed under autopilot: "+truncate(apiErr.body.Error, 160), false)
+			return "", errors.New("autopilot could not do it: " + apiErr.body.Error + ". Fix that and prepare it again")
+		}
+		act.Status, act.Result, act.Link = actDone, result, link
+		s.docs.Put(ctx, kindAssistAction, act.ID, act)
+		actionMu.Unlock()
+		_ = s.audit(ctx, t.p, ip, "assistant.action.confirm", "action/"+act.ID, act.Kind+" "+act.Pipeline+" (autopilot)", true)
+		if sink, ok := ctx.Value(lookupSinkKey{}).(*lookupSink); ok {
+			sink.actions = append(sink.actions, act)
+		}
+		return "Done, because autopilot is on: " + result + " Carry on with the rest of the task.", nil
+	}
 	if sink, ok := ctx.Value(lookupSinkKey{}).(*lookupSink); ok {
 		sink.actions = append(sink.actions, act)
 	}
@@ -246,20 +267,7 @@ func (s *Server) handleConfirmAction(w http.ResponseWriter, r *http.Request) {
 	}
 	// Mark it first: if anything below fails, it cannot be replayed by pressing again.
 	a.Status = actFailed
-	var result, link string
-	var apiErr *apiError
-	switch a.Kind {
-	case actSavePipeline:
-		result, link, apiErr = s.doSavePipeline(r.Context(), p, a)
-	case actRunPipeline:
-		result, link, apiErr = s.doRunPipeline(r.Context(), p, a)
-	case actSaveSkill, actSaveAgent, actSaveWorkflow:
-		result, link, apiErr = s.doSaveDefinition(r.Context(), p, clientIP(r), a)
-	case actEnableShell, actAllowChanges:
-		result, link, apiErr = s.doCapability(r.Context(), p, a)
-	default:
-		apiErr = badRequest("unknown action")
-	}
+	result, link, apiErr := s.performAction(r.Context(), p, clientIP(r), a)
 	if apiErr != nil {
 		a.Result = apiErr.body.Error
 		s.docs.Put(r.Context(), kindAssistAction, a.ID, a)
@@ -271,6 +279,32 @@ func (s *Server) handleConfirmAction(w http.ResponseWriter, r *http.Request) {
 	s.docs.Put(r.Context(), kindAssistAction, a.ID, a)
 	s.auditReq(r, "assistant.action.confirm", "action/"+a.ID, a.Kind+" "+a.Pipeline, true)
 	writeJSON(w, http.StatusOK, a)
+}
+
+// gateOfAction says which kind of approval a card is, for the autopilot gate.
+func gateOfAction(kind string) gateKind {
+	switch kind {
+	case actRunPipeline:
+		return gateRunPipeline
+	case actEnableShell, actAllowChanges:
+		return gateCapability
+	}
+	return gateSaveDefinition
+}
+
+// performAction does what a card says, as the person, through the console's own checks.
+func (s *Server) performAction(ctx context.Context, p Principal, ip string, a AssistAction) (result, link string, apiErr *apiError) {
+	switch a.Kind {
+	case actSavePipeline:
+		return s.doSavePipeline(ctx, p, a)
+	case actRunPipeline:
+		return s.doRunPipeline(ctx, p, a)
+	case actSaveSkill, actSaveAgent, actSaveWorkflow:
+		return s.doSaveDefinition(ctx, p, ip, a)
+	case actEnableShell, actAllowChanges:
+		return s.doCapability(ctx, p, a)
+	}
+	return "", "", badRequest("unknown action")
 }
 
 func (s *Server) handleDismissAction(w http.ResponseWriter, r *http.Request) {

@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"github.com/forgelinehq/forgeline/internal/authn"
 	"strings"
 	"testing"
 	"time"
@@ -179,37 +180,34 @@ func TestAutopilotHasAnEnvelopeAStopAndAnAdministratorSwitch(t *testing.T) {
 }
 
 func TestAnEndedAutopilotAllowsNothingAndAStoppedOneIsNotResumed(t *testing.T) {
-	ctx := func(a *autopilot) context.Context { return context.WithValue(context.Background(), autopilotKey{}, a) }
-	dec := permDecision{Effect: permAsk, Why: "a change asks first"}
-	cmd := "aws ecs update-service --cluster web --service api"
-	a, _ := startAutopilot("k1", autopilotRequest{Minutes: 5, Steps: 2})
-	if !autopilotAllowsChange(ctx(a), dec, cmd) {
-		t.Error("a running autopilot does not allow a plain change")
+	m := newMCPHarness(t)
+	p := Principal{UserID: "k", Name: "k", Role: authn.Admin}
+	ctx := context.WithValue(context.Background(), autopilotConvKey{}, "c")
+	g := gateRequest{Kind: gateSaveDefinition, Tool: "prepare_action", Detail: "Save x"}
+	key := autopilotKeyFor(p, "c")
+	startAutopilot(key, autopilotRequest{Minutes: 5, Steps: 2})
+	if !m.srv.autopilotApproves(ctx, p, g) || !m.srv.autopilotApproves(ctx, p, g) {
+		t.Error("a running autopilot did not approve within its steps")
 	}
-	a.spend()
-	if !autopilotAllowsChange(ctx(a), dec, cmd) {
-		t.Error("the step before the last was refused")
+	if m.srv.autopilotApproves(ctx, p, g) {
+		t.Error("an autopilot with no steps left approved")
 	}
-	a.spend()
-	if autopilotAllowsChange(ctx(a), dec, cmd) {
-		t.Error("an autopilot with no steps left allowed a change")
-	}
-	b, _ := startAutopilot("k2", autopilotRequest{})
+	endAutopilot(key)
+	b, _ := startAutopilot(key, autopilotRequest{})
 	b.stop()
-	if autopilotAllowsChange(ctx(b), dec, cmd) {
-		t.Error("a stopped autopilot allowed a change")
+	if m.srv.autopilotApproves(ctx, p, g) {
+		t.Error("a stopped autopilot approved")
 	}
-	if autopilotAllowsChange(context.Background(), dec, cmd) {
-		t.Error("no autopilot allowed a change")
+	if m.srv.autopilotApproves(context.Background(), p, g) {
+		t.Error("with no conversation an autopilot approved")
 	}
-	endAutopilot("k1")
-	endAutopilot("k2")
+	endAutopilot(key)
 
 	// A message without the switch ends it for good: switching it on again starts a new envelope.
 	autopilotMu.Lock()
 	clear(autopilots) // other tests leave theirs standing, and the conversation id is shared
 	autopilotMu.Unlock()
-	m := newMCPHarness(t)
+	m = newMCPHarness(t)
 	answerOf(t, m.streamWith(m.dev, map[string]any{"autopilot": map[string]any{"steps": 7}}, "Hi."))
 	answerOf(t, m.streamWith(m.dev, nil, "Hi."))
 	autopilotMu.Lock()
@@ -340,3 +338,89 @@ func TestAutopilotWithoutALimitDoesNotStopAtTheUsualBudget(t *testing.T) {
 	}
 	m.dev.expect(200, "POST", "/v1/assistant/autopilot/stop", map[string]any{"conversation": apConv})
 }
+
+// One gate decides what autopilot covers, for every place that would ask the person.
+func TestTheAutopilotGateIsTheOnePlaceThatDecidesWhatItCovers(t *testing.T) {
+	want := map[gateKind]bool{gateAWSChange: true, gateAgentTool: true, gateSaveDefinition: true, gateForgelineWrite: true, gateRunPipeline: false, gateCapability: false, gateSecret: false}
+	for k, covered := range want {
+		if autopilotCovers[k] != covered {
+			t.Errorf("%s: covered %v, want %v", k, autopilotCovers[k], covered)
+		}
+	}
+	if len(autopilotCovers) != 4 {
+		t.Errorf("the policy table has %d entries", len(autopilotCovers))
+	}
+	m := newMCPHarness(t)
+	p := Principal{UserID: "gate-u", Name: "gate-u", Role: authn.Admin}
+	ctx := context.WithValue(context.Background(), autopilotConvKey{}, "conv-gate")
+	for k := range want {
+		if m.srv.autopilotApproves(ctx, p, gateRequest{Kind: k, Tool: "x", Detail: "d"}) {
+			t.Errorf("%s approved with no autopilot running", k)
+		}
+	}
+	startAutopilot(autopilotKeyFor(p, "conv-gate"), autopilotRequest{})
+	defer endAutopilot(autopilotKeyFor(p, "conv-gate"))
+	for k, covered := range want {
+		if k == gateAgentTool {
+			continue // needs the sandbox; checked below
+		}
+		if got := m.srv.autopilotApproves(ctx, p, gateRequest{Kind: k, Tool: "x", Detail: "d"}); got != covered {
+			t.Errorf("%s: approved %v, want %v", k, got, covered)
+		}
+	}
+	// An agent's own tool is covered inside the sandbox and not on the server itself.
+	if m.srv.autopilotApproves(ctx, p, gateRequest{Kind: gateAgentTool, Tool: "Bash", Detail: "ls"}) {
+		t.Error("an agent's tool was approved on the server itself")
+	}
+	m.admin.expect(200, "PUT", "/v1/assistant/sandbox", map[string]any{"enabled": true})
+	if !m.srv.autopilotApproves(ctx, p, gateRequest{Kind: gateAgentTool, Tool: "Bash", Detail: "ls"}) {
+		t.Error("an agent's tool was not approved in the sandbox")
+	}
+	if aud := string(m.admin.expect(200, "GET", "/v1/audit?limit=60", nil)); !strings.Contains(aud, "assistant.autopilot.approved") {
+		t.Error("the audit log does not say autopilot approved")
+	}
+}
+
+func TestAutopilotConfirmsCardsThatSaveAndLeavesTheRestToThePerson(t *testing.T) {
+	m := newMCPHarness(t)
+	yaml := func(name string) string {
+		return lookupReply("prepare_action", map[string]string{"action": "save_pipeline", "title": "Save " + name, "yaml": "version: v1alpha1\nname: " + name + "\nsteps:\n  - id: a\n    image: alpine:3.20\n    run: echo hi\n"})
+	}
+	// Without autopilot: a card, nothing saved.
+	cards := actionsIn(m.run(m.admin, map[string]any{"message": "save it", "conversationId": apConv}, yaml("manual")))
+	if len(cards) != 1 || cards[0]["done"] == true {
+		t.Fatalf("without autopilot: %v", cards)
+	}
+	if m.srv.docs.Get(t.Context(), kindPipeline, "manual", &SavedPipeline{}) == nil {
+		t.Fatal("a pipeline was saved before anyone confirmed it")
+	}
+	// With autopilot: saved at once, shown as done, audited; the model is told it is done.
+	evs := m.run(m.admin, map[string]any{"message": "save it", "conversationId": apConv, "autopilot": map[string]any{}}, yaml("auto"))
+	cards = actionsIn(evs)
+	if len(cards) != 1 || cards[0]["done"] != true || !strings.Contains(cards[0]["result"].(string), "auto") {
+		t.Fatalf("with autopilot: %v", cards)
+	}
+	if m.srv.docs.Get(t.Context(), kindPipeline, "auto", &SavedPipeline{}) != nil {
+		t.Error("autopilot did not save the pipeline")
+	}
+	if !strings.Contains(m.llm.lastUser(1), "because autopilot is on") {
+		t.Errorf("the model was not told: %s", m.llm.lastUser(1))
+	}
+	// Running a pipeline and turning a capability on still wait for the person, even with autopilot on.
+	run := actionsIn(m.run(m.admin, map[string]any{"message": "run it", "conversationId": apConv, "autopilot": map[string]any{}}, lookupReply("prepare_action", map[string]string{"action": "run_pipeline", "pipeline": "auto"})))
+	cap := actionsIn(m.run(m.admin, map[string]any{"message": "shell", "conversationId": apConv, "autopilot": map[string]any{}}, lookupReply("prepare_action", map[string]string{"action": "turn_on_sandbox"})))
+	if len(run) != 1 || run[0]["done"] == true || len(cap) != 1 || cap[0]["done"] == true {
+		t.Errorf("a run or a capability was confirmed by autopilot: %v %v", run, cap)
+	}
+	if m.srv.loadSandbox(t.Context()).Enabled {
+		t.Error("autopilot turned the sandbox on")
+	}
+	// A save that fails its checks is a failure the model hears about, not a silent success.
+	bad := m.run(m.admin, map[string]any{"message": "again", "conversationId": apConv, "autopilot": map[string]any{}}, yaml("auto")) // the name exists now
+	if !strings.Contains(string(mustJSON2(bad)), "already exists") {
+		t.Errorf("a duplicate under autopilot: %s", mustJSON2(bad))
+	}
+	m.admin.expect(200, "POST", "/v1/assistant/autopilot/stop", map[string]any{"conversation": apConv})
+}
+
+func mustJSON2(v any) []byte { b, _ := json.Marshal(v); return b }

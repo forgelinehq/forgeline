@@ -190,7 +190,7 @@ func (s *Server) handleAssistantRun(w http.ResponseWriter, r *http.Request) {
 			}
 			for ; sentA < len(sink.actions); sentA++ {
 				a := sink.actions[sentA]
-				out.send("CUSTOM", map[string]any{"name": "forgeline.action", "value": map[string]any{"id": a.ID, "kind": a.Kind, "title": a.Title, "effects": a.Effects, "detail": truncate(a.Detail, 8<<10), "pipeline": a.Pipeline}})
+				out.send("CUSTOM", map[string]any{"name": "forgeline.action", "value": map[string]any{"id": a.ID, "kind": a.Kind, "title": a.Title, "effects": a.Effects, "detail": truncate(a.Detail, 8<<10), "pipeline": a.Pipeline, "done": a.Result != "" && a.Status == actDone, "result": a.Result, "link": a.Link}})
 			}
 			for ; sentF < len(sink.files); sentF++ {
 				f := sink.files[sentF]

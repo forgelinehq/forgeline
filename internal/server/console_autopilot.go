@@ -164,13 +164,6 @@ func autopilotGuidance(a *autopilot) string {
 	return "\n\nAutopilot is on for this conversation, with no limit unless the person set one. Work on the task until it is done without stopping to ask: choose the sensible option, say in the answer what you chose, and keep going. Ask the person only when you are blocked on something only they know. A change the permission check allows runs without a card; a change to a protected account, to IAM, Organizations, accounts, SSM or STS, or one a rule forbids, still needs the person or a proposal, so do not try to get around that. When a tool is missing, install or write one in the sandbox."
 }
 
-// autopilotAllowsChange says whether autopilot lets this change run without a card: it must be running, and the command
-// must be the kind that asks only by default (no rule asked, and not a service that always asks).
-func autopilotAllowsChange(ctx context.Context, dec permDecision, command string) bool {
-	a := autopilotFrom(ctx)
-	return a != nil && a.active() && dec.Effect == permAsk && dec.Rule == "" && alwaysPattern(command) != ""
-}
-
 func (s *Server) autopilotAllowed(ctx context.Context) bool {
 	d, err := s.loadPermissions(ctx)
 	return err == nil && !d.AutopilotOff
