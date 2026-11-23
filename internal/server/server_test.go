@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -37,6 +38,27 @@ steps:
     needs: [build]
 `
 
+// syncBuffer is a log destination that is safe to write from the server's goroutines and read from the test.
+type syncBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *syncBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.buf.Len() > 64<<10 { // enough to explain a failure; a long test must not grow without bound
+		return len(p), nil
+	}
+	return b.buf.Write(p)
+}
+
+func (b *syncBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
+
 type harness struct {
 	t     *testing.T
 	srv   *Server
@@ -48,8 +70,17 @@ type harness struct {
 func newHarness(t *testing.T, fake *executor.Fake, mutate ...func(*Config)) *harness {
 	t.Helper()
 	st := store.NewMemory()
+	// The server's log is kept and printed only if the test fails, so a failure that happens on a busy CI runner and
+	// nowhere else (a status that never arrives, say) says what the server was doing. Registered first, it runs last,
+	// after the server has stopped and written everything.
+	logs := &syncBuffer{}
+	t.Cleanup(func() {
+		if t.Failed() {
+			t.Logf("server log of the failed test:\n%s", logs.String())
+		}
+	})
 	cfg := Config{Store: st, Executor: fake, Token: testToken, DataDir: t.TempDir(), MaxRuns: 1,
-		Logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
+		Logger: slog.New(slog.NewTextHandler(logs, nil))}
 	for _, m := range mutate {
 		m(&cfg)
 	}
