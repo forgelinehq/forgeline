@@ -7,6 +7,9 @@ section in the pull request that makes the change; a release moves it under its 
 ## [Unreleased]
 
 ### Added
+- **Long tasks no longer resend every old result.** When the lookups of a conversation pass 96 KB, the assistant clears the
+  oldest results (keeping the newest four and every call) before asking the model again, so a long review stays within
+  the model's context. The model is told a result was cleared and can call the tool again.
 - **"Keep this?" cards.** After a task the assistant can offer what it learned (what a name means, how an environment is laid
   out, a procedure that worked) as a card with the file's path and text. It is saved only when you press Confirm, as yours,
   after the server checks it again. Under autopilot a clean conversation keeps it at once; once the conversation has read

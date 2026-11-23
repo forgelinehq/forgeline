@@ -327,6 +327,11 @@ func (s *Server) lookupLoop(ctx context.Context, p Principal, turns []chatTurn, 
 	}
 	obs := lookupObserver(ctx)
 	for i := 0; ; i++ {
+		// A long task must not send every old result again on every step (note 052: context clearing).
+		if cleared, n := clearOldResults(turns, contextBudget, keepRecentResults); n > 0 {
+			turns = cleared
+			span.Set("forgeline.context.cleared_results", n)
+		}
 		reply, err := s.askAssistant(ctx, p.Role, turns, ctxText)
 		if err != nil {
 			span.Fail("model_error")
