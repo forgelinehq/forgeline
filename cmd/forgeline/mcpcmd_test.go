@@ -148,3 +148,68 @@ func TestTheMCPBridgeCanTalkToAUnixSocketWithTheEngineToken(t *testing.T) {
 		t.Errorf("another path: %d %s", code, errb.String())
 	}
 }
+
+// An agent that takes only HTTP MCP servers (the Copilot CLI ignores a stdio one, checked against the real program) reaches
+// Forgeline's tools through a listener on the container's loopback, which forwards to the engine socket.
+func TestTheMCPBridgeCanListenOnLoopbackAndForwardToTheEngineSocket(t *testing.T) {
+	sock := filepath.Join(t.TempDir(), "e.sock")
+	ln, err := net.Listen("unix", sock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var gotPath, gotAuth, gotQuery, gotBody string
+	srv := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		gotPath, gotAuth, gotQuery, gotBody = r.URL.Path, r.Header.Get("Authorization"), r.URL.RawQuery, string(b)
+		fmt.Fprint(w, `{"jsonrpc":"2.0","id":7,"result":{"tools":[]}}`)
+	})}
+	go srv.Serve(ln)
+	defer srv.Close()
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	addr := make(chan net.Addr, 1)
+	done := make(chan int, 1)
+	go func() {
+		done <- serveMCPHTTP(ctx, "127.0.0.1:0", sock, "/mcp/engine/abc123", io.Discard, func(a net.Addr) { addr <- a })
+	}()
+	a := <-addr
+	// The client names another path, a query and its own credentials: none of it reaches the engine.
+	req, _ := http.NewRequest("POST", "http://"+a.String()+"/v1/users?x=1", strings.NewReader(`{"jsonrpc":"2.0","id":7,"method":"tools/list"}`))
+	req.Header.Set("Authorization", "Bearer client-secret")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != 200 || !strings.Contains(string(out), `"tools"`) {
+		t.Errorf("answer %d %s", resp.StatusCode, out)
+	}
+	if gotPath != "/mcp/engine/abc123" || gotAuth != "" || gotQuery != "" || !strings.Contains(gotBody, "tools/list") {
+		t.Errorf("engine saw path %q, authorization %q, query %q, body %q", gotPath, gotAuth, gotQuery, gotBody)
+	}
+	cancel()
+	if code := <-done; code != 0 {
+		t.Errorf("exit %d", code)
+	}
+
+	// It listens only on this machine, and only for the engine's own path.
+	var errb bytes.Buffer
+	env := map[string]string{"FORGELINE_MCP_SOCKET": sock, "FORGELINE_MCP_PATH": "/mcp/engine/abc123"}
+	for name, args := range map[string][]string{"all interfaces": {"--listen", "0.0.0.0:18081"}, "another host": {"--listen", "10.0.0.5:18081"}, "no port": {"--listen", "127.0.0.1"}} {
+		errb.Reset()
+		if code := runMCP(t.Context(), args, strings.NewReader(""), io.Discard, &errb, func(k string) string { return env[k] }); code != 2 || !strings.Contains(errb.String(), "loopback") {
+			t.Errorf("%s: %d %s", name, code, errb.String())
+		}
+	}
+	errb.Reset()
+	if code := runMCP(t.Context(), []string{"--listen", "127.0.0.1:0"}, strings.NewReader(""), io.Discard, &errb, func(string) string { return "" }); code != 2 || !strings.Contains(errb.String(), "FORGELINE_MCP_SOCKET") {
+		t.Errorf("without the sandbox: %d %s", code, errb.String())
+	}
+	env["FORGELINE_MCP_PATH"] = "/v1/users"
+	errb.Reset()
+	if code := runMCP(t.Context(), []string{"--listen", "127.0.0.1:0"}, strings.NewReader(""), io.Discard, &errb, func(k string) string { return env[k] }); code != 2 || !strings.Contains(errb.String(), "/mcp/engine/") {
+		t.Errorf("another path: %d %s", code, errb.String())
+	}
+}

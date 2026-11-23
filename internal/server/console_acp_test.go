@@ -23,6 +23,7 @@ def rd():
     l = sys.stdin.readline()
     return json.loads(l) if l else None
 authed = os.path.exists('authed')
+copilot = os.path.exists('copilot-mode')  # behave like the real Copilot CLI (checked 2026-11-23): HTTP MCP only, asks before every tool
 mcp = None
 def rpc(method, params=None, i=[0]):
     i[0] += 1
@@ -43,12 +44,14 @@ while True:
     log.write(m.get('method', 'response') + '\n'); log.flush()
     meth = m.get('method'); i = m.get('id')
     if meth == 'initialize':
+        if copilot:
+            out({'jsonrpc': '2.0', 'id': i, 'result': {'protocolVersion': 1, 'agentCapabilities': {'loadSession': True, 'mcpCapabilities': {'http': True, 'sse': True}}, 'authMethods': [{'id': 'copilot-login'}]}}); continue
         out({'jsonrpc': '2.0', 'id': i, 'result': {'protocolVersion': 1, 'agentCapabilities': {'loadSession': True, 'sessionCapabilities': {'resume': {}}}, 'authMethods': [{'id': 'oauth-personal'}, {'id': 'gemini-api-key'}]}})
     elif meth == 'authenticate':
         open('authed', 'w').write(m['params']['methodId']); authed = True
         out({'jsonrpc': '2.0', 'id': i, 'result': {}})
     elif meth == 'session/new':
-        if not authed:
+        if not authed and not copilot:
             out({'jsonrpc': '2.0', 'id': i, 'error': {'code': -32000, 'message': 'Authentication required'}}); continue
         mcp = m['params']['mcpServers']
         open('mcp.json', 'w').write(json.dumps(m['params']))
@@ -58,6 +61,18 @@ while True:
         open('resumed.json', 'w').write(json.dumps({'method': meth, 'sessionId': m['params']['sessionId']}))
         out({'jsonrpc': '2.0', 'method': 'session/update', 'params': {'sessionId': 's-1', 'update': {'sessionUpdate': 'agent_message_chunk', 'content': {'type': 'text', 'text': 'OLD HISTORY'}}}})
         out({'jsonrpc': '2.0', 'id': i, 'result': {}})
+    elif meth == 'session/prompt' and copilot:
+        open('prompt.txt', 'w').write(json.dumps(m['params']['prompt']))
+        picks = []
+        for n, (cid, title, call) in enumerate([('t2', 'list_pipelines', 'forgeline-list_pipelines'), ('t3', 'notes', 'forgeline-notes')]):
+            out({'jsonrpc': '2.0', 'method': 'session/update', 'params': {'sessionId': 's-1', 'update': {'sessionUpdate': 'tool_call', 'toolCallId': cid, 'title': call, 'kind': 'read', 'status': 'pending', 'rawInput': {}}}})
+            out({'jsonrpc': '2.0', 'id': 901 + n, 'method': 'session/request_permission', 'params': {'sessionId': 's-1', 'toolCall': {'toolCallId': cid, 'title': title, 'kind': 'other', 'status': 'pending', 'rawInput': {}}, 'options': [{'optionId': 'allow_once', 'name': 'Allow once', 'kind': 'allow_once'}, {'optionId': 'allow_always', 'name': 'Always allow', 'kind': 'allow_always'}, {'optionId': 'reject_once', 'name': 'Reject', 'kind': 'reject_once'}]}})
+            r = rd()
+            while r is not None and r.get('id') != 901 + n: r = rd()
+            picks.append(cid + '=' + r['result']['outcome'].get('optionId', r['result']['outcome']['outcome']))
+        open('perm.txt', 'w').write(','.join(picks))
+        out({'jsonrpc': '2.0', 'method': 'session/update', 'params': {'sessionId': 's-1', 'update': {'sessionUpdate': 'agent_message_chunk', 'content': {'type': 'text', 'text': 'Permissions: ' + ','.join(picks)}}}})
+        out({'jsonrpc': '2.0', 'id': i, 'result': {'stopReason': 'end_turn'}})
     elif meth == 'session/prompt':
         open('prompt.txt', 'w').write(json.dumps(m['params']['prompt']))
         out({'jsonrpc': '2.0', 'method': 'session/update', 'params': {'sessionId': 's-1', 'update': {'sessionUpdate': 'plan', 'entries': [{'content': 'Look around', 'priority': 'high', 'status': 'in_progress'}, {'content': 'Report', 'priority': 'low', 'status': 'pending'}]}}})
@@ -249,7 +264,7 @@ func TestAnACPAgentNeedsTheSandboxNetworkAndRejectsWhenNobodyCanAnswer(t *testin
 	}
 	// With nobody to ask, a permission request is rejected, never allowed.
 	run := &engineRun{ctx: t.Context(), p: Principal{UserID: "u", Name: "u", Role: authn.Developer}, set: buildNativeSet(nil)}
-	out, _ := json.Marshal(m.srv.acpPermission(run, json.RawMessage(`{"toolCall":{"title":"rm","kind":"execute"},"options":[{"optionId":"a","kind":"allow_once"},{"optionId":"r","kind":"reject_once"}]}`)))
+	out, _ := json.Marshal(m.srv.acpPermission(run, json.RawMessage(`{"toolCall":{"title":"rm","kind":"execute"},"options":[{"optionId":"a","kind":"allow_once"},{"optionId":"r","kind":"reject_once"}]}`), nil))
 	if !strings.Contains(string(out), `"optionId":"r"`) {
 		t.Errorf("nobody to ask: %s", out)
 	}
@@ -282,3 +297,82 @@ func TestEachAgentPresetFindsItsProgramWhenRunByTheShell(t *testing.T) {
 		t.Errorf("the installer's folder: %q %v", out, err)
 	}
 }
+
+// Checked against the real Copilot CLI (1.0.107, 2026-11-23): it ignores a stdio MCP server and takes an HTTP one, and it asks
+// permission before every tool, Forgeline's own included. So its tools are offered over HTTP on the container's loopback
+// (forwarded to the engine socket), a request to use one of Forgeline's own tools is allowed without a card, and a tool of
+// some other server that merely has a similar name still asks.
+func TestACopilotAgentGetsForgelineOverHTTPAndAsksOnlyAboutItsOwnTools(t *testing.T) {
+	m, _, started, short := acpHarness(t)
+	if err := os.WriteFile(filepath.Join(short, "copilot-mode"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	m.admin.expect(200, "PUT", "/v1/integrations/assistant", map[string]any{"backend": "acp-agent", "harness": "copilot"})
+	st := m.streamWith(m.dev, map[string]any{"message": "which pipelines exist?", "conversationId": apConv}, "unused")
+	id := m.waitPending(t) // only the lookalike tool asks
+	time.Sleep(30 * time.Millisecond)
+	m.dev.expect(200, "POST", "/v1/assistant/approvals/"+id, map[string]any{"decision": "approve"})
+	events, _ := answerOf(t, st)
+	if cards := eventsNamed(events, "forgeline.permission"); len(cards) != 1 {
+		t.Errorf("permission cards: %v (Forgeline's own tool must not ask; the other server's tool must)", cards)
+	}
+	if text, _ := textOf(events); !strings.Contains(text, "t2=allow_once,t3=allow_once") {
+		t.Errorf("the answer: %q", text)
+	}
+	raw, _ := os.ReadFile(filepath.Join(short, "perm.txt"))
+	if string(raw) != "t2=allow_once,t3=allow_once" {
+		t.Errorf("answers given to the agent: %q", raw)
+	}
+
+	// The tools are an HTTP server on the container's loopback, not a stdio one, and the token stays out of the arguments.
+	var mcp struct {
+		McpServers []struct {
+			Type, Name, URL, Command string
+		} `json:"mcpServers"`
+	}
+	b, _ := os.ReadFile(filepath.Join(short, "mcp.json"))
+	json.Unmarshal(b, &mcp)
+	if len(mcp.McpServers) != 1 || mcp.McpServers[0].Type != "http" || mcp.McpServers[0].Command != "" || !strings.HasPrefix(mcp.McpServers[0].URL, "http://127.0.0.1:") || !strings.Contains(mcp.McpServers[0].URL, "/mcp/engine/") {
+		t.Fatalf("the MCP server given to the agent: %+v", mcp)
+	}
+	line := strings.Join(*started, " ")
+	port := strings.Split(strings.TrimPrefix(mcp.McpServers[0].URL, "http://127.0.0.1:"), "/")[0]
+	for _, want := range []string{"-e FORGELINE_MCP_PATH ", "forgeline mcp --listen 127.0.0.1:" + port, "timeout ", "trap 'kill $P", "copilot --acp"} {
+		if !strings.Contains(line, want) {
+			t.Errorf("the agent was not started with %q:\n%s", want, line)
+		}
+	}
+	if strings.Contains(line, "exec copilot") {
+		t.Error("the shell must stay as the agent's parent so the listener is stopped when the agent ends")
+	}
+	if tok := mcp.McpServers[0].URL[strings.LastIndex(mcp.McpServers[0].URL, "/")+1:]; tok == "" || strings.Contains(line, tok) {
+		t.Errorf("the engine token is on the command line (token %q)", tok)
+	}
+}
+
+func TestOwnToolCallsAreRecognisedStrictly(t *testing.T) {
+	set := buildNativeSet([]helpLine{{"list_pipelines", `{} lists pipelines`}, {"get_run", `{"id":"x"} one run`}})
+	cases := []struct {
+		title string
+		own   bool
+	}{
+		{"forgeline-list_pipelines", true}, {"forgeline_get_run", true}, {"forgeline list_pipelines", true}, {"Forgeline-List_Pipelines", true},
+		{"forgeline-notes", false}, {"forgeline-", false}, {"forgeline", false}, {"my-forgeline-list_pipelines", false},
+		{"list_pipelines", false}, {"forgelinelist_pipelines", false}, {"forgeline-list_pipelines; rm -rf /", false},
+	}
+	for _, c := range cases {
+		own := map[string]bool{}
+		noteOwnCall(json.RawMessage(`{"update":{"sessionUpdate":"tool_call","toolCallId":"x","title":`+strconvQuote(c.title)+`}}`), set, own)
+		if own["x"] != c.own {
+			t.Errorf("%q: own = %v, want %v", c.title, own["x"], c.own)
+		}
+	}
+	// Only a tool_call announces one.
+	own := map[string]bool{}
+	noteOwnCall(json.RawMessage(`{"update":{"sessionUpdate":"tool_call_update","toolCallId":"x","title":"forgeline-list_pipelines"}}`), set, own)
+	if len(own) != 0 {
+		t.Error("an update was taken as a call")
+	}
+}
+
+func strconvQuote(s string) string { b, _ := json.Marshal(s); return string(b) }
