@@ -7,6 +7,10 @@ section in the pull request that makes the change; a release moves it under its 
 ## [Unreleased]
 
 ### Added
+- **The assistant can prepare a workflow run as a card.** After it builds a workflow it can offer to run it: the card shows
+  the workflow, its version, the role its agents run with and the budget impact, and starts the run as you only when you
+  press Confirm. If the workflow changed or was turned off since, the card refuses. (Before, it could only say "start it
+  from Workflows".)
 - **Long tasks no longer resend every old result.** When the lookups of a conversation pass 96 KB, the assistant clears the
   oldest results (keeping the newest four and every call) before asking the model again, so a long review stays within
   the model's context. The model is told a result was cleared and can call the tool again.
@@ -28,6 +32,9 @@ section in the pull request that makes the change; a release moves it under its 
   the agent does not obey it. Checked with a stand-in agent that obeys (the case fails) and one that refuses (it passes).
 
 ### Fixed
+- **The assistant said something was held back when it no longer was.** It told a person the sandbox was off, then found it
+  was on once it checked. It is now told that what is held back can change while they talk, and to re-check
+  its setup before saying so instead of relying on an earlier answer.
 - **"I tried to do that but wrote the request in a form I cannot run" on big accounts.** A model that asks for the same thing
   in many regions at once sends several calls in one reply, and only exactly one was accepted; after a single resend
   the assistant gave up. Now the first call runs and the model is told which others did not (one call per reply), a

@@ -55,6 +55,12 @@ administrator. **Confirm** saves it as version 1, through the same checks as the
 log says it was written by the assistant and confirmed by you. A developer can ask for one, but only an administrator gets
 the card, as in the console.
 
+Once a workflow exists, the assistant can prepare a **run** of it as a card too, so "build it and run it" needs one Confirm
+instead of a trip to the Workflows page. The card says which workflow and version will start, with which role its agents
+run, and that the run uses the model provider and counts against their budgets; anything an agent proposes still waits
+for a different administrator. If the workflow is changed or turned off before you press Confirm, the card refuses to
+start it. The run is yours, in the audit log and on the workflow's page.
+
 When you press Confirm or Dismiss on a card in the assistant, your answer goes back to it as your next message, so it
 carries on with the rest of what you asked and the conversation shows which card you answered.
 
