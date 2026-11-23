@@ -77,6 +77,7 @@ func (s *Server) lookupPrepareAction(ctx context.Context, raw json.RawMessage) (
 		Pipeline    string          `json:"pipeline"`
 		Spec        json.RawMessage `json:"spec"`
 		Account     string          `json:"account"`
+		Workflow    string          `json:"workflow"`
 	}
 	if err := decodeArgs(raw, &a); err != nil {
 		return "", err
@@ -139,8 +140,12 @@ func (s *Server) lookupPrepareAction(ctx context.Context, raw json.RawMessage) (
 		if err := s.prepareKeepMemory(ctx, t.p, a.Spec, &act); err != nil {
 			return "", err
 		}
+	case actRunWorkflow:
+		if err := s.prepareRunWorkflow(ctx, a.Workflow, &act); err != nil {
+			return "", err
+		}
 	default:
-		return "", errors.New(`action must be "save_pipeline", "run_pipeline", "save_skill", "save_agent", "save_workflow", "save_memory", "turn_on_sandbox" or "allow_aws_changes"`)
+		return "", errors.New(`action must be "save_pipeline", "run_pipeline", "save_skill", "save_agent", "save_workflow", "run_workflow", "save_memory", "turn_on_sandbox" or "allow_aws_changes"`)
 	}
 	// The same card twice is one card: if the person already has this one waiting, show that one again. A changed version
 	// of a waiting card replaces it, so they are never asked to choose between two cards for one thing.
@@ -297,7 +302,7 @@ func (s *Server) handleConfirmAction(w http.ResponseWriter, r *http.Request) {
 // gateOfAction says which kind of approval a card is, for the autopilot gate.
 func gateOfAction(kind string) gateKind {
 	switch kind {
-	case actRunPipeline:
+	case actRunPipeline, actRunWorkflow:
 		return gateRunPipeline
 	case actEnableShell, actAllowChanges:
 		return gateCapability
@@ -318,6 +323,8 @@ func (s *Server) performAction(ctx context.Context, p Principal, ip string, a As
 		return s.doCapability(ctx, p, a)
 	case actKeepMemory:
 		return s.doKeepMemory(ctx, p, a)
+	case actRunWorkflow:
+		return s.doRunWorkflow(ctx, p, a)
 	}
 	return "", "", badRequest("unknown action")
 }
