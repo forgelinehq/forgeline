@@ -28,8 +28,8 @@ Status: **built in slices (2026-11-21 and 22).** The Claude Code engine in the s
 AWS changes after the person approves the exact command, a sandbox container for commands and code, autopilot, memory as
 files, and native tool calls for Anthropic and OpenAI-compatible providers. Note 053: Claude Code as the assistant's agent,
 with Forgeline as its tools and its permission prompt, running inside the sandbox container; any coding agent over the Agent
-Client Protocol (presets for Copilot, Codex and Antigravity); one autopilot gate for every approval point. Memory files have valid-until dates (2026-11-22) and the assistant offers "Keep this?" cards (2026-11-23). Open: the sandbox is off by
-default (an administrator switch); memory compaction; a host shell mode; a microVM;
+Client Protocol (presets for Copilot, Codex and Antigravity); one autopilot gate for every approval point. Memory files have valid-until dates (2026-11-22) and the assistant offers "Keep this?" cards (2026-11-23). Long tasks clear old lookup results (2026-11-23). Open: the sandbox is off by
+default (an administrator switch); summarising old messages; a host shell mode; a microVM;
 streaming partial answers; Antigravity (`agy`) needs sign-in before it opens a session. See
 [note 052](design/052-assistant-that-works-like-a-colleague.md) and [note 053](design/053-claude-code-as-the-agent.md).
 

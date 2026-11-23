@@ -347,7 +347,7 @@ project), stored in the document store:
   keep or delete their own, and "Forget everything about me" removes their files too. The chat shows "Saved to memory: path".
   Every write is audited (path, action, size, never the content). Agents and workflows do not get the tool.
 - The notes of slice 1 (`remember`, 300 characters) still work beside it.
-- **Not built yet:** context clearing and compaction, moving a personal file to the organisation, embeddings. Verified with a
+- **Not built yet:** compaction of the conversation history itself (older messages are still just cut after 12), moving a personal file to the organisation, embeddings. Verified with a
   scripted model only.
 
 ## Built (validity dates, 2026-11-22)
@@ -370,6 +370,19 @@ project), stored in the document store:
   always waits, because that data may be what is being saved. The tool's help tells the model to offer what it learned after
   a task. Checked with a scripted model: removing the taint guard, the exists check, the scope check, the content check and
   the check at confirm each failed a test. Not checked: a real model deciding well when to offer a card, or the card in a browser.
+
+## Built (context clearing, 2026-11-23)
+
+- A long task made many lookups (each up to 12 KB) and sent all of them again on every step. Before each model call, when the
+  lookup results in the conversation total over 96 KB, the oldest are replaced by a short note ("Result of lookup X was
+  cleared to save space … call the tool again if you still need it") until the total fits; the newest four are never
+  cleared, and the call each result answers stays, so the model sees what it asked. Done in the chat loop for every
+  model (the Claude Code and ACP engines manage their own context). A trace span records how many results were cleared.
+  Checked with a scripted model (a unit test of the clearing and a task with eight large results); removing the call, the
+  protection of the newest results, the stop at the budget and the check for which turns are results each failed a test.
+  **Not built:** summarising the older *messages* of a conversation (they are still cut after 12), and telling the model to
+  save what matters to memory first (a lookup's result is state, which memory should not hold; what the person said is kept
+  by the notes and "Keep this?" cards).
 
 ## Built (native tool calls, 2026-11-21)
 
