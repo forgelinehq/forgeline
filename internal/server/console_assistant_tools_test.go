@@ -225,8 +225,8 @@ func TestAnInvokeStyleCallIsRunAndAMixedOneIsNotShownRaw(t *testing.T) {
 	if m.llm.count() != 3 || !strings.Contains(m.llm.lastUser(1), "not run") {
 		t.Errorf("the model was not asked to resend: %d calls", m.llm.count())
 	}
-	// A model that keeps doing it is not shown its own raw call.
-	evs := m.run(m.dev, map[string]any{"message": "go"}, bad, bad, bad)
+	// A model that keeps doing it is asked three times, and is then not shown its own raw call.
+	evs := m.run(m.dev, map[string]any{"message": "go"}, bad, bad, bad, bad)
 	var text string
 	for _, f := range evs {
 		if f["type"] == "TEXT_MESSAGE_CONTENT" {
@@ -235,5 +235,57 @@ func TestAnInvokeStyleCallIsRunAndAMixedOneIsNotShownRaw(t *testing.T) {
 	}
 	if strings.Contains(text, "<invoke") || !strings.Contains(text, "cannot run") {
 		t.Errorf("the person was shown: %q", text)
+	}
+}
+
+// A model that asks for the same thing in many places at once sends several calls in one reply. The first runs, the model
+// is told the rest did not, and nothing is shown raw; text between the calls is still an answer, not a call.
+func TestSeveralCallsInOneReplyRunTheFirstAndSayTheRestDidNot(t *testing.T) {
+	two := `<function_calls>
+<invoke name="list_pipelines"></invoke>
+<invoke name="list_runs"><parameter name="limit">3</parameter></invoke>
+<invoke name="list_pipelines"></invoke>
+</function_calls>`
+	c, ok := parseLookup(two)
+	if !ok || c.Tool != "list_pipelines" || len(c.Skipped) != 2 || c.Skipped[0] != "list_runs" || c.Skipped[1] != "list_pipelines" {
+		t.Fatalf("parsed %+v %v", c, ok)
+	}
+	if c, ok := parseLookup(`<invoke name="list_runs"><parameter name="limit">3</parameter></invoke>`); !ok || len(c.Skipped) != 0 {
+		t.Errorf("a single call: %+v %v", c, ok)
+	}
+	for name, reply := range map[string]string{
+		"prose between": `<invoke name="list_runs"></invoke> and then <invoke name="list_runs"></invoke>`,
+		"prose after":   `<invoke name="list_runs"></invoke> That should do it.`,
+		"unclosed":      `<invoke name="list_runs"><parameter name="limit">3</parameter>`,
+	} {
+		if c, ok := parseLookup(reply); ok {
+			t.Errorf("%s: run as %+v", name, c)
+		}
+	}
+
+	m := newMCPHarness(t)
+	// A model that gets the form wrong twice and then right is not given up on.
+	bad := "Working on it.\n<invoke name=\"list_pipelines\">\n</invoke>"
+	evs := m.run(m.dev, map[string]any{"message": "look"}, bad, bad, lookupReply("list_pipelines", map[string]string{}), "Done after two retries.")
+	var said string
+	for _, f := range evs {
+		if f["type"] == "TEXT_MESSAGE_CONTENT" {
+			said += f["delta"].(string)
+		}
+	}
+	if m.llm.count() != 4 || !strings.Contains(said, "Done after two retries.") || strings.Contains(said, "cannot run") {
+		t.Errorf("gave up too soon: %d model calls, said %q", m.llm.count(), said)
+	}
+
+	m.run(m.dev, map[string]any{"message": "look at everything"}, two, "Here is what I found.")
+	if m.llm.count() != 2 {
+		t.Fatalf("the model was asked %d times, want 2 (the call, then the answer)", m.llm.count())
+	}
+	last := m.llm.lastUser(1)
+	if !strings.Contains(last, "Result of lookup list_pipelines") || !strings.Contains(last, "only the first ran") || !strings.Contains(last, "NOT run: list_runs, list_pipelines") {
+		t.Errorf("the model was not told which calls did not run:\n%s", last)
+	}
+	if strings.Contains(strings.SplitN(last, "</lookup_result>", 2)[0], "NOT run") {
+		t.Error("the note is inside the data block")
 	}
 }

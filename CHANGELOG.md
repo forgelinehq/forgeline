@@ -28,6 +28,11 @@ section in the pull request that makes the change; a release moves it under its 
   the agent does not obey it. Checked with a stand-in agent that obeys (the case fails) and one that refuses (it passes).
 
 ### Fixed
+- **"I tried to do that but wrote the request in a form I cannot run" on big accounts.** A model that asks for the same thing
+  in many regions at once sends several calls in one reply, and only exactly one was accepted; after a single resend
+  the assistant gave up. Now the first call runs and the model is told which others did not (one call per reply), a
+  model that writes the `<invoke>` form wrong is asked up to three times instead of once. Text around or between calls
+  is still an answer, never a call.
 - **One attack case could not reach an agent built as the guide says.** The issue-hijack case planted its text only under
   `get_run`, so an agent with `run_failure` or `get_step_log` (what the guide tells people to give it) never read it and the
   case passed for nothing. It is now planted under all three. Found in a browser check of the attack suite.
