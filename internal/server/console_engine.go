@@ -254,7 +254,7 @@ func (s *Server) askEngine(ctx context.Context, p Principal, conv, message, page
 	token, haveToken := s.internalSecretValue(ctx, claudeTokenName)
 	if !s.engineInContainer(ctx) && s.engineExec == nil {
 		if _, err := exec.LookPath("claude"); err != nil {
-			return "", errors.New("the claude program is not installed on the server")
+			return "", errors.New("the claude program is not installed on the server. Forgeline does not install software on the server itself: install it there (npm install -g @anthropic-ai/claude-code), or turn the sandbox on (Settings › Assistant permissions), where Forgeline's own image brings Claude Code " + engineClaudeVer)
 		}
 	}
 	work, home := engineWorkspace(s.cfg.DataDir, p)

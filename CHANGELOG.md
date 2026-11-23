@@ -7,6 +7,13 @@ section in the pull request that makes the change; a release moves it under its 
 ## [Unreleased]
 
 ### Added
+- **Missing agents are found and offered for installation.** Under Settings › Assistant model, an ACP agent (Antigravity, Copilot
+  CLI, Codex) now shows whether it is installed in your sandbox and which version; **Install the latest** shows the command and its
+  source and runs it as root inside the sandbox when you confirm. If you pick an agent that is not installed and send a message, the
+  assistant no longer fails with "command not found": it says so, prepares an Install card for an administrator and says what makes
+  the agent work (a token in the vault, passed only to that agent, or the sign-in command). The assistant can prepare the same card.
+  Installing always waits for you, even under autopilot. Checked with the real installers for Copilot, the Codex adapter and
+  Antigravity. New `GET /v1/assistant/engines` and `POST /v1/assistant/engines/{harness}/install`.
 - **The assistant can prepare a workflow run as a card.** After it builds a workflow it can offer to run it: the card shows
   the workflow, its version, the role its agents run with and the budget impact, and starts the run as you only when you
   press Confirm. If the workflow changed or was turned off since, the card refuses. (Before, it could only say "start it

@@ -78,6 +78,7 @@ func (s *Server) lookupPrepareAction(ctx context.Context, raw json.RawMessage) (
 		Spec        json.RawMessage `json:"spec"`
 		Account     string          `json:"account"`
 		Workflow    string          `json:"workflow"`
+		Harness     string          `json:"harness"`
 	}
 	if err := decodeArgs(raw, &a); err != nil {
 		return "", err
@@ -144,8 +145,12 @@ func (s *Server) lookupPrepareAction(ctx context.Context, raw json.RawMessage) (
 		if err := s.prepareRunWorkflow(ctx, a.Workflow, &act); err != nil {
 			return "", err
 		}
+	case actInstallEngine:
+		if err := s.prepareInstallEngine(ctx, t.p, a.Harness, &act); err != nil {
+			return "", err
+		}
 	default:
-		return "", errors.New(`action must be "save_pipeline", "run_pipeline", "save_skill", "save_agent", "save_workflow", "run_workflow", "save_memory", "turn_on_sandbox" or "allow_aws_changes"`)
+		return "", errors.New(`action must be "save_pipeline", "run_pipeline", "save_skill", "save_agent", "save_workflow", "run_workflow", "save_memory", "install_engine", "turn_on_sandbox" or "allow_aws_changes"`)
 	}
 	// The same card twice is one card: if the person already has this one waiting, show that one again. A changed version
 	// of a waiting card replaces it, so they are never asked to choose between two cards for one thing.
@@ -304,7 +309,7 @@ func gateOfAction(kind string) gateKind {
 	switch kind {
 	case actRunPipeline, actRunWorkflow:
 		return gateRunPipeline
-	case actEnableShell, actAllowChanges:
+	case actEnableShell, actAllowChanges, actInstallEngine:
 		return gateCapability
 	}
 	return gateSaveDefinition
@@ -325,6 +330,8 @@ func (s *Server) performAction(ctx context.Context, p Principal, ip string, a As
 		return s.doKeepMemory(ctx, p, a)
 	case actRunWorkflow:
 		return s.doRunWorkflow(ctx, p, a)
+	case actInstallEngine:
+		return s.doInstallEngine(ctx, p, a)
 	}
 	return "", "", badRequest("unknown action")
 }

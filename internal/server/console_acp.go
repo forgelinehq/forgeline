@@ -13,6 +13,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/forgelinehq/forgeline/internal/authn"
 )
 
 // Agents over the Agent Client Protocol (design note 053, slice 3). ACP is the protocol editors use to drive a coding agent:
@@ -38,9 +40,6 @@ var harnessCommands = map[string]string{
 // (1.0.107) is one: given a stdio server it starts nothing and says it has no such tool, checked against the real program,
 // while an HTTP server works end to end. Their tools come through a listener on the container's loopback.
 var harnessHTTPMCP = map[string]bool{"copilot": true}
-
-// harnessLogin is what to run inside the sandbox to sign an agent in, when it is not the agent's ACP command itself.
-var harnessLogin = map[string]string{"copilot": `copilot login`}
 
 // checkHarness validates the choice of agent; "" when it is fine.
 func checkHarness(harness, cmd string) string {
@@ -190,27 +189,33 @@ func (s *Server) askACP(ctx context.Context, p Principal, conv, message, pageCon
 	engineRuns.mu.Unlock()
 	defer func() { engineRuns.mu.Lock(); delete(engineRuns.m, tok); engineRuns.mu.Unlock() }()
 
-	if err := s.ensureEngineImage(ctx); err != nil {
-		return "", err
-	}
-	bridge := engineBridgeDir(s.cfg.DataDir, p)
-	if err := s.engineSocket(bridge); err != nil {
-		return "", fmt.Errorf("opening the agent's socket: %v", err)
-	}
-	bin, err := s.engineBinary()
-	if err != nil {
-		return "", fmt.Errorf("preparing the bridge: %v", err)
-	}
-	ctr, err := s.ensureSandboxWith(ctx, p, engineImage, sbx, "-v", bridge+":/run/forgeline:ro", "-v", bin+":/opt/forgeline:ro")
+	ctr, _, err := s.engineContainer(ctx, p)
 	if err != nil {
 		return "", err
+	}
+	// A ready-made agent that is not installed in the sandbox is found now, not by a "command not found" from the shell: the
+	// person is offered the install as a card and told what will make it work.
+	spec, known := engineSpecFor(st.Harness)
+	if known {
+		if installed, _, perr := s.probeEngine(ctx, ctr, spec); perr == nil && !installed {
+			return s.missingEngineReply(ctx, p, spec), nil
+		}
 	}
 	argv := []string{"exec", "-i", "-w", "/work", "-e", "HOME=/work/.agent"}
 	env := []string{"PATH=" + os.Getenv("PATH"), "HOME=" + os.Getenv("HOME")}
-	apiKey, haveKey := s.internalSecretValue(ctx, geminiKeyName)
-	if haveKey { // the Gemini API key, for an agent that signs in with one
-		argv = append(argv, "-e", geminiKeyName)
-		env = append(env, geminiKeyName+"="+apiKey)
+	// The token that signs the chosen agent in, from the vault, in the environment (never an argument). A custom agent gets the
+	// Gemini key, as before.
+	tokenName, tokenEnv := geminiKeyName, geminiKeyName
+	if known {
+		tokenName, tokenEnv = spec.TokenName, spec.TokenEnv
+	}
+	apiKey, haveKey := "", false
+	if tokenName != "" {
+		apiKey, haveKey = s.internalSecretValue(ctx, tokenName)
+	}
+	if haveKey {
+		argv = append(argv, "-e", tokenEnv)
+		env = append(env, tokenEnv+"="+apiKey)
 	}
 	wall := time.Duration(acpMaxSeconds) * time.Second
 	if ap := liveAutopilot(ctx, p); ap != nil {
@@ -317,19 +322,22 @@ func (s *Server) askACP(ctx context.Context, p Principal, conv, message, pageCon
 	}
 	authenticate := func() error {
 		for _, m := range caps.AuthMethods {
-			if m.ID == "gemini-api-key" && haveKey {
+			if m.ID == "gemini-api-key" && haveKey && tokenName == geminiKeyName {
 				_, err := conn.call(cctx, "authenticate", map[string]string{"methodId": m.ID})
 				return err
 			}
 		}
-		login := harnessLogin[st.Harness]
-		if login == "" {
-			login = harnessCommands[st.Harness]
-		}
-		if login == "" {
+		login := spec.Login
+		if !known {
 			login = st.HarnessCmd
 		}
-		return errors.New("the agent is not signed in. Sign in once inside the sandbox: run `docker exec -it -e HOME=/work/.agent " + ctr + " sh -c '" + login + "'` on the server and follow the agent's sign-in, or store a Gemini API key in the vault as " + geminiKeyName)
+		msg := "the agent is not signed in. " + howToMakeItWork(spec, haveKey)
+		if !known {
+			msg = "the agent is not signed in. Sign in once inside the sandbox: run `docker exec -it -e HOME=/work/.agent " + ctr + " sh -c '" + login + "'` on the server and follow the agent's sign-in, or store a Gemini API key in the vault as " + geminiKeyName
+		} else {
+			msg += " The container is " + ctr + " (docker exec -it -e HOME=/work/.agent " + ctr + " sh -c '" + login + "')."
+		}
+		return errors.New(msg)
 	}
 	sid := s.acpSession(ctx, conv, st.Harness)
 	var sessionID string
@@ -398,6 +406,24 @@ func (s *Server) askACP(ctx context.Context, p Principal, conv, message, pageCon
 		return "", errors.New("the agent ended its turn without an answer (" + out.StopReason + ")")
 	}
 	return text, nil
+}
+
+// missingEngineReply is what the chat says when the chosen agent is not installed in the sandbox: it prepares the install card
+// for an administrator (installing software is theirs) and tells everyone else who to ask.
+func (s *Server) missingEngineReply(ctx context.Context, p Principal, sp engineSpec) string {
+	head := sp.Label + " is not installed in your sandbox yet, so I cannot use it as the assistant's agent."
+	if !p.Role.AtLeast(authn.Admin) {
+		return head + " An administrator can install the latest version from Settings › Assistant model; then send your message again."
+	}
+	raw, _ := json.Marshal(map[string]string{"action": actInstallEngine, "harness": sp.Harness})
+	if _, err := s.lookupPrepareAction(ctx, raw); err != nil {
+		return head + " I could not prepare the install: " + err.Error() + "."
+	}
+	if obs := lookupObserver(ctx); obs != nil {
+		obs(assistEvent{Kind: evFlush}) // the card is shown now, with this answer, not after a tool call that never happens
+	}
+	_, tokenSet := s.internalSecretValue(ctx, sp.TokenName)
+	return head + " I prepared a card to install the latest version (from " + sp.Source + "): press Confirm, then send your message again.\n\n" + howToMakeItWork(sp, sp.TokenName != "" && tokenSet)
 }
 
 func (s *Server) acpFail(what string, err error, stderr string) error {
