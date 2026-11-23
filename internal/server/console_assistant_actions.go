@@ -135,8 +135,12 @@ func (s *Server) lookupPrepareAction(ctx context.Context, raw json.RawMessage) (
 		if err := s.prepareCapability(ctx, t.p, &act, a.Account); err != nil {
 			return "", err
 		}
+	case actKeepMemory:
+		if err := s.prepareKeepMemory(ctx, t.p, a.Spec, &act); err != nil {
+			return "", err
+		}
 	default:
-		return "", errors.New(`action must be "save_pipeline", "run_pipeline", "save_skill", "save_agent", "save_workflow", "turn_on_sandbox" or "allow_aws_changes"`)
+		return "", errors.New(`action must be "save_pipeline", "run_pipeline", "save_skill", "save_agent", "save_workflow", "save_memory", "turn_on_sandbox" or "allow_aws_changes"`)
 	}
 	// The same card twice is one card: if the person already has this one waiting, show that one again. A changed version
 	// of a waiting card replaces it, so they are never asked to choose between two cards for one thing.
@@ -159,7 +163,8 @@ func (s *Server) lookupPrepareAction(ctx context.Context, raw json.RawMessage) (
 	ip, _ := ctx.Value(mcpIPKey{}).(string)
 	s.audit(ctx, t.p, ip, "assistant.action.prepare", "action/"+act.ID, act.Kind+" "+act.Pipeline, true)
 	// A card autopilot approves is confirmed for the person through the same checks, and shown as done.
-	if s.autopilotApproves(ctx, t.p, gateRequest{Kind: gateOfAction(act.Kind), Tool: prepareTool, Detail: act.Title}) {
+	// A file to keep, written after the conversation read data the person did not type, always waits for them.
+	if !(act.Kind == actKeepMemory && t.dirty) && s.autopilotApproves(ctx, t.p, gateRequest{Kind: gateOfAction(act.Kind), Tool: prepareTool, Detail: act.Title}) {
 		actionMu.Lock()
 		act.Status = actFailed
 		result, link, apiErr := s.performAction(ctx, t.p, ip, act)
@@ -311,6 +316,8 @@ func (s *Server) performAction(ctx context.Context, p Principal, ip string, a As
 		return s.doSaveDefinition(ctx, p, ip, a)
 	case actEnableShell, actAllowChanges:
 		return s.doCapability(ctx, p, a)
+	case actKeepMemory:
+		return s.doKeepMemory(ctx, p, a)
 	}
 	return "", "", badRequest("unknown action")
 }

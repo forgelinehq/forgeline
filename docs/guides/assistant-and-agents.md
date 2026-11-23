@@ -316,6 +316,13 @@ when you edit the file on the Memory page), writes a new file for what is true n
 "Dev01 meant the Mumbai cluster until March". After its last valid day a file is marked *No longer valid*, and it is left
 out of the assistant's notes and of its searches. Clear the date to bring it back.
 
+After a task that taught it something (what a name means, how an environment is laid out, a procedure that worked), the
+assistant can offer it as a **Keep this?** card. The card shows the file's path, its text and who will see it (only you
+under `/memories/me`, everyone under `/memories/org`, which only an administrator can keep). Nothing is saved until you
+press Confirm; the server checks the file again then (no secrets, no markup, not over an existing file), and saves it as
+yours. Under autopilot a clean conversation keeps it at once, but once the conversation has read logs or cloud data you
+did not type, the card always waits for you, because what it read may be what is being saved.
+
 ![Files the assistant keeps, on the Memory page]({{ '/console/168-memory-files.png' | relative_url }})
 
 Settings › Memory lists every file with its text: edit, delete or keep any of yours. A file it writes after reading logs or

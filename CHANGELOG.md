@@ -7,6 +7,10 @@ section in the pull request that makes the change; a release moves it under its 
 ## [Unreleased]
 
 ### Added
+- **"Keep this?" cards.** After a task the assistant can offer what it learned (what a name means, how an environment is laid
+  out, a procedure that worked) as a card with the file's path and text. It is saved only when you press Confirm, as yours,
+  after the server checks it again. Under autopilot a clean conversation keeps it at once; once the conversation has read
+  data you did not type, the card always waits.
 - **Memory files can stop being valid.** A file the assistant keeps can have a *valid until* date. The assistant expires an
   old fact and writes a new file instead of overwriting it, so "Dev01 meant X until March" is kept as history. After its
   last day a file is marked *No longer valid* on the Memory page and left out of the assistant's notes and searches; you

@@ -347,8 +347,7 @@ project), stored in the document store:
   keep or delete their own, and "Forget everything about me" removes their files too. The chat shows "Saved to memory: path".
   Every write is audited (path, action, size, never the content). Agents and workflows do not get the tool.
 - The notes of slice 1 (`remember`, 300 characters) still work beside it.
-- **Not built yet:** a suggestion card after a task ("keep
-  this?"), context clearing and compaction, moving a personal file to the organisation, embeddings. Verified with a
+- **Not built yet:** context clearing and compaction, moving a personal file to the organisation, embeddings. Verified with a
   scripted model only.
 
 ## Built (validity dates, 2026-11-22)
@@ -360,6 +359,17 @@ project), stored in the document store:
   expire and write a new file instead of overwriting. Checked with a scripted model: each of the index, search, the date
   check, the expired test and the boundary (the last day still counts) was removed in turn and a test failed.
   Not built: validity on the short notes of slice 1, and "valid from".
+
+## Built ("keep this?" cards, 2026-11-23)
+
+- `prepare_action` has a new kind, `save_memory`, with a spec `{path, content, valid_until?}`. The card shows the path, the full
+  text and who will see the file; nothing is written until the person confirms. It is checked when prepared and again when
+  confirmed (path, scope rights, no markup or secrets, valid date, not over an existing file, the file limits), and the file
+  is saved as the person's own, never pending. An organisation file needs an administrator.
+- **Autopilot:** a clean conversation keeps it at once; once the conversation has read data the person did not type the card
+  always waits, because that data may be what is being saved. The tool's help tells the model to offer what it learned after
+  a task. Checked with a scripted model: removing the taint guard, the exists check, the scope check, the content check and
+  the check at confirm each failed a test. Not checked: a real model deciding well when to offer a card, or the card in a browser.
 
 ## Built (native tool calls, 2026-11-21)
 
