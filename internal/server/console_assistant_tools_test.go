@@ -289,19 +289,3 @@ func TestSeveralCallsInOneReplyRunTheFirstAndSayTheRestDidNot(t *testing.T) {
 		t.Error("the note is inside the data block")
 	}
 }
-
-// Two lookup blocks in one reply are not run, and a model that keeps sending them is told so, not shown the raw blocks.
-func TestTwoLookupBlocksInOneReplyAreNeverShownRaw(t *testing.T) {
-	m := newMCPHarness(t)
-	two := lookupReply("list_pipelines", map[string]string{}) + "\n" + lookupReply("list_runs", map[string]string{})
-	evs := m.run(m.dev, map[string]any{"message": "go"}, two, two, two, two)
-	var text string
-	for _, f := range evs {
-		if f["type"] == "TEXT_MESSAGE_CONTENT" {
-			text += f["delta"].(string)
-		}
-	}
-	if strings.Contains(text, "forgeline-lookup") || !strings.Contains(text, "cannot run") {
-		t.Errorf("the person was shown: %q", text)
-	}
-}

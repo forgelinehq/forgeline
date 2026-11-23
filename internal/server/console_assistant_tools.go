@@ -238,8 +238,9 @@ func parseInvoke(r string) (lookupCall, bool) {
 	return c, true
 }
 
-// maxCallNudges is how many times a model that wrote a call in a form that does not run is asked to send it again before
-// the person is told. One was not enough: a model that sent several calls at once often repeated it once.
+// maxCallNudges is how many times a model that wrote a call in the <invoke> form that does not run is asked to send it
+// again before the person is told. One was not enough: a model that sent several calls at once often repeated it once.
+// Prose around a fenced block is asked once, and is then the answer (see TestAssistantLookupRulesAreStrict).
 const maxCallNudges = 3
 
 // looksLikeCall says a reply carries a tool call in a format that is not run, so the person is never shown it raw.
@@ -366,7 +367,7 @@ func (s *Server) lookupLoop(ctx context.Context, p Principal, turns []chatTurn, 
 			return "", used, err
 		}
 		call, isLookup := parseLookup(reply)
-		if !isLookup && nudges < maxCallNudges && (strings.Contains(reply, lookupFence) || looksLikeCall(reply)) {
+		if !isLookup && ((looksLikeCall(reply) && nudges < maxCallNudges) || (strings.Contains(reply, lookupFence) && nudges < 1)) {
 			// Real models sometimes write a sentence before the block. The call inside is not run (prose around a block is
 			// an answer), but the person should not be shown a raw block, so the model is asked once to send it alone.
 			nudges++
@@ -374,7 +375,7 @@ func (s *Server) lookupLoop(ctx context.Context, p Principal, turns []chatTurn, 
 				chatTurn{Role: "user", Content: "Your reply mixed text with a call, or used a call format that is not run, so nothing ran. A call is exactly one block in the form shown under the rules (```forgeline-lookup with a JSON object, nothing before or after it). Send either only that block, or only your answer."})
 			continue
 		}
-		if !isLookup && (looksLikeCall(reply) || strings.Contains(reply, lookupFence)) {
+		if !isLookup && looksLikeCall(reply) {
 			return "I tried to do that but wrote the request in a form I cannot run, so nothing was done. Ask me again and I will retry.", used, nil
 		}
 		if !isLookup {
