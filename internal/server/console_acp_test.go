@@ -92,6 +92,9 @@ while True:
         pass
 `
 
+// acpLastCmd is the most recent agent process the tests started (its environment is what the agent was given).
+var acpLastCmd *exec.Cmd
+
 func acpHarness(t *testing.T) (*mcpHarness, *dockerStub, *[]string, string) {
 	t.Helper()
 	bin := t.TempDir()
@@ -109,6 +112,7 @@ func acpHarness(t *testing.T) (*mcpHarness, *dockerStub, *[]string, string) {
 		*started = append([]string{name}, args...)
 		cmd := exec.CommandContext(ctx, filepath.Join(bin, "agent"))
 		cmd.Dir = short
+		acpLastCmd = cmd // askACP sets its environment after this returns, so a test reads it once the run is over
 		return cmd
 	}
 	m.admin.expect(200, "PUT", "/v1/assistant/sandbox", map[string]any{"enabled": true})

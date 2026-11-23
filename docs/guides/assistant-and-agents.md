@@ -296,12 +296,32 @@ secret for a command, a protected account, a rule that denies or asks, or IAM, O
 
 Under Settings › Assistant model, choose **An agent over ACP**, then the agent: **Antigravity CLI (agy)**, **GitHub Copilot CLI**,
 **Codex**, or your own command. They run in your sandbox (turn it on first), speak the Agent Client Protocol, and get Forgeline's
-tools and its permission cards, just as Claude Code does. Each has to be installed in the sandbox: ask the assistant to "install
-the Antigravity CLI", for example.
+tools and its permission cards, just as Claude Code does.
 
-An agent signs in **inside the sandbox**, not on the server: a login on the server is not visible in the container. Either run the
-command the error shows (`docker exec -it … agy`) once and follow its sign-in, or store a Gemini API key in the vault as
-`GEMINI_API_KEY` and Forgeline signs the agent in with it.
+**Forgeline finds a missing agent and offers to install it.** Under the agent's name the page says whether the program is
+installed in your sandbox, and which version. If it is not, **Install the latest** shows the exact command and where it comes
+from, and runs it as root inside the sandbox only when you confirm (GitHub Copilot CLI and the Codex adapter from npm,
+Antigravity from Google's installer script). The same happens in the chat: if you pick an agent that is not installed and
+send a message, the assistant does not fail with "command not found": it says so, prepares an **Install** card for an
+administrator (anyone else is told whom to ask), and says what will make the agent work once it is there. The assistant can
+also prepare that card itself when you ask it to use an agent that is missing. Installing is always a card you confirm, even
+under autopilot, and only an administrator can. Nothing on the server itself changes: the program lives in your sandbox.
+(Claude Code is not installed this way: the sandbox image brings it, at the version Forgeline was tested with. With the sandbox
+off it uses the `claude` program on the server, which Forgeline never installs for you.)
+
+**Making it work.** An agent signs in **inside the sandbox**, not on the server: a login on the server is not visible in the
+container. There are two ways, shown on the same page for the agent you chose:
+
+- **A token in the vault** (Settings › Secrets, or the field on the page). Forgeline passes it to that agent only, in its
+  environment: `COPILOT_GITHUB_TOKEN` for Copilot (a fine-grained token with the "Copilot Requests" permission; a classic `ghp_`
+  token is not supported), `GEMINI_API_KEY` for Antigravity, `CODEX_API_KEY` for Codex.
+- **Sign in once by hand** with the command the page shows, in a terminal on the server (`docker exec -it … copilot login
+  --device-code`). Copilot asks whether to keep its token in a plain-text file because the sandbox has no keychain; answer yes, or
+  the token is dropped.
+
+What has been checked against the real programs: Copilot was installed, signed in by device login and run over ACP in the sandbox;
+all three installers were run for real; a token from the vault has not been tried against a real account, and Codex and
+Antigravity have not been signed in or run in the sandbox.
 
 ## When it says it cannot: the doctor
 

@@ -23,7 +23,8 @@ const argsMax = 400     // bytes of a lookup's arguments shown in a step card
 const (
 	evToolStart  = "tool_start"
 	evToolResult = "tool_result"
-	evPlan       = "plan" // Content is the plan as JSON (note 052)
+	evPlan       = "plan"  // Content is the plan as JSON (note 052)
+	evFlush      = "flush" // send the cards, proposals and notes waiting in the sink now, outside a tool call
 )
 
 // assistEvent is a step of the lookup loop, reported to whoever is watching it.
@@ -167,6 +168,29 @@ func (s *Server) handleAssistantRun(w http.ResponseWriter, r *http.Request) {
 		endAutopilot(autopilotKeyFor(job.p, thread)) // switched off: it does not carry on
 	}
 	sentP, sentE, sentN, sentA, sentF := 0, 0, 0, 0, 0
+	// flush sends what lookups and cards left in the sink since the last time: proposals, environments, cards, memory files and
+	// notes.
+	flush := func() {
+		// A lookup may have filed a proposal or asked for an environment.
+		for ; sentP < len(sink.proposals); sentP++ {
+			out.send("CUSTOM", map[string]any{"name": "forgeline.proposal", "value": map[string]any{"id": sink.proposals[sentP]}})
+		}
+		for ; sentE < len(sink.environments); sentE++ {
+			out.send("CUSTOM", map[string]any{"name": "forgeline.environment", "value": map[string]any{"id": sink.environments[sentE]}})
+		}
+		for ; sentA < len(sink.actions); sentA++ {
+			a := sink.actions[sentA]
+			out.send("CUSTOM", map[string]any{"name": "forgeline.action", "value": map[string]any{"id": a.ID, "kind": a.Kind, "title": a.Title, "effects": a.Effects, "detail": truncate(a.Detail, 8<<10), "pipeline": a.Pipeline, "done": a.Result != "" && a.Status == actDone, "result": a.Result, "link": a.Link}})
+		}
+		for ; sentF < len(sink.files); sentF++ {
+			f := sink.files[sentF]
+			out.send("CUSTOM", map[string]any{"name": "forgeline.memory_file", "value": map[string]any{"path": f.Path, "action": f.Action, "pending": f.Pending}})
+		}
+		for ; sentN < len(sink.notes); sentN++ {
+			n := sink.notes[sentN]
+			out.send("CUSTOM", map[string]any{"name": "forgeline.memory", "value": map[string]any{"id": n.ID, "text": n.Text, "about": n.About, "status": n.Status}})
+		}
+	}
 	obs := assistObserver(func(ev assistEvent) {
 		switch ev.Kind {
 		case evPlan:
@@ -181,25 +205,9 @@ func (s *Server) handleAssistantRun(w http.ResponseWriter, r *http.Request) {
 		case evToolResult:
 			out.send("TOOL_CALL_RESULT", map[string]any{"messageId": ev.ID + "-result", "toolCallId": ev.ID, "role": "tool", "content": ev.Content})
 			out.send("CUSTOM", map[string]any{"name": "forgeline.tool_status", "value": map[string]any{"toolCallId": ev.ID, "ok": ev.OK}})
-			// A lookup may have filed a proposal or asked for an environment.
-			for ; sentP < len(sink.proposals); sentP++ {
-				out.send("CUSTOM", map[string]any{"name": "forgeline.proposal", "value": map[string]any{"id": sink.proposals[sentP]}})
-			}
-			for ; sentE < len(sink.environments); sentE++ {
-				out.send("CUSTOM", map[string]any{"name": "forgeline.environment", "value": map[string]any{"id": sink.environments[sentE]}})
-			}
-			for ; sentA < len(sink.actions); sentA++ {
-				a := sink.actions[sentA]
-				out.send("CUSTOM", map[string]any{"name": "forgeline.action", "value": map[string]any{"id": a.ID, "kind": a.Kind, "title": a.Title, "effects": a.Effects, "detail": truncate(a.Detail, 8<<10), "pipeline": a.Pipeline, "done": a.Result != "" && a.Status == actDone, "result": a.Result, "link": a.Link}})
-			}
-			for ; sentF < len(sink.files); sentF++ {
-				f := sink.files[sentF]
-				out.send("CUSTOM", map[string]any{"name": "forgeline.memory_file", "value": map[string]any{"path": f.Path, "action": f.Action, "pending": f.Pending}})
-			}
-			for ; sentN < len(sink.notes); sentN++ {
-				n := sink.notes[sentN]
-				out.send("CUSTOM", map[string]any{"name": "forgeline.memory", "value": map[string]any{"id": n.ID, "text": n.Text, "about": n.About, "status": n.Status}})
-			}
+			flush()
+		case evFlush:
+			flush() // a card prepared outside a tool call, such as the offer to install a missing agent
 		}
 	})
 	ctx := context.WithValue(context.WithValue(r.Context(), lookupSinkKey{}, sink), assistObserverKey{}, obs)

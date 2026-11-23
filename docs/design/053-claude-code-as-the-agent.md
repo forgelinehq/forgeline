@@ -125,3 +125,29 @@ to use one of Forgeline's own tools is allowed without a card, matched by the to
 **Not checked:** the whole path inside the sandbox container (the agent installed there and signed in with `copilot login`
 inside the container, Docker, the socket). Everything up to that is checked against the real program or the tests.
 
+## Finding and installing the agent (2026-11-23)
+
+An ACP agent is a program in the person's sandbox that Forgeline does not ship, so it can be missing. `console_engines.go` holds, per
+ready-made agent, the program, the command that installs the latest version (run as root in the sandbox with `HOME=/work/.agent`),
+where it comes from, a version command, the vault secret and environment variable that sign it in headlessly, and the manual
+sign-in. Package names and versions were read from npm on 2026-11-23, not from memory: `@github/copilot` 1.0.114, `@openai/codex`
+0.171.0 and the Codex ACP adapter `@agentclientprotocol/codex-acp` 2.10.0 (Apache-2.0, depends on `@openai/codex`; the older
+`@zed-industries/codex-acp` stops at 0.16.0), and Google's installer `https://antigravity.google/cli/install.sh` (agy 1.5.15).
+
+- **Detection** asks the container (`command -v`), so the answer is about the place the agent runs. `GET /v1/assistant/engines`
+  lists all three for Settings; the chat probes the chosen one before starting it, and a missing program becomes an answer and
+  an `install_engine` card for an administrator (anyone else is told whom to ask), sent at once (a new `flush` event), instead of
+  `sh: copilot: not found`.
+- **Installing** is a card an administrator confirms, always: it is a capability card, so autopilot never approves it. The Settings
+  button is the administrator pressing Confirm. It is refused with the sandbox network set to none, and every install is audited.
+- **Making it work**: the token from the vault goes to the chosen agent only, by name in the environment; the card and the page say
+  which token and how to sign in by hand. The sign-in error names the agent's own login command. For Copilot that is
+  `copilot login --device-code` in a terminal, answering yes to the plain-text question (found on the real program).
+- **Claude Code** is not installed this way: the sandbox image carries it at the pinned version. With the sandbox off it needs
+  `claude` on the server, which Forgeline never installs; the error says how.
+
+Checked for real in a throwaway server with Docker: the Settings page reported Copilot missing, installed it from the button (1.0.114),
+and the chat offered the Codex adapter as a card and installed it (2.10.0) and Antigravity (1.5.15) through the API; the not-signed-in
+Codex adapter produced the sign-in guidance. **Not checked:** a token from the vault against a real account, and Codex or
+Antigravity signed in and answering inside the sandbox.
+

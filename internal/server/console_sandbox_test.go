@@ -23,6 +23,11 @@ type dockerStub struct {
 	runtimes string
 	ps       string
 	noImage  bool // the agent image is not built until docker build is called
+	// probe is what asking the sandbox whether an agent program is installed ("command -v") answers: empty means a version
+	// line, so a test that is not about missing programs is not bothered; engineMissing means it is not there.
+	probe string
+	// onExec, if set, sees every `docker exec` and may answer it (handled=true) instead of the plain d.out.
+	onExec func(args []string) (out []byte, stderr string, err error, handled bool)
 }
 
 func (d *dockerStub) run(ctx context.Context, name string, args ...string) ([]byte, string, error) {
@@ -59,6 +64,17 @@ func (d *dockerStub) run(ctx context.Context, name string, args ...string) ([]by
 		d.noImage = false
 		return nil, "", nil
 	case "exec":
+		if d.onExec != nil {
+			if out, e, err, ok := d.onExec(args); ok {
+				return out, e, err
+			}
+		}
+		if last := args[len(args)-1]; strings.Contains(last, "command -v ") {
+			if d.probe == "" {
+				return []byte("agent 1.0.0\n"), "", nil
+			}
+			return []byte(d.probe + "\n"), "", nil
+		}
 		return []byte(d.out), d.stderr, d.exitErr
 	case "ps":
 		return []byte(d.ps), "", nil
