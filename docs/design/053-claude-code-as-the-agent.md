@@ -97,3 +97,31 @@ Not built, in this order:
   Enterprise, API key and Agent Platform sign-ins) and `session/new` (it answers "Authentication required" until signed in).
 - Not yet: streaming the answer as it is written, other sign-in methods from the console, and a real turn against a signed-in
   agent (all tested so far with a stand-in agent that speaks ACP).
+
+## Checked against the real Copilot CLI (2026-11-23)
+
+`scripts/dev/acp-probe.py` drives a real ACP agent with the messages Forgeline's client sends, gives it a one-tool MCP server,
+and says whether the agent called it (one model request on the agent's own account). Run against the Copilot CLI
+(1.0.107, then 1.0.114 after it updated itself):
+
+- **It speaks ACP as Forgeline expects**: `initialize` (protocol 1, `loadSession`, `authMethods: copilot-login`), `session/new`,
+  `session/prompt`, streamed `agent_message_chunk`, `tool_call` / `tool_call_update`, `usage_update`, `stopReason: end_turn`.
+- **It ignores a stdio MCP server in `session/new`** and says it has no such tool; `/mcp list` says "No MCP servers
+  configured" either way. The standard says an agent must take stdio; this one does not. It takes **HTTP** (it advertises
+  `mcpCapabilities: {http, sse}`), and that works end to end: its client sends `server/discover`, `initialize`,
+  `tools/list` and `tools/call` to the URL, the tool is announced as `forgeline-<tool>`, and the answer uses the result.
+- **It asks permission before every tool, Forgeline's own included**, with the bare tool name as the title and kind `other`.
+  Forgeline would have shown a card for each lookup ("the agent wants to run its own tool").
+- A stand-in agent could not show either, because it was written from the same assumptions as the client.
+
+Built from that: an agent that takes only HTTP (`copilot`) gets Forgeline's tools as an HTTP MCP server on the container's
+loopback. `forgeline mcp --listen 127.0.0.1:PORT` forwards to the engine socket, with the path fixed to the run's token and
+the client's credentials dropped; the server starts it in the container beside the agent on a random port, stops it when the
+agent ends (and after a time limit if that fails), and passes the token in the environment, never an argument. A request
+to use one of Forgeline's own tools is allowed without a card, matched by the tool call's id and by a name that is
+`forgeline` plus a tool Forgeline offered (a similarly named tool of another server still asks). The sign-in message names
+`copilot login` for Copilot.
+
+**Not checked:** the whole path inside the sandbox container (the agent installed there and signed in with `copilot login`
+inside the container, Docker, the socket). Everything up to that is checked against the real program or the tests.
+

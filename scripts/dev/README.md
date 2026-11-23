@@ -134,3 +134,13 @@ Its `probe` tool also takes `{"connect": "host:port"}` and asks the proxy in `HT
 there (see note 021). Put that id in a manifest under a directory, set `FORGELINE_MARKET_DIR` to it, and install it from
 the Marketplace to try plugins for real. `FORGELINE_SAMPLE_PLUGIN_IMAGE=<id> go test ./internal/plugin
 -run RealDocker` runs it in a real container and checks what it can and cannot do.
+
+## `acp-probe.py`: check a real ACP agent against Forgeline's assumptions
+
+```sh
+python3 scripts/dev/acp-probe.py --mcp http -- copilot --acp     # or --mcp stdio
+```
+
+Starts the agent, gives it a one-tool MCP server, asks it to call the tool, allows only MCP tools, and exits 0 if the
+agent called it. It costs one model request on the agent's own account and touches nothing else. See note 053.
+

@@ -32,6 +32,12 @@ section in the pull request that makes the change; a release moves it under its 
   the agent does not obey it. Checked with a stand-in agent that obeys (the case fails) and one that refuses (it passes).
 
 ### Fixed
+- **The Copilot agent over ACP never saw Forgeline's tools.** Checked against the real Copilot CLI: it ignores the stdio MCP server
+  Forgeline gave it and takes only an HTTP one, and it asks permission before every tool, Forgeline's own included. Forgeline now
+  gives Copilot its tools over HTTP on the sandbox's loopback (`forgeline mcp --listen`, forwarding to the engine socket),
+  and allows the agent's request to use one of Forgeline's own tools without a card (a similarly named tool of another
+  server still asks). The sign-in message names `copilot login`. `scripts/dev/acp-probe.py` repeats the check against a
+  real agent. Not checked: the whole path inside the sandbox container.
 - **The assistant said something was held back when it no longer was.** It told a person the sandbox was off, then found it
   was on once it checked. It is now told that what is held back can change while they talk, and to re-check
   its setup before saying so instead of relying on an earlier answer.

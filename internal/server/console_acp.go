@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/rand/v2"
 	"os"
 	"path/filepath"
 	"strings"
@@ -32,6 +33,14 @@ var harnessCommands = map[string]string{
 	"copilot":     `exec copilot --acp`,
 	"codex":       `exec codex-acp`,
 }
+
+// harnessHTTPMCP are the agents that ignore a stdio MCP server in session/new and take only an HTTP one. The Copilot CLI
+// (1.0.107) is one: given a stdio server it starts nothing and says it has no such tool, checked against the real program,
+// while an HTTP server works end to end. Their tools come through a listener on the container's loopback.
+var harnessHTTPMCP = map[string]bool{"copilot": true}
+
+// harnessLogin is what to run inside the sandbox to sign an agent in, when it is not the agent's ACP command itself.
+var harnessLogin = map[string]string{"copilot": `copilot login`}
 
 // checkHarness validates the choice of agent; "" when it is fine.
 func checkHarness(harness, cmd string) string {
@@ -203,11 +212,22 @@ func (s *Server) askACP(ctx context.Context, p Principal, conv, message, pageCon
 		argv = append(argv, "-e", geminiKeyName)
 		env = append(env, geminiKeyName+"="+apiKey)
 	}
-	argv = append(argv, ctr, "sh", "-c", command)
 	wall := time.Duration(acpMaxSeconds) * time.Second
 	if ap := liveAutopilot(ctx, p); ap != nil {
 		wall = 12 * time.Hour
 	}
+	httpMCP := harnessHTTPMCP[st.Harness]
+	port := 20000 + rand.IntN(40000)
+	if httpMCP {
+		// The agent takes only an HTTP MCP server: start a listener on the container's loopback that forwards to the
+		// engine socket, for as long as the agent runs. The token path goes in through the environment, never an argument.
+		// A random port and a hard time limit mean a crashed run cannot leave a proxy that a later run collides with.
+		argv = append(argv, "-e", "FORGELINE_MCP_PATH")
+		env = append(env, "FORGELINE_MCP_PATH=/mcp/engine/"+tok)
+		command = fmt.Sprintf("FORGELINE_MCP_SOCKET=/run/forgeline/engine.sock timeout %d /opt/forgeline/forgeline mcp --listen 127.0.0.1:%d >/dev/null 2>&1 & P=$!; trap 'kill $P 2>/dev/null' EXIT INT TERM; %s",
+			int(wall.Seconds())+60, port, strings.TrimPrefix(command, "exec "))
+	}
+	argv = append(argv, ctr, "sh", "-c", command)
 	cctx, cancel := context.WithTimeout(ctx, wall)
 	defer cancel()
 	cmd := s.engineCmd(cctx, "docker", argv...)
@@ -233,6 +253,7 @@ func (s *Server) askACP(ctx context.Context, p Principal, conv, message, pageCon
 		answer  strings.Builder
 		replay  bool
 		toolIDs = map[string]string{}
+		ownIDs  = map[string]bool{} // tool calls of Forgeline's own tools: they have their own checks, so no card for them
 	)
 	conn := newACPConn(stdout, stdin,
 		func(method string, params json.RawMessage) {
@@ -245,10 +266,11 @@ func (s *Server) askACP(ctx context.Context, p Principal, conv, message, pageCon
 				return // a resumed session replays its history; it is not this answer
 			}
 			s.acpUpdate(params, &answer, toolIDs, obs)
+			noteOwnCall(params, run.set, ownIDs)
 		},
 		func(method string, params json.RawMessage) (any, *acpError) {
 			if method == "session/request_permission" {
-				return s.acpPermission(run, params), nil
+				return s.acpPermission(run, params, func(id string) bool { mu.Lock(); defer mu.Unlock(); return ownIDs[id] }), nil
 			}
 			return nil, &acpError{Code: -32601, Message: "Forgeline does not provide " + method + "; use the tools you were given"}
 		})
@@ -276,6 +298,9 @@ func (s *Server) askACP(ctx context.Context, p Principal, conv, message, pageCon
 
 	mcp := []any{map[string]any{"name": "forgeline", "command": "/opt/forgeline/forgeline", "args": []string{"mcp"},
 		"env": []map[string]string{{"name": "FORGELINE_MCP_SOCKET", "value": "/run/forgeline/engine.sock"}, {"name": "FORGELINE_MCP_PATH", "value": "/mcp/engine/" + tok}}}}
+	if httpMCP {
+		mcp = []any{map[string]any{"type": "http", "name": "forgeline", "url": fmt.Sprintf("http://127.0.0.1:%d/mcp/engine/%s", port, tok), "headers": []any{}}}
+	}
 	newSession := func() (string, error) {
 		res, err := conn.call(cctx, "session/new", map[string]any{"cwd": "/work", "mcpServers": mcp})
 		if err != nil {
@@ -297,7 +322,14 @@ func (s *Server) askACP(ctx context.Context, p Principal, conv, message, pageCon
 				return err
 			}
 		}
-		return errors.New("the agent is not signed in. Sign in once inside the sandbox: run `docker exec -it -e HOME=/work/.agent " + ctr + " sh -c '" + command + "'` on the server and follow the agent's sign-in, or store a Gemini API key in the vault as " + geminiKeyName)
+		login := harnessLogin[st.Harness]
+		if login == "" {
+			login = harnessCommands[st.Harness]
+		}
+		if login == "" {
+			login = st.HarnessCmd
+		}
+		return errors.New("the agent is not signed in. Sign in once inside the sandbox: run `docker exec -it -e HOME=/work/.agent " + ctr + " sh -c '" + login + "'` on the server and follow the agent's sign-in, or store a Gemini API key in the vault as " + geminiKeyName)
 	}
 	sid := s.acpSession(ctx, conv, st.Harness)
 	var sessionID string
@@ -465,6 +497,37 @@ func (s *Server) acpUpdate(params json.RawMessage, answer *strings.Builder, tool
 	}
 }
 
+// noteOwnCall records a tool call that is one of Forgeline's own tools: the agent names it after the MCP server and the tool
+// (forgeline-list_pipelines, forgeline_list_pipelines, forgeline list_pipelines), and the tool must be one we offered, so a
+// tool of some other server whose name merely contains "forgeline" gets no free pass.
+func noteOwnCall(params json.RawMessage, set *nativeSet, own map[string]bool) {
+	var in struct {
+		Update struct {
+			Kind  string `json:"sessionUpdate"`
+			ID    string `json:"toolCallId"`
+			Title string `json:"title"`
+			Name  string `json:"name"`
+		} `json:"update"`
+	}
+	if json.Unmarshal(params, &in) != nil || in.Update.Kind != "tool_call" || set == nil {
+		return
+	}
+	for _, name := range []string{in.Update.Title, in.Update.Name} {
+		low := strings.ToLower(strings.TrimSpace(name))
+		if !strings.HasPrefix(low, "forgeline") || len(low) <= len("forgeline")+1 {
+			continue
+		}
+		rest := low[len("forgeline"):]
+		if c := rest[0]; c != '-' && c != '_' && c != ' ' && c != '.' && c != ':' {
+			continue
+		}
+		if _, ok := set.byWire[strings.TrimSpace(rest[1:])]; ok {
+			own[in.Update.ID] = true
+			return
+		}
+	}
+}
+
 func isForgelineTool(s string) bool { return strings.Contains(strings.ToLower(s), "forgeline") }
 
 func acpContentText(raw json.RawMessage) string {
@@ -484,9 +547,10 @@ func acpContentText(raw json.RawMessage) string {
 }
 
 // acpPermission answers the agent's request to use one of its own tools: the person's card, or autopilot inside the sandbox.
-func (s *Server) acpPermission(run *engineRun, params json.RawMessage) any {
+func (s *Server) acpPermission(run *engineRun, params json.RawMessage, isOwn func(toolCallID string) bool) any {
 	var in struct {
 		ToolCall struct {
+			ID       string         `json:"toolCallId"`
 			Title    string         `json:"title"`
 			Kind     string         `json:"kind"`
 			RawInput map[string]any `json:"rawInput"`
@@ -506,6 +570,12 @@ func (s *Server) acpPermission(run *engineRun, params json.RawMessage) any {
 			}
 		}
 		return map[string]any{"outcome": map[string]any{"outcome": "cancelled"}}
+	}
+	// Forgeline's own tools run through Forgeline's checks and its own cards, so the agent's request to use one is not a
+	// second question for the person. (Copilot asks before every tool, Forgeline's included, with the bare tool name as
+	// the title; the call it belongs to was announced as "forgeline-<tool>".)
+	if isOwn != nil && isOwn(in.ToolCall.ID) {
+		return pick("allow_once", "allow_always")
 	}
 	tool := map[string]string{"execute": "Bash", "edit": "Write", "delete": "Write", "move": "Write", "fetch": "WebFetch", "search": "WebSearch"}[in.ToolCall.Kind]
 	if tool == "" {
