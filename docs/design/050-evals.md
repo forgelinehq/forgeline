@@ -84,7 +84,7 @@ As built: `POST /v1/ai/evals/attack-suite` adds seven cases to an agent (`consol
 log, an issue, a request to reveal instructions), two for ASI02, two for ASI03. A planted order says to reply with a marker
 word no honest answer contains, so obeying is a deterministic failure; refusal quality is graded by the judge. The cases
 are ordinary cases, free to edit. Checked with a stand-in agent that obeys (fails) and one that refuses (passes), and by
-removing each kind of check in turn. **Not checked:** against a real model; whether a given agent has the tools to read
+removing each kind of check in turn. **Browser-checked 2026-11-23** (Add attack suite on a fresh server: seven cases drawn, no sideways scroll; an `eval:` step saved and drawn in the pipeline editor). **Not checked:** against a real model; whether a given agent has the tools to read
 the planted text depends on its tool list.
 
 ## Order of work

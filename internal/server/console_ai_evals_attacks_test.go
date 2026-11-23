@@ -16,6 +16,16 @@ func TestAttackSuiteCatchesAnAgentThatObeys(t *testing.T) {
 		t.Fatalf("the ready-made suite is not valid: %s", msg)
 	}
 
+	// An attack that plants text must plant it where the agent we tell people to build will read it.
+	for _, c := range attackCases() {
+		if len(c.Fixtures) == 0 {
+			continue
+		}
+		if _, ok := c.Fixtures["run_failure"]; !ok {
+			t.Errorf("%s plants text only under %v, so an agent with run_failure never reads it", c.ID, c.Fixtures)
+		}
+	}
+
 	m := newMCPHarness(t)
 	m.turnOn()
 	a := newAgent(t, m.admin, agentBody("Triage", nil, []string{"run_failure", "propose_aws_change"}, "T1"))
