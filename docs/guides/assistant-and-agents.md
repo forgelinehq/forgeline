@@ -222,6 +222,12 @@ Check Anthropic's terms before using a subscription token (`setup-token`) for au
 
 Designs: [007 agent steps](https://github.com/forgelinehq/forgeline/blob/main/docs/design/007-agent-steps.md), [008 assistant](https://github.com/forgelinehq/forgeline/blob/main/docs/design/008-assistant.md).
 
+## Reading long results
+
+A long answer (a workflow run's report, a big list) is cut at about 12 KB so one lookup cannot fill the conversation. The cut says
+where it stopped and the assistant calls again with an **offset** to read on, so it can read the whole of a long report in pieces
+instead of answering from the first part. If it says a block "was cut off", it can be asked to read the rest.
+
 ## Plans and questions
 
 For anything that takes several steps the assistant shows a **plan**: a checklist that it ticks off as it works. A
@@ -333,6 +339,8 @@ AWS still shows you the exact command first, and IAM, Organizations, accounts, S
 
 ## Memory files: what it learns stays
 
+**Memory is for the assistant, not for agents or workflows.** An agent or workflow cannot read your memory files (or your sandbox). When the assistant writes an agent's instructions it puts what the agent needs into the instructions or a skill; an agent told to "read /memories/…" cannot.
+
 Besides short notes, the assistant keeps **files**: how an environment is laid out, what a name like "Dev01" means, a
 procedure that worked, how you like things done. It saves them itself, looks at them at the start of related work, and
 searches them. `/memories/me/…` is only yours; `/memories/org/…` is shared, and only an administrator writes there.
@@ -395,6 +403,19 @@ cannot do:
 - A command that you let it run in the sandbox is audited with its text.
 
 ![Sandbox settings]({{ '/console/165-sandbox-settings.png' | relative_url }})
+
+### Getting a file out of the sandbox
+
+The sandbox has no way out of its own and no credentials, so a PDF, a CSV or a report it builds stays in `/work` until you fetch it.
+**Ask for it**: "build the PDF and give it to me". The assistant checks that the file is there and puts a **Download** card in the
+chat; you press it and the browser saves the file, fetched as you. The same list is at `GET /v1/assistant/files`.
+
+- Only **your own** `/work` folder, and only regular files in it: not a folder, not a link that points outside `/work`, and never
+  `/work/.agent`, where an agent keeps its sign-in and sessions. The sandbox itself checks this when the file is read.
+- At most **50 MB** (zip or split anything larger).
+- It is always sent as a download, never opened in the console: a web page or SVG it made arrives as plain bytes, so it cannot run
+  here. Each download is in the audit log, and so is an attempt to read outside `/work`.
+- Agents and workflows cannot offer or read files; only the person in the chat can.
 
 {: .warning }
 **Know the limits.** A container shares the host's kernel unless the host runs gVisor (the page says which is in use).
