@@ -3,7 +3,7 @@
 // (design note 024); anything not listed here is ignored, so a newer server cannot break the panel.
 
 export function newRun() {
-  return { status: 'running', context: '', steps: [], approvals: [], text: '', proposals: [], environments: [], memories: [], actions: [], plan: [], questions: [], permissions: [], autopilot: null, autoActions: [], memFiles: [], conversation: '', error: '' };
+  return { status: 'running', context: '', steps: [], approvals: [], text: '', proposals: [], environments: [], memories: [], actions: [], plan: [], questions: [], permissions: [], autopilot: null, autoActions: [], memFiles: [], files: [], conversation: '', error: '' };
 }
 
 const step = (run, id) => run.steps.find(s => s.id === id);
@@ -37,6 +37,9 @@ export function applyEvent(run, ev) {
       } else if (ev.name === 'forgeline.memory_file' && v.path) {
         // A file the assistant wrote to or removed from its memory (design note 052, slice 5).
         run.memFiles.push({ path: String(v.path), action: ['create', 'edit', 'rename', 'delete'].includes(v.action) ? v.action : 'edit', pending: !!v.pending });
+      } else if (ev.name === 'forgeline.file' && v.path && !run.files.some(f => f.path === v.path)) {
+        // A file the assistant made in the sandbox and offered for download (design note 052).
+        run.files.push({ path: String(v.path), name: String(v.name || v.path), size: Number(v.size) || 0, title: String(v.title || '') });
       } else if (ev.name === 'forgeline.autopilot') {
         // Autopilot (design note 052, slice 4): where the envelope stands, and each change that ran without a card.
         run.autopilot = { state: v.state === 'off' ? 'off' : 'on', used: Number(v.used) || 0, steps: Number(v.steps) || 0, untilMs: Number(v.untilMs) || 0 };

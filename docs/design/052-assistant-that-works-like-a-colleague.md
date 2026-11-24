@@ -410,3 +410,26 @@ project), stored in the document store:
   Reads are open. Writes are limited to agents, skills, teams, workflows, team schedules, evals, pipelines and memory, and a path
   that decides who may do what or approves, applies or starts work is refused for every method. It replaces one tool per object, and
   every assistant backend gets it, because the Claude Code and ACP engines are handed the assistant's tool list.
+
+## Built (files out of the sandbox, long results, 2026-11-24)
+
+From a run on a large AWS account: the assistant built a PDF in the sandbox and could not give it to the person ("the documentation
+doesn't describe any way to download files"), read a workflow's report cut at 12 KB ("the Chart data block was truncated"), and its
+workflow agents could not read `/memories/org/...`.
+
+- **Files.** `offer_file {path, title}` checks a file in the person's `/work` and shows a Download card; `GET /v1/assistant/files`
+  lists them and, with `?path=`, sends one. The server reads it from the container with `docker exec`, and the container decides
+  what may leave: a script resolves the path (`realpath -e`), refuses anything outside `/work`, the agent's home `/work/.agent`
+  and anything that is not a regular file, and reads the bytes in the same process so the file cannot change in between. Up to
+  50 MB, always an attachment with sniffing off and a sandboxing policy; a type a browser would run is plain bytes. Only the person's
+  own folder, audited (refusals too). The scripts were run for real against a folder standing in for `/work` (links that leave it, the
+  agent's home, a folder, shell characters in a name), and the whole path against real Docker (bytes identical, every escape refused,
+  a 51 MB file refused).
+- **Long results.** `forgeline_api` GET takes an `offset`: a long answer ends with "cut here: N more characters, call again with
+  offset M", and the next call starts there, counted in characters so a window never splits one. The model is told in the tool's help.
+- **Agents and workflows cannot read memory or the sandbox**, by design (the memory tool is not offered to them). The assistant is
+  now told so where it writes their instructions: put what they need in the instructions or a skill. Reading org memory read-only for
+  agents is a possible change and a decision for the maintainer; it is not built.
+- **Not checked:** the Download card in a browser (the stream event and the state that builds it are tested, and the endpoint was run
+  against real Docker), and a real model choosing to offer a file.
+

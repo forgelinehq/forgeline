@@ -7,6 +7,13 @@ section in the pull request that makes the change; a release moves it under its 
 ## [Unreleased]
 
 ### Added
+- **A file the assistant builds in the sandbox can be downloaded.** It had no way to hand over a PDF or a CSV: the sandbox has no
+  way out. The assistant now offers a file with a **Download** card, and `GET /v1/assistant/files` lists and sends files from your
+  own `/work` folder (regular files only, not `/work/.agent`, not a link out, at most 50 MB, always as a download, audited).
+- **Long results are read in pieces.** A long answer through `forgeline_api` ends with the offset to read on from, so a report longer
+  than 12 KB is read whole instead of being answered from its first part.
+- The assistant is told that agents and workflows cannot read memory files or the sandbox, so it stops writing instructions that
+  say to read them.
 - **Missing agents are found and offered for installation.** Under Settings › Assistant model, an ACP agent (Antigravity, Copilot
   CLI, Codex) now shows whether it is installed in your sandbox and which version; **Install the latest** shows the command and its
   source and runs it as root inside the sandbox when you confirm. If you pick an agent that is not installed and send a message, the

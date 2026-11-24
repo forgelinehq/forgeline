@@ -301,6 +301,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /v1/assistant/approvals/{id}", s.requireRole(authn.Developer, s.handleAssistantApproval))
 	mux.Handle("POST /v1/assistant/questions/{id}", s.requireRole(authn.Developer, s.handleAssistantQuestion))
 	mux.Handle("GET /v1/assistant/sandbox", s.requireRole(authn.Developer, s.handleGetSandbox))
+	mux.Handle("GET /v1/assistant/files", s.requireRole(authn.Developer, s.handleSandboxFiles))
 	mux.Handle("GET /v1/assistant/engines", s.requireRole(authn.Admin, s.handleListEngines))
 	mux.Handle("POST /v1/assistant/engines/{harness}/install", s.requireRole(authn.Admin, s.handleInstallEngine))
 	mux.Handle("PUT /v1/assistant/sandbox", s.requireRole(authn.Admin, s.handlePutSandbox))

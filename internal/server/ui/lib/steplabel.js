@@ -30,6 +30,7 @@ const VERBS = {
   run_runbook: ['Ran a runbook', 'Running a runbook'],
   ask_user: ['Asked you a question', 'Asking you a question'],
   run_shell: ['Ran a command in its sandbox', 'Running a command in its sandbox'],
+  offer_file: ['Offered a file for download', 'Offering a file for download'],
   update_plan: ['Updated its plan', 'Updating its plan'],
   environment_templates: ['Looked at environment templates', 'Looking at environment templates'],
   request_environment: ['Requested an environment', 'Requesting an environment'],

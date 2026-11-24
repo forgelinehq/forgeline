@@ -1,6 +1,6 @@
 // The assistant panel: a colleague that answers questions about the page you are on, looks things up, and changes
 // things only after you approve the exact action (or inside an autopilot envelope you set).
-import { h, icon, mount, errorBox, notice, copyButton, toast, pill, relTime } from './dom.js';
+import { h, icon, mount, errorBox, notice, copyButton, toast, pill, relTime, bytes } from './dom.js';
 import { get, post, del, atLeast, streamPost } from './api.js';
 import { currentPath, navigate } from './router.js';
 import { pageContext as contextOf } from './pagectx.js';
@@ -286,6 +286,14 @@ function build(close, role) {
       n.about === 'system' && pending ? null : h('button', { type: 'button', class: 'btn-secondary btn-sm', 'data-memory': 'undo', onclick: (e) => act(e, () => del('/v1/assistant/memory/' + encodeURIComponent(n.id))) }, pending ? 'Discard' : 'Undo'));
   }
 
+  /** A file the assistant made in your sandbox and offered: you fetch it as yourself, through the console. */
+  function fileCard(f) {
+    return h('div', { class: amber + ' flex-wrap items-center', 'data-file': f.path },
+      icon('note', 'size-4 shrink-0'),
+      h('div', { class: 'min-w-0 flex-1' }, h('b', {}, f.title || f.name), h('div', { class: 'muted text-xs break-all' }, f.name + ' · ' + bytes(f.size))),
+      h('a', { class: 'btn-primary btn-sm', href: '/v1/assistant/files?path=' + encodeURIComponent(f.path), download: f.name, 'data-file-download': f.path }, icon('download', 'size-3.5'), 'Download'));
+  }
+
   /** The run so far: its lookups as cards, what it is doing, the answer as cards, and anything it filed. */
   function runNode(run, opened, cards, stop) {
     const cardFor = (id) => { if (!cards.has(id)) cards.set(id, proposalCard(id)); return cards.get(id); };
@@ -314,6 +322,7 @@ function build(close, role) {
       run.error ? errorBox(run.error) : null,
       run.proposals.map(cardFor),
       run.actions.map(a => { const k = 'action:' + a.id; if (!cards.has(k)) cards.set(k, actionCard(a)); return cards.get(k); }),
+      run.files.map(f => { const k = 'file:' + f.path; if (!cards.has(k)) cards.set(k, fileCard(f)); return cards.get(k); }),
       run.memories.map(n => { const k = 'memory:' + n.id; if (!cards.has(k)) cards.set(k, memoryCard(n)); return cards.get(k); }),
       run.environments.length ? h('div', { class: amber, 'data-filed': 'environment' }, icon('server', 'mt-0.5 size-4 shrink-0'), h('div', {}, 'Environment requested. Nothing exists until an administrator approves: ',
         h('a', { href: '#/environments', class: 'font-semibold underline', onclick: close }, 'see Environments'))) : null,
