@@ -7,6 +7,10 @@ section in the pull request that makes the change; a release moves it under its 
 ## [Unreleased]
 
 ### Added
+- **Agents and workflows can read the organisation's notes.** A new read-only tool, **Read the organisation's shared notes**
+  (`org_memory`), lets an agent that lists it view and search the files under `/memories/org`. It cannot write, never sees anyone's
+  private files or notes still waiting to be kept, and marks notes past their valid-until date. The assistant no longer writes
+  instructions that say "read /memories/…" for an agent that cannot.
 - **Runs have a trust level** (milestone M3, slice 3). How much a run is trusted follows from how it started: a run for a pull request
   is **untrusted** and gets no secrets, whatever the settings say; a run started by a signed-in person is trusted. A run for a **push**
   to an allowed branch may now use secrets, but only where an administrator turned on **Secrets for pushes** for that repository

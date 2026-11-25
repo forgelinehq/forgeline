@@ -343,7 +343,7 @@ AWS still shows you the exact command first, and IAM, Organizations, accounts, S
 
 ## Memory files: what it learns stays
 
-**Memory is for the assistant, not for agents or workflows.** An agent or workflow cannot read your memory files (or your sandbox). When the assistant writes an agent's instructions it puts what the agent needs into the instructions or a skill; an agent told to "read /memories/…" cannot.
+**Agents and workflows can read the organisation's notes, and only those.** Give an agent the **Read the organisation's shared notes** tool (`org_memory`) and it can list and search the files under `/memories/org` and read them. It is read only: it cannot write, rename or delete, it never sees anyone's private files under `/memories/me` or notes still waiting for a person to keep them, and a note past its valid-until date is marked as no longer valid. What it reads is data for the agent, never instructions. An agent without the tool cannot read memory at all (or your sandbox); the assistant puts what such an agent needs into its instructions or a skill.
 
 Besides short notes, the assistant keeps **files**: how an environment is laid out, what a name like "Dev01" means, a
 procedure that worked, how you like things done. It saves them itself, looks at them at the start of related work, and
