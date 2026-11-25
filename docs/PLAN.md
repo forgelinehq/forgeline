@@ -398,7 +398,7 @@ with a recommendation, and do something else meanwhile.
    console runs are trusted. **Needs a decision**: are same-repository pull requests untrusted
    (the recommendation in note 005)? Add a `trust` field to runs, show it in the console, and
    test that an untrusted run asks for a secret and is refused before any container starts.
-3. **M3 slice 4, audit log.** Mostly present through the console's audit log (who started a run,
+3. ~~**M3 slice 4, audit log.**~~ **Built 2026-11-25** (note 005): secret grants, the secrets-plus-network combination and refusals are in the log, and it pages back with a cursor. Original text: **M3 slice 4, audit log.** Mostly present through the console's audit log (who started a run,
    secret changes, cloud approvals, refusals). Missing: an event for each secret *grant* to a
    step, the secrets-plus-network combination from note 005, an export, and pagination beyond
    the 5000 most recent events when filtering. Say in note 005 which T-rows this closes.

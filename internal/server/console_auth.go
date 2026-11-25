@@ -12,6 +12,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -738,6 +739,12 @@ func (s *Server) handleChangeOwnPassword(w http.ResponseWriter, r *http.Request)
 
 // --- audit log (admin) ---
 
+// auditScanWindow is how many of the newest events a filtered listing reads before it stops and offers a cursor.
+var auditScanWindow = 5000 // a variable only so a test can make the window small
+
+// auditCursorRE is the shape of an audit event id: the time in nanoseconds, then a random suffix.
+var auditCursorRE = regexp.MustCompile(`^[0-9]{20}-[0-9A-Za-z_-]{1,12}$`)
+
 func (s *Server) handleAudit(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	limit := 100
@@ -756,9 +763,16 @@ func (s *Server) handleAudit(w http.ResponseWriter, r *http.Request) {
 	fetch := limit
 	filtering := q.Get("actor") != "" || q.Get("action") != "" || q.Get("denied") != "" || q.Get("from") != "" || q.Get("to") != ""
 	if filtering {
-		fetch = 5000
+		fetch = auditScanWindow
 	}
-	docs, err := s.docs.List(r.Context(), kindAudit, docstore.ListOptions{Desc: true, Limit: fetch})
+	// before is a cursor: only events older than that id. The answer's next is the cursor to ask for the following page, so a
+	// filter can reach past the newest auditScanWindow events instead of stopping there.
+	before := q.Get("before")
+	if before != "" && !auditCursorRE.MatchString(before) {
+		writeError(w, http.StatusBadRequest, "before is an event id, as returned in next")
+		return
+	}
+	docs, err := s.docs.List(r.Context(), kindAudit, docstore.ListOptions{Desc: true, Limit: fetch, Before: before})
 	if err != nil {
 		s.internalError(w, "reading the audit log", err)
 		return
@@ -769,15 +783,20 @@ func (s *Server) handleAudit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	out := make([]AuditEvent, 0, limit)
+	next := ""
 	for _, e := range events {
 		if !f.match(e) {
 			continue
 		}
 		out = append(out, e)
 		if len(out) == limit {
+			next = e.ID // the page is full: ask for what is older than the last event on it
 			break
 		}
 	}
+	if next == "" && len(events) == fetch && len(events) > 0 {
+		next = events[len(events)-1].ID // the scan window ended before the log did: carry on from where it stopped
+	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].ID > out[j].ID })
-	writeJSON(w, http.StatusOK, map[string]any{"events": out})
+	writeJSON(w, http.StatusOK, map[string]any{"events": out, "next": next})
 }

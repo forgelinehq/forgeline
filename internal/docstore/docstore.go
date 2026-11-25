@@ -30,6 +30,9 @@ type ListOptions struct {
 	Limit int
 	// Desc lists the highest id first.
 	Desc bool
+	// Before, if not empty, lists only documents whose id is lower than it (a cursor for paging back through a long list, such as the
+	// audit log, whose ids start with the time).
+	Before string
 }
 
 // Store is a document store. Implementations are safe for concurrent use.

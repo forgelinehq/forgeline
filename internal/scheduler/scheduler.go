@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -87,6 +88,11 @@ type Options struct {
 	Eval func(ctx context.Context, s *pipeline.Step, logs io.Writer) error
 	// EvalDenied, if not empty, refuses every eval step and says why, like WorkflowDenied.
 	EvalDenied string
+	// OnSecretsGranted, if set, is called for every step that is given secrets, after they are checked and before its container
+	// starts: the secret names (never the values) and the network the step has (design note 005, T13).
+	OnSecretsGranted func(stepID string, names []string, network string)
+	// OnSecretsRefused, if set, is called for a step that asked for secrets and did not get them, with the reason.
+	OnSecretsRefused func(stepID string, names []string, why string)
 	// OnStepStart, if set, is called just before a step is handed to the executor.
 	OnStepStart func(stepID string)
 	// OnStepDone, if set, is called once for every step with its final result, including
@@ -183,7 +189,18 @@ func runStep(ctx context.Context, s *pipeline.Step, ex executor.Executor, opts O
 		return StepResult{ID: s.ID, Status: StatusFailed, Err: err}
 	}
 	if run.Secrets, err = grantSecrets(s, opts); err != nil {
+		if opts.OnSecretsRefused != nil && len(s.Permissions.Secrets) > 0 {
+			opts.OnSecretsRefused(s.ID, s.Permissions.Secrets, err.Error())
+		}
 		return StepResult{ID: s.ID, Status: StatusFailed, Err: err}
+	}
+	if opts.OnSecretsGranted != nil && len(run.Secrets) > 0 {
+		names := make([]string, 0, len(run.Secrets))
+		for n := range run.Secrets {
+			names = append(names, n)
+		}
+		sort.Strings(names)
+		opts.OnSecretsGranted(s.ID, names, s.Permissions.Network)
 	}
 	var logs io.Writer = io.Discard
 	if opts.Logs != nil {

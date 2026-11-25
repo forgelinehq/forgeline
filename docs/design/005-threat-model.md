@@ -90,7 +90,7 @@ Status is one of **open** (nothing prevents it), **partly** (reduced, with the g
 | T10 | Stealing or guessing the bearer token | **partly**: 16+ characters, constant-time compare, no cookie so no CSRF; plain HTTP, one shared token, no lockout | TLS in front (documented), per-user tokens later | Wrong tokens are rejected (handled) |
 | T11 | One run exhausts CPU, memory, disk or processes | **partly**: log and upload caps and run concurrency are limited (handled); per-step CPU, memory, PID and disk are not | Resource limits per step | A fork bomb and a memory hog must be stopped without hurting another run |
 | T12 | A tampered or swapped container image | **open**: images are pulled by mutable tag | Digest pinning and signature checks belong to M4 | Out of scope here |
-| T13 | An action nobody can reconstruct later | **open**: no audit log | Append-only audit records for runs, grants and approvals | Every grant produces a record, and the record cannot be edited through the API |
+| T13 | An action nobody can reconstruct later | **mitigated** (slice 4, 2026-11-25): the console's audit log records who did what, including refusals; every secret given to a step, every refusal of one, and every step that has secrets and network access are in it (`run.secret.grant`, `run.secret.refused`, `run.secret.network`: names, never values); it can be exported, kept to a retention, paged back through any length, and never edited through the API | Append-only audit records for runs, grants and approvals | Every grant produces a record, and the record cannot be edited through the API |
 | T14 | Compromise of the server process is root on the host | **open by design**: it controls the Docker daemon | Run the server on a dedicated host or VM (the AWS demo does); rootless Docker or a stronger runtime later | Not testable in-process; recorded so it is not forgotten |
 
 ## Proposed slices
@@ -115,7 +115,12 @@ order of value for effort.
    untrusted run is refused any secret. Combining secrets with network egress in one step
    requires both to be declared, and the combination is written to the audit log.
 4. **Audit log (T13).** Append-only records for run starts, secret grants, approvals and
-   cancels, with who or what caused them.
+   cancels, with who or what caused them. **Built 2026-11-25** (the rest of the log was built with the console): each secret given
+   to a step is a `run.secret.grant` (run, step, secret names, the step's network, how the run started), a step that holds
+   secrets and can reach the network also gets a `run.secret.network` record to search for, and a refusal is a
+   `run.secret.refused` (shown as refused, with the reason). Names only: the tests check a value never appears. The list can be paged
+   back past the newest 5000 events with a cursor. This closes T13; T4 stays partly open until slice 3 (a trust level for runs, which
+   waits for a decision) refuses secrets to untrusted runs by rule instead of by the GitHub-only check.
 5. **Limits and capability drop (T2, T11).** Memory, PID and CPU limits and a capability drop,
    once the maintainer has decided how much compatibility to trade.
 

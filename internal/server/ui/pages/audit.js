@@ -56,13 +56,25 @@ export async function auditPage() {
     return q;
   };
 
-  async function load() {
+  // The log is read newest first, a page at a time; "next" from the server is the cursor for the older page, so a filter can go back
+  // past the newest events the server scans for one answer.
+  let events = [], cursor = '', failed = false;
+  async function fetchPage(more) {
     const q = query();
     csv.href = '/v1/audit/export?' + new URLSearchParams([...q, ['format', 'csv']]);
     jsonl.href = '/v1/audit/export?' + new URLSearchParams([...q, ['format', 'jsonl']]);
     q.set('limit', '200');
-    let events;
-    try { events = (await get('/v1/audit?' + q)).events; } catch (e) { return mount(body, errorBox(e.message)); }
+    if (more && cursor) q.set('before', cursor);
+    try {
+      const r = await get('/v1/audit?' + q);
+      events = more ? events.concat(r.events) : r.events;
+      cursor = r.next || '';
+      failed = false;
+    } catch (e) { failed = true; return mount(body, errorBox(e.message)); }
+    draw();
+  }
+  const load = () => fetchPage(false);
+  function draw() {
     mount(body, h('div', { class: 'card overflow-x-auto' }, events.length ? h('table', { class: 'tbl' },
       h('thead', {}, h('tr', {}, ['When', 'Who', 'What', 'On', 'Detail', 'From'].map(x => h('th', {}, x)))),
       h('tbody', {}, events.map(e => h('tr', {},
@@ -70,8 +82,10 @@ export async function auditPage() {
         h('td', { class: 'whitespace-nowrap font-medium' }, e.actor, e.role && h('span', { class: 'muted ml-1 text-xs' }, e.role)),
         h('td', {}, h('span', { class: (e.allowed ? 'pill-idle' : 'pill-bad') + ' font-mono' }, e.allowed ? e.action : e.action + ' · refused')),
         h('td', { class: 'min-w-28 break-all font-mono text-xs' }, e.target || ''), h('td', { class: 'min-w-48 max-w-xs text-sm' }, e.detail || ''), h('td', { class: 'muted whitespace-nowrap font-mono text-xs' }, e.ip || ''))))
-    ) : emptyState('shield', 'Nothing matches', 'Try fewer filters.')),
-      events.length === 200 && h('p', { class: 'hint mt-2' }, 'Showing the newest 200. The download has every event that matches.'));
+    ) : emptyState('shield', cursor ? 'Nothing in the newest events' : 'Nothing matches', cursor ? 'Nothing that matches is among the newest events. Older ones can be searched.' : 'Try fewer filters.')),
+      cursor ? h('div', { class: 'mt-3 flex items-center gap-3' },
+        h('button', { class: 'btn-secondary', type: 'button', id: 'audit-older', onclick: () => fetchPage(true) }, 'Show older events'),
+        h('span', { class: 'hint' }, 'The download has every event that matches.')) : (events.length >= 200 ? h('p', { class: 'hint mt-2' }, 'That is every event that matches. The download has them too.') : null));
   }
 
   let t;
