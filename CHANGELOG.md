@@ -7,6 +7,10 @@ section in the pull request that makes the change; a release moves it under its 
 ## [Unreleased]
 
 ### Added
+- **A long chat keeps what it found.** The assistant sent the model only the last 12 messages and forgot the rest. The messages that
+  fall out of the window are now condensed into a short summary the model is given as background, kept with the conversation and
+  extended only when several more have fallen out (secrets hidden). Claude Code and the ACP agents keep their own sessions and are not
+  affected.
 - **The agent's answer streams into the chat as it is written.** With Claude Code or an ACP agent (Copilot, Codex, Antigravity) the
   text appears piece by piece instead of all at the end; a message after a tool use starts on its own line, and the history keeps
   what you saw. Claude Code is started with `--include-partial-messages` (checked against the real program).

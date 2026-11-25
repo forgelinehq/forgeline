@@ -347,7 +347,7 @@ project), stored in the document store:
   keep or delete their own, and "Forget everything about me" removes their files too. The chat shows "Saved to memory: path".
   Every write is audited (path, action, size, never the content). Agents and workflows do not get the tool.
 - The notes of slice 1 (`remember`, 300 characters) still work beside it.
-- **Not built yet:** compaction of the conversation history itself (older messages are still just cut after 12), moving a personal file to the organisation, embeddings. Verified with a
+- **Not built yet:** (summarising older messages: built 2026-11-25, see below), moving a personal file to the organisation, embeddings. Verified with a
   scripted model only.
 
 ## Built (validity dates, 2026-11-22)
@@ -432,4 +432,17 @@ workflow agents could not read `/memories/org/...`.
   agents is a possible change and a decision for the maintainer; it is not built.
 - **Not checked:** the Download card in a browser (the stream event and the state that builds it are tested, and the endpoint was run
   against real Docker), and a real model choosing to offer a file.
+
+## Built (summaries of older messages, 2026-11-25)
+
+A chat sent the model its last 12 messages and forgot the rest, so a long chat lost what was found at the start. For the model backends
+(a provider, an API key, a login token), the messages that fall out of the window are now condensed into a short summary (at most
+300 words, 2400 characters) that goes to the model as background in the context, marked as data. It is kept in the person's conversation
+with the hash of the messages it was made from, so it is never used for different messages, and it is extended only when at least
+four more messages have fallen out: until then those messages are sent whole, so nothing is lost between summaries. Secrets are hidden
+in what the summariser sees and in what it returns; if the model cannot summarise, the old behaviour stands (earlier messages left
+out; an older summary is still used). Claude Code and the ACP agents keep their own sessions and are not sent the history at all. Deleting
+a conversation deletes its summary. Checked with a scripted model (first summary, between summaries, extension with the previous
+summary, a changed history, a failing summariser, secrets); removing each part made a test fail. **Not checked:** a real model's
+summaries, and how good they are on a long real chat.
 
