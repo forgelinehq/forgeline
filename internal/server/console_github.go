@@ -107,12 +107,13 @@ type githubSettings struct {
 type githubRule struct {
 	Repo     string   `json:"repo"`
 	Branches []string `json:"branches"`
+	Secrets  bool     `json:"secrets,omitempty"` // runs for pushes to these branches may use the vault's secrets (note 005, slice 3)
 }
 
 func (st githubSettings) rules() []RepoRule {
 	out := make([]RepoRule, len(st.Rules))
 	for i, r := range st.Rules {
-		out[i] = RepoRule{Repo: r.Repo, Branches: r.Branches}
+		out[i] = RepoRule{Repo: r.Repo, Branches: r.Branches, Secrets: r.Secrets}
 	}
 	return out
 }
@@ -227,7 +228,7 @@ func (s *Server) githubView(ctx context.Context, r *http.Request) GitHubJSON {
 		out.APIBase, out.PublicURL, out.PipelineFile = active.APIBase, active.PublicURL, active.PipelineFile
 		out.TokenSet, out.WebhookSecretSet = true, true
 		for _, r := range active.Allow {
-			out.Rules = append(out.Rules, githubRule{Repo: r.Repo, Branches: r.Branches})
+			out.Rules = append(out.Rules, githubRule{Repo: r.Repo, Branches: r.Branches, Secrets: r.Secrets})
 		}
 	}
 	base := out.PublicURL

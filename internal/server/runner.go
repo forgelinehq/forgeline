@@ -169,10 +169,22 @@ func (s *Server) runGraph(runCtx context.Context, run store.Run, g *pipeline.Gra
 // content a pull request or a push controls, so until runs have a trust level (note 005,
 // slice 3) it gets none: a step that asks for one fails with this reason instead of running.
 func (s *Server) secretsFor(ctx context.Context, run store.Run) (map[string]string, string) {
-	if run.Trigger == store.TriggerGitHub {
-		return nil, "runs started by GitHub receive no secrets yet (docs/design/005-threat-model.md, slice 3)"
+	if run.Trigger != store.TriggerGitHub {
+		return s.stepSecrets(ctx), "" // started in the console or through the API by a signed-in person: trusted
 	}
-	return s.stepSecrets(ctx), ""
+	if trustOf(run) == trustUntrusted {
+		return nil, "this run was started by GitHub for a pull request, which is untrusted and receives no secrets (docs/design/005-threat-model.md, T5)"
+	}
+	// A push to an allowed branch is trusted only where an administrator said so for that repository.
+	if gh := s.gh(); gh != nil {
+		branch := strings.TrimPrefix(run.SourceRef, "refs/heads/")
+		for _, rule := range gh.Allow {
+			if strings.EqualFold(rule.Repo, run.SourceRepo) && rule.Secrets && gh.allowed(rule.Repo, branch) {
+				return s.stepSecrets(ctx), ""
+			}
+		}
+	}
+	return nil, "runs started by a push to " + run.SourceRepo + " receive no secrets: an administrator can allow them for this repository under Settings › GitHub"
 }
 
 func (s *Server) register(id string, cancel context.CancelFunc) *runCtl {

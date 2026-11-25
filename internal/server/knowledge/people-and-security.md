@@ -133,7 +133,7 @@ goes, with filters applied.
 - Passwords use PBKDF2-SHA256, at least 12 characters, with login throttling per account and per address.
 - Cookies are `HttpOnly` and `SameSite=Strict`. Requests that change something must send `X-Forgeline-Request: 1`.
 - Secrets are encrypted with AES-256-GCM, cannot be read back, and are masked in logs.
-- Steps get only the secrets and network they ask for. Runs started by GitHub get no secrets.
+- Steps get only the secrets and network they ask for. Pull-request runs are untrusted and get no secrets; a push run gets them only where an administrator allowed it for that repository.
 - Every change, refusal and failed login goes to the audit log.
 
 See [design note 006](https://github.com/forgelinehq/forgeline/blob/main/docs/design/006-console.md) for the rules and the known limits.

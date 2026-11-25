@@ -120,7 +120,13 @@ Add one under **Secrets** (name in capitals, value of at least 8 characters). Re
 
 ![A secret used with no network]({{ '/console/32-vault-secret-run.png' | relative_url }})
 
-Runs **started by GitHub get no secrets** yet; runs started by a signed-in developer or admin do.
+**How much a run is trusted follows from how it started**, and a pipeline file cannot claim more:
+
+- A run started by a signed-in developer or administrator, in the console or through the API, is **trusted** and gets the secrets its steps ask for.
+- A run for a **pull request** is **untrusted**: its pipeline file and code come from whoever opened it, so it gets **no secrets**, whatever the settings say. A step that asks for one fails, naming the secret and the reason, and the run page says "untrusted: no secrets".
+- A run for a **push** to an allowed branch gets secrets **only if an administrator turned on "Secrets for pushes" for that repository** (Settings › GitHub). It is off by default: whoever can push to an allowed branch can write the pipeline file, so this is a decision about trusting them.
+
+Every secret a step is given, and every refusal, is in the audit log with the run's trust.
 
 ## From the command line
 

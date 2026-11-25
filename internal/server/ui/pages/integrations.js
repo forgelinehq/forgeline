@@ -28,7 +28,7 @@ async function settingsPage(section) {
     }
     let gh;
     try { gh = await get('/v1/integrations/github'); } catch (e) { return mount(el, errorBox(e.message)); }
-    rules = gh.rules.map(r => ({ repo: r.repo, branches: r.branches.join(', ') }));
+    rules = gh.rules.map(r => ({ repo: r.repo, branches: r.branches.join(', '), secrets: !!r.secrets }));
     if (!rules.length) rules.push({ repo: '', branches: 'main' });
     render(gh);
   }
@@ -49,6 +49,8 @@ async function settingsPage(section) {
     const paintRules = () => mount(rulesBox, rules.map((r, i) => h('div', { class: 'flex flex-wrap items-center gap-2' },
       h('input', { class: 'input min-w-48 flex-1 font-mono', placeholder: 'owner/repository', 'aria-label': 'Repository ' + (i + 1), value: r.repo, disabled: !admin, oninput: (e) => { r.repo = e.target.value; } }),
       h('input', { class: 'input min-w-48 flex-1 font-mono', placeholder: 'main, release/*', 'aria-label': 'Branches for repository ' + (i + 1), value: r.branches, disabled: !admin, oninput: (e) => { r.branches = e.target.value; } }),
+      h('label', { class: 'flex items-center gap-1.5 text-xs', title: 'Runs for pushes to these branches may use the secrets in the vault. A pull request never gets secrets.' },
+        h('input', { type: 'checkbox', class: 'size-4 rounded', 'data-rule-secrets': String(i), 'aria-label': 'Give secrets to runs for pushes to repository ' + (i + 1), checked: !!r.secrets, disabled: !admin, onchange: (e) => { r.secrets = e.target.checked; } }), 'Secrets for pushes'),
       admin && h('button', { class: 'btn-ghost btn-sm', type: 'button', 'aria-label': 'Remove repository ' + (i + 1), onclick: () => { rules.splice(i, 1); paintRules(); } }, icon('x')))));
     paintRules();
 
@@ -70,7 +72,7 @@ async function settingsPage(section) {
       ev.preventDefault(); err.classList.add('hidden'); save.disabled = true;
       const body = {
         enabled: enabled.checked, api_base: api.value, public_url: pub.value, pipeline_file: file.value,
-        rules: rules.filter(r => r.repo.trim()).map(r => ({ repo: r.repo.trim(), branches: r.branches.split(',').map(b => b.trim()).filter(Boolean) })),
+        rules: rules.filter(r => r.repo.trim()).map(r => ({ repo: r.repo.trim(), branches: r.branches.split(',').map(b => b.trim()).filter(Boolean), secrets: !!r.secrets })),
         token: token.value, generate_webhook_secret: secretMode.value === 'generate', webhook_secret: secretMode.value === 'own' ? secretIn.value : '',
       };
       try {

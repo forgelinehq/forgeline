@@ -306,7 +306,7 @@ with their status, five slices, and three decisions for the maintainer.
   while the step runs); nine mutations of the protections were each caught. **Not covered:**
   masking of transformed values (base64, split output), a secret in plain `env`, and any
   secret store other than process environment variables.
-- Slice 3, trust of the run (untrusted runs get no secrets): not started.
+- Slice 3, trust of the run: **built 2026-11-25** (note 005): pull-request runs are untrusted and get no secrets; a push run gets them only where the repository's rule allows.
 - Slice 4, audit log: not started.
 - Slice 5, resource limits and capability drop: not started; waits on a compatibility decision.
 

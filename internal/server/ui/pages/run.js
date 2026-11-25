@@ -93,7 +93,7 @@ export async function runPage({ params }) {
       failureCard(),
       h('dl', { class: 'card card-pad mb-4 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5' },
         meta('Started by', run.triggered_by || run.trigger),
-        meta('Trigger', run.trigger + (run.pipeline_version ? ' · v' + run.pipeline_version : '')),
+        meta('Trigger', run.trigger + (run.pipeline_version ? ' · v' + run.pipeline_version : '') + (run.trust === 'untrusted' ? ' · untrusted: no secrets' : '')),
         meta('Created', h('span', { title: absTime(run.created_at) }, relTime(run.created_at))),
         meta('Duration', duration(run.started_at, run.finished_at) || (live ? 'waiting…' : '–')),
         meta('Source', src ? h('span', { class: 'font-mono text-xs' }, [src.repo, src.sha && '@' + src.sha.slice(0, 7), src.ref && ' (' + src.ref.replace('refs/heads/', '') + ')'].filter(Boolean).join('')) : 'none')),
