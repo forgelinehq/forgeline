@@ -27,6 +27,14 @@ prompt = sys.stdin.read()
 sid = 'sess-1'
 if '--resume' in args: sid = args[args.index('--resume') + 1] + '+'
 print(json.dumps({'type': 'system', 'subtype': 'init', 'session_id': sid}), flush=True)
+streaming = '--include-partial-messages' in args
+def ev(inner):  # what the real program prints for each partial piece (checked 2026-11-25)
+    if streaming: print(json.dumps({'type': 'stream_event', 'event': inner, 'session_id': sid}), flush=True)
+def text(t): ev({'type': 'content_block_delta', 'index': 0, 'delta': {'type': 'text_delta', 'text': t}})
+ev({'type': 'message_start', 'message': {'role': 'assistant'}})
+ev({'type': 'content_block_delta', 'index': 0, 'delta': {'type': 'thinking_delta', 'thinking': 'hmm'}})
+ev({'type': 'content_block_delta', 'index': 0, 'delta': {'type': 'future_delta', 'text': 'NOT-AN-ANSWER'}})
+text('Let me look '); text('at them.')
 rpc('initialize')
 tools = [t['name'] for t in rpc('tools/list')['tools']]
 res = rpc('tools/call', {'name': 'list_pipelines', 'arguments': {}})['content'][0]['text']
@@ -34,6 +42,8 @@ print(json.dumps({'type': 'assistant', 'message': {'content': [{'type': 'tool_us
 dec = json.loads(rpc('tools/call', {'name': 'approve', 'arguments': {'tool_name': 'Bash', 'input': {'command': 'echo hello'}, 'tool_use_id': 'tu1'}})['content'][0]['text'])
 print(json.dumps({'type': 'assistant', 'message': {'content': [{'type': 'tool_use', 'id': 'tu1', 'name': 'Bash', 'input': {'command': 'echo hello'}}]}}), flush=True)
 out = 'hello' if dec['behavior'] == 'allow' else 'denied: ' + dec.get('message', '')
+ev({'type': 'message_start', 'message': {'role': 'assistant'}})
+text('Done: '); text(out)
 print(json.dumps({'type': 'user', 'message': {'content': [{'type': 'tool_result', 'tool_use_id': 'tu1', 'content': out}]}}), flush=True)
 open('seen.json', 'w').write(json.dumps({'tools': tools, 'list': res, 'decision': dec, 'prompt': prompt, 'cwd': os.getcwd(), 'home': os.environ.get('HOME'), 'env_keys': sorted(os.environ.keys())}))
 print(json.dumps({'type': 'result', 'subtype': 'success', 'is_error': False, 'result': 'Done: ' + out, 'session_id': sid}), flush=True)
@@ -78,8 +88,15 @@ func TestTheAgentEngineRunsClaudeWithForgelineAsItsToolsAndItsPermissionPrompt(t
 			steps = append(steps, f["toolCallName"].(string))
 		}
 	}
-	if !strings.Contains(text, "Done: hello") {
-		t.Errorf("the final answer: %q", text)
+	// The text arrives as the program writes it, a second message on its own line, and nothing that is not answer text (a delta of
+	// another kind carries the words NOT-AN-ANSWER). The history keeps all of it, not only the program's last message.
+	if text != "Let me look at them.\n\nDone: hello" {
+		t.Errorf("the streamed answer: %q", text)
+	}
+	var conversation Conversation
+	json.Unmarshal(m.dev.expect(200, "GET", "/v1/assistant/conversations/"+conv, nil), &conversation)
+	if len(conversation.Messages) != 2 || conversation.Messages[1].Text != "Let me look at them.\n\nDone: hello" {
+		t.Errorf("history: %+v", conversation.Messages)
 	}
 	if strings.Join(steps, ",") != "list_pipelines,Bash" {
 		t.Errorf("steps: %v (the Forgeline tool once, from the MCP call, and the program's own Bash)", steps)
@@ -137,7 +154,7 @@ func TestTheAgentEngineRunsClaudeWithForgelineAsItsToolsAndItsPermissionPrompt(t
 	matches, _ := filepath.Glob(filepath.Join(m.srv.cfg.DataDir, "engine", "*", "work", "args.json"))
 	argl, _ := os.ReadFile(matches[0])
 	line := strings.Split(strings.TrimSpace(string(argl)), "\n")[0]
-	for _, want := range []string{"--permission-prompt-tool", "mcp__forgeline__approve", "--strict-mcp-config", "--output-format", "stream-json"} {
+	for _, want := range []string{"--permission-prompt-tool", "mcp__forgeline__approve", "--strict-mcp-config", "--output-format", "stream-json", "--include-partial-messages"} {
 		if !strings.Contains(line, want) {
 			t.Errorf("the program was not started with %s: %s", want, line)
 		}

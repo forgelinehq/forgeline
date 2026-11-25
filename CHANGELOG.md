@@ -7,6 +7,9 @@ section in the pull request that makes the change; a release moves it under its 
 ## [Unreleased]
 
 ### Added
+- **The agent's answer streams into the chat as it is written.** With Claude Code or an ACP agent (Copilot, Codex, Antigravity) the
+  text appears piece by piece instead of all at the end; a message after a tool use starts on its own line, and the history keeps
+  what you saw. Claude Code is started with `--include-partial-messages` (checked against the real program).
 - **A file the assistant builds in the sandbox can be downloaded.** It had no way to hand over a PDF or a CSV: the sandbox has no
   way out. The assistant now offers a file with a **Download** card, and `GET /v1/assistant/files` lists and sends files from your
   own `/work` folder (regular files only, not `/work/.agent`, not a link out, at most 50 MB, always as a download, audited).

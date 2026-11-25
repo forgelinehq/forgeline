@@ -306,7 +306,7 @@ func (s *Server) askEngine(ctx context.Context, p Principal, conv, message, page
 		}
 		ap.mu.Unlock()
 	}
-	args := []string{"-p", "--output-format", "stream-json", "--verbose", "--max-turns", fmt.Sprint(maxTurns),
+	args := []string{"-p", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--max-turns", fmt.Sprint(maxTurns),
 		"--strict-mcp-config", "--mcp-config", string(mcpCfg),
 		"--permission-prompt-tool", "mcp__forgeline__" + engineApproveTool,
 		"--allowedTools", "Read", "Glob", "Grep", "TodoWrite", "mcp__forgeline",
@@ -385,6 +385,7 @@ func (s *Server) readEngineStream(r interface{ Read([]byte) (int, error) }, obs 
 	sc := bufio.NewScanner(r)
 	sc.Buffer(make([]byte, 1<<20), 8<<20)
 	own := map[string]string{} // tool_use id -> tool name, for the program's own tools
+	newMessage, wrote := false, false
 	for sc.Scan() {
 		var ev struct {
 			Type      string `json:"type"`
@@ -395,6 +396,15 @@ func (s *Server) readEngineStream(r interface{ Read([]byte) (int, error) }, obs 
 			Message   struct {
 				Content json.RawMessage `json:"content"`
 			} `json:"message"`
+			// With --include-partial-messages the program streams the answer as it writes it: a message starts, then pieces of
+			// text arrive (checked against the real program, 2026-11-25).
+			Event struct {
+				Type  string `json:"type"`
+				Delta struct {
+					Type string `json:"type"`
+					Text string `json:"text"`
+				} `json:"delta"`
+			} `json:"event"`
 		}
 		if json.Unmarshal(sc.Bytes(), &ev) != nil {
 			continue
@@ -403,6 +413,18 @@ func (s *Server) readEngineStream(r interface{ Read([]byte) (int, error) }, obs 
 			session = ev.SessionID
 		}
 		switch ev.Type {
+		case "stream_event":
+			switch {
+			case ev.Event.Type == "message_start":
+				newMessage = true
+			case ev.Event.Type == "content_block_delta" && ev.Event.Delta.Type == "text_delta" && ev.Event.Delta.Text != "" && obs != nil:
+				piece := ev.Event.Delta.Text
+				if newMessage && wrote { // a new message, after a tool use, starts on its own line
+					piece = "\n\n" + piece
+				}
+				newMessage, wrote = false, true
+				obs(assistEvent{Kind: evText, Content: piece})
+			}
 		case "assistant", "user":
 			var blocks []struct {
 				Type      string          `json:"type"`
