@@ -428,8 +428,8 @@ workflow agents could not read `/memories/org/...`.
 - **Long results.** `forgeline_api` GET takes an `offset`: a long answer ends with "cut here: N more characters, call again with
   offset M", and the next call starts there, counted in characters so a window never splits one. The model is told in the tool's help.
 - **Agents and workflows cannot read memory or the sandbox**, by design (the memory tool is not offered to them). The assistant is
-  now told so where it writes their instructions: put what they need in the instructions or a skill. Reading org memory read-only for
-  agents is a possible change and a decision for the maintainer; it is not built.
+  now told so where it writes their instructions: put what they need in the instructions or a skill. (Reading org memory read-only for
+  agents was then a decision for the maintainer: see "Built (org memory for agents)" below.)
 - **Not checked:** the Download card in a browser (the stream event and the state that builds it are tested, and the endpoint was run
   against real Docker), and a real model choosing to offer a file.
 
@@ -445,4 +445,15 @@ out; an older summary is still used). Claude Code and the ACP agents keep their 
 a conversation deletes its summary. Checked with a scripted model (first summary, between summaries, extension with the previous
 summary, a changed history, a failing summariser, secrets); removing each part made a test fail. **Not checked:** a real model's
 summaries, and how good they are on a long real chat.
+
+## Built (org memory for agents, read only, 2026-11-25)
+
+The maintainer agreed that workflow agents may read the organisation's notes. A new tool, `org_memory` (`view` and `search`), is offered to an
+agent or workflow only if its definition lists it (it appears in the agent builder's tool picker), and only while memory is on; it is
+never offered to the person's chat, which has the memory tool. It reads only `/memories/org`, only files that are kept (not pending),
+marks expired ones (and leaves them out of search), and has no way to write, rename, delete or expire. The memory tool is still refused
+to agents. Checked with the agent run path (an eval run: the agent read a note and the note reached the model) and a direct test of
+every refusal (the person's private files, a pending note, other paths, each write command, the chat, memory off); removing each check
+failed a test, except the path prefix check, which is redundant because the view only ever sees org files. **Not checked:** a real
+workflow on a real account using it.
 

@@ -312,3 +312,108 @@ func TestMemoryFilesCanStopBeingValid(t *testing.T) {
 	}
 	m.dev.expect(400, "PUT", "/v1/assistant/memory/files", map[string]any{"path": "/memories/me/old-dev01.md", "keep": true, "valid_until": "soon"})
 }
+
+// Agents and workflows can read the organisation's shared notes, and only that: read only, only /memories/org, only notes that are
+// kept (not waiting for a person), expired ones marked, and never the person's own files. The chat does not get this tool: it
+// has the memory tool.
+func TestAnAgentCanReadTheOrganisationsNotesAndNothingElse(t *testing.T) {
+	m := newMCPHarness(t)
+	put := func(c *browser, path, content, until string) {
+		body := map[string]any{"path": path, "content": content}
+		if until != "" {
+			body["valid_until"] = until
+		}
+		c.expect(200, "PUT", "/v1/assistant/memory/files", body)
+	}
+	put(m.admin, "/memories/org/runbook.md", "# Runbook\nRestart the worker first, then the queue.", "")
+	put(m.admin, "/memories/org/old-dev01.md", "Dev01 meant the Mumbai cluster.", "2020-03-31")
+	put(m.admin, "/memories/me/private.md", "My private note about the worker.", "")
+	if err := m.srv.docs.Put(t.Context(), kindMemFile, "mf-pending", MemFile{ID: "mf-pending", Scope: "org", Path: "/memories/org/waiting.md", Content: "Not kept yet: restart everything.", Pending: true}); err != nil {
+		t.Fatal(err)
+	}
+	agent := context.WithValue(t.Context(), agentScopeKey{}, &agentScope{agentName: "Reader", tools: map[string]bool{orgMemoryTool: true}})
+	call := func(ctx context.Context, args string) (string, error) {
+		return m.srv.lookupOrgMemory(ctx, json.RawMessage(args))
+	}
+
+	list, err := call(agent, `{"command":"view"}`)
+	if err != nil || !strings.Contains(list, "/memories/org/runbook.md") || !strings.Contains(list, "[no longer valid since 2020-03-31]") {
+		t.Fatalf("the listing: %v %q", err, list)
+	}
+	if strings.Contains(list, "private.md") || strings.Contains(list, "waiting.md") {
+		t.Errorf("the listing shows a private or a pending file: %q", list)
+	}
+	if out, err := call(agent, `{"command":"view","path":"/memories/org/runbook.md"}`); err != nil || !strings.Contains(out, "Restart the worker first") {
+		t.Errorf("view a note: %v %q", err, out)
+	}
+	if out, err := call(agent, `{"command":"view","path":"/memories/org/old-dev01.md"}`); err != nil || !strings.Contains(out, "no longer valid since 2020-03-31") {
+		t.Errorf("view an expired note: %v %q", err, out)
+	}
+	for _, p := range []string{"/memories/me/private.md", "/memories/org/../me/private.md", "/etc/passwd", "/memories", "/memories/orgx/a.md"} {
+		if out, err := call(agent, `{"command":"view","path":"`+p+`"}`); err == nil && (strings.Contains(out, "private note") || strings.Contains(out, "root:")) {
+			t.Errorf("view %s gave %q", p, out)
+		}
+	}
+	if _, err := call(agent, `{"command":"view","path":"/memories/org/waiting.md"}`); err == nil {
+		t.Error("a note nobody has kept yet was readable")
+	}
+	if out, _ := call(agent, `{"command":"search","query":"restart the worker"}`); !strings.Contains(out, "runbook.md") || strings.Contains(out, "waiting.md") || strings.Contains(out, "private.md") {
+		t.Errorf("search: %q", out)
+	}
+	if out, _ := call(agent, `{"command":"search","query":"Mumbai cluster"}`); strings.Contains(out, "old-dev01") {
+		t.Errorf("search found an expired note: %q", out)
+	}
+	for _, cmd := range []string{"create", "str_replace", "insert", "delete", "rename", "expire"} {
+		if _, err := call(agent, `{"command":"`+cmd+`","path":"/memories/org/runbook.md","file_text":"x","old_str":"a","new_str":"b"}`); err == nil {
+			t.Errorf("%s was allowed on read-only notes", cmd)
+		}
+	}
+	var after MemFile
+	if err := m.srv.docs.Get(t.Context(), kindMemFile, memID("org", "", "/memories/org/runbook.md"), &after); err != nil || !strings.Contains(after.Content, "Restart the worker first") {
+		t.Errorf("the note changed or vanished: %+v %v", after, err)
+	}
+
+	// Not for the chat, and not with memory off.
+	chat := context.WithValue(t.Context(), memTurnKey{}, &memTurn{p: Principal{Name: "dev", UserID: "u1", Role: authn.Developer}})
+	if _, err := call(chat, `{"command":"view"}`); err == nil {
+		t.Error("the person's chat read through the agents' tool")
+	}
+	has := func(ctx context.Context) bool {
+		for _, l := range m.srv.lookupLines(ctx, authn.Developer) {
+			if l.name == orgMemoryTool {
+				return true
+			}
+		}
+		return false
+	}
+	if has(chat) || !has(agent) {
+		t.Errorf("offered to the chat: %v, to the agent: %v", has(chat), has(agent))
+	}
+	noTool := context.WithValue(t.Context(), agentScopeKey{}, &agentScope{agentName: "Other", tools: map[string]bool{"list_runs": true}})
+	if has(noTool) {
+		t.Error("offered to an agent that does not list it")
+	}
+	m.admin.expect(200, "PUT", "/v1/assistant/memory/settings", map[string]any{"enabled": false})
+	if _, err := call(agent, `{"command":"view"}`); err == nil || has(agent) {
+		t.Error("read with memory turned off")
+	}
+}
+
+// Through a real agent run: an agent that lists the tool reads the note and uses it.
+func TestAnAgentRunUsesTheOrganisationsNotes(t *testing.T) {
+	m := newMCPHarness(t)
+	m.turnOn()
+	m.admin.expect(200, "PUT", "/v1/assistant/memory/files", map[string]any{"path": "/memories/org/runbook.md", "content": "Restart the worker first, then the queue."})
+	a := newAgent(t, m.admin, agentBody("Reader", nil, []string{orgMemoryTool}, "T0"))
+	var x EvalSuite
+	json.Unmarshal(m.dev.expect(201, "POST", "/v1/ai/evals", map[string]any{"agent": a.ID, "name": "Reads the notes", "attempts": 1, "cases": []map[string]any{
+		{"name": "Uses the runbook", "input": "What do we restart first?", "checks": []map[string]any{{"kind": "tool_called", "value": orgMemoryTool}, {"kind": "contains", "value": "worker"}}},
+	}}), &x)
+	m.llm.script(lookupReply(orgMemoryTool, map[string]any{"command": "view", "path": "/memories/org/runbook.md"}), "The worker, then the queue.")
+	var run EvalRun
+	json.Unmarshal(m.dev.expect(202, "POST", "/v1/ai/evals/"+x.ID+"/run", map[string]any{}), &run)
+	run = waitEvalRun(t, m.dev, run.ID)
+	if run.Passed != 1 || !strings.Contains(m.llm.lastUser(1), "Restart the worker first, then the queue.") {
+		t.Errorf("run: %+v; the agent was shown: %s", run.Results, m.llm.lastUser(1))
+	}
+}

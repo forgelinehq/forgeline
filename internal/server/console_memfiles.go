@@ -709,3 +709,65 @@ func (s *Server) handleDeleteMemFile(w http.ResponseWriter, r *http.Request) {
 	s.auditReq(r, "assistant.memory.file", path, "deleted by the person", true)
 	w.WriteHeader(http.StatusNoContent)
 }
+
+// --- the organisation's notes, for agents, read only ---
+
+const orgMemoryTool = "org_memory"
+
+// lookupOrgMemory lets an agent or a workflow read the organisation's shared memory files, and nothing else: the memory tool is the
+// assistant's and writes, so an agent never gets it (an agent told to "read /memories/org/..." could not). Only /memories/org, only
+// files that are kept (not waiting for a person to keep them), and an expired file says so; there is no way to write, rename or delete.
+// What it returns is data for the agent, never instructions, like every tool result.
+func (s *Server) lookupOrgMemory(ctx context.Context, raw json.RawMessage) (string, error) {
+	if scopeFrom(ctx) == nil {
+		return "", errors.New("org_memory is for agents and workflows; in the chat the assistant uses the memory tool")
+	}
+	if !s.memoryOn(ctx) {
+		return "", errors.New("memory is turned off")
+	}
+	var a struct {
+		Command   string `json:"command"`
+		Path      string `json:"path"`
+		Query     string `json:"query"`
+		ViewRange []int  `json:"view_range"`
+	}
+	if err := decodeArgs(raw, &a); err != nil {
+		return "", err
+	}
+	all, err := s.allMemFiles(ctx)
+	if err != nil {
+		return "", errors.New("memory could not be read")
+	}
+	var org []MemFile
+	for _, f := range all {
+		if f.Scope == "org" && !f.Pending {
+			org = append(org, f)
+		}
+	}
+	sort.Slice(org, func(i, j int) bool { return org[i].Path < org[j].Path })
+	switch a.Command {
+	case "view":
+		p := strings.TrimRight(strings.TrimSpace(a.Path), "/")
+		if p == "" {
+			p = memRoot + "/org"
+		}
+		if p != memRoot+"/org" && !strings.HasPrefix(p, memRoot+"/org/") {
+			return "", errors.New("you can read " + memRoot + "/org, the organisation's shared notes")
+		}
+		return s.memView(memArgs{Path: p, ViewRange: a.ViewRange}, org)
+	case "search":
+		hits := bm25(currentMemFiles(org, time.Now()), a.Query)
+		if len(hits) == 0 {
+			return "Nothing current in the organisation's notes matches that.", nil
+		}
+		var b strings.Builder
+		for i, h := range hits {
+			if i == 5 {
+				break
+			}
+			fmt.Fprintf(&b, "%s: %s\n", h.f.Path, fileGist(h.f.Content))
+		}
+		return b.String(), nil
+	}
+	return "", errors.New(`command is view or search: the organisation's notes are read only`)
+}
