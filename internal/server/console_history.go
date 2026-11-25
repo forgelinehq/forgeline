@@ -47,6 +47,11 @@ type Conversation struct {
 	Updated  time.Time `json:"updated"`
 	Messages []chatMsg `json:"messages"`
 	Refs     []chatRef `json:"refs,omitempty"`
+	// SummaryText condenses the first SummaryCovered messages of the history the browser sends, which are no longer sent whole
+	// (note 052). SummaryHash says which messages it was made from, so it is never used for others.
+	SummaryText    string `json:"summary,omitempty"`
+	SummaryCovered int    `json:"summary_covered,omitempty"`
+	SummaryHash    string `json:"summary_hash,omitempty"`
 }
 
 // ConversationSummaryJSON is one row of the history list.

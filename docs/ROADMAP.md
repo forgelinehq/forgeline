@@ -29,7 +29,7 @@ AWS changes after the person approves the exact command, a sandbox container for
 files, and native tool calls for Anthropic and OpenAI-compatible providers. Note 053: Claude Code as the assistant's agent,
 with Forgeline as its tools and its permission prompt, running inside the sandbox container; any coding agent over the Agent
 Client Protocol (presets for Copilot, Codex and Antigravity; the Copilot one was checked against the real CLI on 2026-11-23, which needed an HTTP tool server, and since run inside the sandbox container with a device-login sign-in; a missing agent is detected and offered for installation, and all three installers were run for real); one autopilot gate for every approval point. Memory files have valid-until dates (2026-11-22) and the assistant offers "Keep this?" cards (2026-11-23). Long tasks clear old lookup results (2026-11-23). Open: the sandbox is off by
-default (an administrator switch); summarising old messages; a host shell mode; a microVM;
+default (an administrator switch);  a host shell mode; a microVM;
 Antigravity (`agy`) needs sign-in before it opens a session. See
 [note 052](design/052-assistant-that-works-like-a-colleague.md) and [note 053](design/053-claude-code-as-the-agent.md).
 
