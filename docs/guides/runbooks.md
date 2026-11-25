@@ -70,7 +70,26 @@ The role or user Forgeline uses needs to send commands only to the tagged instan
 `scripts/dev/fake-aws`, not against a real instance. The example scripts are checked to parse with `bash -n`; they have
 not run on a real server. Try them on a test instance first.
 
-{: .note }
-The plan for alarms: a CloudWatch alarm posts to a workflow's signed webhook through SNS, the workflow runs **Disk
-report**, an agent picks the fixes, and an administrator approves them. Workflows can already run a check with
-`run_runbook`; a ready-made alarm workflow is next.
+## Starting a workflow from a CloudWatch alarm
+
+A CloudWatch alarm can start a workflow, which runs a check, lets an agent pick fixes and sends them for approval. The path is
+**alarm → SNS topic → SQS queue → Forgeline**, and Forgeline *reads* the queue. It reads instead of being called because SNS can only
+deliver to a public HTTPS address, and a Forgeline server is usually not one: nothing has to reach the server from outside.
+
+1. Under **Settings › Connections › Alarm intake**, copy the commands that make the queue, the topic and the queue's policy (only that
+   topic may send to the queue, which is the lock), run them in your account, paste the queue URL, turn the intake on and press
+   **Test the queue**. The intake uses the AWS connection's credentials, which need `sqs:ReceiveMessage`, `sqs:DeleteMessage` and
+   `sqs:GetQueueAttributes` on that queue.
+2. In a graph workflow's **Workflow settings › Trigger**, add the alarm names (or a pattern such as `disk-*`) under **When a CloudWatch
+   alarm goes off**. In the alarm, set the topic as an alarm action.
+3. When the alarm goes to `ALARM`, the workflow starts with the alarm's details (name, reason, region, metric and its dimensions such as
+   the instance id) as its `trigger`, which agents read as data and never as instructions. Going back to `OK` starts nothing.
+
+Safeguards: only a message from the queue's own account is acted on (the others are refused and audited); a message delivered twice is
+acted on once; each workflow starts at most six runs an hour from alarms, so a flapping alarm cannot start a run each time; a workflow
+that is off, or is not a graph, is never started; and the audit log records each alarm, each refusal and each run started. Anyone who
+can send to the queue can start workflows, so keep its policy tight.
+
+{: .warning }
+**Checked against a stand-in queue only so far.** The polling, the parsing of SNS-wrapped alarms, the account check, the limits and the
+audit entries are tested with a fake `aws`; a real alarm through a real topic and queue has not run yet.

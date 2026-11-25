@@ -332,8 +332,7 @@ Design: [docs/design/006-console.md](design/006-console.md). Pictures: [docs/con
 > 1. ~~**Evals slice 3** (note 050): attack suites and an eval step for pipelines~~ **built 2026-11-22** (stand-in models only).
 > 2. ~~Fix the card confirm order~~ (done 2026-11-22: the card is saved as not pending before its action runs); then the open items of
 >    notes 052 and 053 (~~validity dates~~ done 2026-11-22, ~~"keep this" card~~ done 2026-11-23, ~~context clearing~~ done 2026-11-23 (summarising old messages done 2026-11-25), ~~partial answers~~ done 2026-11-25, host shell mode, microVM).
-> 3. **Runbooks next** (note 051): CloudWatch alarm to SNS to signed webhook workflow. A real-instance test creates AWS resources
->    and needs the maintainer's go-ahead.
+> 3. **Runbooks next** (note 051): the alarm intake is built (2026-11-26, SQS instead of a signed webhook because SNS needs a public address); the maintainer gave the go-ahead for the real-instance test, which needs an AWS sign-in (`aws sso login`).
 > 4. **M3 slices 3 to 5**: need the maintainer's decisions (same-repository pull requests untrusted; compatibility cost of
 >    capability drop). Ask once with a recommendation.
 > 5. **Workflow canvas** follow-ups (note 044): run data per node, Team and sub-workflow nodes, re-run from a node.

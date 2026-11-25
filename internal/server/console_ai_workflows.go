@@ -79,6 +79,9 @@ type WFVersion struct {
 	// any pipeline).
 	Webhook     bool     `json:"webhook,omitempty"`
 	OnRunFailed []string `json:"on_run_failed,omitempty"`
+	// OnAlarm names the CloudWatch alarms (a name, or a pattern with * ) that start this workflow when they go to ALARM, through the
+	// alarm intake (note 051): "disk-*" starts it for any alarm whose name begins with disk-.
+	OnAlarm []string `json:"on_alarm,omitempty"`
 }
 
 // Workflow is a named sequence with a history.
@@ -106,8 +109,8 @@ func (v WFVersion) computeHash(id string) string {
 		g, _ := json.Marshal(v.Graph)
 		b.Write(g)
 	}
-	if v.Webhook || len(v.OnRunFailed) > 0 {
-		fmt.Fprintf(&b, "|webhook:%v|on_run_failed:%s", v.Webhook, strings.Join(v.OnRunFailed, ","))
+	if v.Webhook || len(v.OnRunFailed) > 0 || len(v.OnAlarm) > 0 {
+		fmt.Fprintf(&b, "|webhook:%v|on_run_failed:%s|on_alarm:%s", v.Webhook, strings.Join(v.OnRunFailed, ","), strings.Join(v.OnAlarm, ","))
 	}
 	if v.Cron != "" {
 		fmt.Fprintf(&b, "|cron:%s|tz:%s", v.Cron, v.TZ)
@@ -210,6 +213,7 @@ type wfRequest struct {
 	Graph        *WFGraph  `json:"graph"`
 	Webhook      bool      `json:"webhook"`
 	OnRunFailed  []string  `json:"on_run_failed"`
+	OnAlarm      []string  `json:"on_alarm"`
 	EveryMinutes int       `json:"every_minutes"`
 	Cron         string    `json:"cron"`
 	TZ           string    `json:"tz"`
@@ -254,10 +258,13 @@ func (s *Server) resolveWorkflow(ctx context.Context, req wfRequest) (WFVersion,
 				return WFVersion{}, fmt.Sprintf("on_run_failed: %q is not a pipeline name (or * for any)", p)
 			}
 		}
-		return WFVersion{Graph: &g, Webhook: req.Webhook, OnRunFailed: uniq(req.OnRunFailed), EveryMinutes: req.EveryMinutes, Cron: req.Cron, TZ: req.TZ, RunAs: req.RunAs, Note: req.Note}, ""
+		if m := checkAlarmPatterns(req.OnAlarm); m != "" {
+			return WFVersion{}, m
+		}
+		return WFVersion{Graph: &g, Webhook: req.Webhook, OnRunFailed: uniq(req.OnRunFailed), OnAlarm: uniq(req.OnAlarm), EveryMinutes: req.EveryMinutes, Cron: req.Cron, TZ: req.TZ, RunAs: req.RunAs, Note: req.Note}, ""
 	}
-	if req.Webhook || len(req.OnRunFailed) > 0 {
-		return WFVersion{}, "only a graph workflow starts from a webhook or a failed run"
+	if req.Webhook || len(req.OnRunFailed) > 0 || len(req.OnAlarm) > 0 {
+		return WFVersion{}, "only a graph workflow starts from a webhook, a failed run or an alarm"
 	}
 	switch {
 	case len(req.Stages) == 0:
@@ -367,7 +374,7 @@ func (s *Server) handleListWorkflows(w http.ResponseWriter, r *http.Request) {
 		}
 		item := map[string]any{"id": wf.ID, "name": wf.Name, "description": wf.Description, "current": wf.Current, "disabled": wf.Disabled,
 			"stages": len(cur.Stages), "steps": steps, "nodes": nodes, "every_minutes": cur.EveryMinutes, "cron": cur.Cron, "tz": cur.TZ, "run_as": cur.RunAs, "versions": len(wf.Versions),
-			"graph": cur.Graph != nil, "kinds": kinds, "agents": len(agents), "webhook": cur.Webhook, "on_run_failed": cur.OnRunFailed, "archived_at": wf.ArchivedAt}
+			"graph": cur.Graph != nil, "kinds": kinds, "agents": len(agents), "webhook": cur.Webhook, "on_run_failed": cur.OnRunFailed, "on_alarm": cur.OnAlarm, "archived_at": wf.ArchivedAt}
 		if lr, ok := last[wf.ID]; ok {
 			item["last_run"] = map[string]any{"id": lr.ID, "status": lr.Status, "started_at": lr.StartedAt, "finished_at": lr.FinishedAt, "trigger": lr.Trigger}
 		}

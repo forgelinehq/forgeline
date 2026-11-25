@@ -40,6 +40,7 @@ import { registriesPage } from './pages/registries.js';
 import { pushPage } from './pages/pushes.js';
 import { tracesPage } from './pages/traces.js';
 import { otelPage } from './pages/otel.js';
+import { alarmIntakePage } from './pages/alarm_intake.js';
 import { assistantPermissionsPage } from './pages/assistant_permissions.js';
 import { evalsPage, suitePage, evalRunPage } from './pages/evals.js';
 import { providersPage } from './pages/providers.js';
@@ -296,6 +297,7 @@ async function boot() {
     route('/mcp-servers', guard('admin', inSettings(mcpServersPage)));
     route('/registries', guard('admin', inSettings(registriesPage)));
     route('/opentelemetry', guard('admin', inSettings(otelPage)));
+    route('/alarm-intake', guard('admin', inSettings(alarmIntakePage)));
     route('/assistant-permissions', guard('developer', inSettings(assistantPermissionsPage)));
     route('/providers', guard('developer', inSettings(providersPage)));
     route('/image-builds', guard('admin', inSettings(buildRulesPage)));

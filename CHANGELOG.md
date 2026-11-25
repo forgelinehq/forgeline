@@ -7,6 +7,11 @@ section in the pull request that makes the change; a release moves it under its 
 ## [Unreleased]
 
 ### Added
+- **A CloudWatch alarm can start a workflow** (design note 051). Alarm → SNS topic → SQS queue, and Forgeline reads the queue (SNS can
+  only call a public address, and a server usually is not one). Settings › Connections › **Alarm intake** has the setup commands, the
+  queue address and a test; a graph workflow's **Trigger** tab names the alarms (`disk-*` works). When an alarm goes to `ALARM`, the
+  workflow starts with its details as data. Only the queue's own account is accepted, a message acts once, a workflow starts at most six
+  times an hour from alarms, and each alarm and refusal is in the audit log.
 - **Agents and workflows can read the organisation's notes.** A new read-only tool, **Read the organisation's shared notes**
   (`org_memory`), lets an agent that lists it view and search the files under `/memories/org`. It cannot write, never sees anyone's
   private files or notes still waiting to be kept, and marks notes past their valid-until date. The assistant no longer writes
