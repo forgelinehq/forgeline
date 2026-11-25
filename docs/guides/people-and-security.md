@@ -120,6 +120,12 @@ would start a spreadsheet formula gets a leading `'`, so opening the file never 
 brought back, so the console asks you to confirm and suggests downloading first. Each deletion and each change of
 the period is recorded. Nobody can edit or delete a single event.
 
+Every secret a step is given is in the log too: **`run.secret.grant`** names the run, the step, the secrets (names, never values), the
+network the step has and how the run started; a step that has secrets *and* network access gets a second record,
+**`run.secret.network`**, so those can be found at once (filter by action `run.secret`); and a step refused a secret shows as
+**`run.secret.refused`** with the reason. The page shows the newest 200 events; **Show older events** goes back as far as the log
+goes, with filters applied.
+
 ![Audit log with download buttons]({{ '/console/87-audit-export.png' | relative_url }})
 
 ## What protects you

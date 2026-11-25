@@ -74,14 +74,19 @@ func (p *Postgres) Get(ctx context.Context, kind, id string, out any) error {
 }
 
 func (p *Postgres) List(ctx context.Context, kind string, opts ListOptions) ([]Doc, error) {
-	q := `SELECT id, body FROM console_docs WHERE kind = $1 ORDER BY id COLLATE "C"`
+	q := `SELECT id, body FROM console_docs WHERE kind = $1`
+	args := []any{kind}
+	if opts.Before != "" {
+		q += ` AND id COLLATE "C" < $2`
+		args = append(args, opts.Before)
+	}
+	q += ` ORDER BY id COLLATE "C"`
 	if opts.Desc {
 		q += ` DESC`
 	}
-	args := []any{kind}
 	if opts.Limit > 0 {
-		q += ` LIMIT $2`
 		args = append(args, opts.Limit)
+		q += fmt.Sprintf(` LIMIT $%d`, len(args))
 	}
 	rows, err := p.pool.Query(ctx, q, args...)
 	if err != nil {

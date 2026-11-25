@@ -102,6 +102,10 @@ func (m *Memory) List(_ context.Context, kind string, opts ListOptions) ([]Doc, 
 		ids = append(ids, id)
 	}
 	sort.Strings(ids)
+	if opts.Before != "" {
+		cut := sort.SearchStrings(ids, opts.Before) // the first id that is not lower than Before
+		ids = ids[:cut]
+	}
 	if opts.Desc {
 		for i, j := 0, len(ids)-1; i < j; i, j = i+1, j-1 {
 			ids[i], ids[j] = ids[j], ids[i]

@@ -489,3 +489,50 @@ func TestEvalStepGoesToTheServerNeverTheExecutor(t *testing.T) {
 		t.Errorf("timeout: %+v", res)
 	}
 }
+
+// Every secret a step is given is reported before its container starts, by name and with the network it has; a step that asked and
+// was refused is reported with the reason; a step without secrets is neither.
+func TestSecretGrantsAndRefusalsAreReported(t *testing.T) {
+	step := func(id, network string, secrets ...string) pipeline.Step {
+		return pipeline.Step{ID: id, Image: "img", Run: "x", Permissions: pipeline.Permissions{Secrets: secrets, Network: network}}
+	}
+	var mu sync.Mutex
+	var log []string
+	note := func(s string) { mu.Lock(); log = append(log, s); mu.Unlock() }
+	ex := &executor.Fake{Handler: func(_ context.Context, s executor.StepRun, _ io.Writer) (executor.Result, error) {
+		note("start " + s.ID)
+		return executor.Result{}, nil
+	}}
+	opts := Options{
+		Parallelism: 1,
+		Secrets:     map[string]string{"B_KEY": "bbbbbbbb-secret", "A_KEY": "aaaaaaaa-secret"},
+		OnSecretsGranted: func(id string, names []string, network string) {
+			note("grant " + id + " " + strings.Join(names, ",") + " net=" + network)
+		},
+		OnSecretsRefused: func(id string, names []string, why string) {
+			note("refused " + id + " " + strings.Join(names, ",") + ": " + why)
+		},
+	}
+	Run(context.Background(), plan(t, step("plain", ""), step("both", "", "B_KEY", "A_KEY"), step("offline", pipeline.NetworkNone, "A_KEY"), step("missing", "", "NOPE_KEY")), ex, opts)
+	got := strings.Join(log, "\n")
+	for _, want := range []string{
+		"grant both A_KEY,B_KEY net=\nstart both", // names sorted, no values, reported before the container starts
+		"grant offline A_KEY net=none\nstart offline",
+		`refused missing NOPE_KEY: secret "NOPE_KEY" is not configured`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("missing %q in:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "grant plain") || strings.Contains(got, "refused plain") || strings.Contains(got, "start missing") || strings.Contains(got, "secret-") {
+		t.Errorf("a step without secrets was reported, a refused step started, or a value leaked:\n%s", got)
+	}
+	// A run that is refused every secret reports each step that asked, and starts none of them.
+	log = nil
+	opts.SecretsDenied = "runs started by GitHub receive no secrets yet"
+	Run(context.Background(), plan(t, step("a", "", "A_KEY"), step("b", "", "B_KEY")), ex, opts)
+	got = strings.Join(log, "\n")
+	if strings.Count(got, "refused") != 2 || !strings.Contains(got, "runs started by GitHub receive no secrets yet") || strings.Contains(got, "start ") || strings.Contains(got, "grant ") {
+		t.Errorf("denied run:\n%s", got)
+	}
+}

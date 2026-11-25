@@ -93,6 +93,22 @@ func runSuite(t *testing.T, open func(t *testing.T) Store) {
 		if got := ids(ListOptions{Limit: 1}); !reflect.DeepEqual(got, []string{"a"}) {
 			t.Errorf("limit 1 = %v", got)
 		}
+		// A cursor: only ids lower than Before, in either order, with or without a limit; an id that is not there still cuts.
+		for name, tc := range map[string]struct {
+			o    ListOptions
+			want []string
+		}{
+			"before c, newest first":    {ListOptions{Desc: true, Before: "c"}, []string{"b", "a"}},
+			"before c, limit 1, newest": {ListOptions{Desc: true, Before: "c", Limit: 1}, []string{"b"}},
+			"before c, oldest first":    {ListOptions{Before: "c"}, []string{"a", "b"}},
+			"before a: nothing":         {ListOptions{Desc: true, Before: "a"}, nil},
+			"before z: all":             {ListOptions{Desc: true, Before: "z"}, []string{"d", "c", "b", "a"}},
+			"before between ids":        {ListOptions{Desc: true, Before: "bb"}, []string{"b", "a"}},
+		} {
+			if got := ids(tc.o); !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("%s = %v, want %v", name, got, tc.want)
+			}
+		}
 		docs, _ := s.List(ctx, "k", ListOptions{})
 		things, err := Decode[thing](docs)
 		if err != nil || len(things) != 4 || things[0].Name != "a" {

@@ -7,6 +7,10 @@ section in the pull request that makes the change; a release moves it under its 
 ## [Unreleased]
 
 ### Added
+- **Every secret given to a step is in the audit log** (milestone M3, slice 4). `run.secret.grant` records the run, the step, the secret
+  names (never values), the step's network and how the run started; a step with secrets and network access also gets a
+  `run.secret.network` record; a refusal is `run.secret.refused`. The audit log can now be paged back past the newest 5000 events:
+  the list takes `before` and answers `next`, and the audit page has **Show older events**.
 - **A long chat keeps what it found.** The assistant sent the model only the last 12 messages and forgot the rest. The messages that
   fall out of the window are now condensed into a short summary the model is given as background, kept with the conversation and
   extended only when several more have fallen out (secrets hidden). Claude Code and the ACP agents keep their own sessions and are not
