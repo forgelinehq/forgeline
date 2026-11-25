@@ -5,7 +5,7 @@ nav_order: 5
 
 # Status
 
-**Pre-alpha**, maintained by one person. Built to be tried on a laptop or a small server. Updated 2026-11-18.
+**Pre-alpha**, maintained by one person. Built to be tried on a laptop or a small server. Updated 2026-11-26.
 
 ## What works
 
@@ -20,9 +20,9 @@ Everything below is built and tested with the race detector, and the console in 
 | Cloud | AWS sign-in (IAM Identity Center, profiles, IAM Roles Anywhere), several accounts, the Watch map, a page per AWS service, Google Cloud and Azure read-only, Kubernetes read-only, what Forgeline built checked against AWS |
 | Changes | Every change is a proposal a different administrator approves: stacks, environments, blueprints and the AWS calls an agent drafted, with approval rules (two approvals, named approvers) |
 | Models | Providers: Anthropic, OpenAI, Gemini, Azure OpenAI, AWS Bedrock and OpenAI-compatible servers (Ollama, vLLM, OpenRouter…), with keys in the vault, prices, a monthly limit and a fallback per provider, and a live call log. Each agent can have its own `provider/model` |
-| AI | The assistant (with lookups, memory, and cards that write skills, agents and workflows for you to confirm), agents with skills, tools and versions, teams with a lead that splits the work, workflows drawn on a canvas (agents, lookups, decisions, questions for people, merges and loops), missions, MCP servers, per-service switches for the AI, an access policy per tool, budgets per agent, deleted agents kept 30 days |
+| AI | The assistant (with lookups, memory, and cards that write skills, agents and workflows for you to confirm), agents with skills, tools and versions, teams with a lead that splits the work, workflows drawn on a canvas (agents, lookups, decisions, questions for people, merges and loops), missions, MCP servers, per-service switches for the AI, an access policy per tool, budgets per agent, deleted agents kept 30 days; the assistant works in a sandbox with an autopilot mode and memory files; any coding agent over the Agent Client Protocol; evals with attack suites and a publish gate; traces sent over OpenTelemetry; runbooks through SSM; agents exported as bundles or Docker Agent files |
 | Library | Ready-made agents, skills, teams, tools (MCP servers), guardrail packs and environment templates, installed as versions you can review |
-| People and security | Roles, single sign-on with OpenID Connect, approval rules, an audit log with export and retention, secrets that are write-only and masked |
+| People and security | Roles, single sign-on with OpenID Connect, approval rules, an audit log with export and retention, a record of every secret grant, secrets that are write-only and masked |
 | Docs | This site, with search, a Markdown copy of each page and `llms.txt` |
 
 ## Checked on real services
@@ -51,10 +51,10 @@ Everything below is built and tested with the race detector, and the console in 
 - Single sign-on against a real provider (Google, Entra ID, Okta); built and tested against a stand-in.
 - The Agent block on Bedrock AgentCore: the test account's AgentCore quota is zero.
 - TLS behind a real proxy, and more than one server sharing a database.
+- Everything built after 2026-11-18 (the assistant's sandbox, autopilot and memory files, Agent Client Protocol agents, evals and attack suites, OpenTelemetry traces, runbooks, the secret-grant audit): built with tests, but not yet run against a real service unless listed above.
 
 ## Not built yet
 
-See the [roadmap]({{ '/roadmap/' | relative_url }}). Next: the agent builder with side-panel pickers and a playground,
-publishing agents (an MCP toolset with agent keys, an A2A card), a
-Workflows section of its own, the assistant knowing every page and feature, and code mode in a local sandbox. Google
+See the [roadmap]({{ '/roadmap/' | relative_url }}). Next: publishing agents (an MCP toolset with agent keys, an A2A card), a
+Workflows section of its own, and the assistant knowing every page and feature. Google
 Cloud and Azure blocks come after the AWS work is done.

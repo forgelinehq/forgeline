@@ -4,7 +4,7 @@ Each milestone has exit criteria. A milestone is done only when its criteria are
 demonstrated, not when the code exists. The order puts the trust model early because it is
 the project's differentiator.
 
-Status as of 2026-11-22: M0, M1, M2 and M2c (the console) are built; M3 slices 1, 2 and 4 are built and 3 and 5 are not
+Status as of 2026-11-26: M0, M1, M2 and M2c (the console) are built; M3 slices 1, 2 and 4 are built and 3 and 5 are not
 started; M4 and M6 are partly built through agents, traces, evals and the sandboxed assistant (see the sections below the
 table); M5 and M7 are not started. The current state, what is verified only against stand-ins, and the ordered next steps
 are in [PLAN.md](PLAN.md).
@@ -19,7 +19,7 @@ are in [PLAN.md](PLAN.md).
 | M3 | Trust and sandbox model | Per-step declared permissions; secrets scoped to steps; untrusted input isolated from secrets; audit log; a published threat model with tests that try to break it | In progress: slices 1 and 2 done (network permission, secrets scoped to steps); slice 4 (audit of secret grants, the secrets-plus-network combination and refusals; the log pages back with a cursor) built 2026-11-25; slice 3 (trust of the run) and 5 (limits, capability drop) not started and wait on decisions in [note 005](design/005-threat-model.md). Separate from step containers, the assistant's sandbox (note 052) already drops capabilities and has no Docker socket |
 | M4 | Security gates | Scanner orchestration; findings normalized from SARIF; policy gates with expiring waivers; SBOM and image signing | Mostly not started. Policy packs (Trivy, Checkov, Conftest) check every blueprint preview (note 040) and Inspector and Guard findings are read in the console; scanner steps in pipelines, SARIF, waivers, SBOM and signing are open |
 | M5 | Progressive delivery | One declaration for canary and blue-green on Kubernetes with metric-driven rollback | Not started |
-| M6 | AI agents | Governed agent steps with scoped credentials and cost tracking; failure triage; fix suggestions as pull requests, never auto-applied | Largely built beyond the original wording: agent steps (note 007), agent graphs, teams, schedules, Agent Studio with six model providers, budgets and cost per agent, traces, evals with a publish gate, missions, runbooks, and the assistant as a sandboxed agent (notes 044 to 053). Open: eval attack suites and a pipeline eval step, failure triage as pull requests, Codex and Copilot as pipeline steps |
+| M6 | AI agents | Governed agent steps with scoped credentials and cost tracking; failure triage; fix suggestions as pull requests, never auto-applied | Largely built beyond the original wording: agent steps (note 007), agent graphs, teams, schedules, Agent Studio with six model providers, budgets and cost per agent, traces, evals with a publish gate, missions, runbooks, and the assistant as a sandboxed agent (notes 044 to 053). Open: failure triage as pull requests, Codex and Copilot as pipeline steps |
 | M7 | Migration and breadth | Importers for Jenkinsfile and GitHub Actions workflows; Bitbucket and GitLab triggers; additional cloud targets | Not started |
 
 ## Assistant as a colleague and Claude Code as the agent (notes 052 and 053)
