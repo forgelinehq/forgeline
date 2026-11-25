@@ -255,7 +255,7 @@ func (s *Server) askACP(ctx context.Context, p Principal, conv, message, pageCon
 
 	var (
 		mu      sync.Mutex
-		answer  strings.Builder
+		answer  acpAnswer
 		replay  bool
 		toolIDs = map[string]string{}
 		ownIDs  = map[string]bool{} // tool calls of Forgeline's own tools: they have their own checks, so no card for them
@@ -397,7 +397,7 @@ func (s *Server) askACP(ctx context.Context, p Principal, conv, message, pageCon
 	}
 	_ = json.Unmarshal(res, &out)
 	mu.Lock()
-	text := strings.TrimSpace(answer.String())
+	text := strings.TrimSpace(answer.b.String())
 	mu.Unlock()
 	switch {
 	case text == "" && out.StopReason == "refusal":
@@ -458,10 +458,17 @@ func (s *Server) engineInstructions(ctx context.Context, pageContext string) str
 }
 
 // acpUpdate turns one session/update into what the chat shows.
-func (s *Server) acpUpdate(params json.RawMessage, answer *strings.Builder, toolIDs map[string]string, obs assistObserver) {
+// acpAnswer is the agent's answer as it arrives: its messages, one after another.
+type acpAnswer struct {
+	b      strings.Builder
+	lastID string // the id of the message the last piece belonged to
+}
+
+func (s *Server) acpUpdate(params json.RawMessage, answer *acpAnswer, toolIDs map[string]string, obs assistObserver) {
 	var in struct {
 		Update struct {
 			Kind       string          `json:"sessionUpdate"`
+			MessageID  string          `json:"messageId"`
 			Content    json.RawMessage `json:"content"`
 			ToolCallID string          `json:"toolCallId"`
 			Title      string          `json:"title"`
@@ -485,8 +492,19 @@ func (s *Server) acpUpdate(params json.RawMessage, answer *strings.Builder, tool
 			Type string `json:"type"`
 			Text string `json:"text"`
 		}
-		if json.Unmarshal(u.Content, &c) == nil && c.Type == "text" {
-			answer.WriteString(c.Text)
+		if json.Unmarshal(u.Content, &c) == nil && c.Type == "text" && c.Text != "" {
+			piece := c.Text
+			// A new message (after a tool, say) starts on its own line, not glued to the one before.
+			if u.MessageID != "" && answer.lastID != "" && u.MessageID != answer.lastID && answer.b.Len() > 0 {
+				piece = "\n\n" + piece
+			}
+			if u.MessageID != "" {
+				answer.lastID = u.MessageID
+			}
+			answer.b.WriteString(piece)
+			if obs != nil {
+				obs(assistEvent{Kind: evText, Content: piece}) // shown as it is written
+			}
 		}
 	case "tool_call":
 		name := firstOf(u.Name, u.ToolKind, "tool")

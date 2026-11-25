@@ -298,6 +298,10 @@ agent's own commands and file changes inside the sandbox, changes made through t
 skill, agent or workflow (they show as done). It never approves running a pipeline, turning the sandbox or AWS changes on, a
 secret for a command, a protected account, a rule that denies or asks, or IAM, Organizations, accounts, SSM and STS.
 
+**The answer appears as it is written.** With Claude Code, Copilot, Codex or Antigravity as the agent, the text streams into the chat as
+the agent writes it, instead of arriving whole at the end. A message the agent writes after using a tool starts on its own line, and
+the conversation history keeps all of what you saw.
+
 ## Other agents: Antigravity, Copilot, Codex
 
 Under Settings › Assistant model, choose **An agent over ACP**, then the agent: **Antigravity CLI (agy)**, **GitHub Copilot CLI**,

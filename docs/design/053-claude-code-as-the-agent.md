@@ -42,7 +42,7 @@ Not built, in this order:
 1. **Run it in the sandbox container** (built, slice 2, 2026-11-22; see below), so Bash is in a container and not on the server. Today a Bash the person approved runs as
    the server's user in the person's workspace. Needs `claude` in the image, the loopback endpoint reachable from the
    container (a mounted socket and a small bridge), and the token passed in the environment.
-2. **Partial messages**: the answer arrives whole; stream it as it is written.
+2. ~~**Partial messages**~~ built 2026-11-25 (see the end of this note).
 3. **Autopilot for the engine**: an envelope that approves its Bash and Edit inside the workspace, never outside it.
 4. **Other engines**: Codex CLI, the Copilot CLI and **Google's Antigravity CLI (`agy`)** through the same two seams (tools over MCP, permission prompt). Google replaced Gemini CLI with Antigravity CLI on 2026-06-18 for unpaid-tier and Google One users, so Antigravity is the Google engine to build, not Gemini CLI. The maintainer has `agy` set up with a Gemini Pro plan. To check before building: whether `agy` runs headless, takes MCP servers, and has a permission-prompt hook like Claude Code's `--permission-prompt-tool`; if it has no prompt hook, its tools can only be limited to the sandbox container, not asked one by one.
 5. **Memory**: Claude Code's own memory and CLAUDE.md in the person's home, next to Forgeline's memory files.
@@ -150,4 +150,20 @@ Checked for real in a throwaway server with Docker: the Settings page reported C
 and the chat offered the Codex adapter as a card and installed it (2.10.0) and Antigravity (1.5.15) through the API; the not-signed-in
 Codex adapter produced the sign-in guidance. **Not checked:** a token from the vault against a real account, and Codex or
 Antigravity signed in and answering inside the sandbox.
+
+## Built (the answer streams, 2026-11-25)
+
+The answer used to arrive whole when the agent finished. Now each piece is sent as the agent writes it: an `evText` event from the agent
+code, which the stream handler turns into `TEXT_MESSAGE_START`, a `TEXT_MESSAGE_CONTENT` delta per piece and `TEXT_MESSAGE_END` (the
+panel already appended deltas). What was streamed is what the history keeps, so the conversation matches what the person saw; if the
+agent streams nothing (a fallback), the answer arrives whole as before; if it fails after some text, the text is closed and the error
+follows.
+
+- **Claude Code** is started with `--include-partial-messages`. Checked against the real program on 2026-11-25 (one small call): it
+  prints `stream_event` lines, `message_start` at the start of each message and `content_block_delta` with `text_delta` carrying the
+  text; its own warnings on standard output are not JSON and are skipped. Only `text_delta` is shown (thinking and tool-input deltas
+  are not). A message that follows a tool use starts on its own line.
+- **ACP agents** already sent `agent_message_chunk`; each is forwarded, and a chunk with a new `messageId` starts on its own line.
+- Tested with stand-ins written to the shapes the real Claude program printed. **Not checked:** a full real run of Claude Code or an
+  ACP agent through the chat to see the pieces arrive in a browser.
 

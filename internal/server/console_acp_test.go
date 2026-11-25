@@ -23,6 +23,7 @@ def rd():
     l = sys.stdin.readline()
     return json.loads(l) if l else None
 authed = os.path.exists('authed')
+streaming = os.path.exists('stream-mode')  # write the answer in pieces, with a plan update between two messages
 copilot = os.path.exists('copilot-mode')  # behave like the real Copilot CLI (checked 2026-11-23): HTTP MCP only, asks before every tool
 mcp = None
 def rpc(method, params=None, i=[0]):
@@ -61,6 +62,15 @@ while True:
         open('resumed.json', 'w').write(json.dumps({'method': meth, 'sessionId': m['params']['sessionId']}))
         out({'jsonrpc': '2.0', 'method': 'session/update', 'params': {'sessionId': 's-1', 'update': {'sessionUpdate': 'agent_message_chunk', 'content': {'type': 'text', 'text': 'OLD HISTORY'}}}})
         out({'jsonrpc': '2.0', 'id': i, 'result': {}})
+    elif meth == 'session/prompt' and streaming:
+        def chunk(mid, text): out({'jsonrpc': '2.0', 'method': 'session/update', 'params': {'sessionId': 's-1', 'update': {'sessionUpdate': 'agent_message_chunk', 'messageId': mid, 'content': {'type': 'text', 'text': text}}}})
+        chunk('m1', 'Hello '); chunk('m1', 'world')
+        out({'jsonrpc': '2.0', 'method': 'session/update', 'params': {'sessionId': 's-1', 'update': {'sessionUpdate': 'plan', 'entries': [{'content': 'Look around', 'priority': 'high', 'status': 'in_progress'}]}}})
+        chunk('m2', 'Bye')
+        if os.path.exists('stream-error'):
+            out({'jsonrpc': '2.0', 'id': i, 'error': {'code': -32603, 'message': 'the model ran out of credit'}})
+        else:
+            out({'jsonrpc': '2.0', 'id': i, 'result': {'stopReason': 'end_turn'}})
     elif meth == 'session/prompt' and copilot:
         open('prompt.txt', 'w').write(json.dumps(m['params']['prompt']))
         picks = []
@@ -380,3 +390,104 @@ func TestOwnToolCallsAreRecognisedStrictly(t *testing.T) {
 }
 
 func strconvQuote(s string) string { b, _ := json.Marshal(s); return string(b) }
+
+// An agent that writes its answer in pieces is shown in pieces, in the order it wrote them, with a message that follows a plan
+// update on its own line; the history keeps what the person saw. An error after some text closes the text and then says so.
+func TestAnAgentsAnswerIsStreamedInTheOrderItIsWritten(t *testing.T) {
+	m, _, _, short := acpHarness(t)
+	if err := os.WriteFile(filepath.Join(short, "stream-mode"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(short, "authed"), []byte("test"), 0o644); err != nil { // already signed in
+		t.Fatal(err)
+	}
+	conv := "abcdef0123456789abcdef0123456789"
+	evs := m.run(m.admin, map[string]any{"message": "say it", "conversationId": conv})
+	for _, f := range evs {
+		if f["type"] == "RUN_ERROR" {
+			t.Fatalf("the run failed: %v", f["message"])
+		}
+	}
+	var order []string
+	var deltas []string
+	for _, f := range evs {
+		switch f["type"] {
+		case "TEXT_MESSAGE_START", "TEXT_MESSAGE_END", "RUN_FINISHED":
+			order = append(order, f["type"].(string))
+		case "TEXT_MESSAGE_CONTENT":
+			order = append(order, "text")
+			deltas = append(deltas, f["delta"].(string))
+		case "CUSTOM":
+			if f["name"] == "forgeline.plan" {
+				order = append(order, "plan")
+			}
+		}
+	}
+	if got := strings.Join(order, " "); got != "TEXT_MESSAGE_START text text plan text TEXT_MESSAGE_END RUN_FINISHED" {
+		t.Errorf("event order: %s", got)
+	}
+	if strings.Join(deltas, "|") != "Hello |world|\n\nBye" {
+		t.Errorf("pieces: %q", deltas)
+	}
+	// What was streamed is what the history keeps, once.
+	var c Conversation
+	json.Unmarshal(m.admin.expect(200, "GET", "/v1/assistant/conversations/"+conv, nil), &c)
+	if len(c.Messages) != 2 || c.Messages[1].Role != "assistant" || c.Messages[1].Text != "Hello world\n\nBye" {
+		t.Errorf("history: %+v", c.Messages)
+	}
+
+	// An error after some text: the text is closed, then the error.
+	if err := os.WriteFile(filepath.Join(short, "stream-error"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	evs = m.run(m.admin, map[string]any{"message": "again", "conversationId": "00000000000000000000000000000001"})
+	order = nil
+	for _, f := range evs {
+		switch f["type"] {
+		case "TEXT_MESSAGE_START", "TEXT_MESSAGE_END", "RUN_ERROR", "RUN_FINISHED":
+			order = append(order, f["type"].(string))
+		}
+	}
+	if got := strings.Join(order, " "); got != "TEXT_MESSAGE_START TEXT_MESSAGE_END RUN_ERROR" {
+		t.Errorf("after an error: %s", got)
+	}
+}
+
+// The Claude Code program streams its answer when asked to (checked against the real program): pieces of text arrive between a
+// message's start and its end. They are shown as they come, a message after a tool use starts on its own line, and other kinds of
+// delta and the program's own warnings are ignored.
+func TestTheClaudeEngineStreamsItsTextPieces(t *testing.T) {
+	lines := []string{
+		`Warning: no stdin data received in 3s, proceeding without it.`,
+		`{"type":"system","subtype":"init","session_id":"s1"}`,
+		`{"type":"stream_event","event":{"type":"message_start","message":{"role":"assistant"}},"session_id":"s1"}`,
+		`{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"hmm"}},"session_id":"s1"}`,
+		`{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Let me "}},"session_id":"s1"}`,
+		`{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"look."}},"session_id":"s1"}`,
+		`{"type":"stream_event","event":{"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"{\"a\""}},"session_id":"s1"}`,
+		`{"type":"assistant","message":{"content":[{"type":"text","text":"Let me look."},{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"ls"}}]},"session_id":"s1"}`,
+		`{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t1","content":"a b"}]},"session_id":"s1"}`,
+		`{"type":"stream_event","event":{"type":"message_start","message":{"role":"assistant"}},"session_id":"s1"}`,
+		`{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Found 2."}},"session_id":"s1"}`,
+		`{"type":"stream_event","event":{"type":"message_stop"},"session_id":"s1"}`,
+		`{"type":"result","subtype":"success","result":"Found 2.","is_error":false,"session_id":"s1"}`,
+	}
+	var events []assistEvent
+	final, session, isErr, err := (&Server{}).readEngineStream(strings.NewReader(strings.Join(lines, "\n")+"\n"), func(ev assistEvent) { events = append(events, ev) })
+	if err != nil || isErr || final != "Found 2." || session != "s1" {
+		t.Fatalf("final %q session %q err %v/%v", final, session, isErr, err)
+	}
+	var pieces []string
+	var tools int
+	for _, ev := range events {
+		switch ev.Kind {
+		case evText:
+			pieces = append(pieces, ev.Content)
+		case evToolStart:
+			tools++
+		}
+	}
+	if strings.Join(pieces, "|") != "Let me |look.|\n\nFound 2." || tools != 1 {
+		t.Errorf("pieces %q, tool steps %d", pieces, tools)
+	}
+}

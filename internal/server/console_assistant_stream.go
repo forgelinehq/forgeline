@@ -25,6 +25,7 @@ const (
 	evToolResult = "tool_result"
 	evPlan       = "plan"  // Content is the plan as JSON (note 052)
 	evFlush      = "flush" // send the cards, proposals and notes waiting in the sink now, outside a tool call
+	evText       = "text"  // Content is the next piece of the answer, as the agent writes it (note 053)
 )
 
 // assistEvent is a step of the lookup loop, reported to whoever is watching it.
@@ -195,8 +196,23 @@ func (s *Server) handleAssistantRun(w http.ResponseWriter, r *http.Request) {
 			out.send("CUSTOM", map[string]any{"name": "forgeline.memory", "value": map[string]any{"id": n.ID, "text": n.Text, "about": n.About, "status": n.Status}})
 		}
 	}
+	// An agent that writes its answer as it goes streams it: the first piece opens the message, each piece is sent at once, and the
+	// end closes it. What was streamed is the answer that is kept, so the history shows what the person saw.
+	msgID := randomID()
+	var streamed strings.Builder
+	streaming := false
 	obs := assistObserver(func(ev assistEvent) {
 		switch ev.Kind {
+		case evText:
+			if ev.Content == "" {
+				return
+			}
+			if !streaming {
+				streaming = true
+				out.send("TEXT_MESSAGE_START", map[string]any{"messageId": msgID, "role": "assistant"})
+			}
+			streamed.WriteString(ev.Content)
+			out.send("TEXT_MESSAGE_CONTENT", map[string]any{"messageId": msgID, "delta": ev.Content})
 		case evPlan:
 			var items []planItem
 			if json.Unmarshal([]byte(ev.Content), &items) == nil {
@@ -275,8 +291,14 @@ func (s *Server) handleAssistantRun(w http.ResponseWriter, r *http.Request) {
 	}
 	s.auditReq(r, "assistant.chat", "assistant", fmt.Sprintf("%s, %d chars asked, %d lookups, %v", job.ctxNote, job.asked, len(lookups), err == nil), err == nil)
 	if err != nil {
+		if streaming {
+			out.send("TEXT_MESSAGE_END", map[string]any{"messageId": msgID}) // close what was already shown
+		}
 		out.send("RUN_ERROR", map[string]any{"message": err.Error()})
 		return
+	}
+	if streaming {
+		reply = strings.TrimSpace(streamed.String())
 	}
 	var refs []chatRef
 	for _, id := range sink.proposals {
@@ -286,9 +308,10 @@ func (s *Server) handleAssistantRun(w http.ResponseWriter, r *http.Request) {
 		refs = append(refs, chatRef{Kind: "environment", ID: id})
 	}
 	s.saveTurn(r.Context(), job.p, conv, job.message, reply, lookups, refs)
-	msgID := randomID()
-	out.send("TEXT_MESSAGE_START", map[string]any{"messageId": msgID, "role": "assistant"})
-	out.send("TEXT_MESSAGE_CONTENT", map[string]any{"messageId": msgID, "delta": reply})
+	if !streaming { // nothing was streamed: the answer arrives whole
+		out.send("TEXT_MESSAGE_START", map[string]any{"messageId": msgID, "role": "assistant"})
+		out.send("TEXT_MESSAGE_CONTENT", map[string]any{"messageId": msgID, "delta": reply})
+	}
 	out.send("TEXT_MESSAGE_END", map[string]any{"messageId": msgID})
 	out.send("RUN_FINISHED", map[string]any{"threadId": thread, "runId": runID, "result": map[string]any{"context": job.ctxNote, "lookups": lookups, "conversation": conv}})
 }
