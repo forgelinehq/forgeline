@@ -124,6 +124,8 @@ type Server struct {
 	tracer      *trace.Tracer   // what agents, workflows and the assistant do, as spans (note 049)
 	traces      traceStore      // serialises updates to stored traces
 	evals       evalBook        // which eval suites are running (note 050)
+	alarms      alarmStatus     // what the alarm intake has been doing (note 051)
+	alarmReload chan struct{}   // told when the intake's settings change, so the poller notices at once
 	agentMu     sync.Mutex      // serialises publishing agent versions (note 050)
 	runbookMu   sync.Mutex      // serialises runbook reviews and fix decisions (note 051)
 	runbookPoll time.Duration   // how often a runbook run asks SSM how it went; tests make it short
@@ -287,6 +289,7 @@ func (s *Server) Start(ctx context.Context) error {
 	s.reloadOTel(ctx)
 	go s.otel.Run(ctx)
 	s.startWorkflows(ctx)
+	s.startAlarmIntake(ctx)
 	s.startMissions(ctx)
 	s.startAuditPruner(ctx)
 	s.startSandboxReaper(ctx)

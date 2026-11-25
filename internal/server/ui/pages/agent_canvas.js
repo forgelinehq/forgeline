@@ -243,7 +243,7 @@ export async function graphEditorPage({ params }) {
   let g = cur?.graph ? autoPlace(cur.graph) : cur ? stagesToGraph(cur) : emptyGraph();
   let selected = '', problem = '', dirty = !wf, edited = false; // edited: changed since it was opened, so leaving asks
   const view = newView();
-  const meta = { name: wf?.name || '', description: wf?.description || '', every: cur?.every_minutes || 0, cron: cur?.cron || '', tz: cur?.tz || '', runAs: cur?.run_as || 'developer', note: '', webhook: !!cur?.webhook, follow: (cur?.on_run_failed || []).join(', ') };
+  const meta = { name: wf?.name || '', description: wf?.description || '', every: cur?.every_minutes || 0, cron: cur?.cron || '', tz: cur?.tz || '', runAs: cur?.run_as || 'developer', note: '', webhook: !!cur?.webhook, follow: (cur?.on_run_failed || []).join(', '), alarms: (cur?.on_alarm || []).join(', ') };
   const canvasBox = h('div', { class: 'relative' }), bar = h('div', {}), state = h('span', { class: 'text-xs', id: 'graph-dirty' });
 
   const drawState = () => mount(state, dirty ? h('span', { class: 'pill-wait' }, wf ? 'Unsaved changes' : 'Not saved yet') : h('span', { class: 'muted' }, 'Saved as v' + wf.current));
@@ -293,7 +293,7 @@ export async function graphEditorPage({ params }) {
     btn.disabled = true;
     try {
       const body = { name: meta.name, description: meta.description, every_minutes: Number(meta.every), cron: meta.cron, tz: meta.tz, run_as: meta.runAs, note: meta.note, graph: g,
-        webhook: meta.webhook, on_run_failed: meta.follow.split(',').map(x => x.trim()).filter(Boolean) };
+        webhook: meta.webhook, on_run_failed: meta.follow.split(',').map(x => x.trim()).filter(Boolean), on_alarm: meta.alarms.split(',').map(x => x.trim()).filter(Boolean) };
       const out = await post(wf ? '/v1/ai/workflows/' + wf.id + '/versions' : '/v1/ai/workflows', body);
       toast(wf ? 'Saved v' + out.current : 'Workflow created', 'ok');
       edited = false;
@@ -322,7 +322,10 @@ export async function graphEditorPage({ params }) {
           h('label', { class: 'flex items-start gap-2 text-sm', for: 'graph-webhook' }, hook, h('span', {}, 'Also starts from a signed webhook'))),
         card('failed', 'After a failed pipeline run', 'What failed reaches the workflow as its trigger, which agents read as data.',
           chipInput({ id: 'graph-follow', values: meta.follow.split(',').map(x => x.trim()).filter(Boolean), placeholder: 'pipeline names, or * for any',
-            onchange: (v) => { meta.follow = v.join(', '); dirty = edited = true; } }))] },
+            onchange: (v) => { meta.follow = v.join(', '); dirty = edited = true; drawState(); } })),
+        card('alarm', 'When a CloudWatch alarm goes off', 'Names of alarms, or a pattern such as disk-* . Needs the alarm intake (Settings › Alarm intake). The alarm reaches the workflow as its trigger, which agents read as data.',
+          chipInput({ id: 'graph-alarms', values: meta.alarms.split(',').map(x => x.trim()).filter(Boolean), placeholder: 'alarm names, or disk-*',
+            onchange: (v) => { meta.alarms = v.join(', '); dirty = edited = true; drawState(); } }))] },
       { id: 'access', label: 'Permissions', icon: 'runas', render: () => [
         h('p', { class: 'muted text-xs' }, 'Who the run acts as. Never an administrator: change proposals still need a different administrator to approve them.'),
         choiceCards({ id: 'graph-runas', value: meta.runAs, onchange: (v) => { meta.runAs = v; dirty = edited = true; }, options: [

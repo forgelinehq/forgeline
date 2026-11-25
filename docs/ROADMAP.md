@@ -37,8 +37,7 @@ Antigravity (`agy`) needs sign-in before it opens a session. See
 
 Status: **slice 1 built (2026-11-21).** Scripts one administrator writes and another reviews, with typed parameters, run
 on servers through SSM: checks run when asked (by people, agents and workflows); every fix waits for a different
-administrator. Three examples for a build server whose disk fills up. Checked against stand-ins only. Next: a CloudWatch
-alarm workflow (SNS to a signed webhook), then more AI SRE checks. Starts phase 4 of the product direction early. See
+administrator. Three examples for a build server whose disk fills up. Checked against stand-ins only. The alarm intake is built (2026-11-26; CloudWatch alarm to SNS to an SQS queue that Forgeline reads, so no public address is needed; stand-ins only so far). Next: run it against a real alarm and instance, then more AI SRE checks. Starts phase 4 of the product direction early. See
 [note 051](design/051-runbooks.md).
 
 ## Evals (note 050)

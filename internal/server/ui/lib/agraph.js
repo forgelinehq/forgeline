@@ -343,5 +343,6 @@ export function triggerSummary(meta) {
   else if (every) parts.push(every < 60 ? 'every ' + every + ' min' : every < 1440 ? 'every ' + every / 60 + ' h' : every === 1440 ? 'daily' : 'weekly');
   if (meta.webhook) parts.push('webhook');
   if (String(meta.follow || '').trim()) parts.push('failed runs');
+  if (String(meta.alarms || '').trim()) parts.push('alarms');
   return parts.join(' · ');
 }
