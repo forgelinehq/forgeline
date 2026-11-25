@@ -23,7 +23,7 @@ func (s *Server) auditSecretGrant(ctx context.Context, run store.Run, stepID str
 		network = "egress" // the default
 	}
 	target := "run/" + run.ID + "/" + stepID
-	detail := fmt.Sprintf("secrets %s; network %s; run started by %s", strings.Join(names, ", "), network, run.Trigger)
+	detail := fmt.Sprintf("secrets %s; network %s; run started by %s (%s)", strings.Join(names, ", "), network, run.Trigger, trustOf(run))
 	_ = s.audit(ctx, runActor(run), "", "run.secret.grant", target, detail, true)
 	if network != "none" {
 		_ = s.audit(ctx, runActor(run), "", "run.secret.network", target, fmt.Sprintf("a step with secrets (%s) can also reach the network", strings.Join(names, ", ")), true)
@@ -33,5 +33,5 @@ func (s *Server) auditSecretGrant(ctx context.Context, run store.Run, stepID str
 // auditSecretRefusal records that a step asked for secrets and was refused them.
 func (s *Server) auditSecretRefusal(ctx context.Context, run store.Run, stepID string, names []string, why string) {
 	_ = s.audit(ctx, runActor(run), "", "run.secret.refused", "run/"+run.ID+"/"+stepID,
-		fmt.Sprintf("asked for %s; %s; run started by %s", strings.Join(names, ", "), truncate(why, 200), run.Trigger), false)
+		fmt.Sprintf("asked for %s; %s; run started by %s (%s)", strings.Join(names, ", "), truncate(why, 200), run.Trigger, trustOf(run)), false)
 }

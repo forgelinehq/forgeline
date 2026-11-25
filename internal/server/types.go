@@ -16,6 +16,9 @@ type RunJSON struct {
 	Status   string `json:"status"`
 	Reason   string `json:"reason,omitempty"`
 	Trigger  string `json:"trigger"`
+	// Trust is how much the run is trusted, from how it started: "untrusted" for a pull request, which is refused every secret
+	// (design note 005, slice 3); "trusted" otherwise.
+	Trust string `json:"trust"`
 	// TriggeredBy is the person (or "token") who started the run, when the console knows.
 	TriggeredBy     string     `json:"triggered_by,omitempty"`
 	PipelineID      string     `json:"pipeline_id,omitempty"`
@@ -85,7 +88,7 @@ func runDetail(r store.Run, steps []store.Step) RunJSON {
 func runJSON(r store.Run, steps []store.Step) RunJSON {
 	out := RunJSON{
 		ID: r.ID, Pipeline: r.PipelineName, Status: string(r.Status), Reason: r.Reason,
-		Trigger: string(r.Trigger), CreatedAt: r.CreatedAt, StartedAt: r.StartedAt, FinishedAt: r.FinishedAt,
+		Trigger: string(r.Trigger), Trust: trustOf(r), CreatedAt: r.CreatedAt, StartedAt: r.StartedAt, FinishedAt: r.FinishedAt,
 	}
 	if r.StartedAt != nil {
 		out.TraceID = trace.IDFor("run:" + r.ID)

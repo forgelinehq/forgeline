@@ -7,6 +7,11 @@ section in the pull request that makes the change; a release moves it under its 
 ## [Unreleased]
 
 ### Added
+- **Runs have a trust level** (milestone M3, slice 3). How much a run is trusted follows from how it started: a run for a pull request
+  is **untrusted** and gets no secrets, whatever the settings say; a run started by a signed-in person is trusted. A run for a **push**
+  to an allowed branch may now use secrets, but only where an administrator turned on **Secrets for pushes** for that repository
+  (Settings › GitHub); it is off by default, so nothing changes until someone opts in. The run page and the API (`trust`) show
+  it, and the audit log records it with every secret grant and refusal.
 - **Every secret given to a step is in the audit log** (milestone M3, slice 4). `run.secret.grant` records the run, the step, the secret
   names (never values), the step's network and how the run started; a step with secrets and network access also gets a
   `run.secret.network` record; a refusal is `run.secret.refused`. The audit log can now be paged back past the newest 5000 events:

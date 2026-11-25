@@ -89,7 +89,7 @@ A run's `status` is one of `queued`, `running`, `succeeded`, `failed`, `canceled
 
 | Method and path | Role | Purpose |
 | --- | --- | --- |
-| `GET /v1/integrations/github` | developer | Current settings (no secrets), last deliveries. |
+| `GET /v1/integrations/github` | developer | Current settings (no secrets), last deliveries. Each rule has `repo`, `branches` and `secrets` (runs for pushes to these branches may use the vault's secrets; off unless an administrator turns it on; a pull request never gets any). |
 | `PUT /v1/integrations/github` | admin | Body: `enabled`, `api_base`, `public_url`, `pipeline_file`, `rules` (`owner/repo` plus branches), `token` (write-only). |
 | `DELETE /v1/integrations/github` | admin | Disconnect and delete stored keys. |
 | `POST /v1/integrations/github/test` | admin | Check the connection. |

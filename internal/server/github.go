@@ -64,6 +64,10 @@ type RepoRule struct {
 	// Branches are names or path.Match patterns such as "release/*". A "*" does not cross a
 	// slash. At least one is required; there is no allow-everything shortcut.
 	Branches []string
+	// Secrets lets runs started by a push to one of the Branches use the vault's secrets. It is off unless an administrator turns
+	// it on for the repository: whoever can push to an allowed branch can write the pipeline file, so this is a decision about
+	// trusting those people. A pull request never gets secrets, whatever this says.
+	Secrets bool
 }
 
 const (
