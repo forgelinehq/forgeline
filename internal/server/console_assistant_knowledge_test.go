@@ -58,9 +58,9 @@ func TestSearchDocsFindsTheRightSection(t *testing.T) {
 	for q, want := range map[string]string{
 		"what is a mission":                  "Missions",
 		"how do teams work, who is the lead": "Teams",
-		"connect ollama local model":         "A free local model",
-		"remove what a blueprint built":      "Build",
-		"monthly budget for an agent":        "Budgets",
+		"connect ollama local model":         "free local model",
+		"remove what a blueprint built":      "Remove what a blueprint built",
+		"monthly budget for an agent":        "AI use and budgets",
 		"approval rules two approvals":       "",
 	} {
 		secs := searchDocs(q, 3)
@@ -68,8 +68,9 @@ func TestSearchDocsFindsTheRightSection(t *testing.T) {
 			t.Errorf("%q: nothing found", q)
 			continue
 		}
-		if want != "" && !strings.Contains(secs[0].Heading, want) && !strings.Contains(secs[1].Heading, want) {
-			t.Errorf("%q: got %q then %q, want %q in the first two", q, secs[0].Heading, secs[1].Heading, want)
+		name := func(s docSection) string { return s.Guide + " › " + s.Heading } // each guide is one feature
+		if want != "" && !strings.Contains(name(secs[0]), want) && !strings.Contains(name(secs[1]), want) {
+			t.Errorf("%q: got %q then %q, want %q in the first two", q, name(secs[0]), name(secs[1]), want)
 		}
 	}
 	if len(searchDocs("the and of", 3)) != 0 {
@@ -136,7 +137,7 @@ func TestAssistantIsToldThePageAndWhatTheDocsSayAboutIt(t *testing.T) {
 	}
 	// On the missions list: the page and the docs section about missions.
 	dev.expect(200, "POST", "/v1/assistant/chat", map[string]any{"message": "what is this?", "context": map[string]any{"kind": "page", "path": "/missions", "label": "Team › Missions"}})
-	if got := system(); !strings.Contains(got, "Team › Missions (/missions)") || !strings.Contains(got, "Discover") {
+	if got := system(); !strings.Contains(got, "Team › Missions (/missions)") || !strings.Contains(got, "### Missions ›") {
 		t.Fatalf("system = %s", got)
 	}
 	// On one mission: where it is, and the mission itself; a missing one is a clear error.
