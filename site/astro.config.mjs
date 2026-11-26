@@ -23,7 +23,7 @@ export default defineConfig({
           label: 'Guides',
           items: [
             { label: 'All guides', slug: 'guides' }, 'guides/console-tour', 'guides/pipelines', 'guides/assistant-and-agents', 'guides/models-and-providers', 'guides/people-and-security',
-            'guides/connect-github', 'guides/github-actions', 'guides/connect-aws', 'guides/connect-gcp', 'guides/connect-azure', 'guides/versioning', 'guides/runbooks',
+            'guides/connect-github', 'guides/github-actions', 'guides/connect-aws', 'guides/connect-gcp', 'guides/connect-azure', 'guides/versioning', 'guides/runbooks', 'guides/alarm-intake',
           ],
         },
         { label: 'Reference', items: ['api', 'api/reference', { label: 'Screenshots', slug: 'console' }] },

@@ -31,11 +31,6 @@ what to do next**. The project is pre-alpha and maintained by one person.
   copies them in at build time (titles from front matter or the first heading, `relative_url` paths, callouts, `.md`
   links). Preview with `cd site && npm ci && npm run dev`; `node --test site/scripts/sync.test.mjs` runs in CI. Add a new
   guide to the sidebar in `site/astro.config.mjs`; design notes appear on their own. The home page is `site/src/home.mdx`.
-- The guides show the real console, not screenshots (note 054). `<!-- console /route "caption" -->` in a guide becomes a
-  frame of the demo console at `/demo/`, which `site/scripts/demo.mjs` builds from `internal/server/ui` and answers from
-  `site/demo/fixtures.json`. After changing what a page reads from the API, run `cd site && npm ci && npm run record`
-  (needs Go, Docker, a Chromium via `CHROMIUM_PATH`) and commit `site/demo/fixtures.json`. New pages go in `ROUTES` in
-  `site/demo/record.mjs`. The old PNGs in `docs/console` are being replaced; do not add new ones.
 - The assistant has the guides built in (`internal/server/knowledge/`). After editing `docs/guides/`, `docs/get-started.md`
   or `docs/status.md`, run `FORGELINE_UPDATE_KNOWLEDGE=1 go test ./internal/server -run TestKnowledgeMatchesTheDocs`.
 - Regenerate the JSON Schema after changing types in `internal/pipeline`:

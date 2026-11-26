@@ -409,7 +409,7 @@ with a recommendation, and do something else meanwhile.
    per-account allowlist, then metrics (note 023 steps 2 to 4; the log endpoint needs the IAM check noted
    there first); and the assistant as an agent surface ([note 024](design/024-assistant-agent-surface.md)).
    The assistant reading logs is deferred until its own note answers the prompt-injection question. The
-   screenshots in `docs/console` still show the old look (being replaced by live frames, [note 054](design/054-live-console-in-the-docs.md)).
+   screenshots in `docs/console` still show the old look.
 5. **Console hardening.** Postgres advisory locks (or a `SELECT ... FOR UPDATE`) for the
    in-process locks; a list of active sessions with revoke; a master-key rotation command;
    a committed browser test (the scripted checks in `docs/console/README.md` were done by hand
