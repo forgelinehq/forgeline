@@ -16,6 +16,22 @@ import (
 	"time"
 )
 
+var capNameRE = regexp.MustCompile(`^[A-Z_]{3,20}$`)
+
+// Capability modes (design note 005, T2). Every step container drops all Linux capabilities; the mode says what is
+// given back to every step, and a step can list more in permissions.capabilities.
+const (
+	// CapsRelaxed keeps the ones ordinary installs and builds use (changing file owners and modes, switching user,
+	// signalling processes, binding low ports) and drops raw network sockets, device nodes, file capabilities,
+	// capability changes and chroot, which almost nothing needs.
+	CapsRelaxed = "relaxed"
+	// CapsStrict gives back nothing; a step lists what it needs.
+	CapsStrict = "strict"
+)
+
+// RelaxedCapabilities is what CapsRelaxed gives every step.
+var RelaxedCapabilities = []string{"CHOWN", "DAC_OVERRIDE", "FOWNER", "FSETID", "KILL", "NET_BIND_SERVICE", "SETGID", "SETUID"}
+
 // WorkspaceMount is where the workspace appears inside the container and the default workdir.
 const WorkspaceMount = "/workspace"
 
@@ -139,7 +155,16 @@ func dockerArgs(name string, s StepRun, envFile string) ([]string, error) {
 	}
 	// no-new-privileges stops a process gaining privileges through setuid binaries, whatever
 	// the image does. It is on for every step; see docs/design/005-threat-model.md (T2).
-	args := []string{"run", "--rm", "--name", name, "--security-opt", "no-new-privileges", "-w", workdir}
+	args := []string{"run", "--rm", "--name", name, "--security-opt", "no-new-privileges", "--cap-drop", "ALL"}
+	caps := append([]string(nil), s.Capabilities...)
+	sort.Strings(caps)
+	for _, c := range caps {
+		if !capNameRE.MatchString(c) {
+			return nil, fmt.Errorf("step %q: invalid capability %q", s.ID, c)
+		}
+		args = append(args, "--cap-add", c)
+	}
+	args = append(args, "-w", workdir)
 	switch s.Network {
 	case "", "egress":
 	case "none":

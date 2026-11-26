@@ -308,7 +308,7 @@ with their status, five slices, and three decisions for the maintainer.
   secret store other than process environment variables.
 - Slice 3, trust of the run: **built 2026-11-25** (note 005): pull-request runs are untrusted and get no secrets; a push run gets them only where the repository's rule allows.
 - Slice 4, audit log: not started.
-- Slice 5, resource limits and capability drop: not started; waits on a compatibility decision.
+- Slice 5, capability drop: **built 2026-11-26** (note 005): every step drops all capabilities and gets a baseline back, `relaxed` by default or `strict` by setting, with per-step grants audited. Resource limits (memory, PID, CPU) are still to do.
 
 ## Web console (design note 006: built)
 
@@ -401,8 +401,8 @@ with a recommendation, and do something else meanwhile.
    secret changes, cloud approvals, refusals). Missing: an event for each secret *grant* to a
    step, the secrets-plus-network combination from note 005, an export, and pagination beyond
    the 5000 most recent events when filtering. Say in note 005 which T-rows this closes.
-4. **M3 slice 5, limits and capability drop.** **Needs a decision** on how much compatibility to
-   trade (note 005, decision 2). Then memory, PID and CPU limits and `--cap-drop`.
+4. **M3 slice 5, limits and capability drop.** Capability drop **built 2026-11-26** (relaxed by default, strict by setting; measured in
+   docs/testing/2026-11-26-step-capabilities.md). Still to do: memory, PID and CPU limits. Possible: run steps as the workspace's owner, so strict needs no `DAC_OVERRIDE`.
 5a. **Console redesign (note 022).** Built: grouped navigation, the ember palette, the Markdown editor for
    agent and skill text, and the AWS map ([note 023](design/023-infrastructure-map-and-logs.md) step 1).
    **Still to do, designed with the decisions made:** alarms and health, then the log viewer with its

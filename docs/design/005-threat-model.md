@@ -79,7 +79,7 @@ Status is one of **open** (nothing prevents it), **partly** (reduced, with the g
 | # | Threat | Status today | Planned change | A test that tries to break it |
 | --- | --- | --- | --- | --- |
 | T1 | A step sends source code or secrets to the internet, or calls internal services | **open**: network is on for every step | Per-step `permissions.network` of `none` or `egress`; default is an open decision | A `network: none` step tries TCP, DNS and the Docker bridge gateway; all must fail |
-| T2 | A step abuses privileges inside or out of its container | **open**: root, 14 capabilities, `no_new_privileges` off | `no-new-privileges` for every step now; capability drop, PID and memory limits proposed (see decisions) | A step reads `NoNewPrivs`, tries to regain capabilities and to write outside the workspace |
+| T2 | A step abuses privileges inside or out of its container | **open**: root, 14 capabilities, `no_new_privileges` off | `no-new-privileges` and a capability drop (relaxed baseline by default, strict by setting) for every step; PID and memory limits proposed (see decisions) | A step reads `NoNewPrivs`, tries to regain capabilities and to write outside the workspace |
 | T3 | A secret leaks through the process list, `docker inspect`, or logs | **mitigated** (slice 2): secrets go in a private env file; plain `env` is still in argv, so do not put secrets there | Secrets only for steps that declare them; passed in a private env file, not argv; masked in logs | A step prints its secret and a second process lists processes; neither may show the value |
 | T4 | **Untrusted input, secrets and an external action in one step** (the prompt-injection pattern) | **mostly mitigated** (slice 3, 2026-11-25): a run is `trusted` or `untrusted` by how it started and an untrusted run is refused every secret; the combination of secrets and network is recorded (slice 4). Not built: a step declaring the three properties (the spec has no untrusted-input field yet) | A run started from untrusted input gets no secrets; a step must declare each of the three before it may combine them | An untrusted run asks for a secret and must be refused before any container starts |
 | T5 | Hostile code in a pull request runs on the host | **mitigated** (slice 3, 2026-11-25): fork PRs are ignored; same-repository PRs run, untrusted, with no secrets (the maintainer decided so on 2026-11-25); they still run code in a step container, so network and resources are the container's only limits (slice 5) | Mark pull request runs untrusted for T4; keep the allow list | A fork PR payload is ignored (handled); a same-repo PR run gets no secrets (tested) |
@@ -121,8 +121,13 @@ order of value for effort.
    `run.secret.refused` (shown as refused, with the reason). Names only: the tests check a value never appears. The list can be paged
    back past the newest 5000 events with a cursor. This closes T13; T4 stays partly open until slice 3 (a trust level for runs, which
    waits for a decision) refuses secrets to untrusted runs by rule instead of by the GitHub-only check.
-5. **Limits and capability drop (T2, T11).** Memory, PID and CPU limits and a capability drop,
-   once the maintainer has decided how much compatibility to trade.
+5. **Limits and capability drop (T2, T11).** Capability drop **built 2026-11-26**: every step container runs `--cap-drop ALL`
+   and gets back a baseline the administrator chooses (Settings › Step container limits): `relaxed` (the default, eight
+   capabilities ordinary builds use) or `strict` (none); a step lists more in `permissions.capabilities`, limited to Docker's default
+   set, and each grant beyond the baseline is audited (`run.capability.grant`). Measured on eleven common steps: relaxed broke
+   none; strict broke three (root writes into the workspace, `chown`, `apt-get install`), each fixed by a grant
+   (docs/testing/2026-11-26-step-capabilities.md). The default stays relaxed until a pipeline's steps are known to run as a
+   non-root user. Memory, PID and CPU limits are still to do.
 
 ## Decisions needed from the maintainer
 

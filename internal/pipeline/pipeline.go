@@ -50,7 +50,13 @@ type Permissions struct {
 	// Secrets names the secrets the step receives, as environment variables of the same name.
 	// Values come from the server's configuration, never from the pipeline file.
 	Secrets []string `json:"secrets,omitempty" doc:"Names of the secrets this step receives as environment variables. Values come from the server or the local environment (FORGELINE_SECRET_<NAME>), never from the pipeline file. A step gets only what it lists." itemPattern:"^[A-Za-z_][A-Za-z0-9_]*$"`
+	// Capabilities are Linux capabilities the step gets back. Every step starts with all of them dropped.
+	Capabilities []string `json:"capabilities,omitempty" doc:"Linux capabilities this step needs, such as CHOWN or NET_RAW. Every step runs with all capabilities dropped, plus the server's baseline (the setting under Settings, Security). List one here only when a step fails with 'Operation not permitted'. Docker's default set only; each grant is in the audit log." itemPattern:"^[A-Z_]+$"`
 }
+
+// GrantableCapabilities are the capabilities a step may ask for: Docker's default set. Nothing else (SYS_ADMIN, NET_ADMIN
+// and the rest) can be granted from a pipeline file.
+var GrantableCapabilities = []string{"AUDIT_WRITE", "CHOWN", "DAC_OVERRIDE", "FOWNER", "FSETID", "KILL", "MKNOD", "NET_BIND_SERVICE", "NET_RAW", "SETFCAP", "SETGID", "SETPCAP", "SETUID", "SYS_CHROOT"}
 
 // Network values.
 const (

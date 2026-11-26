@@ -71,6 +71,9 @@ func TestValidateRejects(t *testing.T) {
 		{"network is case sensitive", func(p *Pipeline) { p.Steps[0].Permissions.Network = "None" }, "steps[0].permissions.network", "must be"},
 		{"bad secret name", func(p *Pipeline) { p.Steps[0].Permissions.Secrets = []string{"1BAD"} }, "steps[0].permissions.secrets[0]", "invalid secret name"},
 		{"secret with equals sign", func(p *Pipeline) { p.Steps[0].Permissions.Secrets = []string{"A=B"} }, "steps[0].permissions.secrets[0]", "invalid secret name"},
+		{"capability that cannot be granted", func(p *Pipeline) { p.Steps[0].Permissions.Capabilities = []string{"SYS_ADMIN"} }, "steps[0].permissions.capabilities[0]", "cannot be granted"},
+		{"all capabilities", func(p *Pipeline) { p.Steps[0].Permissions.Capabilities = []string{"ALL"} }, "steps[0].permissions.capabilities[0]", "cannot be granted"},
+		{"duplicate capability", func(p *Pipeline) { p.Steps[0].Permissions.Capabilities = []string{"CHOWN", "CHOWN"} }, "steps[0].permissions.capabilities[1]", "duplicate capability"},
 		{"empty secret name", func(p *Pipeline) { p.Steps[0].Permissions.Secrets = []string{""} }, "steps[0].permissions.secrets[0]", "invalid secret name"},
 		{"duplicate secret", func(p *Pipeline) { p.Steps[0].Permissions.Secrets = []string{"TOKEN", "TOKEN"} }, "steps[0].permissions.secrets[1]", "duplicate secret"},
 		{"secret also in env", func(p *Pipeline) {

@@ -111,6 +111,14 @@
     "Permissions": {
       "additionalProperties": false,
       "properties": {
+        "capabilities": {
+          "description": "Linux capabilities this step needs, such as CHOWN or NET_RAW. Every step runs with all capabilities dropped, plus the server's baseline (the setting under Settings, Security). List one here only when a step fails with 'Operation not permitted'. Docker's default set only; each grant is in the audit log.",
+          "items": {
+            "pattern": "^[A-Z_]+$",
+            "type": "string"
+          },
+          "type": "array"
+        },
         "network": {
           "description": "Outbound network access: none cuts the step off from every network, egress allows it. Empty means egress for now.",
           "enum": [

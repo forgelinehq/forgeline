@@ -23,6 +23,7 @@ export const SETTINGS = [
     { path: '/providers', label: 'Models and providers', icon: 'model', note: 'Providers whose models agents, workflows and the assistant use, with spend, limits and a log of calls', min: 'developer' },
     { path: '/integrations/claude/settings', label: 'Assistant model', icon: 'sparkle', note: 'Which model answers the assistant, and agents that have no model of their own', min: 'developer' },
     { path: '/assistant-permissions', label: 'Assistant permissions', icon: 'shield', note: 'What the assistant may change as you, rules for it, and which AWS accounts it may change with your approval', min: 'developer' },
+    { path: '/step-capabilities', label: 'Step container limits', icon: 'shield', note: 'Which Linux capabilities pipeline steps keep: all dropped, or a small safe set', min: 'admin' },
     { path: '/memory', label: 'Memory', icon: 'memory', note: 'What the assistant remembers about you and this system, and your conversations', min: 'developer' },
   ] },
   { title: 'Developer', items: [

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -91,6 +92,12 @@ type Options struct {
 	// OnSecretsGranted, if set, is called for every step that is given secrets, after they are checked and before its container
 	// starts: the secret names (never the values) and the network the step has (design note 005, T13).
 	OnSecretsGranted func(stepID string, names []string, network string)
+	// CapabilityMode is executor.CapsStrict or executor.CapsRelaxed (the default for empty). Every step container drops all
+	// Linux capabilities and gets back the mode's baseline plus what the step lists in permissions.capabilities.
+	CapabilityMode string
+	// OnCapabilitiesGranted, if set, is called for every step that lists capabilities, with the ones it listed that the mode
+	// did not already give, before its container starts.
+	OnCapabilitiesGranted func(stepID string, names []string)
 	// OnSecretsRefused, if set, is called for a step that asked for secrets and did not get them, with the reason.
 	OnSecretsRefused func(stepID string, names []string, why string)
 	// OnStepStart, if set, is called just before a step is handed to the executor.
@@ -184,9 +191,14 @@ func runStep(ctx context.Context, s *pipeline.Step, ex executor.Executor, opts O
 		}
 		return runServerStep(ctx, s, opts, opts.Eval)
 	}
-	run, err := toStepRun(s, opts.Workspace)
+	run, err := toStepRun(s, opts.Workspace, opts.CapabilityMode)
 	if err != nil {
 		return StepResult{ID: s.ID, Status: StatusFailed, Err: err}
+	}
+	if opts.OnCapabilitiesGranted != nil {
+		if extra := extraCapabilities(s, opts.CapabilityMode); len(extra) > 0 {
+			opts.OnCapabilitiesGranted(s.ID, extra)
+		}
 	}
 	if run.Secrets, err = grantSecrets(s, opts); err != nil {
 		if opts.OnSecretsRefused != nil && len(s.Permissions.Secrets) > 0 {
@@ -311,11 +323,37 @@ func grantSecrets(s *pipeline.Step, opts Options) (map[string]string, error) {
 	return granted, nil
 }
 
-func toStepRun(s *pipeline.Step, workspace string) (executor.StepRun, error) {
+// capabilitiesFor is what a step's container keeps: the mode's baseline and what the step lists.
+func capabilitiesFor(s *pipeline.Step, mode string) []string {
+	var caps []string
+	if mode != executor.CapsStrict {
+		caps = append(caps, executor.RelaxedCapabilities...)
+	}
+	for _, c := range s.Permissions.Capabilities {
+		if !slices.Contains(caps, c) {
+			caps = append(caps, c)
+		}
+	}
+	return caps
+}
+
+// extraCapabilities are the ones a step lists that its mode does not already give.
+func extraCapabilities(s *pipeline.Step, mode string) []string {
+	base := capabilitiesFor(&pipeline.Step{}, mode)
+	var extra []string
+	for _, c := range s.Permissions.Capabilities {
+		if !slices.Contains(base, c) {
+			extra = append(extra, c)
+		}
+	}
+	return extra
+}
+
+func toStepRun(s *pipeline.Step, workspace, capMode string) (executor.StepRun, error) {
 	run := executor.StepRun{
 		ID: s.ID, Image: s.Image, Script: s.Run, Command: s.Command,
 		Env: s.Env, WorkDir: s.WorkDir, Workspace: workspace, Inputs: s.Inputs,
-		Network: s.Permissions.Network,
+		Network: s.Permissions.Network, Capabilities: capabilitiesFor(s, capMode),
 	}
 	if s.Agent != nil {
 		run.Command = s.Agent.Argv()
