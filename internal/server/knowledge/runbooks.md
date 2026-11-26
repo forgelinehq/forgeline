@@ -66,9 +66,9 @@ The role or user Forgeline uses needs to send commands only to the tagged instan
 ```
 
 {: .warning }
-**Checked only against a stand-in.** The SSM calls were tested with Forgeline's own fakes and
-`scripts/dev/fake-aws`, not against a real instance. The example scripts are checked to parse with `bash -n`; they have
-not run on a real server. Try them on a test instance first.
+**Checked on one real instance.** The SSM calls were tested with fakes and `scripts/dev/fake-aws`, and on 2026-11-26 the Disk
+report and Old backups ran on a real `t3.nano` (see [the test note](../testing/2026-11-26-alarm-runbook.md)). The other
+example scripts have only been checked to parse with `bash -n`. Try them on a test instance first.
 
 ## Starting a workflow from a CloudWatch alarm
 
@@ -91,5 +91,6 @@ that is off, or is not a graph, is never started; and the audit log records each
 can send to the queue can start workflows, so keep its policy tight.
 
 {: .warning }
-**Checked against a stand-in queue only so far.** The polling, the parsing of SNS-wrapped alarms, the account check, the limits and the
-audit entries are tested with a fake `aws`; a real alarm through a real topic and queue has not run yet.
+**Checked once against real AWS.** A real alarm through a real topic and queue started a workflow, an agent ran a check and
+filed a fix, and an administrator approved it (2026-11-26, [test note](../testing/2026-11-26-alarm-runbook.md)). The limits and
+the account check are tested with a fake `aws` only.

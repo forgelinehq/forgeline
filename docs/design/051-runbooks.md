@@ -2,7 +2,7 @@
 
 Status: **accepted 2026-11-20, every decision as proposed** (end of this note); **slice 1 built 2026-11-21**: runbooks with
 review, typed parameters, checks and approved fixes through SSM, `run_runbook` for agents, three examples, the console
-pages (see "Built" at the end). Checked against stand-ins only. The alarm intake was built 2026-11-26 (see the end of this note). Starts phase 4 of the product direction (AI SRE:
+pages (see "Built" at the end). Checked against stand-ins, and on 2026-11-26 once on real AWS (alarm, queue, instance, approved fix: `docs/testing/2026-11-26-alarm-runbook.md`). The alarm intake was built 2026-11-26 (see the end of this note). Starts phase 4 of the product direction (AI SRE:
 health, alerts, remediation) early, because the maintainer wants a demo now: "a Jenkins which gets out of space every
 time and I have Copilot from local who gets into the server by SSM and cleans spaces safely, docker prune and docker
 layers, db backups. I wanted to do the same from here, with a hook or even a manual run, but the system is not capable
