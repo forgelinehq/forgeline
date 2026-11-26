@@ -128,7 +128,7 @@ Follow **Set up Forgeline** on Home, or go straight to:
 - Put values a step needs in **Secrets**, then ask for them with `permissions.secrets`: [Pipelines]({{ '/guides/pipelines/' | relative_url }}).
 - [Connect GitHub]({{ '/guides/connect-github/' | relative_url }}) so a push runs your pipeline.
 - [Connect AWS]({{ '/guides/connect-aws/' | relative_url }}) to see and change your cloud.
-- Turn on the [assistant]({{ '/guides/assistant-and-agents/' | relative_url }}).
+- Turn on the [assistant]({{ '/guides/assistant/' | relative_url }}).
 
 ## Server settings
 

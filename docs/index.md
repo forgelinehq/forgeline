@@ -31,7 +31,7 @@ Pre-alpha. It is built to be tried on a laptop. Read [what is not checked yet]({
 ## Start here
 
 1. [Get started]({{ '/get-started/' | relative_url }}): install, start the server, run your first pipeline (10 minutes).
-2. [Console tour]({{ '/guides/console-tour/' | relative_url }}): every page, with pictures.
+2. [Console basics]({{ '/guides/console-basics/' | relative_url }}): the seven spaces, search and roles.
 3. [Write pipelines]({{ '/guides/pipelines/' | relative_url }}), [connect GitHub]({{ '/guides/connect-github/' | relative_url }}), [connect AWS]({{ '/guides/connect-aws/' | relative_url }}).
 4. [API reference]({{ '/api/' | relative_url }}) for scripts and CI.
 
