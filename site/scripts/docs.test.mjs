@@ -32,3 +32,15 @@ test('every picture a page shows exists, and every picture file is shown somewhe
   for (const n of files) if (!shown.has(n)) bad.push('unused: ' + n + ' (delete it; git keeps the history)');
   assert.deepEqual(bad, []);
 });
+
+test('no private address, tailnet host name or home directory is written into the docs, skills or scripts', () => {
+  const ROOT = path.resolve(DOCS, '..');
+  const files = ['docs', '.claude', 'scripts'].flatMap((d) => fs.existsSync(path.join(ROOT, d)) ? walk(path.join(ROOT, d)) : [])
+    .filter((f) => !f.includes('node_modules') && /\.(md|mjs|js|json|py|sh|yml|yaml)$/.test(f));
+  const bad = [];
+  for (const f of files) {
+    const text = fs.readFileSync(f, 'utf8');
+    for (const m of text.matchAll(/192\.168\.\d+\.\d+|[\w-]+\.ts\.net|\/home\/[a-z][\w-]*\//g)) bad.push(`${path.relative(ROOT, f)}: ${m[0]}`);
+  }
+  assert.deepEqual(bad, [], 'CLAUDE.md: no hostnames, usernames or local paths in the repository');
+});

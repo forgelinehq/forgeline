@@ -1,0 +1,8 @@
+{
+  "name": "forgeline-uat",
+  "private": true,
+  "type": "module",
+  "description": "User-acceptance helpers for a running Forgeline (see .claude/skills/feature-uat). Not part of the product.",
+  "scripts": { "smoke": "node smoke.mjs" },
+  "dependencies": { "playwright-core": "1.65.1" }
+}

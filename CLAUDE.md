@@ -34,6 +34,9 @@ what to do next**. The project is pre-alpha and maintained by one person.
 - Every guide is one feature in one layout (copy `docs/guides/runbooks.md`); screenshots are few, cropped with
   `scripts/docs/crop.py`, and a picture no page uses fails `site/scripts/docs.test.mjs`. After a change to the console or
   the API, run the `docs-review` skill (`.claude/skills/docs-review`) before the pull request.
+- To test a feature like a user, on the UAT instance with real AWS, GitHub and the assistant, use the `feature-uat` skill
+  (`.claude/skills/feature-uat`); `scripts/uat/smoke.mjs` walks every console page of a running instance. The instance's
+  address and credentials are never written in the repository.
 - The assistant has the guides built in (`internal/server/knowledge/`). After editing `docs/guides/`, `docs/get-started.md`
   or `docs/status.md`, run `FORGELINE_UPDATE_KNOWLEDGE=1 go test ./internal/server -run TestKnowledgeMatchesTheDocs`.
 - Regenerate the JSON Schema after changing types in `internal/pipeline`:
