@@ -53,3 +53,6 @@ h1, h2, h3, .site-title, .hero h1 { font-family: 'Bricolage Grotesque', var(--sl
 .fl-copy-menu a:hover { background: var(--sl-color-gray-6); }
 .fl-copy-menu b { display: block; font-size: var(--sl-text-sm); }
 .fl-copy-menu span { display: block; font-size: var(--sl-text-xs); color: var(--sl-color-gray-3); }
+
+/* Screenshots in the guides: cropped to the part that matters, with one consistent edge. */
+.sl-markdown-content img:not(.no-frame) { border: 1px solid var(--sl-color-gray-5); border-radius: 0.5rem; box-shadow: 0 1px 3px rgb(0 0 0 / 0.08); }
