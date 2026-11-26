@@ -6,43 +6,76 @@ nav_order: 5
 
 # Connect AWS
 
-Go to **Operations → Infrastructure → AWS account → Connect**. Two tabs:
+Forgeline connects to one AWS account to look at it (stacks, instances, resources, spend) and to change it through
+proposals that a different administrator approves. You can sign in with AWS IAM Identity Center from the console, or use
+a named profile of the AWS CLI on the server.
+
+Connect AWS before you use [runbooks](runbooks.md), [alarm intake](alarm-intake.md), the AWS map, cloud changes or
+blueprints.
+
+## At a glance
+
+| | |
+| --- | --- |
+| Where in the console | **Operations → Infrastructure → AWS account → Connect** |
+| Needs | An AWS account with IAM Identity Center (for the sign-in), or an AWS CLI profile on the server |
+| Who | Administrator connects; developers and administrators propose |
+| Design | [Note 009](../design/009-aws-signin.md) |
+
+## Who can do what
+
+| Action | Minimum role | Extra rule |
+| --- | --- | --- |
+| See the account's stacks, instances and resources | Viewer | Read-only |
+| See spend | Developer | Each request is billed by AWS, so it loads only when you ask |
+| Connect, sign out, or use a server profile | Administrator | |
+| Propose a change (deploy a template, start, stop or reboot an instance) | Developer | With a reason |
+| Approve or reject a change | Administrator | Not the person who proposed it |
+| Cancel a proposal | Developer | Your own |
+
+## How it works
+
+1. An administrator connects, by signing in with AWS or by naming a server profile.
+2. Forgeline keeps the sign-in token sealed in its vault and the role credentials only in memory, and passes them to the
+   `aws` command as environment variables.
+3. Looking is read-only. To change something, a developer or administrator proposes the change with a reason, and
+   Forgeline previews it as a CloudFormation change set.
+4. A **different** administrator approves or rejects. Approval runs it and writes the audit log.
 
 ## Sign in with AWS (IAM Identity Center)
 
-1. Enter your **access portal URL** (like `https://d-xxxxxxxxxx.awsapps.com/start`, from the IAM Identity Center page) and the region of your Identity Center.
+1. Enter your **access portal URL** (like `https://d-xxxxxxxxxx.awsapps.com/start`, from the IAM Identity Center page)
+   and the region of your Identity Center.
 2. Forgeline shows a short **code** and a link. Open the link in your own browser and approve.
 3. The dialog continues by itself. Pick an **account** and a **role**, and the region Forgeline should work in.
 4. **Test and connect.**
 
-![Code]({{ '/console/23-aws-signin-code.png' | relative_url }})
-![Choose]({{ '/console/24-aws-signin-choose.png' | relative_url }})
-
-No AWS CLI is needed for the sign-in. Forgeline keeps the sign-in token sealed in its vault and
-the role credentials only in memory, and passes them to the `aws` command as environment variables.
+No AWS CLI is needed for the sign-in.
 
 {: .important }
-Pick a **read-only role** if you only want to look. Changes always need a second administrator's approval, but they run with whichever role you picked.
+Pick a **read-only role** if you only want to look. Changes always need a second administrator's approval, but they run
+with whichever role you picked.
 
-## Server profile
-Uses a named profile of the AWS CLI on the machine that runs the server. Use it when the server
-already has credentials (for example an instance role). Sign in on the server with `aws sso login`.
+## Use a server profile
 
-## Looking and changing
+This uses a named profile of the AWS CLI on the machine that runs the server. Use it when the server already has
+credentials (for example an instance role). Sign in on the server with `aws sso login`.
+
+## Look and change
 
 - **Stacks, instances, spend.** Spend loads only when you ask, because AWS bills each Cost Explorer request.
-- **Cloud changes.** A developer or admin proposes a change (deploy a template, or start, stop or reboot an instance) with a reason. Forgeline previews it as a CloudFormation change set. A **different** administrator approves or rejects. Approval runs it and writes the audit log.
+- **Cloud changes.** Propose a change with a reason. The preview shows exactly what would be added, changed or replaced.
+  A different administrator approves or rejects it.
 
-![Preview]({{ '/console/23-deploy-preview.png' | relative_url }})
-![Done]({{ '/console/25-change-succeeded.png' | relative_url }})
+![A proposed deploy: the reason, the parameters and exactly what would change]({{ '/console/connect-aws.png' | relative_url }})
 
-**Verified:** reading a real account, the real device-code sign-in and the real credential step, and rejecting a change on a real account. Executing an approved change was run on a real account: a deploy and a delete of the demo stack, each approved by a second actor in the browser. Design: [note 009](https://github.com/forgelinehq/forgeline/blob/main/docs/design/009-aws-signin.md).
+Once connected, the **AWS account** tab shows the account's resources as a map, grouped by VPC, with a list of what needs
+a look. See the [Infrastructure map and services](infrastructure-map-and-services.md). It is read-only and uses the same connection. Stack
+boxes and lines on the map use two more read permissions, `cloudformation:ListStackResources` and
+`lambda:ListEventSourceMappings`, which `ReadOnlyAccess` includes; without them the map says what is missing. Cloud → Map
+shows the same map on its own page.
 
-## What you see once connected
-
-The **AWS account** tab shows the account's resources as a map, grouped by VPC, with a list of what needs a look. See the [Console tour]({{ '/guides/console-tour/' | relative_url }}#infrastructure). It is read-only and uses the same connection. Stack boxes and lines on the map use two more read permissions, `cloudformation:ListStackResources` and `lambda:ListEventSourceMappings`, which `ReadOnlyAccess` includes; without them the map says what is missing. Cloud › Map shows the same map on its own page.
-
-## Building blueprints
+## Permissions for blueprints
 
 ### Any other AWS resource
 
@@ -57,13 +90,13 @@ Forgeline chooses none of a resource's settings, so read its previews: the guard
 and a different administrator approves them, as for everything else. The role Forgeline builds with needs permission
 for those types too (`PowerUserAccess` covers most, but not IAM).
 
-### Permissions
+### Permissions to build
 
 Blueprints (Cloud › Canvas) are built with OpenTofu, which Forgeline downloads on first use and checks against the
 release's published checksum (set `FORGELINE_TOFU` to use your own). Building needs the AWS permissions for what a
 blueprint makes. Tables, buckets, queues and log groups are covered by `PowerUserAccess`. An app block also makes two
 IAM roles, which `PowerUserAccess` does not allow; to build apps, add a policy that allows the IAM role actions listed
-in [design note 035](https://github.com/forgelinehq/forgeline/blob/main/docs/design/035-blueprints.md) on
+in [design note 035](../design/035-blueprints.md) on
 `arn:aws:iam::<account>:role/fl-*` only, so Forgeline cannot change any other role.
 
 The policy below is that permission, ready to attach to the role Forgeline builds with. It lets Forgeline manage only
@@ -139,3 +172,37 @@ aws iam create-open-id-connect-provider --url https://token.actions.githubuserco
 ```
 
 Without it, building such a blueprint fails when IAM refuses the push role, and the error says the provider does not exist.
+
+## Security model
+
+- **Two people.** A change needs an administrator who did not propose it. [Approval rules](approval-rules.md) can ask
+  for more.
+- **Whatever the role allows.** An approved change runs with the role you picked, so a read-only role cannot change
+  anything.
+- **Credentials.** The sign-in token is sealed in the vault; role credentials stay in memory.
+- **Audited.** Every proposal, approval and rejection is in the [audit log](audit-log.md).
+
+## Limits and verification
+
+{: .warning }
+**Verified:** reading a real account, the real device-code sign-in and the real credential step, and rejecting a change
+on a real account. Executing an approved change was run on a real account: a deploy and a delete of the demo stack, each
+approved by a second actor in the browser.
+
+## Troubleshooting
+
+| Symptom | Likely cause |
+| --- | --- |
+| The map says what is missing | The role lacks `cloudformation:ListStackResources` or `lambda:ListEventSourceMappings`. |
+| An approval is refused | You proposed the change, or an [approval rule](approval-rules.md) names other approvers. |
+| A blueprint apply fails with `iam:PassRole` | Forgeline says which services the policy in *Permissions to build* must hold. |
+| Building an app or agent with a source repository fails because the OIDC provider does not exist | Create GitHub's OIDC provider in the account once (see *Permissions to build*). |
+
+## Related
+
+- [Runbooks](runbooks.md)
+- [Alarm intake](alarm-intake.md)
+- [Approval rules](approval-rules.md)
+- [Policy packs](policy-packs.md)
+- [People and roles](people-and-roles.md)
+- [API: AWS](../api/reference.md)

@@ -6,9 +6,36 @@ nav_order: 4
 
 # Models and providers
 
-Agents, teams, workflows and the assistant need a model to answer. **Settings › Models and providers** is where an
-administrator connects model providers, turns their models on, and sees every model call as it happens. A model from a
-provider works whatever the assistant itself is set to, so agents and workflows keep running with the assistant off.
+Agents, teams, workflows and the assistant need a model to answer. **Settings → Models and providers** is where an
+administrator connects model providers, turns their models on, sets spend limits and fallbacks, and sees every model
+call as it happens. A model from a provider works whatever the assistant itself is set to, so agents and workflows keep
+running with the assistant off.
+
+Use it to choose which models your agents may use, to cap what a provider can cost per month, or to run agents on a
+local model with no key.
+
+## At a glance
+
+| | |
+| --- | --- |
+| Where in the console | **Settings → Models and providers**; **Settings → Assistant model** for the assistant |
+| Needs | An API key for the provider (none for AWS Bedrock or a local server without one) |
+| Design | [Note 045](../design/045-agent-studio.md) |
+
+## Who can do what
+
+| Action | Minimum role | Extra rule |
+| --- | --- | --- |
+| See providers, their spend and the call log | Developer | The key is never shown |
+| Add, change, test or remove a provider | Administrator | Every change is audited |
+
+## How it works
+
+1. An administrator connects a provider and ticks the models agents may use. The key goes into the vault.
+2. An agent, team or workflow names a model as `provider/model`. Each call goes to that provider and is logged with its
+   tokens and cost.
+3. When the provider's monthly limit is reached, or the provider is unreachable, rate limited or overloaded, the call
+   goes to the **fallback** model if one is set. Otherwise it stops.
 
 ## Connect a provider
 
@@ -53,15 +80,44 @@ A model from a provider is written `provider/model`, for example `anthropic/clau
 team, the assistant or a test), the model, the tokens in and out, the cost and the time, or the error. Each provider's
 card shows whether it is working, its spend against the monthly limit and its median answer time.
 
-## A free local model
+## Run a free local model
 
 An OpenAI-compatible provider pointing at [Ollama](https://ollama.com) on the same machine runs agents with no key and
 no cost: install Ollama, pull a small model (`ollama pull llama3.2:3b`), add the provider with the address
 `http://localhost:11434/v1`, and add `llama3.2:3b` under Models. Small models follow instructions less reliably; try one
 on an agent's page before giving it to a team.
 
-## What was checked
+## Security model
 
-The Anthropic provider was checked with the real API on a Raspberry Pi (2026-11-18): the Test button, and an agent on
-`anthropic/claude-haiku-5-5` answering while the assistant used a different login. The other providers are tested
-against stand-ins only.
+- Keys are kept encrypted in the vault, are never shown again, and are deleted with the provider.
+- Only `https` addresses are allowed, or plain `http` for this machine. Private and cloud-internal addresses are
+  refused unless you tick **It is on a private network**.
+- AWS Bedrock calls are signed with a connected account's credentials, so no key is stored.
+- A refused key or a denied permission does not fall back to another model: that needs a person.
+- Every change is in the [audit log](audit-log.md).
+
+## Limits and verification
+
+{: .warning }
+**Only the Anthropic provider was checked against the real API.** That was on a Raspberry Pi on 2026-11-18: the Test
+button, and an agent on `anthropic/claude-haiku-5-5` answering while the assistant used a different login. The other
+providers are tested against stand-ins only.
+
+## Troubleshooting
+
+| Symptom | Likely cause |
+| --- | --- |
+| A provider's card shows **no-key** or **failing** | The key is missing or refused, or the provider cannot be reached. Use **Test** to see the error. |
+| An agent fails with a clear error | Its provider was removed. Give the agent another model. |
+| Calls stop at the monthly limit | No fallback is set. Add a fallback or raise the limit. |
+| Calls do not fall back after an error | A refused key or a denied permission needs a person; only a limit, an unreachable provider, rate limiting or overload fall back. |
+| An address is refused | It is private or cloud-internal. Tick **It is on a private network** if it is yours. |
+| Bedrock calls are denied | The account's role lacks `bedrock:InvokeModel`. |
+| A small local model ignores instructions | Small models follow instructions less reliably; try one on an agent's page before giving it to a team. |
+
+## Related
+
+- [Connect AWS](connect-aws.md)
+- [Versioning](versioning.md)
+- [People and roles](people-and-roles.md)
+- [API: models and providers](../api/reference.md)

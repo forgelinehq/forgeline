@@ -62,7 +62,7 @@ administrator approves, and exactly that plan is applied. An app or agent can na
 that branch, and Forgeline suggests the workflow that builds the image; **Run a new image…** then lists what was pushed and previews running the one you pick. **Remove…** takes it away again the same way, keeping tables,
 buckets, databases and secrets unless you choose to remove everything. The assistant beside the canvas suggests changes in
 plain words; you choose whether to use them. The
-console serves its own fonts and loads nothing from other hosts. [Screenshots](docs/console/README.md) and [design note 006](docs/design/006-console.md)
+console serves its own fonts and loads nothing from other hosts. [design note 006](docs/design/006-console.md)
 show what each page does and what has not been checked.
 
 Accounts, pipelines, secrets and settings are kept in `<data-dir>/console.json`, encrypted where

@@ -44,6 +44,10 @@ var docStopWords = map[string]bool{"the": true, "and": true, "for": true, "are":
 	"use": true, "used": true, "when": true, "where": true, "which": true, "who": true, "why": true, "there": true, "then": true,
 	"them": true, "they": true, "here": true, "page": true, "forgeline": true, "please": true, "tell": true, "show": true}
 
+// boilerplateHeadings are the sections every feature page has (see docs/guides/runbooks.md).
+var boilerplateHeadings = map[string]bool{"Troubleshooting": true, "Who can do what": true, "Limits and verification": true,
+	"Security model": true, "At a glance": true}
+
 func loadKnowledge() []docSection {
 	knowledgeOnce.Do(func() {
 		files, _ := knowledgeFS.ReadDir("knowledge")
@@ -72,7 +76,9 @@ func splitGuide(src string) []docSection {
 	cur := docSection{}
 	flush := func() {
 		cur.Text = strings.TrimSpace(cur.Text)
-		if cur.Text != "" {
+		// A "Related" section is only a list of links: it answers nothing, and its short text would outrank the
+		// section that does, because every guide's title is in its words.
+		if cur.Text != "" && !strings.HasPrefix(cur.Heading, "Related") {
 			cur.Guide = guide
 			out = append(out, cur)
 		}
@@ -153,6 +159,19 @@ func searchDocs(query string, n int) []docSection {
 			continue
 		}
 		score *= float64(hit) / float64(len(terms)) // sections that match more of the question first
+		// Every feature page ends with the same boilerplate sections. Their short text repeats the feature's name, so
+		// without this they outrank the section that explains it, unless the question is about that very thing.
+		if boilerplateHeadings[sec.Heading] {
+			asked := false
+			for _, w := range docWords(sec.Heading) {
+				for _, t := range terms {
+					asked = asked || t == w
+				}
+			}
+			if !asked {
+				score *= 0.4
+			}
+		}
 		score /= 1 + math.Log1p(float64(sec.size)/4000)
 		all = append(all, scored{sec, score})
 	}
@@ -413,7 +432,12 @@ func (s *Server) lookupListModels(ctx context.Context, _ json.RawMessage) (strin
 func pageSummary(label, path string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "The person is on the page %s (%s).\n", label, path)
-	if secs := searchDocs(label, 2); len(secs) > 0 {
+	// The page's own name ("Missions" of "Operations › Missions"): the space it sits in would pull in a neighbour.
+	name := label
+	if i := strings.LastIndex(label, "›"); i >= 0 {
+		name = strings.TrimSpace(label[i+len("›"):])
+	}
+	if secs := searchDocs(name, 2); len(secs) > 0 {
 		b.WriteString("What the documentation says about it:\n\n" + formatSections(secs, 2500))
 	}
 	return b.String()

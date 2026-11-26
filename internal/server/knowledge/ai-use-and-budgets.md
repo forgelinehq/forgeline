@@ -1,0 +1,78 @@
+---
+title: AI use and budgets
+parent: Guides
+nav_order: 47
+---
+
+# AI use and budgets
+
+**Usage and budgets** shows what each agent used this month (tokens, model time and calls, and the cost where the `claude`
+program reports it) and what people used asking the assistant themselves. An administrator can give an agent a monthly
+budget so a looping agent cannot run up a bill.
+
+Use it to see where model use goes and to cap it.
+
+## At a glance
+
+| | |
+| --- | --- |
+| Where in the console | **Agents → Usage and budgets** |
+| Needs | Nothing beyond agents that have run |
+| Design note | [036](../design/036-ai-use-and-budgets.md) |
+
+## Who can do what
+
+| Action | Minimum role | Extra rule |
+| --- | --- | --- |
+| See usage | Developer | This month or one of the last six |
+| Set or clear a budget | Administrator | Tokens, minutes, or both; 0 for none |
+
+## How it works
+
+1. Every model call is counted where it is made: the assistant, agents, workflow steps and the canvas assistant. The count
+   is calls, input and output tokens (including cache), the time the call took, and the cost in US dollars when the
+   `claude` program reports it. The Anthropic API reports tokens, not cost, so cost is shown only for the calls that had
+   one ("$1.50 for 2 of 3 calls").
+2. Use counts against the running agent, or one total for people's own questions. The period is the calendar month, in UTC.
+3. At **80%** of either limit the agent's card and the page warn.
+4. At 100% the agent's next model call is refused before it is sent. Its card says **Stopped**, and a workflow step it was
+   running fails with a message saying why. A call that starts under the limit finishes, so an agent can end a little over.
+5. Raise the budget, or wait for the next month (UTC), to let it run again.
+
+![AI use and budgets]({{ '/console/ai-use-and-budgets.png' | relative_url }})
+
+## Set a budget
+
+1. On **Usage and budgets** choose **Set budget** next to an agent.
+2. Enter tokens, minutes, or both. Minutes bound a backend that reports no tokens. Both 0 clears the budget.
+3. Save. The budget is kept on the agent, not in its versions.
+
+## Security model
+
+- The limit is checked before each call, so a stopped agent cannot spend more.
+- Every budget change and every crossing is in the audit log (`ai.agent.budget.warn`, `ai.agent.budget.stop`).
+
+## Limits and verification
+
+Cloud spend an agent causes (for example a change it proposed and someone approved) is **not counted** here yet: Forgeline
+cannot attribute AWS costs to an agent. Output that is not the `claude` program's JSON (an older program, a stand-in) is
+counted with its tokens unknown, and the page says the totals are low by those calls.
+
+Design note 036 records the tests: ten rules were removed one at a time and each failed a test, and the page was checked in a
+browser with a stand-in `claude`.
+
+## Troubleshooting
+
+| Symptom | Likely cause |
+| --- | --- |
+| An agent says **Stopped** | It used its monthly budget; raise it or wait for the next month (UTC). |
+| A workflow step failed with a budget message | The agent it runs hit its budget. |
+| Cost is missing for some calls | Only calls where the `claude` program reports cost have one. |
+| Totals look low | Some calls reported no tokens (shown as such on the page). |
+| I cannot set a budget | Only administrators can. |
+
+## Related
+
+- [Agents](agents.md)
+- [Missions](missions.md) (each mission also has its own token budget)
+- [Assistant](assistant.md)
