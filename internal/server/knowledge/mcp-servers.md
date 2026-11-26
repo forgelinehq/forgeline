@@ -45,8 +45,6 @@ Every tool starts off, and a tool that changes things can never be turned on.
 5. Arguments are checked against the tool's own schema before the call. Every call is in the audit log, and what the tool
    returns is shown to the model as untrusted data.
 
-![MCP servers]({{ '/console/mcp-servers.png' | relative_url }})
-
 ### What turns a tool off
 
 | Event | Result |

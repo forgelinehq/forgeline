@@ -82,7 +82,7 @@ a cloud account, the assistant, what the AI may touch, and a first pipeline or b
 the page that does it. A step ticks itself when what it sets up exists, and an administrator can skip any of them. The
 same list is in **Settings → Setup** later.
 
-![Set up Forgeline on Home]({{ '/console/117-setup.png' | relative_url }})
+![Set up Forgeline on Home]({{ '/console/home-today.png' | relative_url }})
 
 Prefer a terminal? From the `forgeline` folder:
 
@@ -112,7 +112,7 @@ without running). You land on the run: the steps as a graph, coloured by status,
 with `hello from Forgeline`. The first run downloads the `alpine` image, so it can take a few seconds more.
 **Run again** runs it once more.
 
-![A run in progress]({{ '/console/05-run-live.png' | relative_url }})
+![A run in progress]({{ '/console/get-started-run-live.png' | relative_url }})
 
 Prefer the command line? From the `forgeline` folder, in a second terminal:
 

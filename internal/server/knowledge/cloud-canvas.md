@@ -133,8 +133,6 @@ An app or an agent can name where its **Code** lives: a GitHub repository, a bra
 Forgeline never pushes to your repository, and running a new image is a blueprint change you preview and send for
 approval.
 
-![The Build from GitHub dialog with Built by Forgeline chosen: a forgeline.yaml with a build step and a push rule]({{ '/console/139-built-by-forgeline.png' | relative_url }})
-
 ## Run a new image
 
 Once the blueprint is built:

@@ -102,10 +102,7 @@ The role rules for each tab are in `internal/server/ui/lib/nav.js` and `settings
 This page was checked against those two files, `app.js` and `lib/cmdk.js` and `lib/palette.js`.
 
 {: .warning }
-**Not checked.** The screenshots were taken from a real browser on stand-ins for AWS, GitHub and Claude with demo data.
-The Settings picture predates OpenTelemetry, Alarm intake, Assistant permissions and Step container limits, so it shows
-fewer entries than the console now has. Some older pictures in other guides still show earlier sidebar names (Build,
-Ship, Team, Watch); the spaces above are the current ones. No screen reader or phone check was repeated for this page.
+**Not checked.** The screenshots were taken from a real browser on a throwaway local server with demo data. No screen reader or phone check was repeated for this page.
 
 ## Troubleshooting
 
