@@ -70,3 +70,12 @@ test('llms.txt lists every page by section, with links to the Markdown copies', 
   assert.ok(out.includes('- [Console tour](https://forgelinehq.github.io/forgeline/guides/console-tour.md)'));
   assert.ok(out.includes('- [Roadmap](https://forgelinehq.github.io/forgeline/roadmap.md)'));
 });
+
+test('a console comment becomes a frame of the demo console, and stays invisible on GitHub', () => {
+  const out = transform('guides/x.md', '# X\n\n<!-- console /pipelines "The pipelines page" -->\n\nNext.\n');
+  assert.ok(out.includes('<iframe src="/forgeline/demo/#/pipelines" title="The pipelines page"'));
+  assert.ok(out.includes('<a href="/forgeline/demo/#/pipelines">Open it full size</a>'));
+  assert.ok(!out.includes('<!--'));
+  const hostile = transform('x.md', '# X\n\n<!-- console /a"><script>x</script> "x" -->\n');
+  assert.ok(!hostile.includes('<script>'), 'a route is escaped before it reaches the page');
+});

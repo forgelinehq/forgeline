@@ -5,9 +5,11 @@
   "description": "The Forgeline documentation site (Starlight). Pages are written in ../docs and copied in by scripts/sync.mjs.",
   "scripts": {
     "sync": "node scripts/sync.mjs",
-    "dev": "node scripts/sync.mjs && astro dev",
-    "build": "node scripts/sync.mjs && astro build",
-    "test": "node --test scripts/sync.test.mjs"
+    "dev": "node scripts/sync.mjs && node scripts/demo.mjs && astro dev",
+    "build": "node scripts/sync.mjs && node scripts/demo.mjs && astro build",
+    "test": "node --test scripts/sync.test.mjs scripts/demo.test.mjs",
+    "demo": "node scripts/demo.mjs",
+    "record": "node demo/record.mjs"
   },
   "dependencies": {
     "@astrojs/starlight": "0.42.10",
@@ -15,5 +17,8 @@
   },
   "engines": {
     "node": ">=22"
+  },
+  "devDependencies": {
+    "playwright-core": "^1.65.1"
   }
 }
