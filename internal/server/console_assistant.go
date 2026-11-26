@@ -321,7 +321,7 @@ func (s *Server) prepareChat(w http.ResponseWriter, r *http.Request) (chatJob, b
 	}
 	st := s.loadAssistant(r.Context())
 	if st.Backend == assistOff {
-		writeError(w, http.StatusConflict, "the assistant is not set up. An administrator can turn it on under Integrations")
+		writeError(w, http.StatusConflict, "the assistant is not set up. An administrator can turn it on under Settings → AI → Assistant model")
 		return chatJob{}, false
 	}
 

@@ -37,7 +37,7 @@ func (s *Server) lookupGitHubRepos(ctx context.Context, _ json.RawMessage) (stri
 		fmt.Fprintf(&b, "- %s (branches that may run: %s)\n", rule.Repo, strings.Join(rule.Branches, ", "))
 	}
 	if b.Len() == 0 {
-		return "GitHub is connected but no repository is on the allow list. An administrator adds them under Integrations, GitHub.", nil
+		return "GitHub is connected but no repository is on the allow list. An administrator adds them under Settings → Connections → GitHub.", nil
 	}
 	return b.String(), nil
 }

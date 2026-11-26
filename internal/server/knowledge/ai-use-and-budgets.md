@@ -16,7 +16,7 @@ Use it to see where model use goes and to cap it.
 
 | | |
 | --- | --- |
-| Where in the console | **Agents → Usage and budgets** |
+| Where in the console | **Agents → Usage and budgets** (a month picker shows this month and the five before it) |
 | Needs | Nothing beyond agents that have run |
 | Design note | [036](../design/036-ai-use-and-budgets.md) |
 
@@ -24,8 +24,8 @@ Use it to see where model use goes and to cap it.
 
 | Action | Minimum role | Extra rule |
 | --- | --- | --- |
-| See usage | Developer | This month or one of the last six |
-| Set or clear a budget | Administrator | Tokens, minutes, or both; 0 for none |
+| See usage | Developer | This month or one of the five before it |
+| Set or clear a budget | Administrator | Tokens (0 to 1,000,000,000), minutes (0 to 100,000), or both; 0 for none |
 
 ## How it works
 
@@ -34,17 +34,17 @@ Use it to see where model use goes and to cap it.
    `claude` program reports it. The Anthropic API reports tokens, not cost, so cost is shown only for the calls that had
    one ("$1.50 for 2 of 3 calls").
 2. Use counts against the running agent, or one total for people's own questions. The period is the calendar month, in UTC.
-3. At **80%** of either limit the agent's card and the page warn.
+3. At **80%** of either limit the agent's card and the page warn (and the crossing is audited).
 4. At 100% the agent's next model call is refused before it is sent. Its card says **Stopped**, and a workflow step it was
    running fails with a message saying why. A call that starts under the limit finishes, so an agent can end a little over.
-5. Raise the budget, or wait for the next month (UTC), to let it run again.
+5. Raise the budget, or wait for the next month (UTC), to let it run again. A mission also has its own token budget; see [Missions](missions.md).
 
 ![AI use and budgets]({{ '/console/ai-use-and-budgets.png' | relative_url }})
 
 ## Set a budget
 
 1. On **Usage and budgets** choose **Set budget** next to an agent.
-2. Enter tokens, minutes, or both. Minutes bound a backend that reports no tokens. Both 0 clears the budget.
+2. Enter tokens, minutes, or both (limits: "tokens: 0 (no limit) to 1000000000", "minutes: 0 (no limit) to 100000"). Minutes bound a backend that reports no tokens. Both 0 clears the budget.
 3. Save. The budget is kept on the agent, not in its versions.
 
 ## Security model
@@ -65,7 +65,7 @@ browser with a stand-in `claude`.
 
 | Symptom | Likely cause |
 | --- | --- |
-| An agent says **Stopped** | It used its monthly budget; raise it or wait for the next month (UTC). |
+| An agent says **Stopped** | It used its monthly budget; raise it or wait for the next month (UTC). The error reads `over budget: <agent> has used its budget for YYYY-MM (...)`. It ends with "an administrator can raise it under Team", which is an old page name: raise it under **Agents → Usage and budgets**. |
 | A workflow step failed with a budget message | The agent it runs hit its budget. |
 | Cost is missing for some calls | Only calls where the `claude` program reports cost have one. |
 | Totals look low | Some calls reported no tokens (shown as such on the page). |

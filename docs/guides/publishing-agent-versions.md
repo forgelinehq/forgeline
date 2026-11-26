@@ -16,7 +16,7 @@ Use it for agents that workflows, teams and schedules rely on, so a change canno
 
 | | |
 | --- | --- |
-| Where in the console | An agent's page, under **Publishing** |
+| Where in the console | An agent's page, under **Publishing** (buttons **Publish v<n>** and **Run the suite, publish if it passes**) |
 | Needs | An [agent](agents.md) and an eval suite for it |
 | Design note | [050](../design/050-evals.md) |
 
@@ -59,9 +59,10 @@ Without a gate, a saved version is published at once.
 
 | Symptom | Likely cause |
 | --- | --- |
-| Publish is refused (409) | No run of the gate suite has passed on that version since the suite last changed. |
+| Publish is refused (409) | `vN has no passing run of <suite> since the suite last changed; run it (or publish when it passes)`. |
+| Publish is refused: "the gate suite ... no longer exists" | The suite was deleted; choose another, or turn the gate off. |
 | My new version is not used by a workflow | It is a candidate; publish it. |
-| The suite cannot be chosen | It belongs to another agent. |
+| The suite cannot be chosen | "suite: not one of this agent's suites", or "suite: it has no cases yet, so nothing could pass it". |
 | **Run the suite, publish if it passes** left a candidate | At least one case failed. |
 
 ## Related

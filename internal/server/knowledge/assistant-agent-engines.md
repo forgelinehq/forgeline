@@ -17,7 +17,7 @@ message to message.
 
 | | |
 | --- | --- |
-| Where in the console | **Settings → Assistant model**: **Claude Code as the agent** or **An agent over ACP** |
+| Where in the console | **Settings → AI → Assistant model**: **Claude Code as the agent** or **An agent over ACP** |
 | Needs | The `claude` program and a Claude Code token, or an agent installed in your [sandbox](assistant-sandbox.md) |
 | Design notes | [052](../design/052-assistant-that-works-like-a-colleague.md), [053](../design/053-claude-code-as-the-agent.md) |
 
@@ -33,7 +33,7 @@ message to message.
 
 ### Claude Code as the agent
 
-1. Choose **Claude Code as the agent** under Settings → Assistant model.
+1. Choose **Claude Code as the agent** under **Settings → AI → Assistant model**.
 2. Claude Code plans, uses subagents, reads files, runs commands in a workspace kept for you, and carries on from message
    to message.
 3. Forgeline is its tools and its permission prompt: it can look at AWS, Kubernetes, findings and runs, keep memory, and
@@ -41,15 +41,15 @@ message to message.
    card** with the exact command first; say no and it does not run.
 
 It needs the `claude` program on the server and a Claude Code token (the same one agent steps use) or the server user's
-login. With the **sandbox on** (Settings → Assistant permissions) the whole of Claude Code runs inside your sandbox
+login. With the **sandbox on** (**Settings → AI → Assistant permissions**) the whole of Claude Code runs inside your sandbox
 container: its commands and files are in the container's `/work`, which also holds its memory and sessions, and
 Forgeline's tools reach it through a socket, not the network. The first message builds the image, which takes a few
-minutes. This needs a Claude Code token under Assistant model. With the sandbox off it runs on the server itself, as the
+minutes. This needs a Claude Code token (the secret `CLAUDE_CODE_OAUTH_TOKEN`). With the sandbox off it runs on the server itself, as the
 server's user, so approve each command as you would in a terminal.
 
 ### An agent over ACP
 
-Under Settings → Assistant model, choose **An agent over ACP**, then **Antigravity CLI (agy)**, **GitHub Copilot CLI**,
+Under **Settings → AI → Assistant model**, choose **An agent over ACP**, then **Antigravity CLI (agy)**, **GitHub Copilot CLI**,
 **Codex**, or your own command. They run in your sandbox (turn it on first), speak the Agent Client Protocol, and get
 Forgeline's tools and its permission cards, just as Claude Code does.
 

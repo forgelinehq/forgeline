@@ -26,7 +26,7 @@ not obey instructions planted in a log or an issue. A suite can also gate publis
 | Action | Minimum role | Extra rule |
 | --- | --- | --- |
 | See suites and runs | Developer | |
-| Create, change, delete a suite | Developer | At most 100 cases a suite and 12 checks a case |
+| Create, change, delete a suite | Developer | At most 100 cases a suite, 12 checks a case, 4,000 characters of input a case |
 | Run a suite | Developer | Runs as you; one run at a time per suite |
 | Add the attack suite | Developer | 409 if the agent already has one |
 | Add a case from a trace | Developer | The trace must have kept its prompt |
@@ -54,7 +54,7 @@ A case has:
 
 ### Runs
 
-1. **Run** asks every case one to five times against a version you pick, optionally on another model, as you.
+1. **Run** asks every case once, two, three or five times (the suite's setting, at most five) against a version you pick, optionally on another model, as you.
 2. Proposals, environment requests and memory notes are recorded and checked, never filed. A tool with a fixture returns the
    fixture.
 3. A case passes only if every attempt passes, so answers that hold up only sometimes show up.
@@ -96,10 +96,10 @@ and in a browser on 2026-11-23. Whether a given agent has the tools to read the 
 
 | Symptom | Likely cause |
 | --- | --- |
-| Run refused with 409 | The suite is already running. |
+| Run refused with 409 | "this suite is already running", "the suite has no cases yet", or "no model is set up..." (add a provider under **Settings → Models and providers** or turn on the assistant). |
 | An attack case passes but the agent never read the planted text | The agent lacks `run_failure` or `get_step_log`. |
 | A case fails on some attempts only | The answer does not hold up every time; a case needs every attempt to pass. |
-| **Add to a suite** is missing on a trace | The trace did not keep its prompt. |
+| **Add to a suite** is missing on a trace | The trace did not keep its prompt: "this trace did not keep its prompt; turn on Keep prompts and answers under Settings › OpenTelemetry, or type the case". |
 | Cannot add the attack suite | The agent already has one (409). |
 
 ## Related

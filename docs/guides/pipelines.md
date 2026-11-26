@@ -17,7 +17,7 @@ use it for completion.
 
 | | |
 | --- | --- |
-| Where in the console | **Ship → Pipelines**; **Settings → Secrets**, **Settings → Image builds**, **Settings → Step container limits** |
+| Where in the console | **Delivery → Pipelines**; **Settings → Connections → Secrets** and **Image builds**; **Settings → AI → Step container limits** |
 | Needs | Docker on the server (or on your laptop for `forgeline run`) |
 | Design | [Note 001](../design/001-execution-engine.md), [note 043](../design/043-native-image-builds.md), [note 050](../design/050-evals.md) |
 
@@ -30,17 +30,19 @@ use it for completion.
 | Save a pipeline or a new version, run it, cancel a run, restore an old version | Developer | |
 | Delete a pipeline | Administrator | |
 | List secret names | Developer | Never values |
-| Create or delete a secret | Administrator | |
-| Choose the step container baseline | Administrator | **Settings → Step container limits** |
+| Create, replace or delete a secret | Administrator | |
+| Choose the step container baseline | Administrator | **Settings → Step container limits**; developers can read it |
 | Add push rules for built images | Administrator | **Settings → Image builds** |
 
 ## How it works
 
 1. You save a pipeline in the console, or a repository holds a `forgeline.yaml` that GitHub starts (see
    [Connect GitHub](connect-github.md)), or you run a file with `forgeline run`.
-2. Forgeline checks the file and draws the step graph. Steps with no dependency between them run in parallel.
-3. Each step runs in its own container with only the network and secrets it asks for. A step whose `inputs` did not
-   change since the last good run is served from the cache.
+2. Forgeline checks the file, listing every problem at once with its location (for example
+   `steps[2].needs[0]: unknown step "x"`), and draws the step graph. Steps with no dependency between them run in
+   parallel.
+3. Each step runs in its own container with only the secrets it asks for and, by default, network access. A step whose
+   `inputs` did not change since the last good run is served from the cache; a step with no `inputs` is never cached.
 4. The run page shows each step's output (secrets appear as `***`) and, for a failed run, which step failed first.
 
 ## Write a pipeline
@@ -73,20 +75,20 @@ steps:
 
 | Field | Meaning |
 | --- | --- |
-| `id` | Unique name inside the pipeline. |
-| `image` | Container image. Required. |
-| `run` / `command` / `agent` / `workflow` / `build` / `eval` | **Exactly one.** `run` is a shell script, `command` an argument list with no shell, `agent` a coding agent, `workflow` starts a [GitHub Actions workflow](github-actions.md) and waits for it, `build` builds a container image (see below), `eval` runs an agent's test suite (see below). `workflow`, `build` and `eval` steps have no image or permissions. |
+| `id` | Unique name inside the pipeline: lowercase letters, digits and hyphens, starting with a letter, up to 63 characters (pipeline names follow the same rule). |
+| `image` | Container image, with no spaces. Required for `run`, `command` and `agent` steps. |
+| `run` / `command` / `agent` / `workflow` / `build` / `eval` | **Exactly one.** `run` is a shell script, `command` an argument list with no shell, `agent` a coding agent (see [Agent steps](agent-steps.md)), `workflow` starts a [GitHub Actions workflow](github-actions.md) and waits for it, `build` builds a container image (see below), `eval` runs an agent's test suite (see below). `workflow`, `build` and `eval` steps have no image or permissions. |
 | `needs` | Steps that must succeed first. Steps with no dependency between them run in parallel. |
 | `inputs` | Files the step reads. If none changed since the last good run, the step is served from the cache (`--no-cache` turns that off). |
-| `env`, `workdir`, `timeout` | Environment, working directory, and a time limit such as `10m`. |
-| `permissions.network` | `none` cuts the step off from every network; `egress` allows outbound access. |
-| `permissions.secrets` | Names of secrets this step may read. A step gets nothing it does not list. |
+| `env`, `workdir`, `timeout` | Environment variables, an absolute working directory (default `/workspace`), and a positive time limit such as `10m`. |
+| `permissions.network` | `none` cuts the step off from every network; `egress` allows outbound access. Empty means `egress`. |
+| `permissions.secrets` | Names of secrets this step may read. A step gets nothing it does not list. A name cannot also be in `env`. |
 | `permissions.capabilities` | Linux capabilities this step needs, such as `CHOWN` or `DAC_OVERRIDE` (Docker's default set only). See below. |
 
 ### Linux capabilities
 
 Every step container drops **all** Linux capabilities, then gets back a baseline. An administrator chooses the baseline under
-Settings › Step container limits (`forgeline run` has `--capabilities`): **relaxed** (the default) keeps `CHOWN`, `DAC_OVERRIDE`,
+**Settings → Step container limits** (`forgeline run` has `--capabilities`): **relaxed** (the default) keeps `CHOWN`, `DAC_OVERRIDE`,
 `FOWNER`, `FSETID`, `KILL`, `NET_BIND_SERVICE`, `SETGID` and `SETUID` and drops raw network sockets, device nodes, file
 capabilities, capability changes and `chroot`; **strict** keeps nothing. A step lists more in `permissions.capabilities`, and each
 time a step lists one the mode did not already give, the audit log records it (`run.capability.grant`).
@@ -98,8 +100,8 @@ workspace as root needs `DAC_OVERRIDE`, `chown` needs `CHOWN`, and `apt-get inst
 
 ## Run against a repository
 
-A pipeline saved in the console can name a **source**: a repository and branch on the GitHub allow list (Settings ›
-Connections › GitHub). Set it in the editor under **Source repository** and **Branch**. Every run then downloads that
+A pipeline saved in the console can name a **source**: a repository and branch on the GitHub allow list (**Settings →
+Connections → GitHub**). Set it in the editor under **Source repository** and **Branch**. Every run then downloads that
 branch's newest commit into its workspace before the first step, as a run GitHub starts does, and the run page shows
 which commit it ran. The allow list is read again at each run: a branch taken off it stops being downloaded.
 
@@ -119,35 +121,35 @@ laptop's, with `forgeline run`), and can push it to Amazon ECR:
       context: app                # a directory of the repository; empty means the root
       dockerfile: Dockerfile      # relative to the context
       platform: linux/amd64       # optional; linux/amd64, linux/arm64 or linux/arm/v7
-      args: {VERSION: "1.4"}      # build arguments; never secrets, they stay in the image's history
-      network: none               # optional: the Dockerfile's RUN lines get no network
-      push: 123456789012.dkr.ecr.ap-south-1.amazonaws.com/web
-      tags: [latest]              # optional; the default is the first 12 characters of the commit
-    timeout: 20m                  # optional; the default is 30 minutes
+      args: {VERSION: "1.4"}      # at most 25 build arguments of up to 1000 bytes; never secrets, they stay in the image's history
+      network: none               # optional: egress (the default) or none, for the Dockerfile's RUN lines
+      push: 123456789012.dkr.ecr.ap-south-1.amazonaws.com/web   # an ECR repository, no tag
+      tags: [latest]              # optional, at most 5; the default is the first 12 characters of the commit
+    timeout: 20m                  # optional; with no timeout the build is limited to 30 minutes
 ```
 
 The Dockerfile's `RUN` lines get no secrets, no files from the server and no extra privileges. **Any run may build.
 Pushing is trusted only for a run GitHub started for a push** (not a pull request, not a console run) to a branch that
-an administrator's push rule under **Settings › Image builds** allows, to exactly the rule's repository. For each push
+an administrator's push rule under **Settings → Image builds** allows, to exactly the rule's repository. For each push
 Forgeline asks the rule's AWS account for a short-lived ECR token, which never enters a build container or a log, and
-builds without reusing cached layers. A pull request or a console run builds the same step without pushing, so pull
-requests check that the image builds; a push to a branch without a matching rule fails. Every build and push is in the audit log, with the image's digest. Pushing does
-not deploy: a deploy still goes through an approval. `forgeline run` builds and never pushes. See
-[design note 043](../design/043-native-image-builds.md).
-
+builds without reusing cached layers. A pull request or a console run builds the same step without pushing (the log
+says "building without pushing: ..."), so pull requests check that the image builds. A GitHub push to a branch with no
+matching rule fails with `push refused: no push rule lets owner/repo branch "x" push to ...`. Every build and push is
+in the audit log. Pushing does not deploy: a deploy still goes through an approval. `forgeline run` builds and never
+pushes. See [design note 043](../design/043-native-image-builds.md).
 
 On a machine with an ARM processor (a Raspberry Pi, say), building for `linux/amd64` needs QEMU emulation installed in
 Docker (`docker run --privileged --rm tonistiigi/binfmt --install amd64`, run once by whoever manages that machine).
 
 ## Test an agent
 
-An `eval` step runs a suite from **Agents › Evals** and fails unless every case passes, so the pipeline that ships a change
+An `eval` step runs a suite from **Agents → Evals** and fails unless every case passes, so the pipeline that ships a change
 to an agent can test it first:
 
 ```yaml
   - id: gate
     eval:
-      suite: triage-regression   # the suite's id, shown in its address in Agents › Evals
+      suite: triage-regression   # the suite's id, shown in its address in Agents → Evals
       version: 3                 # optional: the agent version to test; empty means its current version
       model: openai/gpt-5        # optional: test on another model as provider/model
   - id: deploy
@@ -164,16 +166,17 @@ cannot either: the agents live on the server.
 
 ## Secrets
 
-Add one under **Secrets** (name in capitals, value of at least 8 characters). Request it with
-`permissions.secrets`; it arrives as an environment variable of the same name and is masked as
-`***` in stored output.
+An administrator adds one under **Settings → Connections → Secrets**: a name of letters, digits and underscores (not
+starting with a digit), and a value of 8 characters to 16 KiB with no newline. Request it with
+`permissions.secrets`; it arrives as an environment variable of the same name and is masked as `***` in stored output.
+A secret set by the server's environment (`FORGELINE_SECRET_<NAME>`) cannot be changed in the console.
 
 
 **How much a run is trusted follows from how it started**, and a pipeline file cannot claim more:
 
 - A run started by a signed-in developer or administrator, in the console or through the API, is **trusted** and gets the secrets its steps ask for.
-- A run for a **pull request** is **untrusted**: its pipeline file and code come from whoever opened it, so it gets **no secrets**, whatever the settings say. A step that asks for one fails, naming the secret and the reason, and the run page says "untrusted: no secrets".
-- A run for a **push** to an allowed branch gets secrets **only if an administrator turned on "Secrets for pushes" for that repository** (Settings › GitHub). It is off by default: whoever can push to an allowed branch can write the pipeline file, so this is a decision about trusting them.
+- A run for a **pull request** is **untrusted**: its pipeline file and code come from whoever opened it, so it gets **no secrets**, whatever the settings say. A step that asks for one fails, naming the secret and the reason ("this run was started by GitHub for a pull request, which is untrusted and receives no secrets"), and the run page says "untrusted: no secrets".
+- A run for a **push** to an allowed branch gets secrets **only if an administrator turned on "Secrets for pushes" for that repository** (**Settings → Connections → GitHub**, on the repository's row). It is off by default: whoever can push to an allowed branch can write the pipeline file, so this is a decision about trusting them.
 
 Every secret a step is given, and every refusal, is in the audit log with the run's trust.
 
@@ -202,10 +205,15 @@ forgeline submit --server URL --wait pipeline.yaml         # to a server (uses F
 ## Limits and verification
 
 - `workflow`, `build` and `eval` steps have no image or permissions.
-- A `build` step defaults to a 30 minute time limit. `forgeline run` builds and never pushes.
+- A `build` step with no `timeout` is limited to 30 minutes. `forgeline run` builds and never pushes.
 - `forgeline run` cannot run `workflow` or `eval` steps: the connection and the agents live on the server.
 - The capabilities needed by common steps were measured on eleven steps (see the test note linked under
   *Linux capabilities*). Steps not in that list may need more in strict mode.
+
+{: .warning }
+**Checked against the code, not run again.** Field names, limits, validation, trust rules and the build push rules were
+compared with `internal/pipeline` and `internal/server`. The ECR push, BuildKit builds and the QEMU note were not run for
+this review. The picture shows the editor's source fields as they were when it was taken.
 
 ## Troubleshooting
 
@@ -214,15 +222,20 @@ forgeline submit --server URL --wait pipeline.yaml         # to a server (uses F
 | A step fails with `Operation not permitted` or `Permission denied` after you choose strict | The step needs a capability. Add it under `permissions.capabilities`. |
 | A step that asks for a secret fails and the run page says "untrusted: no secrets" | The run is for a pull request. Pull-request runs never get secrets. |
 | A push run gets no secrets | **Secrets for pushes** is off for that repository (default). |
-| A `build` step fails when it tries to push | The run is not a GitHub push, or no push rule matches the repository and branch. |
+| A `build` step fails with `push refused: no push rule lets ...` | The run is a GitHub push, but no rule under **Settings → Image builds** matches the repository, branch and target. |
+| A `build` step succeeds but nothing was pushed | The run was not started by a GitHub push (a console run or a pull request builds without pushing). |
+| A `workflow` or `eval` step fails on a GitHub-started run | Refused on purpose: "runs started by GitHub may not start GitHub workflows" or "...may not run evals". |
 | Building for `linux/amd64` fails on an ARM machine | QEMU emulation is not installed in Docker (see *Build an image*). |
 | A run with a source repository will not start | The branch is no longer on the GitHub allow list; the allow list is read at each run. |
+| `forgeline submit` says to set `--server` and `FORGELINE_TOKEN` | It needs both (or `FORGELINE_SERVER`). |
 | A step is skipped from the cache when you wanted a fresh run | None of its `inputs` changed. Use `--no-cache`. |
 
 ## Related
 
 - [Connect GitHub](connect-github.md)
 - [GitHub Actions](github-actions.md)
+- [Agent steps](agent-steps.md)
+- [Pipeline editor and runs](pipeline-editor-and-runs.md)
 - [Versioning](versioning.md)
 - [People and roles](people-and-roles.md)
 - [API: pipelines and runs](../api/reference.md)

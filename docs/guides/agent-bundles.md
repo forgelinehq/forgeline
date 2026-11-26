@@ -16,7 +16,7 @@ version control. Neither file holds a key or a secret.
 
 | | |
 | --- | --- |
-| Where in the console | **Download**, **Import** and **Push** on **Agents**; registries under **Settings → Agent registries**; pushes under **Home → Approvals → Agent pushes** |
+| Where in the console | **Download v<n>** and **Push v<n>** on an agent's page, **Import** on **Agents → Agents**; registries under **Settings → Agent registries**; pushes under **Home → Approvals → Agent pushes** |
 | Needs | For a push, a registry and a token that may push |
 | Design note | [046](../design/046-agent-export.md) |
 

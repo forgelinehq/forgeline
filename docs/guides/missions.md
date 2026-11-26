@@ -50,8 +50,8 @@ Two rules keep a mission honest:
 
 ## Start a mission
 
-1. Open **Operations → Missions** and start one.
-2. Write the goal (10 to 2000 characters), pick the agent and the AWS account.
+1. Open **Operations → Missions** and choose **New mission**.
+2. Write the goal (10 to 2000 characters), pick the agent and the AWS account, and choose **Start**.
 3. Optionally set a token budget. The default is 200,000 and the most is 5,000,000.
 4. Watch the stages. A mission waiting for approval shows its proposals; a different administrator decides them under
    **Home → Approvals**.
@@ -82,12 +82,15 @@ run.
 
 | Symptom | Likely cause |
 | --- | --- |
-| A lookup is refused | It names an account other than the mission's. |
+| A lookup is refused | "this mission may only look at the AWS account ..., not ...". |
+| The mission failed with "the agent did not list its findings in the agreed form" | The agent did not answer in the format a stage needs (the same for the plan and the evidence). |
 | A finding is counted as left out | It named no lookup the agent ran. |
-| The mission stopped | It used its token budget, or the agent used its monthly budget. |
+| The mission stopped | "the mission has used its token budget (n of m tokens)", or the agent used its monthly budget. |
 | The mission waits | A proposal is waiting for a different administrator. |
 | The mission failed after a restart | It was running a stage when the server stopped. |
-| Cannot start another | 5 missions are already running. |
+| Cannot start another | "5 missions are already under way; wait for one to end or cancel one". |
+| Cannot start: "... is turned off" | The chosen agent is turned off. |
+| Cannot start: "no model is set up..." | No provider and the assistant is off; see [Models and providers](models-and-providers.md). |
 
 ## Related
 

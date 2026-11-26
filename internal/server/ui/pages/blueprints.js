@@ -87,7 +87,7 @@ export async function blueprintPage({ params }) {
       h('a', { class: 'btn-primary', href: '#/design/' + encodeURIComponent(b.id), id: 'open-canvas' }, icon('edit', 'size-4'), 'Open on the canvas'),
       h('button', { class: 'btn-secondary', type: 'button', id: 'show-code', onclick: toggleCode }, icon('git', 'size-4'), 'Code'),
       mayDelete && h('button', { class: 'btn-ghost text-rose-600 dark:text-rose-400', type: 'button', onclick: remove }, icon('trash', 'size-4'), 'Delete')),
-    h('div', { class: 'mb-4' }, notice('info', 'Change it on the design canvas. Previewing what AWS would do and sending it for approval come next.')),
+    h('div', { class: 'mb-4' }, notice('info', 'Change it, preview what AWS would do and send it for approval on the design canvas.')),
     h('div', { class: 'grid gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]' },
       h('section', { class: 'card card-pad', id: 'blueprint-blocks' },
         h('h2', { class: 'h-section mb-3' }, 'Blocks'),

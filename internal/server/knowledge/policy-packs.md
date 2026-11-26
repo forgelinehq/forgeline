@@ -25,7 +25,7 @@ Use packs when your organization has standards the built-in guardrails do not kn
 | Action | Minimum role | Extra rule |
 | --- | --- | --- |
 | Read the packs | Developer | |
-| Change the packs | Administrator | At most 10 packs; audited |
+| Change the packs | Administrator | At most 10 packs; audited as `guardrail.packs` |
 
 ## How it works
 
@@ -58,10 +58,11 @@ Use packs when your organization has standards the built-in guardrails do not kn
 
 ## Add a pack
 
-1. Open **Security → Policy packs** and add a pack for one of the three tools.
+1. Open **Security → Policy packs**, choose **Add a pack**, name it and pick the tool under **Checked by**. The **On**
+   box turns a pack off without deleting it.
 2. For Trivy choose **Deny from**. For Trivy and Checkov, list rules under **Rules to skip** (the preview counts what was
    skipped) and **Rules that always deny**. For Conftest, add your `.rego` files.
-3. Save, then make the preview again: a preview made before the packs changed must be made again before it can be sent.
+3. Choose **Save packs**, then make the preview again: a preview made before the packs changed must be made again before it can be sent.
 
 Trivy and Checkov flag some choices Forgeline's blocks make on purpose, such as a load balancer open to the internet.
 Trivy rates a load balancer open to the internet (`AWS-0053`) as high, so with **Deny from: High** skip that rule or no
@@ -81,14 +82,16 @@ what it never accepts under **Rules that always deny**.
 The three tools were run on real plans on a Raspberry Pi Forgeline with OpenTofu and a real AWS role on 2026-11-17 (see
 [the test note](../testing/2026-11-17-policy-packs.md)).
 
-A Conftest pack holds at most 10 `.rego` files of 32 KB each, and Forgeline keeps at most 10 packs.
+A Conftest pack holds at most 10 `.rego` files of 32 KB each (a file name is lower-case letters, digits, dashes and
+underscores, ending in `.rego`), a pack lists at most 50 rule ids, and Forgeline keeps at most 10 packs. Saving too many
+is refused with `packs: at most 10`.
 
 ## Troubleshooting
 
 | Symptom | Likely cause |
 | --- | --- |
 | A preview cannot be sent for approval | A pack's deny rule matched. The preview names the rule. |
-| The plan is stopped and no finding is named | A pack could not run (for example Docker is not reachable). It never counts as a pass. |
+| A finding says `This policy pack could not be run, so the plan is not checked by it: ...` (rule `pack-failed`, a deny) | The pack could not run, for example `Trivy could not be started (Docker is needed): ...`. It never counts as a pass. |
 | A load balancer open to the internet is denied | Trivy rates `AWS-0053` as high; skip it or raise **Deny from**. |
 | A changed pack has no effect on an old preview | Make the preview again. |
 

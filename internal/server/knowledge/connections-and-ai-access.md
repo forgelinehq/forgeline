@@ -17,7 +17,7 @@ before you let agents loose on an account.
 
 | | |
 | --- | --- |
-| Where in the console | **Settings → Connections**, and **Settings → Setup** for the first-run list |
+| Where in the console | **Settings → Connections**, and **Settings → Setup** for the first-run list (Developer and above) |
 | Needs | An administrator to connect or change anything |
 | Design notes | [025 integrations hub](../design/025-integrations-hub-and-settings.md), [026 access policy](../design/026-access-policy.md), [030 service switches](../design/030-service-switches.md) |
 
@@ -75,7 +75,7 @@ sets each to one of:
 | **Blocked** | The tool is refused for the assistant and for agents |
 
 A tool that changes something is never **Allow**: it stays a proposal a different administrator approves, though it can
-be **Blocked**. A table shows what each agent can actually do, with the reason when it cannot.
+be **Needs approval** or **Blocked**. Setting it to Allow is refused. A table shows what each agent can actually do, with the reason when it cannot.
 
 ## Security model
 
@@ -113,6 +113,7 @@ the middle of a conversation was not checked.
 
 - [Connect AWS](connect-aws.md)
 - [Console basics](console-basics.md)
+- [Connect GitHub](connect-github.md), [Google Cloud](connect-gcp.md) and [Azure](connect-azure.md)
 - [Infrastructure map and services](infrastructure-map-and-services.md)
 - [Assistant](assistant.md)
 - [People and roles](people-and-roles.md)

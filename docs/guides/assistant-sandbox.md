@@ -26,7 +26,7 @@ project.
 | --- | --- | --- |
 | Turn the sandbox on, or choose no network | Administrator | Off until then |
 | Use it in the chat | Developer | Only the person in the chat; agents and workflows cannot |
-| Reset your sandbox | Developer | Removes your containers and your `/work` folder |
+| Reset your sandbox (**Reset my sandbox**) | Developer | Removes your containers and your `/work` folder |
 | Give a command a vault secret | Administrator | Sees the command and the secret's name on a card, answers once |
 | Download a file from `/work` | Developer | Your own `/work` only |
 
@@ -43,7 +43,8 @@ project.
 ## Turn it on
 
 1. Open **Settings → AI → Assistant permissions**.
-2. Turn the sandbox on, and choose the network: the internet, or none.
+2. In the **Sandbox** card choose **Turn on**, and set **Network** to **Internet (can install things)** or **No network**. A new
+   network choice applies to a new sandbox; choose **Reset my sandbox** to apply it to yours now.
 
 ## Get a file out of the sandbox
 
@@ -67,7 +68,8 @@ Rules for downloads:
 ## Security model
 
 - It cannot see the server's files, its credentials or the Docker socket: nothing of the host is mounted, it is not
-  privileged, and it has few capabilities, a memory limit (2 GB) and a process limit.
+  privileged, and it has all capabilities dropped but a small set, `no-new-privileges`, 2 GB of memory, 2 CPUs and at most
+  512 processes.
 - It has **no credentials** unless you give it one. A command that needs a key names a vault secret; an administrator
   sees the command and the secret's name on a card and answers once. The value goes in as an environment variable, is
   hidden if the command prints it, and never reaches the model.
@@ -88,7 +90,8 @@ gVisor and microVMs have not been tried.
 
 | Symptom | Likely cause |
 | --- | --- |
-| The assistant says it has no shell | The sandbox is off; an administrator turns it on. |
+| The assistant says it has no shell | The sandbox is off ("the sandbox is turned off"); an administrator turns it on. |
+| A command with a secret is refused | Only an administrator can give a command a secret; the secret must exist in the vault (**Settings → Secrets**), and a command takes at most 8. |
 | Files I made are gone | The container is removed after 30 minutes unused but `/work` stays; **reset** removes `/work` too. |
 | A download is refused | The file is outside your `/work`, is under `/work/.agent`, is a folder or link, or is over 50 MB. |
 | A workflow's agent cannot run code | The sandbox is not offered to agents or workflows. |

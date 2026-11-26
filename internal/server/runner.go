@@ -189,7 +189,7 @@ func (s *Server) secretsFor(ctx context.Context, run store.Run) (map[string]stri
 			}
 		}
 	}
-	return nil, "runs started by a push to " + run.SourceRepo + " receive no secrets: an administrator can allow them for this repository under Settings › GitHub"
+	return nil, "runs started by a push to " + run.SourceRepo + " receive no secrets: an administrator can allow them for this repository under Settings → Connections → GitHub"
 }
 
 func (s *Server) register(id string, cancel context.CancelFunc) *runCtl {

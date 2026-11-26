@@ -16,7 +16,7 @@ Use agents to give a repeatable job a fixed shape: "explain failed runs", "watch
 
 | | |
 | --- | --- |
-| Where in the console | **Agents → Agents** (the Library tab has ready-made ones) |
+| Where in the console | **Agents → Agents** (the **Library** tab, in the same space, has ready-made ones) |
 | Needs | A model (by default the assistant's) |
 | Design notes | [045](../design/045-agent-studio.md), [046](../design/046-agent-export.md) |
 
@@ -28,7 +28,7 @@ Use agents to give a repeatable job a fixed shape: "explain failed runs", "watch
 | Create an agent, save a new version, roll back | Administrator | |
 | Turn an agent off or on | Administrator | |
 | Delete (archive) or restore an agent | Administrator | |
-| Create or change a skill | Administrator | A skill no agent version uses can be removed |
+| Create or change a skill | Administrator | Skills are listed on the Agents page; a skill no agent version uses can be deleted |
 | Set which agent reports to which | Administrator | Describes the team; gives no agent power over another |
 
 ## How it works
@@ -75,15 +75,16 @@ workflow whose agent has a tool its run-as role may never use is refused, with t
 
 1. Open **Agents → Agents** and choose **New agent**, or install one from the **Library**.
 2. Fill in the [builder](agent-builder.md): instructions, skills, tools, model and guardrails.
-3. Add a note on what changed and why, and choose **Save version**.
+3. Choose **Create agent**. Later saves are **Save version**, each with a note on what changed and why.
 
 You can also ask the [assistant](assistant.md) to write one; it prepares a card you confirm.
 
 ## Delete and restore
 
-**Delete** on an agent's page archives it: it is turned off and listed under **Agents → Archived**, and can be restored for
-30 days, after which it is deleted for good. An agent that a team, an enabled workflow or an unfinished mission still uses
-cannot be deleted; the message says which.
+**Delete** on an agent's page archives it: it is turned off, anyone who reported to it reports to people again, and it is listed under **Archived (n)** at the bottom
+of the Agents page. It can be restored for 30 days, after which it is deleted for good. An agent that something still
+uses cannot be archived; the message names what, for example `<agent> is still used by ...; turn those off or give them
+another agent first`.
 
 ## Security model
 
@@ -104,7 +105,7 @@ cannot be deleted; the message says which.
 
 | Symptom | Likely cause |
 | --- | --- |
-| An agent cannot be deleted | A team, an enabled workflow or an unfinished mission still uses it; the message names it. |
+| An agent cannot be deleted | Something still uses it: "... is still used by ...; turn those off or give them another agent first". |
 | Saving a workflow is refused with a tool named | The tool is not allowed for the workflow's run-as role. |
 | An agent stopped | It used up its monthly budget; its card says **Stopped**. |
 | An imported agent lacks a tool | The tool needs something this server does not have, or it is a proposal tool on a T0 agent. |

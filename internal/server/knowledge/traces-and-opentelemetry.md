@@ -6,7 +6,7 @@ nav_order: 18
 
 # Traces and OpenTelemetry
 
-Every assistant chat, agent run, workflow run, team run, mission and pipeline run is recorded as a **trace**: what
+Every assistant chat, agent run, workflow run, team run, mission, pipeline run and runbook run is recorded as a **trace**: what
 started it, who, how long it took, its model calls and tool calls, tokens and cost, and whether it failed. A trace opens
 as a waterfall of bars on one time scale. Forgeline can also send every trace to the observability tools you already use
 over OTLP/HTTP.
@@ -36,7 +36,7 @@ Grafana, Datadog, Honeycomb, Jaeger or an OpenTelemetry Collector.
    also shows each node and the time it waited for a person.
 2. Spans are named as OpenTelemetry's GenAI conventions name them, for example `invoke_agent`, `chat` and
    `execute_tool`.
-3. Forgeline keeps the newest 1,000 traces, and none older than 14 days.
+3. Forgeline keeps the newest 1,000 traces, and none older than 14 days (a trace is dropped when either limit passes).
 4. If sending is turned on, the same traces go to your endpoint in the background, in batches.
 
 | Run | What its trace shows |
@@ -46,15 +46,17 @@ Grafana, Datadog, Honeycomb, Jaeger or an OpenTelemetry Collector.
 | Team run | The lead's and each member's work under it |
 | Mission | A span per stage (discover, propose, verify) with the agent's runs and the proposals it filed |
 | Pipeline run | Each step, with its exit code |
+| Runbook run | A link from the run page (**Open the trace**) |
 
 ## Read a trace
 
-1. Open **Agents → Runs and traces**. Filter by agents, workflows, the assistant or failures.
+1. Open **Agents → Runs and traces**. Filter by **All**, **Agents**, **Workflows**, **Teams**, **Missions**,
+   **Pipelines**, **Assistant** or **Failed**.
 2. Open a trace. The top shows time taken, model calls, tool calls, tokens in and out, and cost. The bars show each step
    nested under what started it.
 3. Click a bar to see its details on the right.
 
-You can also reach a trace from where the run is shown: **See its trace** on an agent's answer and a team run, and a
+You can also reach a trace from where the run is shown: a trace link under an agent's answer and a team run, and a
 **Trace** button on a workflow run, a mission and (for developers) a pipeline run.
 
 By default a trace keeps no prompt, answer, instructions or tool arguments.
@@ -64,9 +66,10 @@ By default a trace keeps no prompt, answer, instructions or tool arguments.
 ## Send traces to your observability tool
 
 1. Open **Settings → Connections → OpenTelemetry**.
-2. Enter the **endpoint**. Forgeline adds `/v1/traces`. Plain `http` is accepted only for `localhost` and `127.0.0.1`.
+2. Enter the **endpoint**. Forgeline adds `/v1/traces`. Plain `http` is accepted only for `localhost` and `127.0.0.1`;
+   anything else is refused with `endpoint: must use https (plain http only for localhost or 127.0.0.1)`.
 3. Give a **service name** (default `forgeline`) and any **headers**, such as an API key. Values are kept in the vault and
-   never shown again. At most 8 headers.
+   never shown again. At most 8 headers, each value on one line and at most 4,096 characters.
 4. Turn on **Send traces** and choose **Save**, then **Send a test trace**. The test uses the saved settings.
 
 The page counts what was sent, is waiting and was dropped since the server started, and shows the last error. A slow or
@@ -109,6 +112,7 @@ conventions are still in Development, not stable, so attribute names may change
 
 | Symptom | Likely cause |
 | --- | --- |
+| **Send a test trace** says `save an endpoint first` | The test uses the saved settings; choose **Save** first. |
 | **Send a test trace** fails | The endpoint, headers or network are wrong; the page shows what the endpoint answered. |
 | The counters show dropped spans | The endpoint was slow or refusing; see the last error on the page. |
 | Nothing arrives in your tool | **Send traces** is off, or the endpoint should not include `/v1/traces` (Forgeline adds it). |

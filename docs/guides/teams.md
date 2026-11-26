@@ -26,7 +26,7 @@ underneath?"
 | --- | --- | --- |
 | See teams and their runs | Developer | |
 | Give a team a goal | Developer | 2000 characters at most; one run at a time per team |
-| Create, change or remove a team | Administrator | A team has 1 to 8 members besides the lead; removal is refused while it is working |
+| Create, change or remove a team | Administrator | A team has 1 to 8 members besides the lead; at most 50 teams; removal is refused while it is working |
 | Schedule a goal | Administrator | See [Schedules](schedules.md) |
 
 ## How it works
@@ -69,8 +69,9 @@ agents and past runs.
 
 | Symptom | Likely cause |
 | --- | --- |
-| The run fails at once | A member is turned off. |
-| "Already working" | A team runs one goal at a time. |
+| The run fails at once | An agent is turned off ("<agent> is turned off"), no longer exists, or has no current version. |
+| "<team> is already working on a goal" | A team runs one goal at a time. |
+| "goal: say what the team should do, in at most 2000 characters" | The goal is empty or too long. |
 | A member did no work | The lead picked only some members, or the plan named an agent that is not a member and was dropped. |
 | An agent stopped mid-run | It used its monthly [budget](ai-use-and-budgets.md). |
 
