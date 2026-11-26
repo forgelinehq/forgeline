@@ -6,8 +6,11 @@ nav_order: 1
 
 # Console tour
 
-Everything below is done from the web console. The pictures were taken on 2026-11-08 from the current console, in a
-real browser, on stand-ins for AWS, GitHub and Claude with demo data.
+Everything below is done from the web console. The frames on this page are the real console, built from the same
+source as the product and filled with demo data, so you can click around in them; they change nothing. (The older
+pictures further down are being replaced by frames, one page at a time.)
+
+<!-- console / "Home: what needs you today" -->
 
 The sidebar has seven spaces, named after what you look after: **Home** (what needs you), **Agents** (your AI agents
 and teams of them), **Workflows** (agents, decisions and people in a flow, and everything that runs on a schedule),
@@ -20,6 +23,8 @@ lists what your role may open. Setup lives behind **Settings** at the bottom. **
 with the number of changes waiting. What you see depends on your role, and old addresses still work.
 
 ![Search]({{ '/console/150-search.png' | relative_url }})
+
+<!-- console /pipelines "Delivery: the pipelines, with the latest run of each" -->
 
 | Space | Tabs |
 | --- | --- |

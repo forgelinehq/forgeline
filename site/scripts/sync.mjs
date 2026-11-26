@@ -43,6 +43,14 @@ export function splitFront(text) {
   return { front, raw: m[1], body: text.slice(m[0].length) };
 }
 
+const esc = (t) => t.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+
+/** The frame for one console page (design note 054): the demo console at that route, with a caption. */
+export function consoleFrame(route, caption) {
+  return `<figure class="console-frame"><iframe src="${BASE}/demo/#${esc(route)}" title="${esc(caption)}" loading="lazy"></iframe>` +
+    `<figcaption>${esc(caption)} <a href="${BASE}/demo/#${esc(route)}">Open it full size</a></figcaption></figure>`;
+}
+
 /** Rewrites one page. `rel` is its path inside docs/. */
 export function transform(rel, text, exists = () => true) {
   const { front, body: b0 } = splitFront(text);
@@ -58,6 +66,8 @@ export function transform(rel, text, exists = () => true) {
 
   // Jekyll's relative_url filter.
   body = body.replace(/\{\{\s*'([^']*)'\s*\|\s*relative_url\s*\}\}/g, (_, p) => BASE + p);
+  // A page of the live console: `<!-- console /pipelines "caption" -->` (invisible on GitHub) becomes a frame.
+  body = body.replace(/^<!--\s*console\s+(\/\S*)\s+"([^"]*)"\s*-->$/gm, (_, route, caption) => consoleFrame(route, caption));
   // Kramdown callouts: the attribute line applies to the paragraph after it.
   body = body.replace(/^\{:\s*\.([a-z]+)\s*\}\n((?:.+\n?)+)/gm, (_, kind, para) => `:::${ASIDE[kind] || 'note'}\n${para.trimEnd()}\n:::\n`);
   // Relative links to other files.
