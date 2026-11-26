@@ -27,14 +27,19 @@ func runPipeline(args []string, stdout, stderr io.Writer, ex executor.Executor) 
 	fs.SetOutput(stderr)
 	parallel := fs.Int("parallel", 4, "maximum steps to run at once")
 	noCache := fs.Bool("no-cache", false, "run every step, ignoring and not updating the cache")
+	caps := fs.String("capabilities", executor.CapsRelaxed, "Linux capabilities every step keeps: relaxed (a small set that ordinary builds use) or strict (none); steps can list more in permissions.capabilities")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
 	if fs.NArg() != 1 {
-		fmt.Fprintln(stderr, "usage: forgeline run [--parallel N] [--no-cache] <pipeline.yaml>")
+		fmt.Fprintln(stderr, "usage: forgeline run [--parallel N] [--no-cache] [--capabilities relaxed|strict] <pipeline.yaml>")
 		return 2
 	}
 	file := fs.Arg(0)
+	if *caps != executor.CapsRelaxed && *caps != executor.CapsStrict {
+		fmt.Fprintf(stderr, "forgeline: --capabilities must be %s or %s, got %q\n", executor.CapsRelaxed, executor.CapsStrict, *caps)
+		return 2
+	}
 
 	p, err := pipeline.LoadFile(file)
 	if err != nil {
@@ -65,11 +70,12 @@ func runPipeline(args []string, stdout, stderr io.Writer, ex executor.Executor) 
 
 	logs := newPrefixLogs(stdout)
 	report := scheduler.Run(ctx, g, ex, scheduler.Options{
-		Parallelism: *parallel,
-		Workspace:   workspace,
-		Secrets:     stepSecrets,
-		Logs:        logs.writer,
-		Build:       localBuild(workspace),
+		Parallelism:    *parallel,
+		CapabilityMode: *caps,
+		Workspace:      workspace,
+		Secrets:        stepSecrets,
+		Logs:           logs.writer,
+		Build:          localBuild(workspace),
 	})
 	logs.flush()
 

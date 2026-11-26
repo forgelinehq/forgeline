@@ -45,6 +45,20 @@ steps:
 | `env`, `workdir`, `timeout` | Environment, working directory, and a time limit such as `10m`. |
 | `permissions.network` | `none` cuts the step off from every network; `egress` allows outbound access. |
 | `permissions.secrets` | Names of secrets this step may read. A step gets nothing it does not list. |
+| `permissions.capabilities` | Linux capabilities this step needs, such as `CHOWN` or `DAC_OVERRIDE` (Docker's default set only). See below. |
+
+### Linux capabilities
+
+Every step container drops **all** Linux capabilities, then gets back a baseline. An administrator chooses the baseline under
+Settings › Step container limits (`forgeline run` has `--capabilities`): **relaxed** (the default) keeps `CHOWN`, `DAC_OVERRIDE`,
+`FOWNER`, `FSETID`, `KILL`, `NET_BIND_SERVICE`, `SETGID` and `SETUID` and drops raw network sockets, device nodes, file
+capabilities, capability changes and `chroot`; **strict** keeps nothing. A step lists more in `permissions.capabilities`, and each
+time a step lists one the mode did not already give, the audit log records it (`run.capability.grant`).
+
+If a step fails with `Operation not permitted` or `Permission denied` after you choose strict, add the capability it needs to that
+step. Measured on eleven common steps ([the test note](../testing/2026-11-26-step-capabilities.md)): in strict, writing into the
+workspace as root needs `DAC_OVERRIDE`, `chown` needs `CHOWN`, and `apt-get install` needs `CHOWN`, `SETUID`, `SETGID`,
+`DAC_OVERRIDE` and `FOWNER`. Package installs through `apk`, `npm`, `pip` and `go build` needed nothing.
 
 ## Run against a repository
 

@@ -35,6 +35,9 @@ type StepRun struct {
 	// Network is "none" to run the step with no network at all. Empty or "egress" leaves the
 	// container's default network in place.
 	Network string
+	// Capabilities are the Linux capabilities the container keeps. Every container drops all of them first and gets back
+	// only these.
+	Capabilities []string
 	// Inputs are workspace-relative globs that make up the step's cache key. Real executors
 	// ignore them; the cache wrapper reads them.
 	Inputs []string

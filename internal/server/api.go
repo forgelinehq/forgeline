@@ -301,6 +301,8 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /v1/assistant/approvals/{id}", s.requireRole(authn.Developer, s.handleAssistantApproval))
 	mux.Handle("POST /v1/assistant/questions/{id}", s.requireRole(authn.Developer, s.handleAssistantQuestion))
 	mux.Handle("GET /v1/assistant/sandbox", s.requireRole(authn.Developer, s.handleGetSandbox))
+	mux.Handle("GET /v1/settings/step-capabilities", s.requireRole(authn.Developer, s.handleGetStepCaps))
+	mux.Handle("PUT /v1/settings/step-capabilities", s.requireRole(authn.Admin, s.handlePutStepCaps))
 	mux.Handle("GET /v1/settings/alarm-intake", s.requireRole(authn.Developer, s.handleGetAlarmIntake))
 	mux.Handle("PUT /v1/settings/alarm-intake", s.requireRole(authn.Admin, s.handlePutAlarmIntake))
 	mux.Handle("POST /v1/settings/alarm-intake/test", s.requireRole(authn.Admin, s.handleTestAlarmIntake))

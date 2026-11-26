@@ -21,17 +21,20 @@ func TestDockerArgs(t *testing.T) {
 		want []string
 	}{
 		{"script with defaults", StepRun{ID: "a", Image: "alpine", Script: "echo hi", Workspace: "/ws"},
-			[]string{"run", "--rm", "--name", "n", "--security-opt", "no-new-privileges", "-w", "/workspace", "-v", "/ws:/workspace",
+			[]string{"run", "--rm", "--name", "n", "--security-opt", "no-new-privileges", "--cap-drop", "ALL", "-w", "/workspace", "-v", "/ws:/workspace",
 				"--entrypoint", "sh", "alpine", "-c", "echo hi"}},
 		{"command with env and workdir", StepRun{ID: "a", Image: "golang", Command: []string{"go", "test", "./..."},
 			Env: map[string]string{"B": "2", "A": "1"}, WorkDir: "/src"},
-			[]string{"run", "--rm", "--name", "n", "--security-opt", "no-new-privileges", "-w", "/src", "-e", "A=1", "-e", "B=2",
+			[]string{"run", "--rm", "--name", "n", "--security-opt", "no-new-privileges", "--cap-drop", "ALL", "-w", "/src", "-e", "A=1", "-e", "B=2",
 				"--entrypoint", "go", "golang", "test", "./..."}},
+		{"capabilities come back sorted, after the drop", StepRun{ID: "a", Image: "alpine", Script: "true", Capabilities: []string{"SETUID", "CHOWN"}},
+			[]string{"run", "--rm", "--name", "n", "--security-opt", "no-new-privileges", "--cap-drop", "ALL", "--cap-add", "CHOWN", "--cap-add", "SETUID", "-w", "/workspace",
+				"--entrypoint", "sh", "alpine", "-c", "true"}},
 		{"network none", StepRun{ID: "a", Image: "alpine", Script: "true", Network: "none"},
-			[]string{"run", "--rm", "--name", "n", "--security-opt", "no-new-privileges", "-w", "/workspace", "--network", "none",
+			[]string{"run", "--rm", "--name", "n", "--security-opt", "no-new-privileges", "--cap-drop", "ALL", "-w", "/workspace", "--network", "none",
 				"--entrypoint", "sh", "alpine", "-c", "true"}},
 		{"network egress is the default", StepRun{ID: "a", Image: "alpine", Script: "true", Network: "egress"},
-			[]string{"run", "--rm", "--name", "n", "--security-opt", "no-new-privileges", "-w", "/workspace",
+			[]string{"run", "--rm", "--name", "n", "--security-opt", "no-new-privileges", "--cap-drop", "ALL", "-w", "/workspace",
 				"--entrypoint", "sh", "alpine", "-c", "true"}},
 	}
 	for _, tt := range tests {
@@ -105,7 +108,7 @@ func TestDockerRunsRealContainer(t *testing.T) {
 
 	res, err := Docker{}.Run(context.Background(),
 		StepRun{ID: "t", Image: image, Script: "echo $GREETING > out.txt; cat out.txt; exit 3",
-			Env: map[string]string{"GREETING": "hello"}, Workspace: ws, Timeout: time.Minute}, &logs)
+			Env: map[string]string{"GREETING": "hello"}, Workspace: ws, Timeout: time.Minute, Capabilities: RelaxedCapabilities}, &logs)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -340,4 +343,43 @@ echo done; exit $fail`
 			}
 		}
 	})
+}
+
+// With every capability dropped, root in the container cannot write to a folder the host user owns (DAC_OVERRIDE is what
+// lets it). The relaxed baseline and a one-line grant both fix that; this is the break the capability setting warns about.
+func TestDockerCapabilitiesAreDropped(t *testing.T) {
+	dockerOrSkip(t)
+	image := os.Getenv("FORGELINE_DOCKER_TEST_IMAGE")
+	if image == "" {
+		image = "alpine:3.24"
+	}
+	for _, tt := range []struct {
+		name string
+		caps []string
+		want int
+	}{
+		{"strict: nothing given back", nil, 1},
+		{"a grant of the one it needs", []string{"DAC_OVERRIDE"}, 0},
+		{"the relaxed baseline", RelaxedCapabilities, 0},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			ws := t.TempDir()
+			res, err := Docker{}.Run(context.Background(), StepRun{ID: "c", Image: image, Script: "echo x > out.txt",
+				Workspace: ws, Timeout: time.Minute, Capabilities: tt.caps}, io.Discard)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if res.ExitCode != tt.want {
+				t.Fatalf("exit = %d, want %d", res.ExitCode, tt.want)
+			}
+		})
+	}
+	// And what the container holds is what was asked: no capabilities at all means an empty effective set.
+	var logs bytes.Buffer
+	if _, err := (Docker{}).Run(context.Background(), StepRun{ID: "e", Image: image, Script: "grep CapEff /proc/self/status", Timeout: time.Minute}, &logs); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(logs.String(), "0000000000000000") {
+		t.Fatalf("effective capabilities = %q, want none", logs.String())
+	}
 }

@@ -175,7 +175,8 @@ browser tab only.
 
 **Warning:** there is almost no sandbox until milestone M3 is done. Each step can set
 `permissions: {network: none}` to run with no network at all, and every step runs with
-`no-new-privileges`; beyond that you get container defaults (root in the container, internet
+`no-new-privileges` and with most Linux capabilities dropped (an administrator can drop all of them, and a step can ask for
+one back; see the pipelines guide); beyond that you get container defaults (root in the container, internet
 on, no resource limits). See [the threat model](docs/design/005-threat-model.md). Anyone with the
 token can run containers on the host, so keep the default loopback address or put the server
 behind TLS and a network you trust. Server runs do not use the step cache.

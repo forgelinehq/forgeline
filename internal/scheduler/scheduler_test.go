@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -358,7 +359,7 @@ func contains(s, sub string) bool { return strings.Contains(s, sub) }
 
 func TestToStepRunCompilesAgent(t *testing.T) {
 	s := &pipeline.Step{ID: "review", Image: "img", Agent: &pipeline.Agent{Provider: pipeline.ProviderClaudeCode, Prompt: "look"}}
-	run, err := toStepRun(s, "/ws")
+	run, err := toStepRun(s, "/ws", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -534,5 +535,37 @@ func TestSecretGrantsAndRefusalsAreReported(t *testing.T) {
 	got = strings.Join(log, "\n")
 	if strings.Count(got, "refused") != 2 || !strings.Contains(got, "runs started by GitHub receive no secrets yet") || strings.Contains(got, "start ") || strings.Contains(got, "grant ") {
 		t.Errorf("denied run:\n%s", got)
+	}
+}
+
+// Every step drops all capabilities and gets back the mode's baseline plus what it lists; the mode decides the baseline.
+func TestCapabilitiesFollowTheModeAndTheStep(t *testing.T) {
+	plain := &pipeline.Step{ID: "a"}
+	asks := &pipeline.Step{ID: "b", Permissions: pipeline.Permissions{Capabilities: []string{"NET_RAW", "CHOWN"}}}
+	tests := []struct {
+		name  string
+		step  *pipeline.Step
+		mode  string
+		caps  []string
+		extra []string
+	}{
+		{"relaxed is the default", plain, "", executor.RelaxedCapabilities, nil},
+		{"strict gives nothing", plain, executor.CapsStrict, nil, nil},
+		{"relaxed plus a grant", asks, executor.CapsRelaxed, append(append([]string(nil), executor.RelaxedCapabilities...), "NET_RAW"), []string{"NET_RAW"}},
+		{"strict plus grants", asks, executor.CapsStrict, []string{"NET_RAW", "CHOWN"}, []string{"NET_RAW", "CHOWN"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			run, err := toStepRun(tt.step, "/ws", tt.mode)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !slices.Equal(run.Capabilities, tt.caps) {
+				t.Errorf("Capabilities = %v, want %v", run.Capabilities, tt.caps)
+			}
+			if got := extraCapabilities(tt.step, tt.mode); !slices.Equal(got, tt.extra) {
+				t.Errorf("extra = %v, want %v", got, tt.extra)
+			}
+		})
 	}
 }

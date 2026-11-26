@@ -5,6 +5,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -161,6 +162,18 @@ func (p *Pipeline) Validate() error {
 			seenSecrets[name] = true
 		}
 
+		seenCaps := make(map[string]bool, len(s.Permissions.Capabilities))
+		for j, c := range s.Permissions.Capabilities {
+			cpath := fmt.Sprintf("%s.permissions.capabilities[%d]", path, j)
+			switch {
+			case !slices.Contains(GrantableCapabilities, c):
+				add(cpath, "%q cannot be granted; the capabilities a step may ask for are %s", c, strings.Join(GrantableCapabilities, ", "))
+			case seenCaps[c]:
+				add(cpath, "duplicate capability %q", c)
+			}
+			seenCaps[c] = true
+		}
+
 		if s.Timeout != "" {
 			d, err := time.ParseDuration(s.Timeout)
 			switch {
@@ -246,7 +259,7 @@ func validateWorkflow(s Step, path string, add func(path, format string, args ..
 			add(wpath+".inputs", "input %q has a bad name or a value over 1000 bytes", k)
 		}
 	}
-	if s.Image != "" || len(s.Env) > 0 || s.WorkDir != "" || len(s.Inputs) > 0 || s.Permissions.Network != "" || len(s.Permissions.Secrets) > 0 {
+	if s.Image != "" || len(s.Env) > 0 || s.WorkDir != "" || len(s.Inputs) > 0 || s.Permissions.Network != "" || len(s.Permissions.Secrets) > 0 || len(s.Permissions.Capabilities) > 0 {
 		add(path, "a workflow step runs on GitHub: it takes no image, env, workdir, inputs or permissions")
 	}
 }
@@ -266,7 +279,7 @@ func validateEval(s Step, path string, add func(path, format string, args ...any
 	if e.Model != "" && (strings.Count(e.Model, "/") < 1 || strings.ContainsAny(e.Model, " \t\n") || len(e.Model) > 200) {
 		add(epath+".model", "must look like provider/model, got %q", e.Model)
 	}
-	if s.Image != "" || len(s.Env) > 0 || s.WorkDir != "" || len(s.Inputs) > 0 || s.Permissions.Network != "" || len(s.Permissions.Secrets) > 0 {
+	if s.Image != "" || len(s.Env) > 0 || s.WorkDir != "" || len(s.Inputs) > 0 || s.Permissions.Network != "" || len(s.Permissions.Secrets) > 0 || len(s.Permissions.Capabilities) > 0 {
 		add(path, "an eval step runs on the server: it takes no image, env, workdir, inputs or permissions")
 	}
 }
@@ -327,7 +340,7 @@ func validateBuild(s Step, path string, add func(path, format string, args ...an
 	if len(b.Tags) > 0 && b.Push == "" {
 		add(bpath+".tags", "tags are only used when pushing; set push too")
 	}
-	if s.Image != "" || len(s.Env) > 0 || s.WorkDir != "" || len(s.Inputs) > 0 || s.Permissions.Network != "" || len(s.Permissions.Secrets) > 0 {
+	if s.Image != "" || len(s.Env) > 0 || s.WorkDir != "" || len(s.Inputs) > 0 || s.Permissions.Network != "" || len(s.Permissions.Secrets) > 0 || len(s.Permissions.Capabilities) > 0 {
 		add(path, "a build step is run by Forgeline: it takes no image, env, workdir, inputs or permissions (use build.network)")
 	}
 }

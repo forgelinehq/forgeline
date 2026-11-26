@@ -7,6 +7,14 @@ section in the pull request that makes the change; a release moves it under its 
 ## [Unreleased]
 
 ### Added
+- **Pipeline steps drop Linux capabilities** (design note 005, T2). Every step container now runs with all capabilities dropped and gets
+  a baseline back that an administrator chooses under Settings › **Step container limits**: **relaxed** (the default; eight
+  capabilities ordinary builds use) or **strict** (none). A step lists more in `permissions.capabilities` (Docker's default set only);
+  each grant beyond the baseline is in the audit log as `run.capability.grant`. `forgeline run` has `--capabilities`. Measured on
+  eleven common steps with real containers: relaxed broke none, strict broke three (root writing into the workspace, `chown`,
+  `apt-get install`), each fixed by a grant; see docs/testing/2026-11-26-step-capabilities.md. The default stays relaxed until
+  the measurement says strict is safe for your pipelines. Raw network sockets, device nodes, file capabilities, capability changes
+  and `chroot` are now dropped for every step.
 - **A CloudWatch alarm can start a workflow** (design note 051). Alarm → SNS topic → SQS queue, and Forgeline reads the queue (SNS can
   only call a public address, and a server usually is not one). Settings › Connections › **Alarm intake** has the setup commands, the
   queue address and a test; a graph workflow's **Trigger** tab names the alarms (`disk-*` works). When an alarm goes to `ALARM`, the

@@ -98,7 +98,12 @@ func (s *Server) runGraph(runCtx context.Context, run store.Run, g *pipeline.Gra
 	var stepMu sync.Mutex
 	defer func() { span.End() }()
 	secretsFor, denied := s.secretsFor(bg, run)
+	capMode := s.loadStepCaps(bg).Mode
 	report := scheduler.Run(runCtx, g, s.cfg.Executor, scheduler.Options{
+		CapabilityMode: capMode,
+		OnCapabilitiesGranted: func(stepID string, names []string) {
+			s.auditCapabilityGrant(bg, run, stepID, names, capMode)
+		},
 		Parallelism:    s.cfg.Parallelism,
 		Workspace:      s.workspace(run.ID),
 		Secrets:        secretsFor,
