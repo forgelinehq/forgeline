@@ -25,13 +25,14 @@ Use the canvas to create or change infrastructure without writing OpenTofu. A dr
 
 | Action | Minimum role | Extra rule |
 | --- | --- | --- |
-| Draw, save and check a blueprint | Developer | Saving needs the AWS account to be connected |
-| Preview changes | Developer | Reads only; refused while another preview or build of it runs |
+| Draw, save and check a blueprint | Developer | Saving needs the AWS account to be connected. The server keeps at most 200 blueprints |
+| Preview changes | Developer | Reads only; refused while another preview or build of it runs (`this blueprint is busy with ...; try again when it ends`) |
 | Send for approval | Developer | The preview must be finished, of the saved blueprint, under an hour old, from the current state, and change something |
 | Approve a build or a removal | Administrator | Not whoever sent it; the [approval rules](approval-rules.md) count removals and replacements as high risk |
-| Delete a blueprint | Developer | Only its author or an administrator, and only once nothing it built is left |
+| Delete a blueprint | Developer | Only its author or an administrator, and only once nothing it built is left (the server answers `this blueprint has built things that still exist; ... Remove what it built first`) |
 | Allow a build push rule ("Allow this push") | Administrator | |
-| Suggest a repository, show the GitHub workflow, list images | Developer | |
+| Suggest a repository, show the GitHub workflow, list images, use an image | Developer | |
+| Ask the assistant to draft a change | Developer | 20 questions a minute |
 
 ## How it works
 
@@ -41,7 +42,10 @@ Use the canvas to create or change infrastructure without writing OpenTofu. A dr
    stays off until a problem is fixed.
 3. Choose **Preview changes**. Forgeline asks OpenTofu what building the saved blueprint would do. Each block says
    whether it would be added, changed, replaced or removed.
-4. Choose **Send for approval** and give a reason. This files the preview as a cloud change.
+4. Choose **Send for approval** and give a reason. This files the preview as a cloud change. The server refuses it when the
+   preview is not ready (`preview the changes first`), is for an older version of the blueprint (`the blueprint changed
+   after the preview; preview again`), is over an hour old (`the preview is more than an hour old; preview again`),
+   changes nothing (`the preview changes nothing; there is nothing to approve`) or breaks a guardrail.
 5. A different administrator approves in **Home → Approvals**. Forgeline applies exactly the approved plan, then the
    canvas shows **Built**.
 
@@ -73,9 +77,7 @@ Spot" keeps one task on regular Fargate. The checks say which apps use Spot.
 An **Agent** block runs your agent on Amazon Bedrock AgentCore from its container image in ECR (built for arm64,
 answering on port 8080). Link it to the tables, files, queues and secrets it may use: its role gets exactly those and
 Bedrock models, plus AWS's documented runtime permissions, nothing else. It is reached through AWS's API, never a
-public port.
-
-![An agent on the canvas]({{ '/console/120-design-agent.png' | relative_url }})
+public port. That is the design: tests check the generated code, but a real AgentCore build has not been run (see the notice at the end).
 
 ## Use the assistant beside the canvas
 
@@ -111,8 +113,6 @@ block, so removing what the blueprint built keeps it unless you choose to remove
 Right after a Step Functions workflow is first built, AWS can take up to a minute to let its new role start the
 functions, so a run started at once may be refused. Start it again a minute later.
 
-![A Lambda function template on the canvas]({{ '/console/140-template-block.png' | relative_url }})
-
 ## Build an app's image from GitHub
 
 An app or an agent can name where its **Code** lives: a GitHub repository, a branch and a folder.
@@ -123,19 +123,17 @@ An app or an agent can name where its **Code** lives: a GitHub repository, a bra
    from GitHub Actions, to push images. GitHub's OIDC provider must be set up in the AWS account once.
 3. Choose **Build from GitHub…**. Pick one of two ways to build:
    - **GitHub Actions**: Forgeline shows the workflow to add to the repository (its actions pinned to commit SHAs) and a
-     Forgeline pipeline that starts it.
+     Forgeline pipeline that starts it (save it as a pipeline under **Delivery → Pipelines**).
    - **Built by Forgeline**: a `forgeline.yaml` for the repository with a `build` step that pushes to the block's image
      repository, and the push rule that allows it. An administrator chooses **Allow this push** once the blueprint has
-     been previewed, since the rule needs the AWS account. Forgeline's own AWS connection pushes, only for runs GitHub
+     been previewed, since the rule needs the AWS account (until then the dialog says `Preview the blueprint first: the push rule needs the AWS account.`; a developer sees `an administrator allows it`). Forgeline's own AWS connection pushes, only for runs GitHub
      starts for a push to that branch; pull requests build without pushing. See
      [Build an image](pipelines.md#build-an-image).
 
 Forgeline never pushes to your repository, and running a new image is a blueprint change you preview and send for
 approval.
 
-![Build from GitHub]({{ '/console/121-design-github-build.png' | relative_url }})
-
-![Built by Forgeline]({{ '/console/139-built-by-forgeline.png' | relative_url }})
+![The Build from GitHub dialog with Built by Forgeline chosen: a forgeline.yaml with a build step and a push rule]({{ '/console/139-built-by-forgeline.png' | relative_url }})
 
 ## Run a new image
 
@@ -157,12 +155,10 @@ Only images from the block's own repository are offered; any other image is set 
 | Choice | What it removes | Approvals |
 | --- | --- | --- |
 | **Keep the data** | Apps, front doors, queues, caches and logs. Tables, buckets, databases and secrets stay, still protected | One |
-| **Remove everything** | Everything, in two steps when something is protected | Two: first deletion protection is turned off and the rest removed, then the data is deleted |
+| **Remove everything, data included** | Everything, in two steps when something is protected | Two: first deletion protection is turned off and the rest removed, then the data is deleted |
 
 A final snapshot of each database is kept unless you untick it; it costs a little storage until someone deletes it in
 AWS. Afterwards the canvas shows **Removed**, and the blueprint can be built again.
-
-![Removing what a blueprint built]({{ '/console/119-design-removal.png' | relative_url }})
 
 ## Security model
 
@@ -196,7 +192,7 @@ The generated OpenTofu was validated with OpenTofu 1.13.9 and AWS provider 6.72 
 | Symptom | Likely cause |
 | --- | --- |
 | **Save** is off | A check found a problem; the canvas names it. |
-| **Send for approval** is off or refused | The preview is not finished, is older than an hour, is not of the saved blueprint, changes nothing, or a guardrail says **deny**. Preview again. |
+| **Send for approval** is off or refused (texts under How it works) | The preview is not finished, is older than an hour, is not of the saved blueprint, changes nothing, or a guardrail says **deny**. Preview again. |
 | The preview says planning for a long time | Another preview or build of the same blueprint is running. |
 | **Suggest a repository** finds nothing | GitHub is not connected, or the repository is not on the GitHub allow list. |
 | **Run a new image** is empty | The block's repository has no pushed images yet, or the blueprint is not built. |

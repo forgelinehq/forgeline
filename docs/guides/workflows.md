@@ -18,7 +18,7 @@ someone when severity is high, a weekly review, a response to an alarm.
 
 | | |
 | --- | --- |
-| Where in the console | **Workflows** (cards, with a **Runs** tab and an **Archived** tab) |
+| Where in the console | **Workflows** (cards, with a **Runs** tab and an **Archived** tab, administrators only) |
 | Needs | One or more [agents](agents.md) |
 | Design notes | [044](../design/044-agent-graphs.md), [047](../design/047-schedules.md), [051](../design/051-runbooks.md) |
 
@@ -31,8 +31,8 @@ someone when severity is high, a weekly review, a response to an alarm.
 | Create, save a version, roll back, turn off or on | Administrator | Agent versions are pinned at save |
 | Delete (archive) or restore | Administrator | Refused while a run is going or waiting |
 | Release a run waiting at a stage gate | Administrator | |
-| Answer a question in a graph run | Developer | Any administrator, or only the people the node names |
-| Cancel a run | Developer | Its starter, or an administrator |
+| Answer a question in a graph run | Developer | If the node names answerers, only those people (an administrator not named is refused). If it names none, only an administrator: "an administrator answers this question" |
+| Cancel a run | Developer | Its starter, or an administrator: "only the person who started it, or an administrator, can cancel a run" |
 | Make the webhook secret | Administrator | Shown once; the old one stops working |
 
 ## How it works
@@ -49,7 +49,7 @@ someone when severity is high, a weekly review, a response to an alarm.
 | --- | --- |
 | By hand | **Run** on the workflow |
 | On a schedule | See [Schedules](schedules.md) |
-| Signed webhook | **Webhook secret** on the workflow's page shows the secret once. Send `X-Forgeline-Signature-256` (or GitHub's `X-Hub-Signature-256`), `sha256=` and the hex HMAC-SHA256 of the body. A bad signature, unknown workflow or missing secret all answer 401. The body is at most 64 KB. 30 webhook runs an hour at most |
+| Signed webhook | **Webhook secret** on the workflow's page shows the secret once. Send `X-Forgeline-Signature-256` (or GitHub's `X-Hub-Signature-256`), `sha256=` and the hex HMAC-SHA256 of the body. A bad signature, unknown workflow or missing secret all answer 401 "the signature does not match". The body is at most 64 KB. 30 webhook runs an hour at most |
 | After a pipeline run fails | Name the pipelines (or `*`); the failed run is the `trigger` |
 | A CloudWatch alarm | See [Alarm intake](alarm-intake.md) |
 
@@ -61,7 +61,7 @@ version.
 
 ### Run-as role
 
-A workflow never runs as an administrator: it runs as a viewer or a developer (set under **Settings → Permissions**). Its
+A workflow never runs as an administrator: it runs as a viewer or a developer (set on the canvas, in **Settings → Permissions** of that workflow). Its
 agents may use only the tools that role may use. Saving a workflow whose agent has a tool its run-as role may never use is
 refused, with the tool named. For example `aws_script` and `search_audit` are for administrators only, and a workflow
 running as a viewer may not use `call_aws` or proposal tools either. `call_aws` runs one read-only AWS CLI call for
@@ -71,6 +71,11 @@ developers and administrators, so a workflow running as a developer can use it.
 
 **Delete** on a workflow's page archives it: it is turned off and listed under **Archived**, and can be restored for 30
 days, then it is deleted for good. Its past runs stay.
+
+## Limits
+
+A stage workflow has at most 6 stages of 4 steps each (a task is at most 4,000 characters). A graph has at most 40 nodes and
+80 wires, 4 nodes at once, 10 visits to one node and 50 steps a run. The newest 200 runs are kept.
 
 ## Security model
 
@@ -93,8 +98,9 @@ against a real model; see [Alarm intake](alarm-intake.md) for its own check.
 | --- | --- |
 | Saving is refused, naming a tool | The tool is not allowed for the workflow's run-as role. |
 | A webhook answers 401 | Wrong signature, unknown workflow, or no secret made yet. |
-| A webhook answers 409 | The version takes no webhook, the workflow is off, or a run is going. |
-| A webhook answers 429 | More than 30 webhook runs in an hour. |
+| A webhook answers 409 | "the current version of this workflow does not start from a webhook", "this workflow is turned off", or "a run of this workflow is already in progress". |
+| A webhook answers 413 | The body is over 64 KB. |
+| A webhook answers 429 | "this workflow already started 30 times from its webhook in the last hour". |
 | A run is stuck waiting | A question or an approval is waiting for an answer at the top of the run. |
 | Delete is refused | A run is going or waiting. |
 

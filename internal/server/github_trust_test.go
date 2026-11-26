@@ -98,7 +98,7 @@ func TestRunTrustDecidesWhoGetsSecrets(t *testing.T) {
 		t.Error("a push got a secret although the repository's rule does not allow it")
 	}
 	_, steps, _ := h.store.GetRun(context.Background(), o.runID)
-	if len(steps) != 1 || !strings.Contains(steps[0].Error, "Settings › GitHub") || strings.Contains(steps[0].Error, value) {
+	if len(steps) != 1 || !strings.Contains(steps[0].Error, "Settings → Connections → GitHub") || strings.Contains(steps[0].Error, value) {
 		t.Errorf("the refusal the step shows: %+v", steps)
 	}
 	if r := auditOf(h, "run.secret.refused"); len(r) != 1 || r[0].Allowed {

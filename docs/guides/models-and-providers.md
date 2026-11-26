@@ -18,7 +18,7 @@ local model with no key.
 
 | | |
 | --- | --- |
-| Where in the console | **Settings → Models and providers**; **Settings → Assistant model** for the assistant |
+| Where in the console | **Settings → AI → Models and providers**; **Settings → AI → Assistant model** for the assistant |
 | Needs | An API key for the provider (none for AWS Bedrock or a local server without one) |
 | Design | [Note 045](../design/045-agent-studio.md) |
 
@@ -27,7 +27,7 @@ local model with no key.
 | Action | Minimum role | Extra rule |
 | --- | --- | --- |
 | See providers, their spend and the call log | Developer | The key is never shown |
-| Add, change, test or remove a provider | Administrator | Every change is audited |
+| Add, change, test or remove a provider | Administrator | Every change is audited. At most 20 providers and 50 models each; a monthly limit up to $1,000,000; prices 0 to 1,000 dollars per million tokens |
 
 ## How it works
 
@@ -35,7 +35,8 @@ local model with no key.
 2. An agent, team or workflow names a model as `provider/model`. Each call goes to that provider and is logged with its
    tokens and cost.
 3. When the provider's monthly limit is reached, or the provider is unreachable, rate limited or overloaded, the call
-   goes to the **fallback** model if one is set. Otherwise it stops.
+   goes to the **fallback** model if one is set. Otherwise it stops. A rate-limited call (HTTP 429) is retried twice, after 3
+   and 8 seconds, before it falls back.
 
 ## Connect a provider
 
@@ -59,7 +60,7 @@ In the panel:
   unreachable, rate limited or overloaded. A refused key or a denied permission does not fall back: that needs a person.
 - **Address**: leave it empty for the provider's own API. Only `https` is allowed, or plain `http` for this machine;
   private and cloud-internal addresses are refused unless you tick **It is on a private network**.
-- **Test** asks the first model turned on to reply with one word and shows the time and the cost.
+- **Test** asks the first model turned on to reply with one word and shows the time and the cost; with no model on it says "turn on a model first".
 
 Keys are kept encrypted in the vault, are never shown again, and are deleted with the provider. Every change is in the
 audit log.
@@ -70,7 +71,7 @@ A model from a provider is written `provider/model`, for example `anthropic/clau
 
 - **An agent**: pick its model in the agent's form; models are grouped by provider. An agent with no model of its own
   uses the assistant's.
-- **The assistant**: under Settings › Assistant model choose *A model from Models and providers* and pick one.
+- **The assistant**: under **Settings → AI → Assistant model** choose *A model from Models and providers* and pick one.
 - **Teams and workflows** use each agent's own model, so one team can mix a quick model for routing with a stronger one
   for analysis.
 
@@ -109,6 +110,9 @@ providers are tested against stand-ins only.
 | --- | --- |
 | A provider's card shows **no-key** or **failing** | The key is missing or refused, or the provider cannot be reached. Use **Test** to see the error. |
 | An agent fails with a clear error | Its provider was removed. Give the agent another model. |
+| "provider ... has no API key" | The key is missing; edit the provider and enter it. |
+| "api_key: the provider needs an API key" | A provider other than Bedrock or a keyless local server was saved without a key. |
+| "its fallback ... failed too" | The fallback model also failed; the message gives both errors. |
 | Calls stop at the monthly limit | No fallback is set. Add a fallback or raise the limit. |
 | Calls do not fall back after an error | A refused key or a denied permission needs a person; only a limit, an unreachable provider, rate limiting or overload fall back. |
 | An address is refused | It is private or cloud-internal. Tick **It is on a private network** if it is yours. |

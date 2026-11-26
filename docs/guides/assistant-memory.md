@@ -16,8 +16,8 @@ Use it so the assistant does not need telling the same thing twice.
 
 | | |
 | --- | --- |
-| Where in the console | **Settings → Memory** |
-| Needs | Memory switched on (an administrator can turn it off) |
+| Where in the console | **Settings → AI → Memory** (the **Memory is on** switch is for administrators) |
+| Needs | Memory switched on (an administrator can turn it off). Limits: 8,000 characters a file, 100 files a person, 200 for the organisation |
 | Design notes | [027](../design/027-assistant-memory-and-history.md), [052](../design/052-assistant-that-works-like-a-colleague.md) |
 
 ## Who can do what
@@ -43,21 +43,22 @@ Use it so the assistant does not need telling the same thing twice.
 
 ![Files the assistant keeps, on the Memory page]({{ '/console/assistant-memory.png' | relative_url }})
 
-### Keep this?
+### Keep a file: the card
 
-After a task that taught it something, the assistant can offer it as a **Keep this?** card. The card shows the file's path,
+After a task that taught it something, the assistant can offer it as a card titled **Keep /memories/me/...** (the file's path). The card shows the path,
 its text and who will see it (only you under `/memories/me`, everyone under `/memories/org`, which only an administrator
 can keep).
 
 1. Nothing is saved until you press **Confirm**.
-2. The server checks the file again then (no secrets, no markup, not over an existing file), and saves it as yours.
+2. The server checks the file again then (at most 8,000 characters, no secrets, no markup, not over an existing file: "the
+   file ... already exists"), and saves it as yours.
 3. Under [autopilot](assistant-permissions-and-autopilot.md) a clean conversation keeps it at once. Once the conversation
    has read logs or cloud data you did not type, the card always waits for you, because what it read may be what is being
    saved.
 
 ### Manage files
 
-Settings → Memory lists every file with its text: edit, delete or keep any of yours. A file it writes after reading logs or
+**Settings → AI → Memory** lists every file with its text: edit, delete or keep any of yours. A file it writes after reading logs or
 cloud data you did not type waits for you to keep it, and is not used until you do.
 
 ## Use the notes from agents
@@ -84,8 +85,9 @@ Give an agent the **Read the organisation's shared notes** tool (`org_memory`) a
 | Symptom | Likely cause |
 | --- | --- |
 | The assistant ignores a file | Its valid-until date has passed (*No longer valid*), or it is still waiting for you to keep it. |
-| A save is refused | The file has a secret or markup in it, or it would overwrite an existing file. |
-| Memory does nothing | An administrator turned memory off (the API answers 409 when adding a note). |
+| A save is refused | The file is over 8,000 characters, has a secret or markup in it, or would overwrite an existing file. |
+| Memory does nothing | An administrator turned memory off (the console says "Memory is turned off"; adding a note answers 409). Your conversation history is still kept. |
+| A file is refused for the organisation | "only an administrator writes to /memories/org": save it under `/memories/me` and ask an administrator to move it. The assistant also refuses `/memories/org` after it read logs or cloud data you did not type. |
 | An agent cannot read a note | It lacks the `org_memory` tool, or the note is under `/memories/me`. |
 
 ## Related

@@ -16,7 +16,7 @@ with a company login instead of a password, see [Single sign-on](single-sign-on.
 
 | | |
 | --- | --- |
-| Where in the console | **Settings → People and roles**; **Settings → API tokens** for your own tokens |
+| Where in the console | **Settings → People and roles** (the page is titled **People**); **Settings → API tokens** for your own tokens |
 | Needs | Nothing beyond the server |
 | Design | [Note 006](../design/006-console.md) |
 
@@ -25,7 +25,7 @@ with a company login instead of a password, see [Single sign-on](single-sign-on.
 | Action | Minimum role | Extra rule |
 | --- | --- | --- |
 | See runs, pipelines, infrastructure | Viewer | |
-| Run, cancel, edit pipelines | Developer | |
+| Run, cancel, edit pipelines | Developer | Deleting a pipeline needs an administrator |
 | Propose cloud changes, ask the assistant | Developer | |
 | List secret names | Developer | Names only, never values |
 | Create or delete secrets, connect GitHub and AWS | Administrator | |
@@ -33,6 +33,8 @@ with a company login instead of a password, see [Single sign-on](single-sign-on.
 | Read the audit log | Administrator | |
 | Add, change, disable or remove people | Administrator | The last administrator cannot be removed or demoted |
 | Make a personal API token | Viewer | At most your own role; needs a browser session |
+| Revoke a personal API token | Its owner, or an administrator | |
+| List everyone's tokens | Administrator | Through the API only (`GET /v1/tokens?all=1`); the console shows your own |
 
 The server token counts as an administrator named `token`.
 
@@ -41,37 +43,41 @@ The server token counts as an administrator named `token`.
 1. An administrator adds a person with a username, name, password and role.
 2. The person signs in with the password. A role is checked on every request, in the console and in the API.
 3. An administrator can later change the role, reset the password, disable the account or remove it.
-4. Disabling an account, or resetting its password, ends that person's sessions at once.
+4. Disabling an account, resetting its password, or removing it ends that person's sessions at once. Disabling or
+   removing it also deletes the person's API tokens. Changing a role does not sign anyone out.
 
 ![People and their roles]({{ '/console/people-and-roles.png' | relative_url }})
 
 ## Add a person
 
 1. Open **Settings → People and roles** and choose **Add person**.
-2. Enter a username, a name, a password of at least 12 characters, and a role.
+2. Enter a username (letters, digits and `. _ - @`), a name, a temporary password of at least 12 characters, and a role.
 3. Give the person the password. They can change it under their own account.
+
+A username that exists is refused with `that username is taken`; a short password with
+`password must be at least 12 characters`.
 
 ## Change what someone may do
 
 1. Open **Settings → People and roles**.
-2. Change the role in the person's row, or choose **Reset password**, **Disable** or the bin to remove them.
+2. Change the role in the person's row, or choose **Reset password**, **Disable** (**Enable** brings the account back) or
+   the bin to remove them.
 
-The server always keeps at least one active administrator.
+The server always keeps at least one active administrator. Demoting, disabling or removing the last one is refused with
+`this is the last active administrator; make another one first`.
 
 ## Personal API tokens
 
 Under **Settings → API tokens** anyone can make a token for AI tools that connect over MCP. A token has a name, a role
 (at most your own, your own by default) and a life of 1 to 365 days (90 by default). The secret is shown once. Each
-person can have at most 10. You make a token from a browser session, not with another token. An administrator can see
-and revoke everyone's tokens.
+person can have at most 10 (`you already have 10 tokens; revoke one first`). You make a token from a browser session, not
+with another token (`sign in to the console as a person to create a token`).
 
 ## Security model
 
 - Passwords use PBKDF2-SHA256 and are at least 12 characters, with login throttling per account and per address.
 - Cookies are `HttpOnly` and `SameSite=Strict`. Requests that change something must send `X-Forgeline-Request: 1`.
-- Secrets are encrypted with AES-256-GCM, cannot be read back, and are masked in logs.
-- Steps get only the secrets and network they ask for. Pull-request runs are untrusted and get no secrets; a push run
-  gets them only where an administrator allowed it for that repository.
+- Secrets are encrypted with AES-256-GCM and cannot be read back; see [Secrets and memory](secrets-and-memory.md).
 - Every change, refusal and failed login goes to the [audit log](audit-log.md).
 
 See [design note 006](../design/006-console.md) for the rules and the known limits.
@@ -82,7 +88,8 @@ See [design note 006](../design/006-console.md) for the rules and the known limi
 | --- | --- |
 | Someone cannot see **Settings → People and roles** | The page is for administrators only. |
 | You cannot demote or remove an account | It is the last active administrator. |
-| Someone is signed out suddenly | An administrator disabled the account or reset the password. |
+| Someone is signed out suddenly | An administrator disabled the account, reset the password or removed it, or the session reached its 12 hours. |
+| Sign-in says `too many attempts; try again in ...` | Login throttling per account and per address. |
 | Someone is refused when they approve a change | They proposed it themselves, or an [approval rule](approval-rules.md) names other approvers. |
 
 ## Related

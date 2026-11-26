@@ -6,212 +6,88 @@ nav_order: 1
 
 # Endpoints
 
-Role = the minimum role. A test (`internal/server/apidocs_test.go`) fails if a route is missing from this page or has a different role, so the lists stay true to the code. *public* needs no credentials.
+Role = the minimum role. A test (`internal/server/apidocs_test.go`) fails if a route is missing from this page or has a different role, so the list of routes and roles stays true to the code. The descriptions, fields and limits are written by hand from the handlers; a row says what the server reads and returns, and where it does not, treat the code as the answer. *public* needs no credentials. Authentication, errors, limits and worked examples are on the [API overview](index.md).
 
-## Health and sign-in
+Every endpoint that reads a body wants JSON with `Content-Type: application/json`, rejects fields it does not know (`400` `invalid JSON: json: unknown field "x"`) and refuses a body over 1 MiB (`413`). Send `{}` when there is nothing to say. The lists checked for this page answer as an object (`{"runs": [...]}`), not as a bare array.
+
+
+## Sign-in, people and API tokens
+
+Accounts, sessions, single sign-on and personal API tokens. See [People and roles](../guides/people-and-roles.md), [People and security](../guides/people-and-security.md) and [Single sign-on](../guides/single-sign-on.md).
 
 | Method and path | Role | Purpose |
 | --- | --- | --- |
-| `GET /healthz` | public | Liveness. |
-| `GET /v1/auth/state` | public | Is setup needed, who am I, and `sso` (`enabled`, `name`): whether the sign-in page offers single sign-on. |
-| `POST /v1/auth/setup` | public (needs server token) | Create the first admin. Body: `token`, `username`, `name`, `password`. |
-| `POST /v1/auth/login` | public | Body: `username`, `password`. Sets the session cookie. Throttled. |
+| `GET /healthz` | public | Liveness. Answers `200` with `{"status":"ok"}`. |
+| `GET /v1/auth/state` | public | Works with or without credentials. Returns `setup_needed` (no account exists yet), `authenticated`, and for a signed-in caller `role` and either `user` (a person) or `actor` (`token`, for the server token), plus `sso` (`enabled`, `name`): whether the sign-in page offers single sign-on. |
+| `POST /v1/auth/setup` | public (needs server token) | Create the first administrator. Body: `token` (the server token), `username` (3 to 40 characters: letters, digits and `. _ - @`), `name` (up to 100), `password`. Answers `201` with the user and a session cookie. `401` "the server token is wrong" (counted by the sign-in throttle), `409` "setup is already done". |
+| `POST /v1/auth/login` | public | Body: `username`, `password`. Answers `200` with the user and sets the `forgeline_session` cookie (12 hours, `HttpOnly`, `SameSite=Strict`, `Secure` over HTTPS). One message for every failure: `401` "wrong username or password". After 5 failures for the same name or the same address the next attempts get `429` with a `Retry-After` header: 30 seconds, doubling up to 15 minutes. |
 | `GET /v1/auth/oidc/start` | public | Starts single sign-on (design note 031): sends the browser to the provider with PKCE, a single-use `state` (10 minutes, bound to a `SameSite=Lax` cookie) and a `nonce`. When single sign-on is off it goes back to the sign-in page with `#sso-error=off`. |
 | `GET /v1/auth/oidc/callback` | public | Where the provider sends the browser back. Checks the state and its cookie, exchanges the code, verifies the ID token (signature, issuer, audience, expiry, nonce), applies the rules (new people, domains, roles from groups, never demoting the last administrator) and sets the session cookie, then goes to `/#/`. A refusal goes to the sign-in page with `#sso-error=` `state`, `token`, `refused`, `provider` or `off`; the audit log has the full reason (`login.sso.failed`). A person is matched by issuer and subject, never by email. |
 | `GET /v1/settings/sso` | admin | Single sign-on settings: `enabled`, `name` (button text), `issuer`, `client_id`, `address`, `groups_claim`, `mappings` (group and role), `allow_new`, `default_role`, `domains`, plus `has_secret`, `redirect_url` (to register at the provider) and `ready`. The client secret is never returned. |
 | `PUT /v1/settings/sso` | admin | The same fields, plus `client_secret` (write-only; empty keeps the stored one, sealed in the vault). The issuer and address must be `https`, or `http` on a loopback host. Turning it on needs the issuer, client ID, address and a stored secret. Audited as `sso.update`. |
 | `POST /v1/settings/sso/test` | admin | Body: `issuer`. Reads the provider's discovery document and says what it found (`ok`, `authorization_endpoint`, `token_endpoint`, `pkce`). Changes nothing. |
-| `GET /v1/settings/approvals` | developer | The approval rules (design note 032): each with `name`, `accounts`, `kinds` (`ai`, `cloud`, `publish`, `runbook`), `high_risk`, `approvals` (1 or 2) and `approvers`. No rules means one approval from an administrator who did not propose the change. |
-| `GET /v1/settings/resource-types` | developer | The resource types the generic resource block may make (design note 040, step 7): `accounts`, each a sorted list such as `aws_sns_topic`. |
-| `PUT /v1/settings/resource-types` | admin | Body: `accounts` (account id to types, at most 300 each). Every type must exist in the AWS provider's schema; IAM users, groups, access keys, other long-lived credentials and account-wide settings are refused. The first call may take a minute while the schema is made. Audited as `blueprint.resource-types` ("allows ...", "no longer allows ..."). |
-| `GET /v1/resource-types/search` | developer | `?q=sns topic`: up to 40 resource types whose name matches, shortest first, with a plain `label`; `count` and `provider_version` of the schema. |
-| `GET /v1/resource-types/{type}` | developer | One type for the canvas form: `fields` (`name`, `kind` `string`/`number`/`bool`/`list`/`map`/`json`/`block`, `required`, `settable`, `why` it cannot be set: secret, set by AWS or the blueprint's region; `nesting`, `min_items`, `max_items` for a nested block), required first; `outputs`, the attributes a link may read. |
-| `GET /v1/settings/policy-packs` | developer | The policy packs (design note 040, step 6): `packs` (each `id`, `name`, `tool` `trivy`/`checkov`/`conftest`, `enabled`, `deny_at`, `deny`, `skip`, `rules`), `tools` (the pinned release and image of each tool) and `builtin` (the built-in rules' version). |
-| `PUT /v1/settings/policy-packs` | admin | Body: `packs` (at most 10). `deny_at` (Trivy only) is `critical`, `high`, `medium` or `low`; `deny` and `skip` list rule ids (Trivy and Checkov); `rules` (Conftest only) maps up to 10 `.rego` file names to their text, 32 KB each. Every preview then runs each enabled pack in a container with no network, on a copy of the plan without sensitive values or the earlier state; the preview's `packs` records each run (`version`, `image`, `denies`, `warnings`, `skipped`, `error`). A pack that cannot run denies the plan, and a preview made before the packs changed cannot be sent (409). Audited as `guardrail.packs` (rule text is counted, not copied). |
-| `PUT /v1/settings/approvals` | admin | Body: `rules`. Validated (known accounts, active administrators, two approvals need two possible approvers). Every matching rule applies and the strictest wins. Waiting changes show `approval` (`needed`, `given`, `approvers`, `rules`). Audited as `approval.rules`. |
-| `POST /v1/auth/logout` | viewer | Ends the session. |
-| `POST /v1/me/password` | viewer | Body: `current`, `new` (at least 12 characters). |
-| `GET /v1/tokens` | viewer | Your personal API tokens (never the secrets); `?all=1` for everyone's, administrators only. |
-| `POST /v1/tokens` | viewer | Body: `name`, `role` (at most your own; default yours), `days` (1 to 365, default 90). Needs a browser session, not a token. Returns the secret once. At most 10 each. |
-| `DELETE /v1/tokens/{id}` | viewer | Revoke your token (an administrator can revoke any). |
-| `POST /mcp` | public | The MCP endpoint (it checks the caller itself) (streamable HTTP, one JSON-RPC message per request). Only a personal API token works here (not the server token, not a session), so it answers 401 to anything else. See note 020. |
+| `POST /v1/auth/logout` | viewer | Ends the session and clears the cookie. Answers `204`. |
+| `POST /v1/me/password` | viewer | Body: `current`, `new` (12 to 128 characters, not the user name, not one repeated character). Answers `204` and ends every session of that person, this one included. `403` when `current` is wrong. `400` for the server token, which has no password. |
+| `GET /v1/tokens` | viewer | Your personal API tokens as `{"tokens": [...]}`: `id`, `name`, `role`, `owner`, `created_at`, `expires_at`, `last_used`. The secret is never returned. `?all=1` lists everyone's, administrators only. A personal token works on `/mcp` only (see the next rows). |
+| `POST /v1/tokens` | viewer | Body: `name` (1 to 60 characters), `role` (`viewer`, `developer` or `admin`; at most your own; default yours), `days` (1 to 365, default 90). Needs a browser session, so a token or the server token gets `403` "sign in to the console as a person to create a token". Answers `201` with the token and its secret, `token`, which starts with `flt_` and is shown once. `409` at 10 live tokens. The token's effective role is the lower of its own and its owner's current role, and it stops working when the owner is disabled or deleted. |
+| `DELETE /v1/tokens/{id}` | viewer | Revoke your token (an administrator can revoke any). `204`. Someone else's token answers `404`. |
+| `POST /mcp` | public | The MCP endpoint, stateless streamable HTTP: one JSON-RPC 2.0 message in the body, one JSON answer (notifications get `202`; a batch is refused). Only a personal API token works here (`Authorization: Bearer flt_...`); the server token or a session answers `401`. Methods: `initialize`, `ping`, `tools/list`, `tools/call`. Limits: body 1 MiB, 60 calls a minute and 4 at once per token (a call over the limit comes back as a tool result with `isError: true`, not as an HTTP `429`). A request with a foreign `Origin` header gets `403`. See design note 020. |
 | `POST /mcp/engine/{token}` | public | The agent engine's own endpoint (note 053): the Claude Code program Forgeline started for one chat message calls Forgeline's tools and its permission prompt here. The random token in the path identifies one running message and stops working when it ends; only the same machine (loopback) is answered, so it is not for clients. |
+| `GET /v1/users` | admin | Every account as `{"users": [...]}`: `id`, `username`, `name`, `role`, `disabled`, `created_at`, `created_by`, `last_login_at`, `sso` and `email` for single sign-on people. Never a password hash. |
+| `POST /v1/users` | admin | Body: `username`, `name`, `password`, `role` (`viewer`, `developer`, `admin`; required). Same rules as setup. `201` with the user, `409` "that username is taken". The `id` is the lower-cased user name. |
+| `PATCH /v1/users/{id}` | admin | Any of `name`, `role`, `disabled`, `password` (the others stay). Disabling, or a new password, ends the person's sessions; disabling also deletes their API tokens. `409` "this is the last active administrator; make another one first" when it would leave none. `404` "no such user". |
+| `DELETE /v1/users/{id}` | admin | Remove an account, its sessions and its API tokens. `204`. The last active administrator cannot be deleted (`409`). |
 
-## Runs
+## Home, approvals and cloud changes
 
-| Method and path | Role | Purpose |
-| --- | --- | --- |
-| `POST /v1/runs` | developer | Submit a pipeline. `multipart/form-data`: field `pipeline` (YAML) and optional `source` (an archive of the files the steps read). |
-| `GET /v1/runs` | viewer | List runs, newest first. |
-| `GET /v1/runs/{id}` | viewer | One run with its steps and their status. |
-| `GET /v1/runs/{id}/failure` | viewer | For a failed run: the step that failed first, exit code, likely causes, steps that did not run, and the end of its output. |
-| `POST /v1/runs/{id}/cancel` | developer | Stop a run. |
-| `GET /v1/runs/{id}/steps/{step}/logs` | viewer | A step's output. Send `Accept: text/event-stream` to follow it live. Secrets appear as `***`. |
-
-A run's `status` is one of `queued`, `running`, `succeeded`, `failed`, `canceled`. A step's is one of `pending`, `running`, `succeeded`, `cached`, `failed`, `skipped`, `canceled`.
-
-## Pipelines
+What needs a person, and the proposal flow behind it: a change to the cloud is proposed, previewed and approved by a different administrator. See [Home and approvals](../guides/home-and-approvals.md) and [Approval rules](../guides/approval-rules.md). Proposals that start as `202` are polled with their `GET` until the status stops changing.
 
 | Method and path | Role | Purpose |
 | --- | --- | --- |
-| `GET /v1/pipelines` | viewer | Saved pipelines with latest status. |
-| `POST /v1/pipelines/validate` | viewer | Body: `yaml`. Returns problems with line numbers and the step graph. Saves nothing. |
-| `POST /v1/pipelines` | developer | Save a new pipeline. Body: `yaml`, `description`, optional `source` (`{"repo": "owner/name", "branch": "main"}`, a branch on the GitHub allow list; not a pattern). The name comes from the YAML. |
-| `GET /v1/pipelines/{id}` | viewer | The pipeline and its versions. |
-| `PUT /v1/pipelines/{id}` | developer | New version. Body: `yaml`, `description`, `base_version`, and `source`: an object sets it, `null` clears it, leaving it out keeps it. `409` if someone saved after `base_version`. |
-| `POST /v1/pipelines/{id}/run` | developer | Run the latest version. May use secrets. With a `source`, the branch must still be on the allow list (`409` if not); the run downloads the branch's newest commit first (`502` if GitHub cannot give it; no run is created) and records it as `source`. Such runs build images but never push. |
-| `POST /v1/pipelines/{id}/versions/{version}/restore` | developer | Make an old version the newest. |
-| `DELETE /v1/pipelines/{id}` | admin | Delete the pipeline and its versions. |
-| `GET /v1/overview` | viewer | The pipeline and run figures on the Home page (its Needs you list also reads proposals, cloud changes, Guard findings and integrations). |
+| `GET /v1/settings/approvals` | developer | The approval rules (design note 032): each with `name`, `accounts`, `kinds` (`ai`, `cloud`, `publish`, `runbook`), `high_risk`, `approvals` (1 or 2) and `approvers`. No rules means one approval from an administrator who did not propose the change. |
+| `PUT /v1/settings/approvals` | admin | Body: `rules`. Validated (known accounts, active administrators, two approvals need two possible approvers). Every matching rule applies and the strictest wins. Waiting changes show `approval` (`needed`, `given`, `approvers`, `rules`). Audited as `approval.rules`. |
+| `GET /v1/overview` | viewer | The pipeline and run figures on the Home page, from the newest runs: `pipelines` (each with `runs`, `recent` statuses, `latest`), `totals` and `recent`. Its Needs you list also reads proposals, cloud changes, Guard findings and integrations from their own endpoints. |
+| `GET /v1/onboarding` | developer | The first-run steps (note 038): `steps` (each `id`, `title`, `why`, `link` to the console page that does it, `done` with a `detail` of what was found, `skipped`), `done`, and `finished` (every step done or skipped). A step is done when what it sets up exists; nothing is ticked by hand. |
+| `PUT /v1/onboarding/{step}` | admin | Body `skip`: skip a step, or bring it back (`false`). A step that is done is never shown as skipped. Audited. |
+| `GET /v1/cloud/catalog` | developer | The stack templates that can be deployed (each with its parameters) as `templates`, and `instance_actions`: `start`, `stop`, `reboot`. |
+| `POST /v1/cloud/changes` | developer | Propose a change. Body: `kind` (`stack-deploy`, `stack-delete`, `instance-action` or `blueprint-apply`), `reason` (5 to 500 characters), `account` (an added AWS account's id; empty is the primary connection), and per kind: `template`, `stack` and `params` (deploy), `stack` (delete), `instance_id` and `action` (`start`, `stop`, `reboot`), `blueprint` (a saved blueprint id; the blueprint's ready preview is what is filed, see `POST /v1/blueprints/{id}/propose`). Answers `202` with the change in status `preparing`; Forgeline reads AWS in the background and the status becomes `proposed` (with the `preview` of exactly what would happen) or `failed` (with `result`). Poll `GET /v1/cloud/changes/{id}`. Refusals: `409` "connect an AWS account first (Infrastructure → AWS)", `404` "no such AWS account", `403` for an account that does not allow changes or a protected stack, `400` for a bad field. |
+| `GET /v1/cloud/changes` | viewer | The newest 100 changes as `{"changes": [...]}`, newest first. A change has `id`, `kind`, `title`, `status` (`preparing`, `proposed`, `executing`, `succeeded`, `failed`, `rejected`, `canceled`, `expired`), `reason`, `region`, `account`, `proposed_by`, `proposed_at`, `decided_by`, `decision_note`, `preview`, `guardrails`, `result` and, while it waits, `approval` (what the approval rules ask). |
+| `GET /v1/cloud/changes/{id}` | viewer | One change, including the preview of exactly what would happen. A proposal older than 24 hours reads as `expired`. |
+| `POST /v1/cloud/changes/{id}/approve` | admin | Body: `note`. `403` "you proposed this change; someone else must approve it". `409` when it is not waiting, is older than 24 hours, or the AWS connection changed since. Always answers `202` with the change: `executing` when this approval completed the count the approval rules need, still `proposed` (with `approval`) when more approvals are needed. Poll the change until `succeeded` or `failed`. |
+| `POST /v1/cloud/changes/{id}/reject` | admin | Body: `note`. `200` with the change, now `rejected`. `409` when it is no longer waiting. |
+| `POST /v1/cloud/changes/{id}/cancel` | developer | Withdraw a proposal: its proposer or an administrator (`403` for anyone else). `200` with the change, now `canceled`; `409` once it is executing or finished. |
+| `GET /v1/ai/proposals` | viewer | Changes the assistant drafted, newest first, with their status. |
+| `GET /v1/ai/proposals/{id}` | viewer | One proposal: the exact script, the AWS calls it makes, risk, and (after approval) what ran. |
+| `POST /v1/ai/proposals/{id}/approve` | admin | Body: `hash` (of the text you read), `note`. Not allowed for the person who proposed it. Applies the approved script through the AWS MCP Server and returns 202; poll the proposal. |
+| `POST /v1/ai/proposals/{id}/reject` | admin | Rejects a waiting proposal. |
+| `POST /v1/ai/proposals/{id}/cancel` | developer | The proposer or an administrator withdraws a waiting proposal. |
 
-## Secrets
+## Agents, skills and publishing
 
-| Method and path | Role | Purpose |
-| --- | --- | --- |
-| `GET /v1/secrets` | developer | Names, descriptions, who changed them and when. Never values. |
-| `PUT /v1/secrets/{name}` | admin | Body: `value` (at least 8 characters), `description`. Name matches `[A-Za-z_][A-Za-z0-9_]*`. |
-| `DELETE /v1/secrets/{name}` | admin | Remove. |
-
-## People and audit
-
-| Method and path | Role | Purpose |
-| --- | --- | --- |
-| `GET /v1/users` | admin | List. |
-| `POST /v1/users` | admin | Body: `username`, `name`, `password`, `role`. |
-| `PATCH /v1/users/{id}` | admin | Any of `name`, `role`, `disabled`, `password`. The last admin cannot be removed or demoted. |
-| `DELETE /v1/users/{id}` | admin | Remove. |
-| `GET /v1/audit` | admin | The audit log, newest first. Filters by query string: `actor`, `action` (prefix), `denied=1`, `from` and `to` (dates, `to` included), `limit` (1 to 1000), and `before` (an event id) to read events older than that one. The answer has `events` and `next`: when the page is full, or a filter's scan of the newest 5000 events ended before the log did, `next` is the id to pass as `before` for the following page; it is empty at the end. |
-| `GET /v1/audit/export` | admin | The whole audit log, or the part the same filters select, oldest first, as a download: `format=csv` (default; cells that would start a spreadsheet formula are prefixed with `'`) or `format=jsonl`. At most 200,000 events per export. Each export is audited as `audit.export` before the file is sent (design note 033). |
-| `GET /v1/settings/audit` | admin | How long the audit log is kept: `retention_days` (0 keeps it forever, the default), `count`, `oldest`, `last_prune`, `last_pruned`. |
-| `PUT /v1/settings/audit` | admin | Body: `retention_days`, 0 or 30 to 3650. Events older than the period are deleted once an hour; each deletion is audited as `audit.pruned` and each change as `audit.retention`. |
-
-## GitHub
+Agent definitions, their skills and versions, export and import, and pushing a version to a registry. See [Agents](../guides/agents.md), [Agent bundles](../guides/agent-bundles.md) and [Publishing agent versions](../guides/publishing-agent-versions.md).
 
 | Method and path | Role | Purpose |
 | --- | --- | --- |
-| `GET /v1/integrations/github` | developer | Current settings (no secrets), last deliveries. Each rule has `repo`, `branches` and `secrets` (runs for pushes to these branches may use the vault's secrets; off unless an administrator turns it on; a pull request never gets any). |
-| `PUT /v1/integrations/github` | admin | Body: `enabled`, `api_base`, `public_url`, `pipeline_file`, `rules` (`owner/repo` plus branches), `token` (write-only). |
-| `DELETE /v1/integrations/github` | admin | Disconnect and delete stored keys. |
-| `POST /v1/integrations/github/test` | admin | Check the connection. |
-| `POST /v1/integrations/github/app/start` | admin | Begin creating the App. Body: `public_url`, `name`, `owner`, `api_base`. |
-| `GET /v1/integrations/github/app/launch` | admin | The page that sends you to GitHub. |
-| `GET /v1/integrations/github/app/callback` | public | GitHub returns here with `code` and `state`. Bound to the admin's setup by a one-time state. |
-| `GET /v1/integrations/github/app/installations` | admin | Installations of the App. |
-| `GET /v1/integrations/github/app/repos` | admin | Repositories of an installation. |
-| `POST /v1/integrations/github/app/install` | admin | Body: `installation_id`, `rules`, `public_url`. |
-| `POST /webhooks/github` | public (signed) | Where GitHub sends events. Checked with the webhook secret; a bad signature gets `401`. |
-
-## AWS
-
-| Method and path | Role | Purpose |
-| --- | --- | --- |
-| `GET /v1/integrations` | developer | Every system Forgeline connects to, for the integrations hub (note 025): built ones with a status (`connected`, `attention`, `off`), logins found on this server by name only (`detected`, such as an AWS profile), and planned ones (`next`, `later`, with a build order and what they will do). Each has a plain `summary`, a `problem` that says what to do when it needs attention, `warnings`, who enforces read-only (`read_only_by`: `provider` or `forgeline`), and the last test. Status comes from stored settings; only the Docker host runs a local command. No secret is ever included. |
-| `POST /v1/integrations/{id}/checks` | admin | Runs a read-only test of one integration (`github`, `aws`, `aws-mcp`, `docker`, `kubernetes`, `claude`) and returns its checks, each with a result (`ok`, `warn`, `fail`), a detail, a fix and a time. It creates and changes nothing (`changed` is always false), is audited, and is remembered for the hub. The Claude test sends one short question. Planned systems have no test (404). |
-| `GET /v1/integrations/{id}/activity` | admin | The newest 30 audit entries that belong to one integration (`github`, `aws`, `aws-mcp`, `gcp`, `azure`, `claude`, `kubernetes`, `docker`), for the Activity tab: time, who, what, detail, and whether it was allowed (refusals are included). The match is exact, so AWS and the AWS MCP Server never show each other's entries. No address is included. |
-| `GET /v1/integrations/{id}/policy` | developer | The access policy of an integration that has tools (`aws`, `aws-mcp`, `kubernetes`, `gcp`, `azure`; others are 404): each tool with its kind (`read` or `write`), level (`allow`, `ask` or `block`), the lowest role that may use it, and what it does, plus, for `aws`, `services` (each switch with `id`, `label`, `tech`, `on` and `level`: `off`, `read` or `change`; see the next row but one), plus the **effective access** of every agent (`allowed`, `blocked` by the connection, `needs_person` when the tool needs approval and an agent run has nobody to ask, or `not_listed` in the agent's tool list) with the reason. `readable` is false when the stored policy cannot be read; every tool is then refused. |
-| `PUT /v1/integrations/{id}/policy` | admin | Body: `tools`, a map of tool name to `allow`, `ask` or `block`, for this integration's tools; the ones left out go back to allowed. A tool that asks for a change (`propose_aws_change`, `propose_cloud_change`) cannot be set to `allow`: a change is always a proposal that a different administrator approves, but it can be blocked. Unknown tools, another integration's tools and any other level are refused with 400. A policy that cannot be read is not overwritten (409). Audited with before and after. `ask` (a read tool that needs a person to approve each call) is accepted for read tools; for a tool that asks for a change it is accepted and changes nothing, because that is already how it works. A blocked tool is refused for everyone, including administrators and agents that list it, and is not shown to the model or offered over MCP. |
-| `PUT /v1/integrations/{id}/services` | admin | AWS only (others are 404). Body: `off`, the AWS service switches turned off for the AI (`s3`, `ecs`, `ecr`, `ec2`, `lambda`, `rds`, `dynamodb`, `elb`, `sqs`, `sns`, `cloudformation`, `cloudwatch`, `ce`, and `other` for every service not listed), and `read_only`, the ones the AI may read but never propose a change to (Look only). Both lists replace what was stored; empty lists put everything back to change, with approval. An unknown switch, or one in both lists, is 400; an unreadable policy 409. A look-only service is refused in `propose_aws_change` and `propose_cloud_change`, and an AI proposal for it is refused at approval (409); reads work. An off service is refused in `call_aws`, `aws_script`, `aws_summary` and both proposal tools, left out of `aws_resources` and `guard_findings`, and an AI proposal for it is refused at approval (409). People still see everything in the explorer. The switches show under `services` in `GET /v1/integrations/aws/policy`. Audited as `policy.services`. |
-| `GET /v1/integrations/gcp` | developer | The Google Cloud connection: whether it is on and its scope. Before it is connected, `detected_project` offers the server's gcloud default project (a name, never a credential). |
-| `PUT /v1/integrations/gcp` | admin | Body: `enabled`, `scope` (a project id, `projects/…`, `folders/…` or `organizations/…`). Turning it on first proves the server's gcloud login can search the scope and refuses with what to fix (no login, no permission, API not enabled, unknown scope); nothing is saved on a refusal. Read-only: the only commands run are `asset search-all-resources`, `auth list` and `config get-value`. |
-| `GET /v1/infra/gcp/resources` | viewer | Everything in the connected scope by service (Compute Engine, Cloud Run, GKE, Cloud Storage, Cloud SQL, Vertex AI and more; unknown types under `other`), at most 200 per service with the true count, cached 60 s; `?refresh=1` skips the cache. |
-| `GET /v1/integrations/azure` | developer | The Azure connection: whether it is on and which subscriptions are chosen (none chosen means every subscription the login can read). Before it is connected, an administrator also gets `available`, the subscriptions the login can see (name and id). |
-| `PUT /v1/integrations/azure` | admin | Body: `enabled`, `subscriptions` (subscription ids, at most 20; each must look like a GUID). Turning it on first proves the server's az login can run a Resource Graph query and refuses with what to fix (no login, no permission, the Resource Graph extension missing, unknown subscription); nothing is saved on a refusal. Read-only: the only commands run are `graph query` (with one fixed query), `account list` and `account show`. |
-| `GET /v1/infra/azure/resources` | viewer | Everything in the chosen subscriptions by service (virtual machines, App Service, AKS, storage, SQL, networks, Azure OpenAI and AI Foundry under AI, and more; unknown types under `other`), read in pages of 1000 up to 3000 resources (`notice` says when the limit was reached), at most 200 shown per service with the count, cached 60 s; `?refresh=1` skips the cache. |
-| `GET /v1/integrations/aws` | developer | Settings and identity. |
-| `PUT /v1/integrations/aws` | admin | Use a server profile. Body: `enabled`, `profile`, `region`. The name `forgeline-sso` is reserved. |
-| `GET /v1/integrations/aws/mcp` | admin | Whether the AWS MCP Server is on, the tools it offers, and the proxy and endpoint used. |
-| `PUT /v1/integrations/aws/mcp` | admin | Body: `enabled`. Turning it on starts the signing proxy and checks the server offers `aws___run_script`. |
-| `POST /v1/integrations/aws/sso/start` | admin | Body: `start_url`, `sso_region`. Returns `login_id`, the `user_code` and the link to approve. |
-| `POST /v1/integrations/aws/sso/poll` | admin | Body: `login_id`. Never blocks; returns `status`: `pending`, `expired`, `denied`, or `authorized` once approved. |
-| `GET /v1/integrations/aws/sso/accounts` | admin | Accounts you may use. |
-| `GET /v1/integrations/aws/sso/roles` | admin | Roles in an account (`?account_id=`). |
-| `POST /v1/integrations/aws/sso/connect` | admin | Body: `account_id`, `account_name`, `role_name`, `region`. Tests the credentials before keeping them. |
-| `GET /v1/integrations/aws/sso` | developer | Whether you are signed in, and until when. |
-| `DELETE /v1/integrations/aws/sso` | admin | Sign out and delete the stored token. |
-| `GET /v1/ai/workflows` | developer | Workflows: stages, steps, schedule, run-as role. Each also has `graph`, `kinds` (nodes per kind), `agents`, `webhook`, `on_run_failed` and its newest run as `last_run`; archived ones are left out. |
-| `GET /v1/ai/workflows/{id}` | developer | One workflow with every version. |
-| `POST /v1/ai/workflows` | admin | Create a workflow (version 1): stages of agent steps, optional gate per stage, optional schedule, run-as viewer or developer. Or, instead of `stages`, a `graph` (design note 044): `nodes` (`id`, `kind` `start`/`agent`/`lookup`/`decide`/`ask`/`merge`/`end`, `x`, `y`, `max_visits`, and per kind `agent`, `agent_n`, `task`, `reads`, `fields`; `tool`, `args`; `by` `rule`/`agent` and `rules` (`key`, `op` `equals`/`contains`/`gt`/`lt`/`empty`, `value`, `when`); `question`, `choices`, `answerers`; `outcome`, `summary`) and `edges` (`from`, `to`, `when` for a branch). At most 40 nodes and 80 wires; exactly one start; every node reachable; a decision needs an `else` wire. A graph version may also take `webhook` (true: starts from its signed webhook) and `on_run_failed` (pipeline names, or `*`: starts when such a run fails, with the run in `trigger`). A graph run has `state`, `visits` (each node visit's `status`, `input`, `output`, `branch`, `answered_by`), `waiting` and `steps` (at most 50). |
-| `POST /v1/ai/workflows/{id}/versions` | admin | Save a new version; agent versions are pinned. |
-| `POST /v1/ai/workflows/{id}/rollback` | admin | Copy an old version forward as the current one. |
-| `POST /v1/ai/workflows/{id}/disable` | admin | Stop it running, including its schedule. |
-| `POST /v1/ai/workflows/{id}/enable` | admin | Turn it back on. |
-| `DELETE /v1/ai/workflows/{id}` | admin | Deletes a workflow by archiving it: turned off and hidden (`GET /v1/ai/workflows?archived=1` lists them), restorable for 30 days, then removed by the hourly sweep (`ai.workflow.purge`); its past runs stay. 409 while a run is going or waiting. Audited as `ai.workflow.archive`. |
-| `POST /v1/ai/workflows/{id}/restore` | admin | Brings an archived workflow back, still turned off. Audited. |
-| `POST /v1/ai/workflows/{id}/run` | developer | Start a run now (one at a time per workflow). |
-| `POST /v1/ai/workflows/{id}/schedule/pause` | admin | Pause the current version's schedule without a new version; it still runs by hand, from its webhook and after failed runs. Audited as `ai.schedule.pause` (design note 047). |
-| `POST /v1/ai/workflows/{id}/schedule/resume` | admin | Resume it; a cron schedule waits for its next time instead of running the missed ones. Audited as `ai.schedule.resume`. |
-| `GET /v1/ai/workflow-runs` | developer | Recent runs (`?workflow=`). |
-| `GET /v1/ai/workflow-runs/{id}` | developer | One run with each step's output. |
-| `POST /v1/ai/workflow-runs/{id}/release` | admin | Let a run waiting at a gate start its next stage. |
-| `POST /v1/ai/workflows/{id}/hook-secret` | admin | Makes a new webhook secret for a workflow and returns it once (`secret`, `url`, `how`); the old one stops working. Audited as `ai.workflow.hook-secret`. |
-| `POST /hooks/workflows/{id}` | public | Starts a graph workflow whose current version has `webhook: true`. The header `X-Forgeline-Signature-256` (or GitHub's `X-Hub-Signature-256`) is `sha256=` and the hex HMAC-SHA256 of the body with the secret. Any bad signature, unknown workflow or missing secret answers 401 the same way. Body at most 64 KB; it reaches the graph as the state value `trigger`. 409 when the version takes no webhook, the workflow is off or a run is going; 429 after 30 webhook runs in an hour. |
-| `POST /v1/ai/workflow-runs/{id}/answer` | developer | Body: `answer`. Answers the question a graph run waits at: any administrator, or only the people the node names; with choices, one of them (it picks the wire). Audited as `ai.workflow.answer`. |
-| `POST /v1/ai/workflow-runs/{id}/cancel` | developer | Cancel a run (its starter, or an administrator). |
-| `GET /v1/envs` | developer | Environments (temporary stacks) with owner, status, expiry and cost estimate. |
-| `GET /v1/envs/templates` | developer | The environment templates (developer box, QA sandbox, Lambda sandbox, event pipeline, workflow sandbox) with the options a person can set. |
-| `GET /v1/envs/policy` | developer | The self-service policy. |
-| `PUT /v1/envs/policy` | admin | Set the self-service policy: templates, time and cost limits, environments per person. |
-| `POST /v1/envs/estimate` | developer | The cost of a request and whether the policy lets it start without approval. |
-| `POST /v1/envs` | developer | Ask for an environment. Within the self-service policy it starts at once; otherwise an administrator approves the change as for any cloud change. |
-| `GET /v1/envs/{id}` | developer | One environment. |
-| `POST /v1/envs/{id}/extend` | developer | Extend it (its owner or an administrator), up to the longest life the policy allows. |
-| `POST /v1/envs/{id}/destroy` | developer | Delete it now (its owner or an administrator). |
-| `GET /v1/k8s/clusters` | viewer | Registered Kubernetes clusters (never their tokens). |
-| `POST /v1/k8s/clusters` | admin | Register a cluster (`eks` through a connected AWS account, or `token`); proves it with a read before saving. |
-| `DELETE /v1/k8s/clusters/{id}` | admin | Remove a cluster and its stored token. Changes nothing in the cluster. |
-| `GET /v1/k8s/clusters/{id}/resources` | viewer | Nodes, workloads, pods, services, namespaces and warning events, read-only; `?refresh=1` skips the 60 s cache. |
-| `GET /v1/guard/findings` | viewer | Guard findings (`?status=open|resolved`, `?account=`, `?severity=`) with severity counts and any accepted exception. |
-| `GET /v1/guard/scans` | viewer | Recent scans and the automatic scan interval. |
-| `POST /v1/guard/scan` | developer | Start a scan of every account, cluster and the pipelines (or one `account`, a cluster as `k8s:<id>`, or `pipelines`); read-only; one at a time. |
-| `PUT /v1/guard/settings` | admin | Automatic scans every 6, 12, 24 or 168 hours, or 0 for off. |
-| `POST /v1/guard/findings/{id}/accept` | admin | Accept a finding for 1 to 90 days with a reason; it reopens when that ends. |
-| `DELETE /v1/guard/findings/{id}/accept` | admin | End an acceptance early. |
 | `GET /v1/ai/tools` | developer | The tools an agent can be given, with the role each needs. |
 | `GET /v1/ai/skills` | developer | Skills (name, description, current version). |
 | `GET /v1/ai/skills/{id}` | developer | One skill with every version. |
-| `POST /v1/ai/skills` | admin | Create a skill (version 1). |
+| `POST /v1/ai/skills` | admin | Create a skill (version 1). Body: `name` (up to 60), `description` (up to 300), `body` (the steps, required, up to 8 KiB), `note` (up to 200). `201`. |
 | `POST /v1/ai/skills/{id}/versions` | admin | Save a new version; history is append-only and an unchanged save is refused. |
 | `POST /v1/ai/skills/{id}/rollback` | admin | Make an old version current by copying it forward as a new version. |
 | `DELETE /v1/ai/skills/{id}` | admin | Remove a skill no agent version uses. |
 | `GET /v1/ai/agents` | developer | Agents with current version, tier and tools. Archived agents are left out; `?archived=1` lists only them, with `archived_at`. |
 | `GET /v1/ai/agents/{id}` | developer | One agent with every version. |
 | `GET /v1/ai/agents/{id}/export` | developer | `?format=bundle` or `docker`, `&version=n`: one version as a Forgeline bundle (a zip: `agent.yaml`, `skills/<name>/SKILL.md` in the Agent Skills format, `README.md`) or a Docker Agent file (`application/yaml`). The current version when `version` is left out. No key or secret is in either; Forgeline's own tools are listed as left out. 409 when a pinned skill or the model's provider is gone. Audited as `ai.agent.export` (design note 046). |
-| `POST /v1/ai/agents` | admin | Create an agent (version 1): instructions, pinned skills, tool allowlist, tier T0 or T1, and optionally `model` (the model it asks, such as `claude-haiku-5-5`; empty uses the assistant's). |
+| `POST /v1/ai/agents` | admin | Create an agent (version 1). Body: `name` (up to 60), `description` (up to 300), `instructions` (required, up to 4 KiB), `skills` (up to 8 pins, `{"id", "n"}`; `n` 0 pins the skill's current version), `tools` (names from `GET /v1/ai/tools`), `tier` (`T0` advisory or `T1`, which may also file proposals), optionally `model` (a name such as `claude-haiku-5-5`, or `provider/model`; empty uses the assistant's) and `note` (up to 200). `201` with the agent; the id is made from the name. An agent keeps at most 100 versions. |
 | `POST /v1/ai/agents/import` | admin | `{"bundle": "<the zip, base64>", "dry_run": true}`: bring in a Forgeline bundle (at most 512 KiB). A new agent, or a new version of the agent with the same name. Skills are matched by their text, and created when none has it; tools this server lacks, proposal tools on a T0 agent and `ask_agent` are left out with a reason; a model this server lacks becomes the assistant's. The answer says all of that (`action`: `create`, `version` or `unchanged`; `skills`, `dropped`, `notes`); a dry run saves nothing, and `unchanged` saves nothing either. Audited as `ai.agent.import` (design note 046). |
 | `POST /v1/ai/agents/{id}/push` | admin | `{"registry": "<id>", "repository": "triage", "version": 3, "reason": "..."}`: propose pushing one version (the current one when `version` is 0 or left out) to a registry as Docker Agent stores it, tagged `v<n>`. The repository goes under the registry's namespace; empty uses the agent's id. The proposal holds the exact Docker Agent file and reference; nothing is sent until a different administrator approves it. Audited as `ai.agent.push.propose` (design note 046). |
 | `GET /v1/ai/pushes` | developer | The 100 newest push proposals, with their status (`proposed`, `pushing`, `pushed`, `failed`, `rejected`, `cancelled`, `expired` after 24 hours) and, while waiting, what the approval rules ask (`approval`). |
-| `GET /v1/traces` | developer | `?kind=agent\|workflow\|team\|mission\|pipeline\|assistant\|model`, `&subject=<agent or workflow id>`, `&failed=1`, `&limit=n` (at most 500): the newest traces without their spans, each with `name`, `kind`, `who`, `started`, `millis`, `failed`, tokens, `cost_usd`, `model_calls`, `tool_calls`; and `total`. Forgeline keeps the newest 1,000 traces and none older than 14 days (design note 049). |
-| `GET /v1/traces/{id}` | developer | One trace with its spans (`trace_id`, `span_id`, `parent_id`, `name`, `kind`, `start`, `end`, `error`, `attrs` with the OpenTelemetry GenAI names such as `gen_ai.operation.name`, `gen_ai.request.model`, `gen_ai.usage.input_tokens`). No prompt, answer, instructions or tool arguments are kept. |
-| `GET /v1/ai/evals` | developer | `?agent=<id>`: eval suites, each with its cases and `last_run` (design note 050). |
-| `POST /v1/ai/evals` | developer | `{"agent", "name", "description", "attempts": 1-5, "judge": "provider/model", "cases": [{"name", "input", "fixtures": {"tool": "what it returns"}, "fields": ["cause"], "checks": [{"kind", "value", "key", "n"}]}]}`: a new suite. Check kinds: `contains`, `not_contains`, `regex`, `json` (value: keys it must have), `field` (key = value), `tool_called` (value: tool; key: an argument it must carry), `tool_not_called`, `max_tool_calls`, `max_tokens`, `max_seconds` (n), `judge` (value: the rubric). At most 100 cases and 12 checks a case. Audited as `ai.eval.create`. |
-| `GET /v1/ai/evals/{id}` | developer | One suite. |
-| `PUT /v1/ai/evals/{id}` | developer | The same fields; replaces the suite's name, attempts, judge and cases. Audited as `ai.eval.update`. |
-| `DELETE /v1/ai/evals/{id}` | developer | Delete a suite and its runs. Audited as `ai.eval.delete`. |
-| `POST /v1/ai/evals/{id}/run` | developer | `{"version": 3, "model": "provider/model"}` (both optional): run every case `attempts` times against that version, as the caller, in the background. Proposals, environment requests, prepared actions and memory writes are recorded, never carried out; a tool with a fixture returns it. 409 while the suite is running. Audited as `ai.eval.run` and, when finished, `ai.eval.done`. |
-| `POST /v1/ai/evals/attack-suite` | developer | `{"agent", "attempts": 1-5 (default 3)}`: add the ready-made attack suite (seven cases from the OWASP agentic list: orders planted in a log or an issue, a change asked for without approval, a tool misused, secret values, a role the person lacks) to an agent. 409 if it already has one. Audited as `ai.eval.create`. |
-| `POST /v1/ai/evals/case-from-trace` | developer | `{"trace_id"}`: a case made from a trace that kept its prompt (`case`, `agent`, `tools`); 409 when it did not. |
-| `GET /v1/ai/eval-runs` | developer | `?suite=<id>`: runs, newest first (`status`, `version`, `model`, `passed_cases`, `total_cases`). The newest 50 per suite are kept. |
-| `GET /v1/ai/eval-runs/{id}` | developer | One run: per case `pass` (every attempt passed) and `passed_attempts`, and per attempt its `checks` (`kind`, `pass`, `note`), `reply`, `tools`, `recorded`, `tokens`, `millis` and `trace_id`. |
 | `PUT /v1/ai/agents/{id}/gate` | admin | `{"suite": "<one of this agent's suites>"}` (or `""` to turn it off): from now on a saved version is a candidate; it becomes current when it is published, which needs a passing run of that suite on it. Audited as `ai.agent.gate` (design note 050). |
 | `POST /v1/ai/agents/{id}/publish` | admin | `{"version": 4, "when_passes": false}`: make a version current. With a gate it needs a run of the gate suite on that version, with its own model, every case passed, made after the suite last changed (409 otherwise); with `when_passes` it starts that run instead (202 with `run`) and publishes when every case passes. Without a gate it publishes at once. A rollback is not gated. Audited as `ai.agent.publish`. |
-| `GET /v1/settings/otel` | admin | Where traces are sent: `enabled`, `endpoint`, `service`, `headers` (`name`, `set`; values are never returned) and `stats` (`sent_spans`, `queued_spans`, `dropped_spans`, `failed_batches`, `last_error`, `last_sent`) since the server started. |
-| `PUT /v1/settings/otel` | admin | `{"enabled": true, "endpoint": "https://otlp.example.com", "service": "forgeline", "content": false, "headers": [{"name": "Authorization", "value": "Bearer ..."}]}`: `content` keeps prompts, answers and tool arguments and results in traces (credentials and stored secrets hidden, 4 KB each); the rest sends every trace to an OTLP/HTTP endpoint (`/v1/traces` is added; plain http only for localhost and 127.0.0.1). A header without `value` keeps its stored one; a header left out is deleted from the vault. At most 8 headers; Host, Content-Type and the like are refused. A person's user name is never sent. Audited as `otel.update` (design note 049). |
-| `POST /v1/settings/otel/test` | admin | Send one small trace now with the saved settings: `{"ok": true, "trace_id": "..."}`, or 502 with what the endpoint answered. Audited as `otel.test`. |
 | `GET /v1/ai/pushes/{id}` | developer | One push: the agent and version, `ref`, the exact `yaml`, the tools that stay behind (`left_out`), `hash`, and after a push the `digest` the registry confirmed. |
 | `POST /v1/ai/pushes/{id}/approve` | admin | `{"hash": "<the push's hash>", "note": "..."}`: approve it. Refused to the proposer, for a different hash, when the registry was removed or its host or namespace changed, and by the approval rules (kind `publish`). The approval that completes the count pushes exactly the approved file and answers with the result. Audited as `ai.agent.push.approve` and `ai.agent.push`. |
 | `POST /v1/ai/pushes/{id}/reject` | admin | Reject a waiting push. Audited as `ai.agent.push.reject`. |
 | `POST /v1/ai/pushes/{id}/cancel` | admin | Withdraw a waiting push. Audited as `ai.agent.push.cancel`. |
-| `GET /v1/runbooks` | developer | Runbooks (design note 051), by name, each with its `versions`, which one is `current` (the newest reviewed; 0 when none is), and `examples` to start from. |
-| `POST /v1/runbooks` | admin | `{"name", "description", "kind": "check" or "fix", "script", "params": [{"name": "ENV_NAME", "type": "choice" or "int", "choices", "min", "max", "default"}], "target": {"account", "instances"} or {"tag_key", "tag_value"}, "timeout_seconds", "note"}`: make a runbook. Its first version waits for review. Audited as `runbook.version`. |
-| `GET /v1/runbooks/{id}` | developer | One runbook with every version's script, parameters, target, `hash` and `review`. |
-| `POST /v1/runbooks/{id}/versions` | admin | The same fields as making one, without name and kind: a new version, which waits for review; the current one keeps running. |
-| `POST /v1/runbooks/{id}/review` | admin | `{"version", "hash", "note"}`: approve that version's exact text, which becomes what runs. Refused to the version's author, for another hash, and for a version older than the current one. Audited as `runbook.review`. |
-| `POST /v1/runbooks/{id}/run` | developer | `{"params": {"NAME": "value"}, "reason"}`: a check starts at once (202, `running`); a fix needs a reason and is filed for a different administrator (202, `proposed`). Values must match their parameter's type; the instances are found now. Audited as `runbook.run` or `runbook.propose`. |
-| `GET /v1/runbook-runs` | developer | The 100 newest runs (`?runbook=` for one), without scripts and output, with what the approval rules ask while one waits. |
-| `GET /v1/runbook-runs/{id}` | developer | One run: the exact `script` sent, `params`, `targets`, `hash`, `status` (`proposed`, `running`, `succeeded`, `failed`, `rejected`, `cancelled`, `expired` after 24 hours), and per instance its SSM status, exit code and output (cut, credentials hidden), and `trace_id`. |
-| `POST /v1/runbook-runs/{id}/approve` | admin | `{"hash", "note"}`: approve a fix. Refused to whoever asked for it, for another hash, when the runbook changed since, and by the approval rules (kind `runbook`). The approval that completes the count starts it (202). Audited as `runbook.approve` and `runbook.done`. |
-| `POST /v1/runbook-runs/{id}/reject` | admin | Reject a fix that is waiting. Audited as `runbook.reject`. |
-| `POST /v1/runbook-runs/{id}/cancel` | developer | Withdraw a fix that is waiting: whoever asked, or an administrator. Audited as `runbook.cancel`. |
 | `GET /v1/ai/registries` | admin | Registries agents may be pushed to: `name`, `host`, `namespace`, `username`, `has_token`. The token is never returned. |
 | `POST /v1/ai/registries` | admin | `{"name", "host", "namespace", "username", "token"}`: add a registry (at most 20). `host` is a registry host such as `ghcr.io` or `127.0.0.1:5000`; plain http is used only for `localhost` and `127.0.0.1`. The token goes into the vault. Audited as `ai.registry.create`. |
 | `PUT /v1/ai/registries/{id}` | admin | The same fields. Leave `token` out to keep the stored one; `""` removes it. Waiting pushes to it are refused if its host or namespace changes. Audited as `ai.registry.update`. |
@@ -224,6 +100,15 @@ A run's `status` is one of `queued`, `running`, `succeeded`, `failed`, `canceled
 | `DELETE /v1/ai/agents/{id}` | admin | Deletes an agent by archiving it: turned off, hidden, its reporting line cut and agents that reported to it report to people. 409 naming them while an enabled workflow or an unfinished mission uses it. Deleted for good 30 days later by the hourly sweep (audited as `ai.agent.purge`). Audited as `ai.agent.archive`. |
 | `POST /v1/ai/agents/{id}/restore` | admin | Brings an archived agent back before the sweep, still turned off. Audited. |
 | `PUT /v1/ai/agents/{id}/reports-to` | admin | Body: `reports_to`, another agent's id, or empty to report to people. A line that would make a loop is refused. Describes the team; it gives no agent power over another. Audited as `ai.agent.team`. |
+| `PUT /v1/ai/agents/{id}/budget` | admin | Body `tokens`, `minutes`: the agent's monthly limits, 0 for none (both 0 clears the budget). At 80% the console warns; when one is used up the agent's next model call is refused. Audited. Answers its state: `budget`, `used`, `fraction`, `level` (`ok`, `warn`, `stop`). |
+| `POST /v1/ai/agents/{id}/chat` | developer | Talk to an agent. Body: `message`, `history`, `version` (optional; 0 is the current one). It uses only its own tools, as the asker. Shares the assistant's limit of 20 questions a minute per person (`429`). |
+
+## Teams
+
+Groups of agents with a lead, and the schedules that give a team a goal. See [Teams](../guides/teams.md).
+
+| Method and path | Role | Purpose |
+| --- | --- | --- |
 | `GET /v1/ai/team` | developer | The team for the org chart: each agent with `reports_to`, `mode` (`advises` or `proposes`), `state` (`working`, `waiting` at a workflow gate, `scheduled` with `next_at` and `every_minutes`, `idle`, `off`), `doing` and `run_id`, `workflows`, `steps_week`, `failed_week`, `last_at`; `mission` (the workflow run in progress, else the latest, with its stages); `schedules_stopped` when the assistant is off. |
 | `GET /v1/ai/teams` | developer | Teams (note 045): each with `id`, `name`, `purpose`, `lead`, `members` (agent ids) and its newest run as `last_run`. |
 | `POST /v1/ai/teams` | admin | Makes a team: `name`, `purpose`, `lead` and 1 to 8 `members` (agents, not the lead, not archived; an agent can be in several teams). `id` is made from the name when left out. Audited. |
@@ -233,16 +118,179 @@ A run's `status` is one of `queued`, `running`, `succeeded`, `failed`, `canceled
 | `POST /v1/ai/teams/{id}/schedules` | admin | Give the team a `goal` at set times: `every_minutes` (15 to 10080) or `cron` (five fields, at most every 15 minutes) with `tz` (an IANA zone; empty is UTC), and `run_as` `viewer` or `developer` (never admin). At most 10 per team. A time missed by more than an hour is skipped, not run late; a team already working skips that time. Audited as `ai.schedule.create` (design note 047). |
 | `PUT /v1/ai/team-schedules/{sid}` | admin | Change one (the same fields, and `paused`). Audited as `ai.schedule.update`. |
 | `DELETE /v1/ai/team-schedules/{sid}` | admin | Delete one; the team's past runs stay. Audited as `ai.schedule.delete`. |
+| `POST /v1/ai/teams/{id}/runs` | developer | Gives the team a `goal` (up to 2000 characters); `202` with the run, so poll `GET /v1/ai/team-runs/{id}`. The lead plans one task per member it picks (only its own members, once each), the members work three at a time as the person who asked, each with its own model, tools and budget, and the lead writes the `answer` from their output, which it gets as data. `409` when a member is off or the team is already working. Each agent call is audited as `ai.team.step`. |
+| `GET /v1/ai/team-runs/{id}` | developer | One run: `status` (`planning`, `working`, `writing`, `done`, `failed`), `plan_note`, `tasks` (member, task, status, output or error, lookups, time), `answer`, `error` and `proposals`. |
+
+## Evals
+
+Test suites for an agent version, runs and the publish gate. See [Evals](../guides/evals.md).
+
+| Method and path | Role | Purpose |
+| --- | --- | --- |
+| `GET /v1/ai/evals` | developer | `?agent=<id>`: eval suites, each with its cases and `last_run` (design note 050). |
+| `POST /v1/ai/evals` | developer | `{"agent", "name", "description", "attempts": 1-5, "judge": "provider/model", "cases": [{"name", "input", "fixtures": {"tool": "what it returns"}, "fields": ["cause"], "checks": [{"kind", "value", "key", "n"}]}]}`: a new suite. Check kinds: `contains`, `not_contains`, `regex`, `json` (value: keys it must have), `field` (key = value), `tool_called` (value: tool; key: an argument it must carry), `tool_not_called`, `max_tool_calls`, `max_tokens`, `max_seconds` (n), `judge` (value: the rubric). At most 100 cases and 12 checks a case. Audited as `ai.eval.create`. |
+| `GET /v1/ai/evals/{id}` | developer | One suite. |
+| `PUT /v1/ai/evals/{id}` | developer | The same fields; replaces the suite's name, attempts, judge and cases. Audited as `ai.eval.update`. |
+| `DELETE /v1/ai/evals/{id}` | developer | Delete a suite and its runs. Audited as `ai.eval.delete`. |
+| `POST /v1/ai/evals/{id}/run` | developer | `{"version": 3, "model": "provider/model"}` (both optional): run every case `attempts` times against that version, as the caller, in the background. Proposals, environment requests, prepared actions and memory writes are recorded, never carried out; a tool with a fixture returns it. 409 while the suite is running. Audited as `ai.eval.run` and, when finished, `ai.eval.done`. |
+| `POST /v1/ai/evals/attack-suite` | developer | `{"agent", "attempts": 1-5 (default 3)}`: add the ready-made attack suite (seven cases from the OWASP agentic list: orders planted in a log or an issue, a change asked for without approval, a tool misused, secret values, a role the person lacks) to an agent. 409 if it already has one. Audited as `ai.eval.create`. |
+| `POST /v1/ai/evals/case-from-trace` | developer | `{"trace_id"}`: a case made from a trace that kept its prompt (`case`, `agent`, `tools`); 409 when it did not. |
+| `GET /v1/ai/eval-runs` | developer | `?suite=<id>`: runs, newest first (`status`, `version`, `model`, `passed_cases`, `total_cases`). The newest 50 per suite are kept. |
+| `GET /v1/ai/eval-runs/{id}` | developer | One run: per case `pass` (every attempt passed) and `passed_attempts`, and per attempt its `checks` (`kind`, `pass`, `note`), `reply`, `tools`, `recorded`, `tokens`, `millis` and `trace_id`. |
+
+## Traces and OpenTelemetry
+
+What agents, workflows and pipelines did, and where traces are sent. See [Traces and OpenTelemetry](../guides/traces-and-opentelemetry.md).
+
+| Method and path | Role | Purpose |
+| --- | --- | --- |
+| `GET /v1/traces` | developer | `?kind=agent\|workflow\|team\|mission\|pipeline\|assistant\|model`, `&subject=<agent or workflow id>`, `&failed=1`, `&limit=n` (at most 500): the newest traces without their spans, each with `name`, `kind`, `who`, `started`, `millis`, `failed`, tokens, `cost_usd`, `model_calls`, `tool_calls`; and `total`. Forgeline keeps the newest 1,000 traces and none older than 14 days (design note 049). |
+| `GET /v1/traces/{id}` | developer | One trace with its spans (`trace_id`, `span_id`, `parent_id`, `name`, `kind`, `start`, `end`, `error`, `attrs` with the OpenTelemetry GenAI names such as `gen_ai.operation.name`, `gen_ai.request.model`, `gen_ai.usage.input_tokens`). No prompt, answer, instructions or tool arguments are kept. |
+| `GET /v1/settings/otel` | admin | Where traces are sent: `enabled`, `endpoint`, `service`, `headers` (`name`, `set`; values are never returned) and `stats` (`sent_spans`, `queued_spans`, `dropped_spans`, `failed_batches`, `last_error`, `last_sent`) since the server started. |
+| `PUT /v1/settings/otel` | admin | `{"enabled": true, "endpoint": "https://otlp.example.com", "service": "forgeline", "content": false, "headers": [{"name": "Authorization", "value": "Bearer ..."}]}`: `content` keeps prompts, answers and tool arguments and results in traces (credentials and stored secrets hidden, 4 KB each); the rest sends every trace to an OTLP/HTTP endpoint (`/v1/traces` is added; plain http only for localhost and 127.0.0.1). A header without `value` keeps its stored one; a header left out is deleted from the vault. At most 8 headers; Host, Content-Type and the like are refused. A person's user name is never sent. Audited as `otel.update` (design note 049). |
+| `POST /v1/settings/otel/test` | admin | Send one small trace now with the saved settings: `{"ok": true, "trace_id": "..."}`, or 502 with what the endpoint answered. Audited as `otel.test`. |
+
+## Models, providers and usage
+
+Model providers, the models they offer, and what the AI used. See [Models and providers](../guides/models-and-providers.md) and [Usage and budgets](../guides/ai-use-and-budgets.md).
+
+Design note 045, part 1. A model from a provider is written `provider/model` (for example `anthropic/claude-haiku-5-5`)
+wherever an agent or the assistant is given one, and works whatever the assistant's own backend is. The `anthropic`,
+`openai`, `openai-compatible`, `gemini` (through Google's OpenAI-compatible endpoint), `azure-openai` (the v1 API; a
+`base_url` such as `https://my-resource.openai.azure.com/openai/v1` is required, the key goes in the `api-key` header,
+and models are deployment names) and `bedrock` kinds are built. A `bedrock` provider has no key or address: it takes
+`aws_account` (an added account's id; empty for the primary) and an optional `region`, and calls the Converse API with
+that account's credentials, whose role needs `bedrock:InvokeModel`. An `openai-compatible` provider (Ollama, vLLM, LiteLLM, OpenRouter,
+Groq...) needs a `base_url` ending in its version path, such as `http://localhost:11434/v1`; its `api_key` is optional and
+its models are added by name (which may contain `/`, as in `local/meta-llama/Llama-3.3-70B`).
+
+| Method and path | Role | Purpose |
+| --- | --- | --- |
+| `GET /v1/ai/usage` | developer | What the AI used in a month (`?month=YYYY-MM`, default this one, UTC; note 036): per agent (`who` is its id) and `_people`, with `calls`, `input_tokens`, `output_tokens`, `millis`, `cost_usd` and `costed_calls` (cost is only known where the claude program reports it), and `blind_calls` (calls whose tokens were not reported). |
+| `GET /v1/providers` | developer | `providers`: each with `id`, `kind`, `name`, `base_url`, `allow_private`, `models` (`id`, `label`, `on`, `input_usd_per_mtok`, `output_usd_per_mtok`), `monthly_usd`, `fallback`, `has_key` (never the key), `month` (calls, failed calls, tokens and cost this month), `median_millis`, `status` (`working`, `failing`, `untested`, `no-key`) and `last_error`. `kinds`: every planned kind with `built` and the known models and list prices. |
+| `POST /v1/providers` | admin | Adds a provider: `id`, `kind`, `name`, `api_key` (write-only, kept in the vault), optional `base_url` (https; http only for loopback; private and reserved addresses refused unless `allow_private`), `models`, `monthly_usd` (0 for no limit) and `fallback` (`provider/model`, used when the limit is reached or the provider is unreachable, rate limited or overloaded; once per call). Audited. |
+| `PUT /v1/providers/{id}` | admin | Changes a provider; the same body without `id` and `kind`. An empty `api_key` keeps the stored key. Audited. |
+| `DELETE /v1/providers/{id}` | admin | Removes a provider and its key. Agents that use its models fail with a clear error until they are given another. Audited. |
+| `POST /v1/providers/{id}/test` | admin | Asks a model (body `model`, or the first one turned on) to reply with one word. Returns `reply`, `model`, `millis`, `cost_usd`, or 502 with the provider's error. |
+| `GET /v1/models` | developer | The models turned on, for pickers: `ref` (`provider/model`), `provider`, `provider_name`, `kind`, `model`, `label` and prices. |
+| `GET /v1/model-calls` | developer | The last 200 model calls, newest first: `at`, `provider` (a provider's id, or the assistant's backend), `model`, `who`, tokens, `cost_usd`, `millis` and `error`. `?provider=` keeps one provider's calls. |
+
+## Library and plugins
+
+The package catalogue (skills, agents, workflows, templates, plugins) and installed plugins. See [Agent builder](../guides/agent-builder.md) and [MCP servers](../guides/mcp-servers.md).
+
+| Method and path | Role | Purpose |
+| --- | --- | --- |
+| `GET /v1/plugins` | developer | Whether plugins are on, and the installed plugins with their tools, network and host grants and secret names (never values). |
+| `PUT /v1/plugins/settings` | admin | Turn plugins on or off. Turning on checks that Docker answers. |
+| `GET /v1/market/packages` | developer | The catalogue: each package with its skills, agents, workflows, environment templates, tools, tiers, sha256, source (`built-in`, `local` or `git`), signer, and what is installed; `git` describes the signed git source (url, ref, trusted key ids, last commit and fetch, error). |
+| `POST /v1/market/refresh` | admin | Fetch the signed git source now. |
+| `DELETE /v1/market/seen/{id}` | admin | Make the server forget which signed versions of a package it has seen from git, so an older one is accepted again (for a version signed by mistake or a replaced key). Audited. |
+| `POST /v1/market/install` | admin | Install or upgrade a package. Needs the sha256 that was reviewed; an upgrade never raises the tier. `grants` gives each plugin its network (`network`, or `hosts`: a subset of the hosts the plugin asked for) and secrets; nothing is granted by default. |
+| `DELETE /v1/market/install/{id}` | admin | Forget an install and disable its agents. Skills and agents stay with their history. |
+
+## Workflows and schedules
+
+Workflows of agent steps (stages or a graph), their runs, webhooks and schedules. See [Workflows](../guides/workflows.md), [Workflow canvas](../guides/workflow-canvas.md) and [Schedules](../guides/schedules.md).
+
+| Method and path | Role | Purpose |
+| --- | --- | --- |
+| `GET /v1/ai/workflows` | developer | Workflows: stages, steps, schedule, run-as role. Each also has `graph`, `kinds` (nodes per kind), `agents`, `webhook`, `on_run_failed` and its newest run as `last_run`; archived ones are left out. |
+| `GET /v1/ai/workflows/{id}` | developer | One workflow with every version. |
+| `POST /v1/ai/workflows` | admin | Create a workflow (version 1): stages of agent steps, optional gate per stage, optional schedule, run-as viewer or developer. Or, instead of `stages`, a `graph` (design note 044): `nodes` (`id`, `kind` `start`/`agent`/`lookup`/`decide`/`ask`/`merge`/`end`, `x`, `y`, `max_visits`, and per kind `agent`, `agent_n`, `task`, `reads`, `fields`; `tool`, `args`; `by` `rule`/`agent` and `rules` (`key`, `op` `equals`/`contains`/`gt`/`lt`/`empty`, `value`, `when`); `question`, `choices`, `answerers`; `outcome`, `summary`) and `edges` (`from`, `to`, `when` for a branch). At most 40 nodes and 80 wires; exactly one start; every node reachable; a decision needs an `else` wire. A graph version may also take `webhook` (true: starts from its signed webhook) and `on_run_failed` (pipeline names, or `*`: starts when such a run fails, with the run in `trigger`). A graph run has `state`, `visits` (each node visit's `status`, `input`, `output`, `branch`, `answered_by`), `waiting` and `steps` (at most 50). |
+| `POST /v1/ai/workflows/{id}/versions` | admin | Save a new version; agent versions are pinned. |
+| `POST /v1/ai/workflows/{id}/rollback` | admin | Copy an old version forward as the current one. |
+| `POST /v1/ai/workflows/{id}/disable` | admin | Stop it running, including its schedule. |
+| `POST /v1/ai/workflows/{id}/enable` | admin | Turn it back on. |
+| `DELETE /v1/ai/workflows/{id}` | admin | Deletes a workflow by archiving it: turned off and hidden (`GET /v1/ai/workflows?archived=1` lists them), restorable for 30 days, then removed by the hourly sweep (`ai.workflow.purge`); its past runs stay. 409 while a run is going or waiting. Audited as `ai.workflow.archive`. |
+| `POST /v1/ai/workflows/{id}/restore` | admin | Brings an archived workflow back, still turned off. Audited. |
+| `POST /v1/ai/workflows/{id}/run` | developer | Start a run now (one at a time per workflow). Optional body `{"version": n}`. Answers `202` with the run; poll `GET /v1/ai/workflow-runs/{id}`. `409` when the workflow is turned off, a run is already going or no model is set up; `404` "no such version". |
+| `POST /v1/ai/workflows/{id}/schedule/pause` | admin | Pause the current version's schedule without a new version; it still runs by hand, from its webhook and after failed runs. Audited as `ai.schedule.pause` (design note 047). |
+| `POST /v1/ai/workflows/{id}/schedule/resume` | admin | Resume it; a cron schedule waits for its next time instead of running the missed ones. Audited as `ai.schedule.resume`. |
+| `GET /v1/ai/workflow-runs` | developer | Recent runs (`?workflow=`). |
+| `GET /v1/ai/workflow-runs/{id}` | developer | One run with each step's output. |
+| `POST /v1/ai/workflow-runs/{id}/release` | admin | Let a run waiting at a gate start its next stage. |
+| `POST /v1/ai/workflows/{id}/hook-secret` | admin | Makes a new webhook secret for a workflow and returns it once (`secret`, `url`, `how`); the old one stops working. Audited as `ai.workflow.hook-secret`. |
+| `POST /hooks/workflows/{id}` | public | Starts a graph workflow whose current version has `webhook: true`. The header `X-Forgeline-Signature-256` (or GitHub's `X-Hub-Signature-256`) is `sha256=` and the hex HMAC-SHA256 of the body with the secret. Any bad signature, unknown workflow or missing secret answers 401 the same way. Body at most 64 KB; it reaches the graph as the state value `trigger`. 409 when the version takes no webhook, the workflow is off or a run is going; 429 after 30 webhook runs in an hour. |
+| `POST /v1/ai/workflow-runs/{id}/answer` | developer | Body: `answer`. Answers the question a graph run waits at: any administrator, or only the people the node names; with choices, one of them (it picks the wire). Audited as `ai.workflow.answer`. |
+| `POST /v1/ai/workflow-runs/{id}/cancel` | developer | Cancel a run (its starter, or an administrator). |
 | `GET /v1/ai/schedules` | developer | Every workflow and team schedule: what it is, `describe`, `next` (three times), `last_at`, `last_run` or `last_note` (why it was skipped), `paused`, `off` (why nothing runs now). |
 | `POST /v1/ai/schedules/preview` | developer | `{every_minutes}` or `{cron, tz}`: `describe` and the next five times, or 400 saying what is wrong. Saves nothing. |
-| `POST /v1/ai/teams/{id}/runs` | developer | Gives the team a `goal` (up to 2000 characters); 202 with the run. The lead plans one task per member it picks (only its own members, once each), the members work three at a time as the person who asked, each with its own model, tools and budget, and the lead writes the `answer` from their output, which it gets as data. 409 when a member is off or the team is already working. Each agent call is audited as `ai.team.step`. |
-| `GET /v1/ai/team-runs/{id}` | developer | One run: `status` (`planning`, `working`, `writing`, `done`, `failed`), `plan_note`, `tasks` (member, task, status, output or error, lookups, time), `answer`, `error` and `proposals`. |
-| `GET /v1/ai/usage` | developer | What the AI used in a month (`?month=YYYY-MM`, default this one, UTC; note 036): per agent (`who` is its id) and `_people`, with `calls`, `input_tokens`, `output_tokens`, `millis`, `cost_usd` and `costed_calls` (cost is only known where the claude program reports it), and `blind_calls` (calls whose tokens were not reported). |
-| `POST /v1/missions` | developer | Start a mission (note 037): `goal` (10 to 2000 characters), `agent`, `account` (default `primary`; the mission may only look at this account), `budget_tokens` (default 200,000, at most 5,000,000). 202 with the mission; it runs in the background. At most 5 at once. Audited. |
-| `GET /v1/missions` | developer | Missions, newest first. |
-| `GET /v1/missions/{id}` | developer | One mission: `stage` (`discover`, `propose`, `approval`, `verify`, `report`), `status` (`running`, `waiting`, `done`, `failed`, `cancelled`, `stopped`), `steps` (with the lookups each ran), `findings` (each naming the lookup that showed it), `unsupported` (claims dropped for naming no lookup that ran), `plan`, `proposals`, `evidence`, `used`, `report`. |
-| `POST /v1/missions/{id}/cancel` | developer | Cancel a mission that has not ended; only the person who started it or an administrator. Proposals it filed stay for the approver to decide. Audited. |
-| `PUT /v1/ai/agents/{id}/budget` | admin | Body `tokens`, `minutes`: the agent's monthly limits, 0 for none (both 0 clears the budget). At 80% the console warns; when one is used up the agent's next model call is refused. Audited. Answers its state: `budget`, `used`, `fraction`, `level` (`ok`, `warn`, `stop`). |
+
+## Pipelines, runs and secrets
+
+Submit and save pipelines, run them and read their logs; the secrets steps may request; build push rules. See [Pipelines](../guides/pipelines.md), [Pipeline editor and runs](../guides/pipeline-editor-and-runs.md) and [Secrets and memory](../guides/secrets-and-memory.md). A run's `status` is one of `queued`, `running`, `succeeded`, `failed`, `canceled`; a step's is one of `pending`, `running`, `succeeded`, `cached`, `failed`, `skipped`, `canceled`.
+
+| Method and path | Role | Purpose |
+| --- | --- | --- |
+| `POST /v1/runs` | developer | Submit a pipeline without saving it. `multipart/form-data`: field `pipeline` (the YAML, at most 1 MiB, else `413`) and optional `source` (a `tar.gz` of the files the steps read; the server's limit is 64 MiB packed and unpacked). Answers `202` with the run (`trigger` is `api`) and a `Location: /v1/runs/{id}` header; the run is `queued`, so poll it. `400` `missing "pipeline" field`, or `{"error": "invalid pipeline", "problems": [{"path", "msg"}]}` with the same paths the editor shows. Nothing is created when the YAML or the archive is refused. |
+| `GET /v1/runs` | viewer | Runs, newest first, without their steps: `{"runs": [...], "next_before": "..."}`. Query: `limit` (default 50, at most 200), `before` (a run id: older runs only; `400` "unknown before cursor"), `pipeline` (a name). A page that is full carries `next_before`: pass it as `before` for the next page. The `pipeline` filter is applied to the page after it is cut, so a filtered page can hold fewer runs than `limit` while more exist. |
+| `GET /v1/runs/{id}` | viewer | One run: `id`, `pipeline`, `status`, `reason`, `trigger` (`api`, `ui`, `github`...), `trust` (`untrusted` for a pull request, which never gets secrets), `triggered_by`, `pipeline_id`, `pipeline_version`, `source` (`repo`, `ref`, `sha`), `created_at`, `started_at`, `finished_at`, `trace_id`, and `steps` (`id`, `needs`, `status`, `exit_code`, `error`, `started_at`, `finished_at`). `404` "no such run". |
+| `GET /v1/runs/{id}/failure` | viewer | For a failed run: `failed`, the step that failed first (`step`), `headline`, `exit_code`, `causes` (plain-words guesses from the exit code and the log), `skipped` (steps that did not run) and `tail` (the last 40 lines of its output). For any other run it answers `{"failed": false, "causes": [], "skipped": []}`. |
+| `POST /v1/runs/{id}/cancel` | developer | Stop a run. Idempotent. `200` with the run when it was finished already or was still queued (now `canceled`); `202` when it was running and a stop has been requested, so poll the run for `canceled`. `404` "no such run". |
+| `GET /v1/runs/{id}/steps/{step}/logs` | viewer | A step's output as `text/plain`, with secrets shown as `***`. With `Accept: text/event-stream` the log is followed live as server-sent events: `data: {"seq": 12, "text": "..."}` with `id: 12`, then `event: end` with `{"status": "..."}` when the step is over. Reconnect with `Last-Event-ID` to resume. `404` "no such run or step". |
+| `GET /v1/pipelines` | viewer | Saved pipelines as `{"pipelines": [...]}`: `id`, `name`, `description`, `version`, `updated_at`, `updated_by`, `steps` (a count). Use `GET /v1/runs?pipeline=NAME` for the latest status. |
+| `POST /v1/pipelines/validate` | viewer | Body: `yaml`. Always `200`, even for a bad pipeline: `valid`, `name`, `problems` (`path`, `msg`), `graph` (`steps` with `layer`, `network`, `secrets`; `layers`), `missing_secrets` (secret names no vault entry or environment variable provides) and `warnings` (a step with secrets and network access, a mutable image tag). Saves nothing. |
+| `POST /v1/pipelines` | developer | Save a new pipeline. Body: `yaml` (at most 1 MiB), `description` (at most 300 characters), optional `source` (`{"repo": "owner/name", "branch": "main"}`, a branch on the GitHub allow list; not a pattern). The name comes from the YAML and is the id. `201` with the pipeline, `409` "a pipeline named ... already exists", `400` with `problems` for a bad pipeline. |
+| `GET /v1/pipelines/{id}` | viewer | The pipeline with its `yaml`, `source` and `history`: the last 20 earlier versions (`version`, `yaml`, `by`, `at`), newest first. `404` "no such pipeline". |
+| `PUT /v1/pipelines/{id}` | developer | New version. Body: `yaml`, `description`, `base_version`, and `source`: an object sets it, `null` clears it, leaving it out keeps it. The name in the YAML must equal the id (`400`; to rename, create a new pipeline). If `base_version` is given and is not the current version the answer is `409` with `error` and `current` (the pipeline as it is now). A save that changes nothing answers `200` with no new version. |
+| `POST /v1/pipelines/{id}/run` | developer | Run the latest version; no body. Answers `202` with the run (`trigger` `ui`) and a `Location` header; poll `GET /v1/runs/{id}`. May use secrets. With a `source`, the branch must still be on the allow list (`409` if not); the run downloads the branch's newest commit first (`502` if GitHub cannot give it, `503` when too many downloads are running; no run is created) and records it as `source`. Such runs build images but never push. |
+| `POST /v1/pipelines/{id}/versions/{version}/restore` | developer | Make an old version the newest (it is saved as a new version). `404` "version N is not kept (the last 20 are)". |
+| `DELETE /v1/pipelines/{id}` | admin | Delete the pipeline and its versions. `204`. Runs that already happened stay. |
+| `GET /v1/secrets` | developer | Names only, as `{"secrets": [...]}`: `name`, `source` (`vault` or `environment`, for `FORGELINE_SECRET_*` variables), `description`, `version`, `created_by`, `updated_by`, `updated_at`, `used_by` (saved pipelines that request it) and `problem` when the stored value cannot be opened with the current master key. Never values. |
+| `PUT /v1/secrets/{name}` | admin | Create or replace. Body: `value` (8 characters to 16 KiB, no newline or NUL byte), `description` (up to 200). The name matches `[A-Za-z_][A-Za-z0-9_]*`. `201` when new, `200` when it replaced one (the `version` goes up). A secret set by the server's environment answers `409`. The answer never contains the value. |
+| `DELETE /v1/secrets/{name}` | admin | Remove. `204`; `404` for an unknown name; `409` for one set by the server's environment. Pipelines that still request it will fail to start a step until it is back. |
+| `GET /v1/build-push-rules` | admin | Push rules for build steps (note 043): `id`, `repo`, `branches`, `target` (an ECR repository), `account` (the Forgeline AWS account that pushes), `updated_by`, `updated_at`. |
+| `PUT /v1/build-push-rules/{id}` | admin | Creates or replaces a rule: `repo` (owner/name), `branches` (1 to 10 names or patterns; not a bare `*`, not `refs/...`), `target` (`<account>.dkr.ecr.<region>.amazonaws.com/<name>`, no tag), `account` (default `primary`). Audited. Only runs GitHub starts for a push to a matching branch of `repo` may push to `target`. |
+| `DELETE /v1/build-push-rules/{id}` | admin | Removes a rule. Images already pushed stay. |
+| `GET /v1/settings/step-capabilities` | developer | What pipeline step containers keep of the Linux capabilities (design note 005): `mode` (`relaxed` or `strict`), the `baseline` every step gets, what relaxed still `dropped`, and what a step may ask for (`grantable`). |
+| `PUT /v1/settings/step-capabilities` | admin | `{"mode": "relaxed" | "strict"}`. Applies to the next run. Audited as `settings.step_capabilities`; each grant beyond the baseline is `run.capability.grant`. |
+
+## GitHub
+
+The GitHub connection, its webhook, and GitHub Actions. See [Connect GitHub](../guides/connect-github.md) and [GitHub Actions](../guides/github-actions.md). Only repositories on the GitHub allow list; a workflow can only be started on a branch its rule allows.
+
+| Method and path | Role | Purpose |
+| --- | --- | --- |
+| `GET /v1/integrations/github` | developer | Current settings (no secrets), last deliveries. Each rule has `repo`, `branches` and `secrets` (runs for pushes to these branches may use the vault's secrets; off unless an administrator turns it on; a pull request never gets any). |
+| `PUT /v1/integrations/github` | admin | Body: `enabled`, `api_base`, `public_url`, `pipeline_file`, `rules` (`repo` as `owner/repo`, `branches`, `secrets`), `token` (write-only; empty keeps the stored one), `webhook_secret` (write-only) or `generate_webhook_secret: true` (a new random one, returned once). `200` with the settings; `400` names the field that is wrong. |
+| `DELETE /v1/integrations/github` | admin | Disconnect and delete stored keys. |
+| `POST /v1/integrations/github/test` | admin | Check the connection. |
+| `POST /v1/integrations/github/app/start` | admin | Begin creating the App. Body: `public_url`, `name`, `owner`, `api_base`. |
+| `GET /v1/integrations/github/app/launch` | admin | The page that sends you to GitHub. |
+| `GET /v1/integrations/github/app/callback` | public | GitHub returns here with `code` and `state`. Bound to the admin's setup by a one-time state. |
+| `GET /v1/integrations/github/app/installations` | admin | Installations of the App. |
+| `GET /v1/integrations/github/app/repos` | admin | Repositories of an installation. |
+| `POST /v1/integrations/github/app/install` | admin | Body: `installation_id`, `rules`, `public_url`. |
+| `POST /webhooks/github` | public (signed) | Where GitHub sends events. Checked with the webhook secret; a bad signature gets `401`. |
+| `GET /v1/actions/repos` | developer | `{"connected": true, "repos": [{"repo", "branches"}]}`: the repositories on the GitHub allow list and the branches each rule allows. |
+| `GET /v1/actions/workflows` | developer | `?repo=owner/name`. The workflows of the repository (`id`, `name`, `path`, `state`, `html_url`), at most 100. `409` when GitHub is not connected, `403` "that repository is not on the GitHub allow list". |
+| `GET /v1/actions/runs` | developer | `?repo=` (required), optional `workflow=` (number or `ci.yml`) and `status=`. The latest 30 runs as `{"repo", "runs": [...]}`. Each has `id`, `run_number`, `run_attempt`, `status`, `conclusion`, `event`, `branch`, `sha`, `actor`, `html_url`, and `fork: true` when its code came from another repository. |
+| `GET /v1/actions/runs/{id}` | developer | `?repo=`. The run and its jobs with steps. |
+| `GET /v1/actions/jobs/{id}/logs` | developer | `?repo=`. The last 256 KB of the job's log as plain text. |
+| `POST /v1/actions/dispatch` | developer | Body: `repo`, `workflow` (a number or a file name such as `ci.yml`), `ref` (a branch the repository's rule allows, else `403`), `inputs` (up to 25 strings, each at most 1000 bytes). Needs `workflow_dispatch` in the workflow file. `200` with `{"ok": true, "run_id", "html_url"}`; `502` with GitHub's own refusal. Writes (dispatch, cancel, rerun) are limited to 20 a minute per person (`429` "too many actions; wait a minute"). |
+| `POST /v1/actions/runs/{id}/cancel` | developer | Body: `repo`. `200` `{"ok": true}`. Counts against the 20 a minute. |
+| `POST /v1/actions/runs/{id}/rerun` | developer | Body: `repo`, `failed_only` (re-run only the failed jobs). `200` `{"ok": true}`. Counts against the 20 a minute. |
+
+## Blueprints, environments and resources
+
+Blueprints (designs that become OpenTofu), the template library, environments (temporary stacks) and what Forgeline built. See [Blueprints and environments](../guides/blueprints-and-environments.md) and [Cloud canvas](../guides/cloud-canvas.md).
+
+| Method and path | Role | Purpose |
+| --- | --- | --- |
+| `GET /v1/settings/resource-types` | developer | The resource types the generic resource block may make (design note 040, step 7): `accounts`, each a sorted list such as `aws_sns_topic`. |
+| `PUT /v1/settings/resource-types` | admin | Body: `accounts` (account id to types, at most 300 each). Every type must exist in the AWS provider's schema; IAM users, groups, access keys, other long-lived credentials and account-wide settings are refused. The first call may take a minute while the schema is made. Audited as `blueprint.resource-types` ("allows ...", "no longer allows ..."). |
+| `GET /v1/resource-types/search` | developer | `?q=sns topic`: up to 40 resource types whose name matches, shortest first, with a plain `label`; `count` and `provider_version` of the schema. |
+| `GET /v1/resource-types/{type}` | developer | One type for the canvas form: `fields` (`name`, `kind` `string`/`number`/`bool`/`list`/`map`/`json`/`block`, `required`, `settable`, `why` it cannot be set: secret, set by AWS or the blueprint's region; `nesting`, `min_items`, `max_items` for a nested block), required first; `outputs`, the attributes a link may read. |
+| `GET /v1/envs` | developer | Environments (temporary stacks) with owner, status, expiry and cost estimate. |
+| `GET /v1/envs/templates` | developer | The environment templates (developer box, QA sandbox, Lambda sandbox, event pipeline, workflow sandbox) with the options a person can set. |
+| `GET /v1/envs/policy` | developer | The self-service policy: `self_service`, `templates`, `max_ttl_hours` (longest self-service request, default 24), `max_lifetime_hours` (longest any environment may live, extensions included, default 168), `max_active_per_user`, `max_monthly_usd` (the largest estimate that starts without approval). |
+| `PUT /v1/envs/policy` | admin | Set the self-service policy: the same fields. Self-service lives 1 to 168 hours; the longest life is at least that and at most 720 hours. |
+| `POST /v1/envs/estimate` | developer | Same body as a request (`template`, `ttl_hours`, `params`; `name` and `purpose` are not needed). `200` with the cost estimate and whether the policy lets it start without approval. |
+| `POST /v1/envs` | developer | Ask for an environment. Body: `template`, `name` (3 to 40 letters, digits, spaces or hyphens, starting with a letter), `purpose` (5 to 300 characters), `ttl_hours` (1 up to the policy's longest), `params` (only what the template lets a person set). Answers `202` with the environment. Within the self-service policy it starts at once; otherwise an administrator approves the change as for any cloud change. `409` at the per-person limit or without a connected AWS account. |
+| `GET /v1/envs/{id}` | developer | One environment. |
+| `POST /v1/envs/{id}/extend` | developer | Body: `hours` (1 to 24 at a time). Its owner or an administrator. At most 3 extensions, and never past the policy's longest life (`409`). `200`. |
+| `POST /v1/envs/{id}/destroy` | developer | Delete it now (its owner or an administrator). Answers `202`: the teardown is a cloud change that runs in the background. `409` "this environment is ..., so there is nothing to delete yet" unless it is `active` or `failed`. |
 | `GET /v1/blueprints` | developer | Blueprints (note 035), newest change first: name, account, region, number of blocks and of warnings, who changed it and when. |
 | `POST /v1/blueprints` | developer | Save a new blueprint: `name`, `description`, `target` (`cloud` `aws`, `account`, `region`), `blocks`, `links`. Refused with a message that says where (`links[0]: ...`) when it is not valid, or when the account is not connected. A `resource` block (`resource_type`, `attributes`) must use a type allowed for the account, with settings the provider's schema takes; its links carry `attribute` (the setting they fill), `output` (what they read) and `list`. Audited. Nothing is built. |
 | `POST /v1/blueprints/check` | developer | Check a blueprint that is not saved: `error` when it is not valid, else the plain-words `checks`. |
@@ -259,32 +307,37 @@ A run's `status` is one of `queued`, `running`, `succeeded`, `failed`, `canceled
 | `POST /v1/blueprints/{id}/propose` | developer | Body `reason`. Files the latest preview as a `blueprint-apply` cloud change for a different administrator to approve; refused unless the preview is ready, of the saved blueprint, under an hour old, from the current state and changing something. On approval exactly that plan is applied. |
 | `GET /v1/blueprints/{id}/built` | developer | Whether it has been built: `built`, and if so `aws_account`, `region`, `applies`, `updated_at`, `updated_by`. After everything was removed, `built` is false and `removed` true. |
 | `GET /v1/built` | developer | Everything Forgeline built and keeps: `blueprints` (each with its blocks, links, the last approved apply, and `resources` from its OpenTofu state: address, type, block, and only the `name`, `id` and `arn`), `stacks` (deployed by an approved change and not deleted since) and `environments` that are up. `?check=1` looks each blueprint resource up in the account's inventory (a read) and sets `present`; kinds the inventory does not list stay unset. |
-| `GET /v1/onboarding` | developer | The first-run steps (note 038): `steps` (each `id`, `title`, `why`, `link` to the console page that does it, `done` with a `detail` of what was found, `skipped`), `done`, and `finished` (every step done or skipped). A step is done when what it sets up exists; nothing is ticked by hand. |
-| `PUT /v1/onboarding/{step}` | admin | Body `skip`: skip a step, or bring it back (`false`). A step that is done is never shown as skipped. Audited. |
 | `POST /v1/blueprints/{id}/assist` | developer | The assistant beside the canvas: `message`, `draft` (what is on screen), `history`. Answers `reply` and, when it edits, a `draft` checked by the save rules, kept on the blueprint's account and region and within the AI service switches, with `changes` in words and `checks`; otherwise `problem` says why none was offered. Nothing is saved. Audited without the text. |
-| `GET /v1/plugins` | developer | Whether plugins are on, and the installed plugins with their tools, network and host grants and secret names (never values). |
-| `PUT /v1/plugins/settings` | admin | Turn plugins on or off. Turning on checks that Docker answers. |
 | `GET /v1/templates` | developer | The library's templates (note 040): `ref` (name@version), `title`, `summary`, `icon`, `holds_data`, `checks`, `inputs` (the JSON Schema subset), `input_order`, and `links` (each role's `name`, `direction`, `kinds`, `access`, `variable`, `shape`). A blueprint block `{"kind": "template", "template": "<ref>", "inputs": {...}}` uses one; inputs are checked against the schema and links against the roles. |
 | `GET /v1/templates/{name}/{version}/code` | developer | The template's OpenTofu module (`main.tf.json`). A plan stores the modules it calls and the apply uses exactly those. |
-| `GET /v1/build-push-rules` | admin | Push rules for build steps (note 043): `id`, `repo`, `branches`, `target` (an ECR repository), `account` (the Forgeline AWS account that pushes), `updated_by`, `updated_at`. |
-| `PUT /v1/build-push-rules/{id}` | admin | Creates or replaces a rule: `repo` (owner/name), `branches` (1 to 10 names or patterns; not a bare `*`, not `refs/...`), `target` (`<account>.dkr.ecr.<region>.amazonaws.com/<name>`, no tag), `account` (default `primary`). Audited. Only runs GitHub starts for a push to a matching branch of `repo` may push to `target`. |
-| `DELETE /v1/build-push-rules/{id}` | admin | Removes a rule. Images already pushed stay. |
-| `GET /v1/mcp-servers` | admin | The MCP servers an administrator added (note 042): `id`, `name`, `kind` (`remote` or `local`), `url` or `image`, the vault secret names it uses (never values), `for_assistant`, `protocol` (the MCP revision it spoke), and `tools` with `read_only`, `destructive`, `writes`, `marked_read_only_by`, `markable` (it could be turned on if an administrator marks it read-only), `enabled`, `pinned` and `problem`. |
-| `POST /v1/mcp-servers` | admin | Adds a server: `id`, `name`, `kind`; remote: `url` (https; http only for loopback), optional `auth_header`, `auth_scheme` and `auth_secret` (a vault secret name), `allow_private`; local: `image` pinned by digest, `network` or `hosts`, `secrets` (environment variable to vault secret name). `run_as_image_user` (local) runs the container as the image's own user instead of nobody; `for_assistant` offers its tools to the assistant. Audited. |
-| `PUT /v1/mcp-servers/{id}` | admin | Changes a server. Changing its address or image turns every tool off until its tools are discovered again. |
-| `DELETE /v1/mcp-servers/{id}` | admin | Removes a server and its tools. |
-| `POST /v1/mcp-servers/{id}/discover` | admin | Asks the server for its tools (MCP 2026-07-28, falling back to the 2025-11-25 handshake for older servers). A tool that was on and whose definition changed is turned off with a reason. 502 with the server's error when it cannot be reached. |
-| `PUT /v1/mcp-servers/{id}/tools` | admin | `{"enabled": ["tool", ...], "read_only": ["tool", ...]}` turns those tools on, pinning their definitions, and every other tool off. A tool can be turned on when its server marks it read-only, or when it is also in `read_only`: the administrator checked that it only reads (named as `marked_read_only_by`, and dropped when its definition changes; send it again with every save). A tool its server marks `destructive`, or says `writes` (`readOnlyHint: false`, as opposed to no hint), cannot be turned on or marked, nor one whose arguments Forgeline cannot check (simple types and lists of them). Enabled tools appear as `mcp_<server>_<tool>` for agents (when added to their tools) and, for servers marked `for_assistant`, for the assistant; every call is audited. |
-| `GET /v1/market/packages` | developer | The catalogue: each package with its skills, agents, workflows, environment templates, tools, tiers, sha256, source (`built-in`, `local` or `git`), signer, and what is installed; `git` describes the signed git source (url, ref, trusted key ids, last commit and fetch, error). |
-| `POST /v1/market/refresh` | admin | Fetch the signed git source now. |
-| `DELETE /v1/market/seen/{id}` | admin | Make the server forget which signed versions of a package it has seen from git, so an older one is accepted again (for a version signed by mistake or a replaced key). Audited. |
-| `POST /v1/market/install` | admin | Install or upgrade a package. Needs the sha256 that was reviewed; an upgrade never raises the tier. `grants` gives each plugin its network (`network`, or `hosts`: a subset of the hosts the plugin asked for) and secrets; nothing is granted by default. |
-| `DELETE /v1/market/install/{id}` | admin | Forget an install and disable its agents. Skills and agents stay with their history. |
-| `POST /v1/ai/agents/{id}/chat` | developer | Talk to an agent (`version` optional). It uses only its own tools, as the asker. |
-| `GET /v1/aws/accounts` | viewer | The connected AWS accounts: the primary one and any added. |
-| `POST /v1/aws/accounts` | admin | Add a read-only account by profile and region; proves it with `sts get-caller-identity`, refuses duplicates. |
-| `PATCH /v1/aws/accounts/{id}` | admin | Body: `writes` (true or false). Allows or stops change proposals for an added account (off by default); turning it off cancels the proposals waiting for it. |
-| `DELETE /v1/aws/accounts/{id}` | admin | Remove an added account and cancel the proposals waiting for it. Changes nothing in AWS. |
+
+## Infrastructure, Kubernetes, missions and runbooks
+
+Read-only views of the connected clouds and clusters, missions, runbooks and alarm intake. See [Infrastructure map and services](../guides/infrastructure-map-and-services.md), [Missions](../guides/missions.md), [Runbooks](../guides/runbooks.md) and [Alarm intake](../guides/alarm-intake.md).
+
+| Method and path | Role | Purpose |
+| --- | --- | --- |
+| `GET /v1/infra/gcp/resources` | viewer | Everything in the connected scope by service (Compute Engine, Cloud Run, GKE, Cloud Storage, Cloud SQL, Vertex AI and more; unknown types under `other`), at most 200 per service with the true count, cached 60 s; `?refresh=1` skips the cache. |
+| `GET /v1/infra/azure/resources` | viewer | Everything in the chosen subscriptions by service (virtual machines, App Service, AKS, storage, SQL, networks, Azure OpenAI and AI Foundry under AI, and more; unknown types under `other`), read in pages of 1000 up to 3000 resources (`notice` says when the limit was reached), at most 200 shown per service with the count, cached 60 s; `?refresh=1` skips the cache. |
+| `GET /v1/k8s/clusters` | viewer | Registered Kubernetes clusters (never their tokens). |
+| `POST /v1/k8s/clusters` | admin | Register a cluster. Body: `name` (up to 40), `env`, `kind` (`eks` or `token`), and for `eks` `account` (a connected AWS account), `cluster_name`, `region`; for `token` `server`, `ca` and `token` (a service-account token, write-only; each of `ca` and `token` at most 16 KiB). Proves it with a read before saving (`422` with the reason). `409` at 30 clusters or for a duplicate name. |
+| `DELETE /v1/k8s/clusters/{id}` | admin | Remove a cluster and its stored token. Changes nothing in the cluster. |
+| `GET /v1/k8s/clusters/{id}/resources` | viewer | Nodes, workloads, pods, services, namespaces and warning events, read-only; `?refresh=1` skips the 60 s cache. |
+| `GET /v1/runbooks` | developer | Runbooks (design note 051), by name, each with its `versions`, which one is `current` (the newest reviewed; 0 when none is), and `examples` to start from. |
+| `POST /v1/runbooks` | admin | `{"name", "description", "kind": "check" or "fix", "script", "params": [{"name": "ENV_NAME", "type": "choice" or "int", "choices", "min", "max", "default"}], "target": {"account", "instances"} or {"tag_key", "tag_value"}, "timeout_seconds", "note"}`: make a runbook. Its first version waits for review. Audited as `runbook.version`. |
+| `GET /v1/runbooks/{id}` | developer | One runbook with every version's script, parameters, target, `hash` and `review`. |
+| `POST /v1/runbooks/{id}/versions` | admin | The same fields as making one, without name and kind: a new version, which waits for review; the current one keeps running. |
+| `POST /v1/runbooks/{id}/review` | admin | `{"version", "hash", "note"}`: approve that version's exact text, which becomes what runs. Refused to the version's author, for another hash, and for a version older than the current one. Audited as `runbook.review`. |
+| `POST /v1/runbooks/{id}/run` | developer | `{"params": {"NAME": "value"}, "reason"}`: a check starts at once (202, `running`); a fix needs a reason and is filed for a different administrator (202, `proposed`). Values must match their parameter's type; the instances are found now. Audited as `runbook.run` or `runbook.propose`. |
+| `GET /v1/runbook-runs` | developer | The 100 newest runs (`?runbook=` for one), without scripts and output, with what the approval rules ask while one waits. |
+| `GET /v1/runbook-runs/{id}` | developer | One run: the exact `script` sent, `params`, `targets`, `hash`, `status` (`proposed`, `running`, `succeeded`, `failed`, `rejected`, `cancelled`, `expired` after 24 hours), and per instance its SSM status, exit code and output (cut, credentials hidden), and `trace_id`. |
+| `POST /v1/runbook-runs/{id}/approve` | admin | `{"hash", "note"}`: approve a fix. Refused to whoever asked for it, for another hash, when the runbook changed since, and by the approval rules (kind `runbook`). The approval that completes the count starts it (202). Audited as `runbook.approve` and `runbook.done`. |
+| `POST /v1/runbook-runs/{id}/reject` | admin | Reject a fix that is waiting. Audited as `runbook.reject`. |
+| `POST /v1/runbook-runs/{id}/cancel` | developer | Withdraw a fix that is waiting: whoever asked, or an administrator. Audited as `runbook.cancel`. |
+| `POST /v1/missions` | developer | Start a mission (note 037): `goal` (10 to 2000 characters), `agent`, `account` (default `primary`; the mission may only look at this account), `budget_tokens` (default 200,000, at most 5,000,000). `202` with the mission; it runs in the background, so poll `GET /v1/missions/{id}`. `409` when no model is set up or the agent is off; at most 5 at once. Audited. |
+| `GET /v1/missions` | developer | Missions, newest first. |
+| `GET /v1/missions/{id}` | developer | One mission: `stage` (`discover`, `propose`, `approval`, `verify`, `report`), `status` (`running`, `waiting`, `done`, `failed`, `cancelled`, `stopped`), `steps` (with the lookups each ran), `findings` (each naming the lookup that showed it), `unsupported` (claims dropped for naming no lookup that ran), `plan`, `proposals`, `evidence`, `used`, `report`. |
+| `POST /v1/missions/{id}/cancel` | developer | Cancel a mission that has not ended; only the person who started it or an administrator. Proposals it filed stay for the approver to decide. Audited. |
 | `GET /v1/infra/aws` | viewer | Identity, stacks, instances. `?account=<id>` reads an added account. |
 | `GET /v1/infra/aws/resources` | viewer | Every resource in the account by service (ECS, EC2, S3, Lambda, RDS and more), read-only; `?account=<id>` picks the account; `?refresh=1` skips the 60 s cache. `?service=<id>` answers with that one service only, read with its own calls (and its own cache entry) when the whole inventory was not read lately, so one service never waits for the others; 404 for an unknown id. |
 | `GET /v1/infra/aws/services` | viewer | The services the explorer can list (`id`, `label`, `category`, `global`), with the account's region. No AWS call: the Services page draws from it at once and asks `?service=` for each tile. |
@@ -292,46 +345,38 @@ A run's `status` is one of `queued`, `running`, `succeeded`, `failed`, `canceled
 | `GET /v1/infra/aws/links` | viewer | What AWS states connects the map's resources (note 034): for each CloudFormation stack the inventory found (at most 25; `stacks_skipped` counts the rest), the resources it made from `list-stack-resources` (type, logical and physical id, status; deleted parts left out), and each Lambda event source mapping (a function and the queue, table stream or stream it reads, with its state). Read-only, cached for a minute like the inventory; `?account=<id>` picks the account, `?refresh=1` reads again. A refused part names the missing permission (`cloudformation:ListStackResources`, `lambda:ListEventSourceMappings`). |
 | `GET /v1/infra/aws/cost` | developer | Spend for 30 days (each call is billed by AWS). |
 | `GET /v1/infra/runtime` | viewer | The Forgeline server, Docker host, running steps, disk. |
+| `GET /v1/settings/alarm-intake` | developer | The alarm intake (design note 051): `enabled`, `queue_url`, its `region` and `account`, whether AWS is connected, and `status` (`polling`, `last_poll`, `last_error`, counts of messages read, runs started and messages ignored). |
+| `PUT /v1/settings/alarm-intake` | admin | `{"enabled", "queue_url"}`: the SQS queue Forgeline reads for CloudWatch alarm notifications (an `https://sqs.<region>.amazonaws.com/<account>/<name>` address). Needs AWS connected to turn on. Audited as `alarm.intake.update`. |
+| `POST /v1/settings/alarm-intake/test` | admin | Reads the queue's attributes with the AWS connection's credentials, without taking a message: `ok`, `queue_arn`, `waiting`. 502 with the reason when it cannot be reached. |
 
-## Cloud changes
+## Security: Guard, policy packs and audit
 
-| Method and path | Role | Purpose |
-| --- | --- | --- |
-| `GET /v1/cloud/catalog` | developer | Templates that can be deployed, and the instance actions. |
-| `POST /v1/cloud/changes` | developer | Propose. Body: `kind` (`stack-deploy`, `stack-delete` or `instance-action`), `reason`, and `template`, `stack`, `params` or `instance_id`, `action` (`start`, `stop`, `reboot`). |
-| `GET /v1/cloud/changes` | viewer | List. |
-| `GET /v1/cloud/changes/{id}` | viewer | One change, including the preview of exactly what would happen. |
-| `POST /v1/cloud/changes/{id}/approve` | admin | Body: `note`. Not allowed for the person who proposed it. Runs the change. |
-| `POST /v1/cloud/changes/{id}/reject` | admin | Body: `note`. |
-| `POST /v1/cloud/changes/{id}/cancel` | developer | Withdraw your own proposal. |
-
-## GitHub Actions
-
-Only repositories on the GitHub allow list. A workflow can only be started on a branch its rule allows.
+Guard findings, policy packs for plan previews, and the audit log. See [Policy packs](../guides/policy-packs.md) and [Audit log](../guides/audit-log.md).
 
 | Method and path | Role | Purpose |
 | --- | --- | --- |
-| `GET /v1/actions/repos` | developer | The repositories you may use, and their branches. |
-| `GET /v1/actions/workflows` | developer | `?repo=owner/name`. Workflows of the repository. |
-| `GET /v1/actions/runs` | developer | `?repo=`, optional `workflow=` (number or `ci.yml`) and `status=`. Latest 30 runs. Each has `fork: true` when its code came from another repository. |
-| `GET /v1/actions/runs/{id}` | developer | `?repo=`. The run and its jobs with steps. |
-| `GET /v1/actions/jobs/{id}/logs` | developer | `?repo=`. The last 256 KB of the job's log as plain text. |
-| `POST /v1/actions/dispatch` | developer | Body: `repo`, `workflow`, `ref` (an allowed branch), `inputs` (up to 25 strings). Needs `workflow_dispatch` in the workflow file. |
-| `POST /v1/actions/runs/{id}/cancel` | developer | Body: `repo`. |
-| `POST /v1/actions/runs/{id}/rerun` | developer | Body: `repo`, `failed_only`. |
+| `GET /v1/settings/policy-packs` | developer | The policy packs (design note 040, step 6): `packs` (each `id`, `name`, `tool` `trivy`/`checkov`/`conftest`, `enabled`, `deny_at`, `deny`, `skip`, `rules`), `tools` (the pinned release and image of each tool) and `builtin` (the built-in rules' version). |
+| `PUT /v1/settings/policy-packs` | admin | Body: `packs` (at most 10). `deny_at` (Trivy only) is `critical`, `high`, `medium` or `low`; `deny` and `skip` list rule ids (Trivy and Checkov); `rules` (Conftest only) maps up to 10 `.rego` file names to their text, 32 KB each. Every preview then runs each enabled pack in a container with no network, on a copy of the plan without sensitive values or the earlier state; the preview's `packs` records each run (`version`, `image`, `denies`, `warnings`, `skipped`, `error`). A pack that cannot run denies the plan, and a preview made before the packs changed cannot be sent (409). Audited as `guardrail.packs` (rule text is counted, not copied). |
+| `GET /v1/audit` | admin | The audit log, newest first, as `{"events": [...], "next": "..."}`; an event has `id`, `time`, `actor`, `role`, `action`, `target`, `detail`, `allowed` (false for a refusal) and `ip`. Query: `actor`, `action` (prefix), `denied=1`, `from` and `to` (dates like `2026-11-08`, `to` included), `limit` (1 to 1000, default 100), `before` (an event id: older events only). When the page is full, or a filter's scan of the newest 5000 events ended before the log did, `next` is the id to pass as `before` for the following page; it is empty at the end. |
+| `GET /v1/audit/export` | admin | The whole audit log, or the part the same filters (`actor`, `action`, `denied`, `from`, `to`) select, oldest first, as a download: `format=csv` (default; cells that would start a spreadsheet formula are prefixed with `'`) or `format=jsonl` (`400` for any other). More than 200,000 matching events answers `413` and exports nothing: narrow the range. Each export is audited as `audit.export` before the file is sent (design note 033). |
+| `GET /v1/settings/audit` | admin | How long the audit log is kept: `retention_days` (0 keeps it forever, the default), `count`, `oldest`, `last_prune`, `last_pruned`. |
+| `PUT /v1/settings/audit` | admin | Body: `retention_days`, required: 0 (keep forever) or 30 to 3650. Events older than the period are deleted once an hour; each deletion is audited as `audit.pruned` and each change as `audit.retention`. |
+| `GET /v1/guard/findings` | viewer | `?status=open` (default) or `resolved`, `?account=`, `?severity=`. Answers `findings` (`id`, `rule`, `title`, `severity`, `account`, `service`, `resource`, `detail`, `fix`, `status`, `first_seen`, `last_seen`), `counts` by severity and `accepted` (each with `reason`, `by`, `expires`). |
+| `GET /v1/guard/scans` | viewer | `{"scans": [...], "every_hours": 24}`: recent scans (`id`, `status` `running`, `done` or `failed`, `trigger`, `by`, `accounts` with their finding counts and skipped checks) and the automatic scan interval. |
+| `POST /v1/guard/scan` | developer | Start a scan. Send a JSON body even when empty: `{}` scans every account, cluster and the pipelines; `{"account": "<id>"}` scans one, a cluster is `k8s:<id>`, and `pipelines` scans the saved pipelines. Read-only; one at a time (`409` while one runs). `202` with the scan in status `running`: poll `GET /v1/guard/scans`. |
+| `PUT /v1/guard/settings` | admin | Body: `every_hours`: 6, 12, 24 or 168 for automatic scans, 0 for off (`400` otherwise). |
+| `POST /v1/guard/findings/{id}/accept` | admin | Body: `reason` (10 to 500 characters, shown to everyone), `days` (1 to 90). `200` with the exception; the finding reopens when it ends. `409` when the finding is already resolved. |
+| `DELETE /v1/guard/findings/{id}/accept` | admin | End an acceptance early. |
 
 ## Assistant
+
+The chat assistant, its memory, sandbox, permissions and autopilot. See [Assistant](../guides/assistant.md), [Assistant memory](../guides/assistant-memory.md), [Sandbox](../guides/assistant-sandbox.md) and [Permissions and autopilot](../guides/assistant-permissions-and-autopilot.md). Chat endpoints share a limit of 20 questions a minute per person (`429`).
 
 | Method and path | Role | Purpose |
 | --- | --- | --- |
 | `GET /v1/assistant` | developer | Whether it is on, and which backend. |
 | `PUT /v1/integrations/assistant` | admin | Body: `backend` (`off`, `api`, `claude-token`, `cli`, `copilot`, or `provider` with a `model` written `provider/model`), `model`, `api_base`, `api_key` and `claude_token` (both write-only; the token is stored as the secret `CLAUDE_CODE_OAUTH_TOKEN`). |
 | `POST /v1/integrations/assistant/test` | admin | Ask it something small to check the setup. |
-| `GET /v1/ai/proposals` | viewer | Changes the assistant drafted, newest first, with their status. |
-| `GET /v1/ai/proposals/{id}` | viewer | One proposal: the exact script, the AWS calls it makes, risk, and (after approval) what ran. |
-| `POST /v1/ai/proposals/{id}/approve` | admin | Body: `hash` (of the text you read), `note`. Not allowed for the person who proposed it. Applies the approved script through the AWS MCP Server and returns 202; poll the proposal. |
-| `POST /v1/ai/proposals/{id}/reject` | admin | Rejects a waiting proposal. |
-| `POST /v1/ai/proposals/{id}/cancel` | developer | The proposer or an administrator withdraws a waiting proposal. |
 | `POST /v1/assistant/chat` | developer | Body: `message`, `history`, `context` (the page: run, pipeline, infra or overview). Returns `reply`, the read-only `lookups` it ran any `proposals` it filed and any `environments` it asked for (requested, never started: a different administrator approves). 20 a minute per person. |
 | `POST /v1/assistant/runs` | developer | The same body, checks, limits and audit entries as `/v1/assistant/chat`, answered as server-sent events that follow the [AG-UI](https://docs.ag-ui.com/) vocabulary: `RUN_STARTED`, `CUSTOM forgeline.context`, then for each lookup `TOOL_CALL_START`, `TOOL_CALL_ARGS`, `TOOL_CALL_END`, `TOOL_CALL_RESULT` (a result cut at 2 KB, or the reason it was refused) and `CUSTOM forgeline.tool_status`; `CUSTOM forgeline.proposal` or `forgeline.environment` when one was filed; `TEXT_MESSAGE_START/CONTENT/END` with the whole answer in one piece; and `RUN_FINISHED` or `RUN_ERROR`. Checks that fail first (rate limit, bad body, assistant off) are ordinary JSON errors. Closing the connection cancels the model call. |
 | `POST /v1/assistant/approvals/{id}` | developer | Answer a question the assistant stream is waiting on: body `{"decision":"approve"}` or `{"decision":"deny"}`. When the access policy says a read tool needs approval, `/v1/assistant/runs` sends `CUSTOM forgeline.approval` (`id`, `tool`, `integration`, `args`, `expiresInSeconds`) before the tool, waits, and sends `CUSTOM forgeline.approval_decided` (`approve`, `deny` or `expired`). Only the person who asked can answer, once; anything else is 404. No answer in two minutes is a denial. Both outcomes are audited as `policy.approval` against the integration. |
@@ -340,11 +385,6 @@ Only repositories on the GitHub allow list. A workflow can only be started on a 
 | `PUT /v1/assistant/memory/files` | developer | `{"path": "/memories/me/x.md", "content": "..."}` writes a file as yourself, or `{"path": ..., "keep": true}` keeps a pending one. Add `"valid_until": "2026-12-31"` to set the last day a file is true, or `""` to clear it; after that day the file is kept as history but the assistant no longer uses it. `/memories/org` needs an administrator. Refuses markup, secrets and files over 8000 characters. |
 | `DELETE /v1/assistant/memory/files` | developer | `?path=/memories/me/x.md`: delete one file of your own (an administrator may delete the organisation's). |
 | `GET /v1/assistant/files` | developer | Your sandbox's `/work` folder (design note 052). Without a query, the regular files in it (not hidden ones, not `/work/.agent`), newest first, at most 200, with `path`, `name`, `size` and `modified`. With `?path=/work/report.pdf`, that file as a download: `Content-Disposition: attachment`, `nosniff`, a sandboxing policy, and a type from a short list (anything a browser would run is sent as `application/octet-stream`). 400 for a path outside `/work`, the agent's home or a link that leaves `/work`, or a folder; 404 for no such file; 413 over 50 MB; 409 when the sandbox is off. Audited as `assistant.file.download`, refusals too. |
-| `GET /v1/settings/step-capabilities` | developer | What pipeline step containers keep of the Linux capabilities (design note 005): `mode` (`relaxed` or `strict`), the `baseline` every step gets, what relaxed still `dropped`, and what a step may ask for (`grantable`). |
-| `PUT /v1/settings/step-capabilities` | admin | `{"mode": "relaxed" | "strict"}`. Applies to the next run. Audited as `settings.step_capabilities`; each grant beyond the baseline is `run.capability.grant`. |
-| `GET /v1/settings/alarm-intake` | developer | The alarm intake (design note 051): `enabled`, `queue_url`, its `region` and `account`, whether AWS is connected, and `status` (`polling`, `last_poll`, `last_error`, counts of messages read, runs started and messages ignored). |
-| `PUT /v1/settings/alarm-intake` | admin | `{"enabled", "queue_url"}`: the SQS queue Forgeline reads for CloudWatch alarm notifications (an `https://sqs.<region>.amazonaws.com/<account>/<name>` address). Needs AWS connected to turn on. Audited as `alarm.intake.update`. |
-| `POST /v1/settings/alarm-intake/test` | admin | Reads the queue's attributes with the AWS connection's credentials, without taking a message: `ok`, `queue_arn`, `waiting`. 502 with the reason when it cannot be reached. |
 | `GET /v1/assistant/engines` | admin | The agent programs for an ACP assistant (`antigravity`, `copilot`, `codex`): for each, whether it is installed in your sandbox and its version, the install command and where it comes from, whether its token is stored in the vault (`token_set`; never the value), the sign-in command, and what was checked against the real program. `sandbox: false` when the sandbox is off. Starts your sandbox if it is not running. |
 | `POST /v1/assistant/engines/{harness}/install` | admin | Install the latest version of that agent in your sandbox as root and answer with its status and what to do next. 404 for an unknown agent; 409 when the sandbox is off or its network is none; 502 when the install fails or leaves nothing. Audited as `assistant.engine.install`. |
 | `GET /v1/assistant/autopilot` | developer | Whether autopilot is `allowed`. It has no default limit. The chat turns it on by sending `"autopilot": {}` (or `{"minutes": 60, "steps": 200}` for an optional limit) with a message to `POST /v1/assistant/runs`. |
@@ -372,27 +412,43 @@ Only repositories on the GitHub allow list. A workflow can only be started on a 
 | `DELETE /v1/assistant/memory` | developer | Forget every note about you. Audited as `memory.me.forget_all`. |
 | `PUT /v1/assistant/memory/settings` | admin | Turn memory on or off, body `{"enabled":false}`. Audited as `memory.settings`. |
 
-## Models and providers
+## Connections and AI access
 
-Design note 045, part 1. A model from a provider is written `provider/model` (for example `anthropic/claude-haiku-5-5`)
-wherever an agent or the assistant is given one, and works whatever the assistant's own backend is. The `anthropic`,
-`openai`, `openai-compatible`, `gemini` (through Google's OpenAI-compatible endpoint), `azure-openai` (the v1 API; a
-`base_url` such as `https://my-resource.openai.azure.com/openai/v1` is required, the key goes in the `api-key` header,
-and models are deployment names) and `bedrock` kinds are built. A `bedrock` provider has no key or address: it takes
-`aws_account` (an added account's id; empty for the primary) and an optional `region`, and calls the Converse API with
-that account's credentials, whose role needs `bedrock:InvokeModel`. An `openai-compatible` provider (Ollama, vLLM, LiteLLM, OpenRouter,
-Groq…) needs a `base_url` ending in its version path, such as `http://localhost:11434/v1`; its `api_key` is optional and
-its models are added by name (which may contain `/`, as in `local/meta-llama/Llama-3.3-70B`).
+The integrations hub and each connection: AWS, Google Cloud, Azure, MCP servers. See [Connections and AI access](../guides/connections-and-ai-access.md), [Connect AWS](../guides/connect-aws.md), [Connect GCP](../guides/connect-gcp.md) and [Connect Azure](../guides/connect-azure.md).
 
 | Method and path | Role | Purpose |
 | --- | --- | --- |
-| `GET /v1/providers` | developer | `providers`: each with `id`, `kind`, `name`, `base_url`, `allow_private`, `models` (`id`, `label`, `on`, `input_usd_per_mtok`, `output_usd_per_mtok`), `monthly_usd`, `fallback`, `has_key` (never the key), `month` (calls, failed calls, tokens and cost this month), `median_millis`, `status` (`working`, `failing`, `untested`, `no-key`) and `last_error`. `kinds`: every planned kind with `built` and the known models and list prices. |
-| `POST /v1/providers` | admin | Adds a provider: `id`, `kind`, `name`, `api_key` (write-only, kept in the vault), optional `base_url` (https; http only for loopback; private and reserved addresses refused unless `allow_private`), `models`, `monthly_usd` (0 for no limit) and `fallback` (`provider/model`, used when the limit is reached or the provider is unreachable, rate limited or overloaded; once per call). Audited. |
-| `PUT /v1/providers/{id}` | admin | Changes a provider; the same body without `id` and `kind`. An empty `api_key` keeps the stored key. Audited. |
-| `DELETE /v1/providers/{id}` | admin | Removes a provider and its key. Agents that use its models fail with a clear error until they are given another. Audited. |
-| `POST /v1/providers/{id}/test` | admin | Asks a model (body `model`, or the first one turned on) to reply with one word. Returns `reply`, `model`, `millis`, `cost_usd`, or 502 with the provider's error. |
-| `GET /v1/models` | developer | The models turned on, for pickers: `ref` (`provider/model`), `provider`, `provider_name`, `kind`, `model`, `label` and prices. |
-| `GET /v1/model-calls` | developer | The last 200 model calls, newest first: `at`, `provider` (a provider's id, or the assistant's backend), `model`, `who`, tokens, `cost_usd`, `millis` and `error`. `?provider=` keeps one provider's calls. |
+| `GET /v1/integrations` | developer | Every system Forgeline connects to, for the integrations hub (note 025): built ones with a status (`connected`, `attention`, `off`), logins found on this server by name only (`detected`, such as an AWS profile), and planned ones (`next`, `later`, with a build order and what they will do). Each has a plain `summary`, a `problem` that says what to do when it needs attention, `warnings`, who enforces read-only (`read_only_by`: `provider` or `forgeline`), and the last test. Status comes from stored settings; only the Docker host runs a local command. No secret is ever included. |
+| `POST /v1/integrations/{id}/checks` | admin | Runs a read-only test of one integration (`github`, `aws`, `aws-mcp`, `docker`, `kubernetes`, `claude`) and returns its checks, each with a result (`ok`, `warn`, `fail`), a detail, a fix and a time. It creates and changes nothing (`changed` is always false), is audited, and is remembered for the hub. The Claude test sends one short question. Planned systems have no test (404). |
+| `GET /v1/integrations/{id}/activity` | admin | The newest 30 audit entries that belong to one integration (`github`, `aws`, `aws-mcp`, `gcp`, `azure`, `claude`, `kubernetes`, `docker`), for the Activity tab: time, who, what, detail, and whether it was allowed (refusals are included). The match is exact, so AWS and the AWS MCP Server never show each other's entries. No address is included. |
+| `GET /v1/integrations/{id}/policy` | developer | The access policy of an integration that has tools (`aws`, `aws-mcp`, `kubernetes`, `gcp`, `azure`; others are 404): each tool with its kind (`read` or `write`), level (`allow`, `ask` or `block`), the lowest role that may use it, and what it does, plus, for `aws`, `services` (each switch with `id`, `label`, `tech`, `on` and `level`: `off`, `read` or `change`; see the next row but one), plus the **effective access** of every agent (`allowed`, `blocked` by the connection, `needs_person` when the tool needs approval and an agent run has nobody to ask, or `not_listed` in the agent's tool list) with the reason. `readable` is false when the stored policy cannot be read; every tool is then refused. |
+| `PUT /v1/integrations/{id}/policy` | admin | Body: `tools`, a map of tool name to `allow`, `ask` or `block`, for this integration's tools; the ones left out go back to allowed. A tool that asks for a change (`propose_aws_change`, `propose_cloud_change`) cannot be set to `allow`: a change is always a proposal that a different administrator approves, but it can be blocked. Unknown tools, another integration's tools and any other level are refused with 400. A policy that cannot be read is not overwritten (409). Audited with before and after. `ask` (a read tool that needs a person to approve each call) is accepted for read tools; for a tool that asks for a change it is accepted and changes nothing, because that is already how it works. A blocked tool is refused for everyone, including administrators and agents that list it, and is not shown to the model or offered over MCP. |
+| `PUT /v1/integrations/{id}/services` | admin | AWS only (others are 404). Body: `off`, the AWS service switches turned off for the AI (`s3`, `ecs`, `ecr`, `ec2`, `lambda`, `rds`, `dynamodb`, `elb`, `sqs`, `sns`, `cloudformation`, `cloudwatch`, `ce`, and `other` for every service not listed), and `read_only`, the ones the AI may read but never propose a change to (Look only). Both lists replace what was stored; empty lists put everything back to change, with approval. An unknown switch, or one in both lists, is 400; an unreadable policy 409. A look-only service is refused in `propose_aws_change` and `propose_cloud_change`, and an AI proposal for it is refused at approval (409); reads work. An off service is refused in `call_aws`, `aws_script`, `aws_summary` and both proposal tools, left out of `aws_resources` and `guard_findings`, and an AI proposal for it is refused at approval (409). People still see everything in the explorer. The switches show under `services` in `GET /v1/integrations/aws/policy`. Audited as `policy.services`. |
+| `GET /v1/integrations/gcp` | developer | The Google Cloud connection: whether it is on and its scope. Before it is connected, `detected_project` offers the server's gcloud default project (a name, never a credential). |
+| `PUT /v1/integrations/gcp` | admin | Body: `enabled`, `scope` (a project id, `projects/…`, `folders/…` or `organizations/…`). Turning it on first proves the server's gcloud login can search the scope and refuses with what to fix (no login, no permission, API not enabled, unknown scope); nothing is saved on a refusal. Read-only: the only commands run are `asset search-all-resources`, `auth list` and `config get-value`. |
+| `GET /v1/integrations/azure` | developer | The Azure connection: whether it is on and which subscriptions are chosen (none chosen means every subscription the login can read). Before it is connected, an administrator also gets `available`, the subscriptions the login can see (name and id). |
+| `PUT /v1/integrations/azure` | admin | Body: `enabled`, `subscriptions` (subscription ids, at most 20; each must look like a GUID). Turning it on first proves the server's az login can run a Resource Graph query and refuses with what to fix (no login, no permission, the Resource Graph extension missing, unknown subscription); nothing is saved on a refusal. Read-only: the only commands run are `graph query` (with one fixed query), `account list` and `account show`. |
+| `GET /v1/integrations/aws` | developer | Settings and identity. |
+| `PUT /v1/integrations/aws` | admin | Use a server profile. Body: `enabled`, `profile`, `region`. The name `forgeline-sso` is reserved. |
+| `GET /v1/integrations/aws/mcp` | admin | Whether the AWS MCP Server is on, the tools it offers, and the proxy and endpoint used. |
+| `PUT /v1/integrations/aws/mcp` | admin | Body: `enabled`. Turning it on starts the signing proxy and checks the server offers `aws___run_script`. |
+| `POST /v1/integrations/aws/sso/start` | admin | Body: `start_url`, `sso_region`. Returns `login_id`, the `user_code` and the link to approve. |
+| `POST /v1/integrations/aws/sso/poll` | admin | Body: `login_id`. Never blocks; returns `status`: `pending`, `expired`, `denied`, or `authorized` once approved. |
+| `GET /v1/integrations/aws/sso/accounts` | admin | Accounts you may use. |
+| `GET /v1/integrations/aws/sso/roles` | admin | Roles in an account (`?account_id=`). |
+| `POST /v1/integrations/aws/sso/connect` | admin | Body: `account_id`, `account_name`, `role_name`, `region`. Tests the credentials before keeping them. |
+| `GET /v1/integrations/aws/sso` | developer | Whether you are signed in, and until when. |
+| `DELETE /v1/integrations/aws/sso` | admin | Sign out and delete the stored token. |
+| `GET /v1/mcp-servers` | admin | The MCP servers an administrator added (note 042): `id`, `name`, `kind` (`remote` or `local`), `url` or `image`, the vault secret names it uses (never values), `for_assistant`, `protocol` (the MCP revision it spoke), and `tools` with `read_only`, `destructive`, `writes`, `marked_read_only_by`, `markable` (it could be turned on if an administrator marks it read-only), `enabled`, `pinned` and `problem`. |
+| `POST /v1/mcp-servers` | admin | Adds a server: `id`, `name`, `kind`; remote: `url` (https; http only for loopback), optional `auth_header`, `auth_scheme` and `auth_secret` (a vault secret name), `allow_private`; local: `image` pinned by digest, `network` or `hosts`, `secrets` (environment variable to vault secret name). `run_as_image_user` (local) runs the container as the image's own user instead of nobody; `for_assistant` offers its tools to the assistant. Audited. |
+| `PUT /v1/mcp-servers/{id}` | admin | Changes a server. Changing its address or image turns every tool off until its tools are discovered again. |
+| `DELETE /v1/mcp-servers/{id}` | admin | Removes a server and its tools. |
+| `POST /v1/mcp-servers/{id}/discover` | admin | Asks the server for its tools (MCP 2026-07-28, falling back to the 2025-11-25 handshake for older servers). A tool that was on and whose definition changed is turned off with a reason. 502 with the server's error when it cannot be reached. |
+| `PUT /v1/mcp-servers/{id}/tools` | admin | `{"enabled": ["tool", ...], "read_only": ["tool", ...]}` turns those tools on, pinning their definitions, and every other tool off. A tool can be turned on when its server marks it read-only, or when it is also in `read_only`: the administrator checked that it only reads (named as `marked_read_only_by`, and dropped when its definition changes; send it again with every save). A tool its server marks `destructive`, or says `writes` (`readOnlyHint: false`, as opposed to no hint), cannot be turned on or marked, nor one whose arguments Forgeline cannot check (simple types and lists of them). Enabled tools appear as `mcp_<server>_<tool>` for agents (when added to their tools) and, for servers marked `for_assistant`, for the assistant; every call is audited. |
+| `GET /v1/aws/accounts` | viewer | The connected AWS accounts as `{"accounts": [...]}`: the primary one (`id` `primary`) and any added, each with `name`, `profile`, `region`, `env`, `account_id` and `writes`. |
+| `POST /v1/aws/accounts` | admin | Add a read-only account. Body: `name` (up to 40 characters), `profile` (an AWS CLI profile on the server: letters, digits and `. _ @ -`; `forgeline-sso` is reserved), `region` (like `ap-south-1`), `env` (`production`, `staging`, `development`, `sandbox` or empty). Proves the profile with `sts get-caller-identity` (`422` with the reason when it fails), refuses duplicates and the primary account (`409`), at most 50. `201` with the account. |
+| `PATCH /v1/aws/accounts/{id}` | admin | Body: `writes` (true or false, required). Allows or stops change proposals for an added account (off by default); turning it off cancels the proposals waiting for it. `400` for `primary`, which always allows proposals. |
+| `DELETE /v1/aws/accounts/{id}` | admin | Remove an added account and cancel the proposals waiting for it. `204`. `400` for `primary`. Changes nothing in AWS. |
 
 ## The pipeline schema
 

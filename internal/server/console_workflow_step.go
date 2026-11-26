@@ -70,7 +70,7 @@ func (s *Server) runWorkflowStep(ctx context.Context, w *pipeline.Workflow, logs
 	}
 	if strings.HasPrefix(w.Ref, "refs/") || !gh.allowed(rule.Repo, w.Ref) {
 		audit(false, "refused: branch "+truncate(w.Ref, 80)+" is not allowed")
-		return fmt.Errorf("branch %q is not allowed for %s (see the GitHub rules under Integrations)", w.Ref, rule.Repo)
+		return fmt.Errorf("branch %q is not allowed for %s (see the GitHub rules under Settings → Connections → GitHub)", w.Ref, rule.Repo)
 	}
 	if !workflowIDRE.MatchString(w.Workflow) && !workflowFileRE.MatchString(w.Workflow) {
 		return fmt.Errorf("bad workflow %q", w.Workflow)

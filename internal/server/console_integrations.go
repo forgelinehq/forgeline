@@ -548,7 +548,7 @@ func (s *Server) testClaude(ctx context.Context) []IntegrationCheckJSON {
 	t := time.Now()
 	v := s.assistantView(ctx)
 	if !v.Ready {
-		return []IntegrationCheckJSON{checkOf("The assistant is set up", "fail", "No backend is ready.", "Turn it on under Integrations.", t)}
+		return []IntegrationCheckJSON{checkOf("The assistant is set up", "fail", "No backend is ready.", "Turn it on under Settings → AI → Assistant model.", t)}
 	}
 	cs := []IntegrationCheckJSON{checkOf("The assistant is set up", "ok", claudeBackendName(v.Backend)+".", "", t)}
 	t = time.Now()

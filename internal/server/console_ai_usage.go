@@ -144,7 +144,7 @@ func (s *Server) checkBudget(ctx context.Context) error {
 		return fmt.Errorf("the agent's use could not be read, so it is not run: %w", err)
 	}
 	if st := budgetState(a.Budget, u.modelUsage); st.Level == "stop" {
-		return fmt.Errorf("%w: %s has used its budget for %s (%s); an administrator can raise it under Team", errOverBudget, name, monthOf(time.Now()), usedWords(a.Budget, u.modelUsage))
+		return fmt.Errorf("%w: %s has used its budget for %s (%s); an administrator can raise it under Agents → Usage and budgets", errOverBudget, name, monthOf(time.Now()), usedWords(a.Budget, u.modelUsage))
 	}
 	return nil
 }

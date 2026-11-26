@@ -31,7 +31,7 @@ Every tool starts off, and a tool that changes things can never be turned on.
 
 ## How it works
 
-1. An administrator adds the server. A remote server takes a token or header value taken from Secrets (never shown
+1. An administrator chooses **Add MCP server**. A remote server takes a token or header value taken from Secrets (never shown
    again). A local one is a fresh container per call, with no network unless you grant it (all of it, or only named
    hosts) and secrets from the vault as environment variables.
 2. **Read its tools** shows what it offers. Every tool starts off.
@@ -76,6 +76,8 @@ Redirects are never followed.
 
 ## Limits and verification
 
+At most 30 servers, and the first 200 tools of a server are kept.
+
 {: .warning }
 **Checked against real servers on 2026-11-13** ([test note](../testing/2026-11-13-mcp-servers.md)): two public remote
 servers and real local servers in containers, with a real model, on the maintainer's Raspberry Pi. Servers that do not
@@ -90,7 +92,9 @@ mark their tools read-only (DeepWiki, for example) cannot have a tool turned on 
 | All tools are off after an edit | Changing a server's address or image turns all its tools off. |
 | A local server fails with `Permission denied` | The image keeps its program where only root can reach it; tick **Run as the image's own user**. |
 | A local server with a host list always runs out of time | See `FORGELINE_EGRESS_PORTS` in [Get started]({{ '/get-started/' | relative_url }}#server-settings). |
-| A remote address is refused | It is on a private or cloud-internal address; tick **It is on a private network**. |
+| A remote address is refused | The console says `refused: ... is a private or reserved address (tick "private network" for a server on your own network)`; tick **It is on a private network**. |
+| Adding a 31st server fails | "at most 30 MCP servers" (409). |
+| A call fails with "the secret ... no longer exists" | The secret the server uses was deleted from the vault; add it again under **Settings → Secrets**. |
 | The assistant does not offer the tool | The server is not marked **Offer its turned-on tools to the assistant**. |
 
 ## Related

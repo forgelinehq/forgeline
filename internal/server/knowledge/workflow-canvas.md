@@ -34,8 +34,8 @@ Use it to build or change a workflow, and to see what happened in a run.
 3. Drag the background to move, scroll with Ctrl (Cmd on a Mac) to zoom. **Fit** shows the whole graph; the grid button
    lays it out left to right.
 4. **Settings** holds three tabs: **About**, **Trigger** (by hand, on a schedule, from a webhook, after failed pipeline
-   runs, each a card) and **Permissions** (developer or viewer).
-5. Add a note on what changed and choose **Save version**.
+   runs, and when a CloudWatch alarm goes off, each a card) and **Permissions** (developer or viewer).
+5. Add a note on what changed and choose **Create workflow** (the first time) or **Save version**.
 
 ![A workflow as a graph, with a node's panel]({{ '/console/workflow-canvas.png' | relative_url }})
 
@@ -90,9 +90,9 @@ question and an agent decision ([test note](../testing/2026-11-17-agent-graphs.m
 
 | Symptom | Likely cause |
 | --- | --- |
-| Save is refused | More than 40 nodes or 80 wires, no or several start nodes, an unreachable node, or a Decide node without an `else` wire. |
+| Save is refused | The message says which: "a graph has at most 40 nodes" or "80 wires", "a graph has exactly one start", "node x cannot be reached from the start", `node x: a decision needs an "else" wire for when nothing matches`, "node x: a merge waits for at least two wires", "node x reads \"k\", which no node writes". |
 | A lookup node fails at once | Its arguments are not valid JSON for the tool; check the tool's arguments. |
-| A run stops at a node | The node reached its visit limit (3 unless set up to 10) or the run reached 50 steps. |
+| A run stops at a node | "node x ran its most times (3); a loop may not end" (the limit is 3 unless set up to 10), or the run reached 50 steps. |
 | The browser asks about unsaved changes | You are leaving the canvas without saving: save and leave, discard, or keep editing. |
 
 ## Related

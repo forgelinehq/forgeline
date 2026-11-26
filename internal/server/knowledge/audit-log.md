@@ -68,8 +68,9 @@ Lines keeps the text as it was.
 ## Choose how long it is kept
 
 1. At the bottom of the page, find **How long to keep it**. The default is **Forever**.
-2. Choose 90 days, 180 days, 1, 2 or 7 years. The API takes any period from 30 to 3650 days.
-3. Confirm. Shortening the period asks first and suggests downloading the log.
+2. Choose 90 days, 180 days, 1 year, 2 years or 7 years. The API takes any period from 30 to 3650 days; anything else is
+   refused with `retention_days must be 0 (keep forever) or 30 to 3650`.
+3. Confirm. Shortening the period asks first (**Delete older events**) and suggests downloading the log.
 
 Older events are deleted once an hour and cannot be brought back. Each deletion is recorded as `audit.pruned` and each
 change of the period as `audit.retention`.
@@ -98,14 +99,13 @@ that tampering with the stored log can be detected.
 | Symptom | Likely cause |
 | --- | --- |
 | The Audit log tab is missing | It needs the administrator role. |
-| An export is refused | More than 200,000 events match; narrow the dates. |
+| An export is refused with `N events match; export at most 200000 at a time by choosing a shorter range` | More than 200,000 events match; narrow the dates. |
 | Old events are gone | A retention period is set; events past it are deleted hourly. |
 | A step's secret use is not found | Filter by action `run.secret`. |
 | A CSV cell starts with `'` | That is the formula protection; the value is otherwise as logged. |
 
 ## Related
 
-- [Audit log and retention](audit-log.md)
 - [Home and approvals](home-and-approvals.md)
 - [Secrets and memory](secrets-and-memory.md)
 - [API reference](../api/reference.md)

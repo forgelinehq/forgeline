@@ -30,7 +30,7 @@ approve it anyway. Every other account stays on the normal path: a proposal that
 | Add, see or remove your own rules | Developer | Up to 100 for you |
 | Add or remove an organisation rule | Administrator | Up to 100 for the organisation |
 | Switch autopilot on or off in a conversation | Developer | |
-| Turn autopilot off for everyone | Administrator | |
+| Turn autopilot off for everyone | Administrator | Under **Settings → AI → Assistant permissions** |
 
 ## How it works
 
@@ -55,8 +55,10 @@ Rules let you decide ahead of time: allow, ask or deny a command pattern for you
 
 - A deny always wins. An organisation "ask" cannot be skipped by your own allow.
 - An allow must name its service and operation.
-- Changes under `iam`, `organizations`, `account`, `ssm` and `sts` always ask, and operations that would hand a secret to
-  the assistant are refused.
+- A rule is for AWS commands only and starts with `aws ` (for example `aws ecs update-service *`), up to 200 characters.
+  An allow whose service or operation is a `*` is refused when you save it.
+- Changes under `iam`, `organizations`, `account`, `ssm`, `sts`, `sso-admin` and `identitystore` always ask and cannot be
+  allowed by a rule, and operations that would hand a secret to the assistant are refused.
 - Every decision is in the audit log.
 
 ![The assistant asks before it changes AWS]({{ '/console/assistant-allow-change.png' | relative_url }})
@@ -65,7 +67,7 @@ Rules let you decide ahead of time: allow, ask or deny a command pattern for you
 
 1. Switch **Autopilot** on under the message box. You can do this at any time, also while the assistant is waiting for an
    answer: what it is waiting on is answered yes, and what it asks next runs.
-2. Optionally **Set a limit**: minutes, steps, or both. With no limit it works until you stop it.
+2. Optionally **Set a limit**: minutes, steps, or both (at most 10,080 minutes, 7 days). With no limit it works until you stop it.
 3. **Stop autopilot** ends it at once.
 
 A change that would only have asked runs without a card. The chat shows each one ("Autopilot ran: ...") and the audit log
@@ -82,7 +84,7 @@ off) they still ask.
 | Changes made through the `forgeline_api` tool | A secret for a command |
 | Cards that save a pipeline, skill, agent or workflow (they show as done) | A protected account |
 | A memory file, when the conversation has read nothing you did not type | A rule that denies or asks |
-| | IAM, Organizations, accounts, SSM and STS |
+| | IAM, Organizations, accounts, SSM, STS, SSO admin and identity store |
 
 Autopilot is on for **one conversation** and never carries over to another, or past a restart. An administrator can turn it
 off for everyone under Settings → Assistant permissions.
@@ -91,7 +93,7 @@ off for everyone under Settings → Assistant permissions.
 
 - **You approve the exact command**, as yourself, or a rule you wrote did.
 - **Protected by default.** An account that was not marked keeps the proposal path and a different administrator.
-- **Fixed floor.** IAM, Organizations, accounts, SSM and STS always ask, and are never covered by autopilot.
+- **Fixed floor.** IAM, Organizations, accounts, SSM, STS, SSO admin and identity store always ask, and are never covered by autopilot.
 - **Present only.** Agents and background runs never change anything this way.
 - **Audited.** Every decision and every autopilot action is in the audit log.
 

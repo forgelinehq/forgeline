@@ -48,7 +48,7 @@ export function accessPane(it, admin, onChange, part) {
     view.services.forEach(x => counts[lvl(x)]++);
     return h('div', { id: 'access-services', class: 'space-y-3' },
       h('div', {}, h('div', { class: 'h-section mb-1' }, 'What the AI may do with each service'),
-        h('p', { class: 'muted text-xs' }, 'For the assistant, agents and AI tools. Off: they cannot see it. Look only: they can read it but never propose a change. Change, with approval: they can propose changes, and a different administrator approves each one. People always see everything in Watch. '
+        h('p', { class: 'muted text-xs' }, 'For the assistant, agents and AI tools. Off: they cannot see it. Look only: they can read it but never propose a change. Change, with approval: they can propose changes, and a different administrator approves each one. People always see everything in Cloud and Operations. '
           + (admin ? '' : 'Only administrators can change this.'))),
       h('div', { class: 'overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800' }, h('ul', { class: 'divide-y divide-slate-100 dark:divide-slate-800' }, view.services.map(x => h('li', { class: 'flex flex-wrap items-center justify-between gap-3 px-4 py-3', 'data-service-row': x.id },
         h('div', { class: 'min-w-0' }, h('div', { class: 'text-sm ' + (lvl(x) === 'off' ? 'muted' : 'font-medium') }, x.label, h('span', { class: 'muted ml-2 font-normal' }, x.tech))),

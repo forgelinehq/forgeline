@@ -16,7 +16,7 @@ Use it to see what runs in Google Cloud next to your other infrastructure.
 
 | | |
 | --- | --- |
-| Where in the console | **Settings → Connections → Add a connection → Google Cloud → Connect**, or **Operations → Infrastructure → Google Cloud** |
+| Where in the console | **Settings → Connections → Add a connection → Google Cloud → Connect** (a three-step wizard: Choose, Connect, Test), or **Operations → Infrastructure → Google Cloud** |
 | Needs | `gcloud` on the server, signed in as the user Forgeline runs as, with the **Cloud Asset Viewer** role and the Cloud Asset API enabled |
 | Design | [Note 025](../design/025-integrations-hub-and-settings.md) |
 
@@ -25,7 +25,7 @@ Use it to see what runs in Google Cloud next to your other infrastructure.
 | Action | Minimum role | Extra rule |
 | --- | --- | --- |
 | See the connection status | Developer | |
-| See the resources | Viewer | |
+| See the resources (the **Google Cloud** tab, the assistant's `gcp_resources` lookup) | Viewer | |
 | Connect, change the scope, turn off, test the connection | Administrator | |
 
 ## How it works
@@ -33,7 +33,8 @@ Use it to see what runs in Google Cloud next to your other infrastructure.
 1. You enter a scope. Before it saves anything, Forgeline proves the login can read the scope.
 2. The only commands it runs are `gcloud asset search-all-resources`, `gcloud auth list` and
    `gcloud config get-value project`.
-3. The explorer groups what it finds by kind. Results are cached for 60 seconds; **Refresh** reads again.
+3. The explorer groups what it finds by kind. Results are cached for 60 seconds; **Refresh** reads again. A single
+   search asks for up to 3,000 resources.
 
 ## Connect
 
@@ -44,13 +45,19 @@ On the server, as the user Forgeline runs as:
    permission to use the project's APIs.
 3. Enable the Cloud Asset API: `gcloud services enable cloudasset.googleapis.com`.
 
-Then in the console, enter the scope (a bare project id such as `my-project` works, or `projects/my-project`,
-`folders/1234567890`, `organizations/1234567890`) and choose **Connect**. If the server's `gcloud` has a default
-project, it is filled in for you; Forgeline reads only its name. If the check fails it says what to fix: no login, no
-permission, the API not enabled, or an unknown scope.
+Then in the console, under **What should Forgeline see?**, enter the scope (a bare project id such as `my-project` works,
+or `projects/my-project`, `folders/1234567890`, `organizations/1234567890`) and choose **Connect**. If the server's
+`gcloud` has a default project, it is filled in for you; Forgeline reads only its name. Only administrators can connect;
+others see "Only administrators can connect Google Cloud." If the check fails it says what to fix, for example:
+
+- "there is no valid Google login on the server; run `gcloud auth login` ..."
+- "the Cloud Asset API is not enabled for the project; enable cloudasset.googleapis.com and try again"
+- "Google denied the request: the login needs the Cloud Asset Viewer role ..."
+- "Google could not find that scope; check the project, folder or organization id"
+- "the gcloud command is not installed on the server"
 
 Once connected it is listed under **Settings → Connections**, where **Test connection** runs the checks again at any
-time. It only reads.
+time, and the **Google Cloud** tab has **Test connection** and **Turn off** (administrators). It only reads.
 
 ## What you see
 
@@ -74,9 +81,10 @@ true count is reported.
 **Verified:** the explorer, the connection and the test against a stand-in `gcloud` (`scripts/dev/fake-gcloud`),
 including permission, login, missing-API and not-installed errors, and that only the three read commands ever run.
 **Not verified:** a real Google account. The exact shape of the real `gcloud asset search-all-resources` output is
-assumed from its documentation and handled defensively. **Not built yet:** the map view and Guard rules for Google
-Cloud, assistant lookups, spend, changes (writes), and signing in from the console or with workload identity
-federation.
+assumed from its documentation and handled defensively. **Not built yet, as the original notes say:** the map view and Guard rules for Google
+Cloud, spend, changes (writes), and signing in from the console or with workload identity federation.
+The assistant can look at the scope (`gcp_resources` in `internal/server/console_assistant_tools.go`); that lookup was not
+re-run for this review, and the page's picture was not compared with the current console.
 
 ## Troubleshooting
 
@@ -85,7 +93,8 @@ federation.
 | Connect says there is no login | `gcloud auth login` was not run as the user Forgeline runs as. |
 | Connect says there is no permission | The login lacks **Cloud Asset Viewer** on the scope. |
 | Connect says the API is not enabled | Run `gcloud services enable cloudasset.googleapis.com`. |
-| Connect says the scope is unknown | Check the project id, or the `projects/`, `folders/` or `organizations/` form. |
+| Connect says "that is not a scope Google understands" or "Google could not find that scope" | Check the project id, or the `projects/`, `folders/` or `organizations/` form. |
+| Connect says "the gcloud command is not installed on the server" | Install `gcloud` for the user the server runs as. |
 | A kind shows fewer resources than exist | At most 200 per kind are shown; the count is the true one. |
 
 ## Related

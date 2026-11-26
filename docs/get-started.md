@@ -7,10 +7,15 @@ nav_order: 2
 
 ## What you need
 
-- Go 1.27 or newer, `git` and `make` (to build), and Docker, running (to run steps). Linux, macOS, or Windows with WSL2.
+- Go 1.27.3 or newer, `git` and `make` (to build from source; the installer can download a release instead), and Docker, running (to run steps). Linux, macOS, or Windows with WSL2.
 - A browser.
 
-No cloud account, database or other setup is needed for this page. Checked from a fresh clone on 2026-11-08.
+No cloud account, database or other setup is needed for this page.
+
+{: .warning }
+**Not re-run for this review.** The commands, flags, labels and messages below were compared with `install.sh`, `Makefile`,
+`cmd/forgeline` and the console source on 2026-11-26. The quickstart itself was last run from a fresh clone on 2026-11-08, and
+the screenshots of setup and the run page predate the current sidebar.
 
 ## 1. Build and start
 
@@ -64,17 +69,18 @@ started for that data directory; any other Forgeline you run is left alone.
 ## 2. Create the first administrator
 
 Open the **Open** link from step 1; it fills in the server token for you. (Or open
-<http://127.0.0.1:8080> and paste the token.) The first visit shows the setup form: choose a username and a
-password of at least 12 characters, and press **Create administrator**.
+<http://127.0.0.1:8080> and paste the token.) The first visit shows the setup form: paste the server token if it is not filled in, choose a username (and optionally your
+name) and a password of at least 12 characters, repeat it, and press **Create administrator**.
 
 ![First run]({{ '/console/01-setup.png' | relative_url }})
 
 The token is required so that whoever reaches the port first cannot take the server over.
 After setup you sign in with the username and password; the token keeps working for the CLI and the API.
 
-Home then shows **Set up Forgeline**: seven steps (your team, GitHub, a cloud account, the assistant, what the AI may
-touch, a first pipeline or blueprint), each with a button that opens the page that does it. A step ticks itself when what
-it sets up exists, and an administrator can skip any of them. The same list is in **Settings › Setup** later.
+Home then shows **Set up Forgeline**: seven steps (the first administrator, which is already done, then your team, GitHub,
+a cloud account, the assistant, what the AI may touch, and a first pipeline or blueprint), each with a button that opens
+the page that does it. A step ticks itself when what it sets up exists, and an administrator can skip any of them. The
+same list is in **Settings → Setup** later.
 
 ![Set up Forgeline on Home]({{ '/console/117-setup.png' | relative_url }})
 
@@ -125,7 +131,7 @@ instead of `./bin/forgeline`, copy the binary into a folder on your `PATH`.
 
 Follow **Set up Forgeline** on Home, or go straight to:
 
-- Put values a step needs in **Secrets**, then ask for them with `permissions.secrets`: [Pipelines]({{ '/guides/pipelines/' | relative_url }}).
+- Put values a step needs in **Settings → Connections → Secrets** (administrators), then ask for them with `permissions.secrets`: [Pipelines]({{ '/guides/pipelines/' | relative_url }}).
 - [Connect GitHub]({{ '/guides/connect-github/' | relative_url }}) so a push runs your pipeline.
 - [Connect AWS]({{ '/guides/connect-aws/' | relative_url }}) to see and change your cloud.
 - Turn on the [assistant]({{ '/guides/assistant/' | relative_url }}).

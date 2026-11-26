@@ -27,7 +27,8 @@ To change something, draw it on the [cloud canvas](cloud-canvas.md) or ask the a
 | Action | Minimum role | Extra rule |
 | --- | --- | --- |
 | See the Map, Services, Infrastructure, Kubernetes | Viewer | |
-| See AWS spend (Load from AWS) | Developer | Each look is billed by AWS |
+| See AWS spend (**Load from AWS** on **Home → Today**, **Load last 30 days** on **Infrastructure → AWS account**) | Developer | Each look is a Cost Explorer request that AWS bills, about a cent |
+| Ask the assistant about a resource | Developer | |
 | Register or remove a Kubernetes cluster | Administrator | Registering proves the cluster with a read first; removing changes nothing in the cluster |
 | Connect or change an account | Administrator | See [Connect AWS](connect-aws.md) |
 
@@ -47,8 +48,9 @@ To change something, draw it on the [cloud canvas](cloud-canvas.md) or ask the a
 1. Open **Cloud → Map**. A switch at the top changes account; **Map** and **List** switch the view, and the search box
    filters by name, id or tag.
 2. Pick anything to see which stack made it, what it uses and what uses it.
-3. When something is flagged, choose **Ask the assistant to fix it**. The assistant drafts a proposal; nothing changes
-   until a different administrator approves it (see [Home and approvals](home-and-approvals.md)).
+3. Open a flagged resource and, as a developer, choose **Ask the assistant to fix it** (**Ask the assistant about this**
+   when nothing is flagged). The assistant drafts a proposal; nothing changes until a different administrator approves
+   it (see [Home and approvals](home-and-approvals.md)).
 
 ![The map: a rolled-back stack, the resources that need a look, and a side panel]({{ '/console/infrastructure-map.png' | relative_url }})
 
@@ -71,7 +73,7 @@ To change something, draw it on the [cloud canvas](cloud-canvas.md) or ask the a
 | Tab | Shows |
 | --- | --- |
 | Platform | The Forgeline server, the Docker host, running steps and the disk |
-| AWS account, Google Cloud, Azure | What is in each connected cloud, by service (Google Cloud and Azure show at most 200 per service, with the true count) |
+| AWS account, Google Cloud, Azure | What is in each connected cloud, by service (AWS keeps 200 resources per service with the true count; Azure reads at most 3,000 resources in all, from at most 20 subscriptions; the Google Cloud limit was not checked) |
 | Cloud changes | Stacks, blueprints and environments proposed, approved and applied |
 
 **Operations → Kubernetes** lists the registered clusters and their nodes, workloads, pods, services, namespaces and
@@ -89,8 +91,9 @@ and says which permission is missing.
 
 - **Read-only.** Only read calls are made. A refused part names the missing permission rather than guessing.
 - **No guessed links.** A line appears only where AWS states the link, never from similar names.
-- **Bounded.** The map reads at most 25 stacks (`stacks_skipped` counts the rest), alarm lists stop at 500, and the
-  inventory is cached for a minute so repeat looks cost no AWS call.
+- **Bounded.** The map reads at most 25 stacks (`stacks_skipped` counts the rest), alarm lists stop at 500, each service
+  list keeps 200 resources (the true count is still shown), and the inventory is cached for 60 seconds so repeat looks
+  cost no AWS call.
 - **Secrets stay out.** A Kubernetes token is never returned by the API.
 - **The AI is switched separately.** What the assistant may read in AWS follows the service switches under
   [Connections and AI access](connections-and-ai-access.md); people always see everything their role may.
@@ -111,7 +114,8 @@ Google Cloud, Azure and Kubernetes pages against real accounts are not recorded 
 | The map has no stack boxes or lines | `cloudformation:ListStackResources` or `lambda:ListEventSourceMappings` is missing. |
 | Alarms do not show | `cloudwatch:DescribeAlarms` is missing. |
 | The page looks a minute old | Answers are cached for 60 seconds; choose **Refresh**. |
-| A stack shows as a tile, not a box | Its resources could not be read, or more than 25 stacks exist. |
+| A stack shows as a tile, not a box | Its resources could not be read, or more than 25 stacks exist (the rest are counted, not read). |
+| A Kubernetes cluster cannot be added | A name is needed (and must be new), the environment must be production, staging, development or sandbox, and at most 30 clusters can exist. An EKS cluster also needs its name, region and a connected AWS account. |
 
 ## Related
 
