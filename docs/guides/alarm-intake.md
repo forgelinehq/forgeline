@@ -25,7 +25,7 @@ reach the server from outside.
 
 | Action | Minimum role | Extra rule |
 | --- | --- | --- |
-| See the intake settings and status | Developer | |
+| See the intake settings and status | Developer | Through the API only (`GET /v1/settings/alarm-intake`); the console page needs an administrator (a developer sees `You do not have access to this page`) |
 | Turn the intake on or off, set the queue, **Test the queue** | Administrator | Needs the AWS connection |
 | Add alarm names to a workflow's trigger | Administrator | Saving a workflow version is an administrator action; it must be a graph workflow |
 
@@ -77,7 +77,8 @@ Anyone who can send to the queue can start workflows, so keep its policy tight.
 {: .warning }
 **Checked once against real AWS.** A real alarm through a real topic and queue started a workflow, an agent ran a check
 and filed a fix, and an administrator approved it (2026-11-26, [test note](../testing/2026-11-26-alarm-runbook.md)). The
-limits and the account check are tested with a fake `aws` only.
+limits and the account check are tested with a fake `aws` only. On 2026-11-27 (commit `487f373`) the settings were read on the UAT instance, where
+the intake is off and no queue is set, so nothing was started or tested ([note](../testing/2026-11-27-uat-cloud-security.md)).
 
 ## Troubleshooting
 

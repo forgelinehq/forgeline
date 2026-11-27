@@ -133,6 +133,8 @@ The role or user Forgeline uses needs to send commands only to the tagged instan
 **Checked on one real instance.** The SSM calls were tested with fakes and `scripts/dev/fake-aws`. On 2026-11-26 the
 Disk report and Old backups ran on a real `t3.nano` (see [the test note](../testing/2026-11-26-alarm-runbook.md)). The
 other example scripts have only been checked to parse with `bash -n`. Try them on a test instance first.
+On 2026-11-27 (commit `487f373`) the list, a runbook's page, its version and its review were read as a developer on the UAT instance; no
+runbook was run, written or reviewed there ([note](../testing/2026-11-27-uat-cloud-security.md)).
 
 ## Troubleshooting
 

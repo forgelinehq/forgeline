@@ -28,7 +28,7 @@ const PARAMS = {
   '/workflows/:id': ['/v1/ai/workflows', 'workflows', (x) => x.id], '/teams/:id': ['/v1/ai/teams', 'teams', (x) => x.id],
   '/runbooks/:id': ['/v1/runbooks', 'runbooks', (x) => x.id], '/evals/:id': ['/v1/ai/evals', 'suites', (x) => x.id],
   '/blueprints/:id': ['/v1/blueprints', 'blueprints', (x) => x.id], '/design/:id': ['/v1/blueprints', 'blueprints', (x) => x.id],
-  '/missions/:id': ['/v1/ai/missions', 'missions', (x) => x.id], '/traces/:id': ['/v1/traces', 'traces', (x) => x.id],
+  '/missions/:id': ['/v1/missions', 'missions', (x) => x.id], '/traces/:id': ['/v1/traces', 'traces', (x) => x.id],
 };
 
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });

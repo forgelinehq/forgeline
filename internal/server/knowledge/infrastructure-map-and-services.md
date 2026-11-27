@@ -101,10 +101,7 @@ and says which permission is missing.
 ## Limits and verification
 
 {: .warning }
-**Tested with fakes and a fake AWS account.** The Map and its links were checked against the fake AWS CLI (a rolled-back
-stack with a function reading a queue) and in a browser on demo data, with 14 of 14 rules failing a test when removed
-([note 034](../design/034-watch-map.md)). Reading a real large account, a stack inventory with many stacks, and the
-Google Cloud, Azure and Kubernetes pages against real accounts are not recorded in a test note.
+**Tested with fakes, and on 2026-11-27 read on a real account.** The Map and its links were checked against the fake AWS CLI (a rolled-back stack with a function reading a queue) and in a browser on demo data, with 14 of 14 rules failing a test when removed ([note 034](../design/034-watch-map.md)). On the UAT instance (main at `487f373`, a real primary account and an added account, as a developer and a viewer) these were read in a browser: the **Map** (a rolled-back stack with its six tables in a box, a stack that is only in review, the VPC box, "2 resources need a look", the account switch, the **Map** and **List** views, the search box, the side panel with **Ask the assistant to fix it**), **Services** (tiles by category with counts, an S3 page with its four buckets, the account switch), **Infrastructure** (Platform and AWS account) and **Kubernetes** (no cluster registered: "No clusters yet"). Nothing was changed. **Not checked.** A tile that says "not listed", the cache refresh timing, a stack box with its lines (no function read a queue in that account), alarms (none existed), a registered Kubernetes cluster, Google Cloud and Azure, and the limits (25 stacks, 200 resources, 3,000 for Azure). Reading a very large account is not recorded in a test note.
 
 ## Troubleshooting
 

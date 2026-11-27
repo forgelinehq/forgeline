@@ -86,7 +86,8 @@ to "Nobody: refuse them", someone in neither group is refused.
 
 {: .warning }
 **Checked against a stand-in only.** The flow was checked in a browser against the stand-in provider in
-`scripts/dev/fakeoidc`. It was **not** checked against a real provider (Google, Entra ID, Okta).
+`scripts/dev/fakeoidc`. It was **not** checked against a real provider (Google, Entra ID, Okta). On 2026-11-27 (commit `487f373`) the settings were read through the API on the UAT
+instance, where sign-in is off and unconfigured, and a developer saw `You do not have access to this page` on the console page ([note](../testing/2026-11-27-uat-cloud-security.md)); nothing else was run there.
 
 ## Troubleshooting
 

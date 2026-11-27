@@ -76,7 +76,9 @@ approvals it needs, who already approved, and who may approve next.
 ## Limits and verification
 
 {: .warning }
-**Checked by tests only.** The rules are covered by tests, including two approvals, named approvers and the strictest
+**Checked by tests only.** On 2026-11-27 (commit `487f373`) the page and the API were read as a developer on the UAT instance, which has no
+rules: the empty page, the refusal of a write and a one-approval change were seen, but no rule was added or met
+([note](../testing/2026-11-27-uat-cloud-security.md)). The rules are covered by tests, including two approvals, named approvers and the strictest
 rule winning. Two real administrators approving one change in two browsers was not checked; the tests use two accounts.
 An environment that starts under the [self-service policy](blueprints-and-environments.md#environments) is approved by the policy (`policy:self-service`), not by a person, and approval rules do not count it. Environment requests outside the policy are ordinary cloud changes and follow the rules.
 

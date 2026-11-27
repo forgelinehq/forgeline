@@ -140,7 +140,9 @@ protected bucket and logs were built and removed on a real account, each step ap
 ([note 041](../design/041-removing-what-a-blueprint-built.md)). The generated code passes `tofu validate` (OpenTofu
 1.13.9, AWS provider 6.72). **Not checked:** removing a real RDS database, and cost estimates per block (there is no
 real price source yet, [note 035](../design/035-blueprints.md)). Policy packs were run on real plans
-([2026-11-17 test note](../testing/2026-11-17-policy-packs.md)).
+([2026-11-17 test note](../testing/2026-11-17-policy-packs.md)). On 2026-11-27 (commit `487f373`) a queue, an on-demand table and a log group were
+built, read back under **Resources**' data (`built`), and removed in two approved steps on a real account; AWS was empty afterwards, and the
+blueprint then deleted ([note](../testing/2026-11-27-uat-cloud-security.md)). Environments were only read, not requested.
 
 ## Troubleshooting
 

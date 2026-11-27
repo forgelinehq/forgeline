@@ -52,9 +52,12 @@ Two rules keep a mission honest:
 
 1. Open **Operations → Missions** and choose **New mission**.
 2. Write the goal (10 to 2000 characters), pick the agent and the AWS account, and choose **Start**.
-3. Optionally set a token budget. The default is 200,000 and the most is 5,000,000.
+3. Optionally set a token budget. The default is 200,000 and the most is 5,000,000 (more is refused: "budget_tokens: up to
+   5000000 (0 means the default, 200000)"). A goal outside 10 to 2000 characters is refused with "goal: say what the mission
+   is for in 10 to 2000 characters". The account list holds the connected accounts; any other id is refused ("account: no
+   connected AWS account ...").
 4. Watch the stages. A mission waiting for approval shows its proposals; a different administrator decides them under
-   **Home → Approvals**.
+   **Home → Approvals**. An agent that may not propose has nothing to approve, so **Your OK** and **Verify** show "not needed".
 
 A mission stops before its next model call once its budget is used. The agent's own monthly
 [budget](ai-use-and-budgets.md) also applies.
@@ -74,9 +77,17 @@ mission that was running a stage when the server stopped is marked failed ("inte
 approval keeps waiting.
 
 {: .warning }
-**Checked with stand-ins.** The mission runner was tested with a scripted model and the AWS stand-ins, and in a browser
-with a scripted `claude` and `fake-aws` ([note 037](../design/037-missions.md)). This page does not claim a real-model
-run.
+**Checked with stand-ins, and once with the real model.** The mission runner was tested with a scripted model and the AWS
+stand-ins, and in a browser with a scripted `claude` and `fake-aws` ([note 037](../design/037-missions.md)). On 2026-11-27,
+on the UAT instance at commit `487f373`, a developer started a mission in the console with a read-only agent
+(`aws_accounts`, `aws_resources`, `claude-haiku-5-5`) on the primary account with a 60,000-token budget. It went through all
+five stages in 5 model calls and 18,319 tokens, kept 9 findings that each named the lookup that showed them (none left
+out), filed no proposals, and wrote a report with the counts. Refusals checked: a goal under 10 or over 2000 characters,
+a budget over 5,000,000, an unconnected account, an agent turned off ("uat-c-tm2 is turned off"), cancelling a mission that
+had ended ("this mission has already ended (done)"), and 403 for a viewer. Not run: a mission whose agent proposes a change
+and its approval, the wrong-account refusal (it needs an agent that asks for another account), the 5-at-once limit, the
+7-day wait and a restart. A change was never allowed in this test. See the
+[test note](../testing/2026-11-27-uat-workflows-teams.md).
 
 ## Troubleshooting
 

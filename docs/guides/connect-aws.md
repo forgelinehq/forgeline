@@ -207,7 +207,10 @@ Without it, building such a blueprint fails when IAM refuses the push role, and 
 table. The IAM policy below is checked by a test against the blueprint blocks and templates. The account-adding flow and
 the AWS MCP Server card were not run. **Recorded earlier:** reading a real account, the real device-code sign-in and the real credential step, and rejecting a change
 on a real account. Executing an approved change was run on a real account: a deploy and a delete of the demo stack, each
-approved by a second actor in the browser.
+approved by a second actor in the browser. On 2026-11-27 (commit `487f373`) a queue, a table and a log group were built and removed on the primary account
+with only `PowerUserAccess`-level permissions, as the section on permissions for blueprints says, with approvals through the API ([note](../testing/2026-11-27-uat-cloud-security.md)). The console does not show the IAM policy; it lives only in this guide, and the IAM role statements were not run (no app block was built).
+
+**Read through the console on 2026-11-27** (main at `487f373`, a primary account and one added account, the server's own role): the **AWS account** tab as a developer and as a viewer (identity, the account switch, the resource count, the map and list, the stacks, the "Changed through Forgeline" list, **Spend** left unloaded because it is billed); the connection test run as an administrator on the server (identity, a VPC read and an alarm read: three of three passed, no change made); a developer is refused the test, a change of the connection and adding an account with 403 "admin is required"; a viewer sees no **Deploy the Forgeline demo** or **Propose deletion** buttons. **Not checked.** Connecting or changing a connection, the IAM Identity Center sign-in and its code expiry, adding, allowing changes for and removing an account, the AWS MCP Server card, proposing a change, and loading spend. One thing to know: a viewer sees **Load last 30 days** under Spend, but the server refuses a viewer (`403`, developer required).
 
 ## Troubleshooting
 

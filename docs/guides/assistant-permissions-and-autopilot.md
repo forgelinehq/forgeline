@@ -101,6 +101,7 @@ off for everyone under Settings → Assistant permissions.
 
 {: .warning }
 **Checked against a fake AWS CLI only**, not a real account, and only for AWS. `az`, `gcloud` and `kubectl` are next.
+On 2026-11-27 (main at `487f373`) the settings page, its roles and the account list were read on the UAT instance as a developer; rules, autopilot and an AWS change were not run there. See the [note 2026-11-27](../testing/2026-11-27-uat-assistant-agents.md).
 
 ## Troubleshooting
 

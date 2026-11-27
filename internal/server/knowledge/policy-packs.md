@@ -80,7 +80,9 @@ what it never accepts under **Rules that always deny**.
 
 {: .note }
 The three tools were run on real plans on a Raspberry Pi Forgeline with OpenTofu and a real AWS role on 2026-11-17 (see
-[the test note](../testing/2026-11-17-policy-packs.md)).
+[the test note](../testing/2026-11-17-policy-packs.md)). On 2026-11-27 (commit `487f373`) the page and the API were read as a developer on the UAT
+instance, which has no pack enabled: the read-only page and the refusal of a write were checked, a pack's finding was not
+([note](../testing/2026-11-27-uat-cloud-security.md)).
 
 A Conftest pack holds at most 10 `.rego` files of 32 KB each (a file name is lower-case letters, digits, dashes and
 underscores, ending in `.rego`), a pack lists at most 50 rule ids, and Forgeline keeps at most 10 packs. Saving too many

@@ -102,7 +102,7 @@ The role rules for each tab are in `internal/server/ui/lib/nav.js` and `settings
 This page was checked against those two files, `app.js` and `lib/cmdk.js` and `lib/palette.js`.
 
 {: .warning }
-**Not checked.** The screenshots were taken from a real browser on a throwaway local server with demo data. No screen reader or phone check was repeated for this page.
+**Checked in a browser on 2026-11-27**, on the UAT instance (main at `487f373`), as a developer and as a viewer: every space and its tabs against the table, Ctrl K, `/`, a no-match search, the Settings groups, the theme (it survived a reload), the phone menu button, the "You do not have access to this page" page, and the viewer refusals. The two screenshots were taken from a throwaway local server with demo data; the search picture shows an administrator's list (it includes **Audit log**, which a developer does not see). **Not checked.** A screen reader, and a real phone.
 
 ## Troubleshooting
 

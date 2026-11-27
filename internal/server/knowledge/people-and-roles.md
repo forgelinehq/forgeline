@@ -71,7 +71,8 @@ The server always keeps at least one active administrator. Demoting, disabling o
 Under **Settings → API tokens** anyone can make a token for AI tools that connect over MCP. A token has a name, a role
 (at most your own, your own by default) and a life of 1 to 365 days (90 by default). The secret is shown once. Each
 person can have at most 10 (`you already have 10 tokens; revoke one first`). You make a token from a browser session, not
-with another token (`sign in to the console as a person to create a token`).
+with another token: the server token is refused with `sign in to the console as a person to create a token`, and a personal token
+is refused with `sign in required`, because a personal token works only on `/mcp` and on no other API path.
 
 ## Security model
 
@@ -81,6 +82,14 @@ with another token (`sign in to the console as a person to create a token`).
 - Every change, refusal and failed login goes to the [audit log](audit-log.md).
 
 See [design note 006](../design/006-console.md) for the rules and the known limits.
+
+## Limits and verification
+
+{: .warning }
+**Run on the UAT instance on 2026-11-27 (commit `487f373`).** A viewer was added, signed in, refused the developer and administrator actions
+in the table, given a personal token that worked on `/mcp` only, promoted (the session stayed), disabled (the session and the token stopped working at once),
+re-enabled and deleted, with the server token as the administrator ([note](../testing/2026-11-27-uat-cloud-security.md)). **Not checked:** the console's People page itself (the test user is not an
+administrator), the last-administrator refusal, login throttling, and the token limit of 10.
 
 ## Troubleshooting
 

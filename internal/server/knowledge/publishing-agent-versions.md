@@ -54,6 +54,7 @@ Without a gate, a saved version is published at once.
 
 {: .warning }
 **Checked in a browser against a stand-in model**, not a real model ([note 050](../design/050-evals.md)).
+On 2026-11-27 (main at `487f373`) on the UAT instance, with a real model, the gate refused a candidate without a passing run, publish-when-it-passes made one current, a failing suite left a candidate, and a rollback was not gated. See the [note 2026-11-27](../testing/2026-11-27-uat-assistant-agents.md).
 
 ## Troubleshooting
 

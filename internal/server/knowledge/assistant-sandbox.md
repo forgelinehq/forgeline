@@ -85,6 +85,7 @@ test, a service listening only on the loopback address was not reachable and the
 but a service listening on all interfaces or on your network could be reached. If that matters, choose **No network**, or
 point `FORGELINE_SANDBOX_NETWORK` at a Docker network you have fenced. Checked here with Docker 29.3 and a stand-in model;
 gVisor and microVMs have not been tried.
+On 2026-11-27 (main at `487f373`) the Sandbox card (already on there) and the download refusals (`/etc/passwd`, `..`, `/work/.agent`) were checked in the console and API as a developer; the off state, turning it on and running code were not. See the [note 2026-11-27](../testing/2026-11-27-uat-assistant-agents.md).
 
 ## Troubleshooting
 

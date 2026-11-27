@@ -44,7 +44,7 @@ Grafana, Datadog, Honeycomb, Jaeger or an OpenTelemetry Collector.
 | Agent run | The run, each model call and each tool call |
 | Workflow run | Each node, and the time it waited for a person |
 | Team run | The lead's and each member's work under it |
-| Mission | A span per stage (discover, propose, verify) with the agent's runs and the proposals it filed |
+| Mission | A span per stage (discover, propose, and verify when something was applied) with the agent's runs and the proposals it filed |
 | Pipeline run | Each step, with its exit code |
 | Runbook run | A link from the run page (**Open the trace**) |
 
@@ -107,6 +107,16 @@ with the right nesting, span kinds, GenAI attributes and tokens, and no user nam
 Honeycomb were **not tried**. A pipeline run's trace was checked with a real Docker run. OpenTelemetry's GenAI
 conventions are still in Development, not stable, so attribute names may change
 ([note 049](../design/049-traces.md)).
+
+**Opened through the console on 2026-11-27**, on the UAT instance at commit `487f373`, as a developer: the traces of a
+mission (5 model calls, 3 tool calls, a span per stage with the agent's runs under it), of a workflow run that waited for
+two people (a span per node, `ask` spans for the questions), of a team run (the lead's, then each member's `invoke_agent`
+and `chat`) and of pipeline runs; the filters All, Workflows, Teams and Failed; a click on a bar showed its details on the
+right; a trace link or **Trace** button was on the mission, the workflow run and the pipeline run. No span carried a prompt,
+an answer or a tool argument. A viewer and a developer got 403 on the OpenTelemetry settings or the traces list as the
+table says, and **Send a test trace** with nothing saved answered 409 "save an endpoint first". Nothing was sent anywhere:
+OTLP was not configured in this test (the settings page was only read, and matched its picture). See the
+[test note](../testing/2026-11-27-uat-workflows-teams.md).
 
 ## Troubleshooting
 

@@ -45,6 +45,9 @@ Use it so the assistant does not need telling the same thing twice.
 
 ### Keep a file: the card
 
+When you ask for a file in your own words ("save a memory file that says ...") and the conversation has read nothing you did
+not type, the assistant saves it at once and says so in its answer, with no card. A card is for what it learned by itself.
+
 After a task that taught it something, the assistant can offer it as a card titled **Keep /memories/me/...** (the file's path). The card shows the path,
 its text and who will see it (only you under `/memories/me`, everyone under `/memories/org`, which only an administrator
 can keep).
@@ -80,12 +83,17 @@ Give an agent the **Read the organisation's shared notes** tool (`org_memory`) a
 - A file written after untrusted data waits for a person to keep it.
 - `/memories/org` needs an administrator to write.
 
+## Limits and verification
+
+{: .warning }
+**Run on the UAT instance, in part.** On 2026-11-27 (main at `487f373`) on the UAT instance a developer wrote, edited, expired and deleted files, met each refusal, and asked the assistant to save one. The shared notes for agents (`org_memory`) and the on/off switch were not run. See the [note 2026-11-27](../testing/2026-11-27-uat-assistant-agents.md).
+
 ## Troubleshooting
 
 | Symptom | Likely cause |
 | --- | --- |
 | The assistant ignores a file | Its valid-until date has passed (*No longer valid*), or it is still waiting for you to keep it. |
-| A save is refused | The file is over 8,000 characters, has a secret or markup in it, or would overwrite an existing file. |
+| A save is refused | The file is over 8,000 characters ("a file is at most 8000 characters; split it into two"), has a secret ("that looks like a secret, and memory is not a place to keep one: it belongs in the vault") or markup ("a file cannot contain markup or tags") in it, or, for a card, would overwrite an existing file. Editing your own file on the Memory page replaces it. |
 | Memory does nothing | An administrator turned memory off (the console says "Memory is turned off"; adding a note answers 409). Your conversation history is still kept. |
 | A file is refused for the organisation | "only an administrator writes to /memories/org": save it under `/memories/me` and ask an administrator to move it. The assistant also refuses `/memories/org` after it read logs or cloud data you did not type. |
 | An agent cannot read a note | It lacks the `org_memory` tool, or the note is under `/memories/me`. |

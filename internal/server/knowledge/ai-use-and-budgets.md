@@ -31,11 +31,14 @@ Use it to see where model use goes and to cap it.
 
 1. Every model call is counted where it is made: the assistant, agents, workflow steps and the canvas assistant. The count
    is calls, input and output tokens (including cache), the time the call took, and the cost in US dollars when the
-   `claude` program reports it. The Anthropic API reports tokens, not cost, so cost is shown only for the calls that had
-   one ("$1.50 for 2 of 3 calls").
+   `claude` program reports it. A call to a [provider's model](models-and-providers.md) is priced from the prices set on
+   that provider (dollars per million tokens), so it has a cost. A call whose cost nobody reports has none, so the page
+   shows "$1.50 for 2 of 3 calls". A cost under one cent shows as `$0.00` here; the call log on Models and providers shows it
+   in full.
 2. Use counts against the running agent, or one total for people's own questions. The period is the calendar month, in UTC.
 3. At **80%** of either limit the agent's card and the page warn (and the crossing is audited).
-4. At 100% the agent's next model call is refused before it is sent. Its card says **Stopped**, and a workflow step it was
+4. At 100% the agent's next model call is refused before it is sent. Its row on this page says "stopped until next month or a
+   higher budget", its card on **Agents → Teams** says **Stopped: its monthly budget is used up**, and a workflow step it was
    running fails with a message saying why. A call that starts under the limit finishes, so an agent can end a little over.
 5. Raise the budget, or wait for the next month (UTC), to let it run again. A mission also has its own token budget; see [Missions](missions.md).
 
@@ -54,6 +57,9 @@ Use it to see where model use goes and to cap it.
 
 ## Limits and verification
 
+{: .warning }
+**Run on the UAT instance, in part.** On 2026-11-27 (main at `487f373`) on the UAT instance a one-token budget on a test agent refused the next call with the message quoted below, and the usage page showed the agent as stopped. The 80% warning and a stopped workflow step were not run. See the [note 2026-11-27](../testing/2026-11-27-uat-assistant-agents.md).
+
 Cloud spend an agent causes (for example a change it proposed and someone approved) is **not counted** here yet: Forgeline
 cannot attribute AWS costs to an agent. Output that is not the `claude` program's JSON (an older program, a stand-in) is
 counted with its tokens unknown, and the page says the totals are low by those calls.
@@ -65,7 +71,7 @@ browser with a stand-in `claude`.
 
 | Symptom | Likely cause |
 | --- | --- |
-| An agent says **Stopped** | It used its monthly budget; raise it or wait for the next month (UTC). The error reads `over budget: <agent> has used its budget for YYYY-MM (...)`. It ends with "an administrator can raise it under Team", which is an old page name: raise it under **Agents → Usage and budgets**. |
+| An agent says **Stopped** | It used its monthly budget; raise it or wait for the next month (UTC). The error reads `over budget: <agent> has used its budget for YYYY-MM (<used> of <limit> tokens); an administrator can raise it under Agents → Usage and budgets`. |
 | A workflow step failed with a budget message | The agent it runs hit its budget. |
 | Cost is missing for some calls | Only calls where the `claude` program reports cost have one. |
 | Totals look low | Some calls reported no tokens (shown as such on the page). |

@@ -211,9 +211,8 @@ forgeline submit --server URL --wait pipeline.yaml         # to a server (uses F
   *Linux capabilities*). Steps not in that list may need more in strict mode.
 
 {: .warning }
-**Checked against the code, not run again.** Field names, limits, validation, trust rules and the build push rules were
-compared with `internal/pipeline` and `internal/server`. The ECR push, BuildKit builds and the QEMU note were not run for
-this review. The picture shows the editor's source fields as they were when it was taken.
+**Run on the UAT instance on 2026-11-27** (main at `487f373`), as a developer and a viewer, in the console and through the API: a two-step pipeline written in the editor, checked, created and run; a failing run; validation messages for eight kinds of mistake (upper-case id, `run` with `command`, a secret also in `env`, a `workflow` step with an image, several problems at once, a missing secret and a mutable tag, a relative `workdir`, a capability that cannot be granted); a step with `network: none` could not reach the internet; a secret printed by a step showed as `***`; viewers were refused saving, running, restoring, deleting and listing secrets. Field names, limits, trust rules and the build push rules were also compared with `internal/pipeline` and `internal/server`.
+**Not checked.** Runs started by GitHub (the pull-request and push trust rules), a source repository, `build` steps and the ECR push, `eval` steps, the QEMU note, strict capabilities and `forgeline run`.
 
 ## Troubleshooting
 

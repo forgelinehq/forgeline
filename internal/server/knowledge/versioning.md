@@ -94,10 +94,8 @@ Until 1.0.0, a MINOR release may include a breaking change, and the changelog sa
 `docs/api/reference.md` lists every route, and a test fails if one is missing or has a different role.
 
 {: .warning }
-**Not verified for this review.** The claims that a run records the agent version and fingerprint in the audit log and the
-reply, that an agent version cannot gain a tool or tier without a new saved version, and the library-package hash rules
-were not re-checked in the code; they are described in the design notes. The release steps were compared with
-`.github/workflows/release.yml` but no release was cut.
+**Run on the UAT instance on 2026-11-27** (main at `487f373`), as a developer: **Operations → Infrastructure → Platform** shows `v0.1.0-202-g487f373` (202 commits after `v0.1.0`, no `-dirty`); a pipeline saved 25 times kept 20 versions and restoring version 1 answered 404 `version 1 is not kept (the last 20 are)`; restoring made a copy as the newest version (3 became 4); a save that changed nothing made no new version.
+**Not verified.** Saving, rolling back and the 100-version limit for skills, agents and workflows (they need an administrator), "v2 available" on a pinned skill, that a run records the agent version and fingerprint in the audit log, that an agent version cannot gain a tool or tier without a new saved version, the library-package hash rules (described in the design notes), and the release steps (compared with `.github/workflows/release.yml`, no release cut).
 
 ## Troubleshooting
 

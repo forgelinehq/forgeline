@@ -99,6 +99,7 @@ ways, shown on the same page for the agent you chose:
 **What has been checked against the real programs.** Copilot was installed, signed in by device login and run over ACP in
 the sandbox; all three installers were run for real. A token from the vault has not been tried against a real account, and
 Codex and Antigravity have not been signed in or run in the sandbox.
+On 2026-11-27 (main at `487f373`) only the role (an engine's status is 403 for a developer) and the page labels were checked on the UAT instance; installing and signing in were not. See the [note 2026-11-27](../testing/2026-11-27-uat-assistant-agents.md).
 
 ## Troubleshooting
 

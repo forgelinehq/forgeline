@@ -52,15 +52,30 @@ Rules for missed and overlapping times:
 
 ## Schedule a team
 
-1. Open the team, and under **On a schedule** add a goal.
-2. Pick the time, the time zone and the role it runs as (viewer or developer).
-3. Save.
+1. Open the team, and under **On a schedule** choose **Schedule a goal** (administrators only).
+2. Type the goal, pick the time, the time zone and the role it runs as (viewer or developer). The next three runs show
+   under the picker.
+3. Choose **Schedule it**.
 
 ## Security model
 
 - A team's schedule never runs as an administrator.
 - **Run now** runs as you.
-- Pause, resume, change, create and delete are audited (for example `ai.schedule.pause`).
+- Pause, resume, change, create and delete are audited. A workflow's pause and resume are `ai.schedule.pause` and
+  `ai.schedule.resume`; for a team's schedule, pause and change are both `ai.schedule.update`, and create and delete are
+  `ai.schedule.create` and `ai.schedule.delete`.
+
+## Limits and verification
+
+{: .warning }
+**Checked through the console on 2026-11-27**, on the UAT instance at commit `487f373`: an administrator scheduled a team
+goal in the side panel (the picker showed three next runs), paused it from **Workflows → Schedules**, and the page matched
+the picture apart from its rows. A developer saw the table without the buttons and got 403 on adding a schedule; the
+refusals for 10 minutes ("schedule: every 15 to 10080 minutes"), for a cron every 5 minutes ("schedule: cron: it would run
+5 minutes apart; at most every 15 minutes"), for run-as administrator and for an 11th schedule on a team ("a team has at
+most 10 schedules") were as written, and pausing a workflow with no schedule answered "this workflow has no schedule; set one
+in its settings". Not run: a schedule firing at its time, **Run now**, a workflow's own schedule, and the missed-time rules
+(they need hours or a restart). See the [test note](../testing/2026-11-27-uat-workflows-teams.md).
 
 ## Troubleshooting
 
