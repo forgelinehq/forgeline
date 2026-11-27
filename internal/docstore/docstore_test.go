@@ -211,31 +211,91 @@ func TestPostgres(t *testing.T) {
 	if base == "" {
 		t.Skip("set FORGELINE_TEST_DATABASE_URL to run the Postgres store tests")
 	}
-	runSuite(t, func(t *testing.T) Store {
-		ctx := context.Background()
-		schema := "d_" + randomSuffix()
-		admin, err := pgx.Connect(ctx, base)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if _, err := admin.Exec(ctx, "CREATE SCHEMA "+schema); err != nil {
-			t.Fatal(err)
-		}
-		t.Cleanup(func() {
-			admin.Exec(ctx, "DROP SCHEMA "+schema+" CASCADE")
-			admin.Close(ctx)
-		})
-		u, _ := url.Parse(base)
-		q := u.Query()
-		q.Set("search_path", schema)
-		u.RawQuery = q.Encode()
-		p, err := OpenPostgres(ctx, u.String())
-		if err != nil {
-			t.Fatal(err)
-		}
-		t.Cleanup(p.Close)
-		return p
+	runSuite(t, func(t *testing.T) Store { return openTestPostgres(t, base) })
+}
+
+// openTestPostgres opens a store in a schema of its own, dropped when the test ends.
+func openTestPostgres(t *testing.T, base string) *Postgres {
+	ctx := context.Background()
+	schema := "d_" + randomSuffix()
+	admin, err := pgx.Connect(ctx, base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := admin.Exec(ctx, "CREATE SCHEMA "+schema); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		admin.Exec(ctx, "DROP SCHEMA "+schema+" CASCADE")
+		admin.Close(ctx)
 	})
+	u, _ := url.Parse(base)
+	q := u.Query()
+	q.Set("search_path", schema)
+	u.RawQuery = q.Encode()
+	p, err := OpenPostgres(ctx, u.String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(p.Close)
+	return p
+}
+
+func TestPostgresTakesOverTheStoreFile(t *testing.T) {
+	base := os.Getenv("FORGELINE_TEST_DATABASE_URL")
+	if base == "" {
+		t.Skip("set FORGELINE_TEST_DATABASE_URL to run the Postgres store tests")
+	}
+	ctx := context.Background()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "console.json")
+	file, err := OpenFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	file.Put(ctx, "users", "u1", thing{"ada", 1})
+	file.Put(ctx, "pipelines", "p1", thing{"build", 2})
+	before, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	p := openTestPostgres(t, base)
+	if n, err := p.ImportFile(ctx, filepath.Join(dir, "none.json")); n != 0 || err != nil {
+		t.Fatalf("no file: %d, %v", n, err)
+	}
+	if n, err := p.ImportFile(ctx, path); n != 2 || err != nil {
+		t.Fatalf("first import: %d, %v", n, err)
+	}
+	var got thing
+	if err := p.Get(ctx, "users", "u1", &got); err != nil || got != (thing{"ada", 1}) {
+		t.Fatalf("imported user = %+v, %v", got, err)
+	}
+	// A database in use is never written from the file again: that would bring back what was deleted since.
+	if err := p.Delete(ctx, "users", "u1"); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := p.ImportFile(ctx, path); n != 0 || err != nil {
+		t.Fatalf("second import: %d, %v", n, err)
+	}
+	if err := p.Get(ctx, "users", "u1", &got); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("a deleted record came back: %v", err)
+	}
+	if after, _ := os.ReadFile(path); string(after) != string(before) {
+		t.Fatal("the file was changed")
+	}
+
+	// All or nothing: the database refuses a zero byte inside JSON, and then nothing is copied.
+	bad := openTestPostgres(t, base)
+	file.Put(ctx, "zz", "broken", thing{Name: "a\x00b"})
+	if n, err := bad.ImportFile(ctx, path); err == nil || n != 0 {
+		t.Fatalf("a record the database refuses: %d, %v", n, err)
+	}
+	for _, kind := range []string{"users", "pipelines", "zz"} {
+		if c, err := bad.Count(ctx, kind); err != nil || c != 0 {
+			t.Fatalf("%s: %d left after a failed import, %v", kind, c, err)
+		}
+	}
 }
 
 func randomSuffix() string {
