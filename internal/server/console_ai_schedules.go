@@ -180,6 +180,9 @@ func (s *Server) handleWorkflowSchedulePause(paused bool) http.HandlerFunc {
 			s.defError(w, "workflow", err)
 			return
 		}
+		if !s.mayChangeWorkflow(w, r, wf) {
+			return
+		}
 		v, _ := wf.version(wf.Current)
 		if !v.spec().On() {
 			writeError(w, http.StatusConflict, "this workflow has no schedule; set one in its settings")

@@ -113,8 +113,8 @@ func TestPipelineLifecycleVersionsAndConflicts(t *testing.T) {
 	}
 	view.expect(200, "GET", "/v1/pipelines/demo", nil)
 	view.expect(404, "GET", "/v1/pipelines/nope", nil)
-	dev.expect(403, "DELETE", "/v1/pipelines/demo", nil) // deleting is an admin action
-	admin.expect(204, "DELETE", "/v1/pipelines/demo", nil)
+	view.expect(403, "DELETE", "/v1/pipelines/demo", nil)
+	dev.expect(204, "DELETE", "/v1/pipelines/demo", nil)
 	admin.expect(404, "GET", "/v1/pipelines/demo", nil)
 }
 

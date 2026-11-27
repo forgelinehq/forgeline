@@ -50,18 +50,20 @@ type EvalCase struct {
 
 // EvalSuite is a list of cases for one agent.
 type EvalSuite struct {
-	ID          string          `json:"id"`
-	Agent       string          `json:"agent"`
-	Name        string          `json:"name"`
-	Description string          `json:"description,omitempty"`
-	Attempts    int             `json:"attempts"`        // 1 to 5; a case passes only if every attempt does
-	Judge       string          `json:"judge,omitempty"` // provider/model for judge checks; empty: the assistant's model
-	Cases       []EvalCase      `json:"cases"`
-	CreatedBy   string          `json:"created_by"`
-	CreatedAt   time.Time       `json:"created_at"`
-	UpdatedBy   string          `json:"updated_by"`
-	UpdatedAt   time.Time       `json:"updated_at"`
-	LastRun     *EvalRunSummary `json:"last_run,omitempty"` // filled in on reads
+	ID          string     `json:"id"`
+	Agent       string     `json:"agent"`
+	Name        string     `json:"name"`
+	Description string     `json:"description,omitempty"`
+	Attempts    int        `json:"attempts"`        // 1 to 5; a case passes only if every attempt does
+	Judge       string     `json:"judge,omitempty"` // provider/model for judge checks; empty: the assistant's model
+	Cases       []EvalCase `json:"cases"`
+	CreatedBy   string     `json:"created_by"`
+	CreatedAt   time.Time  `json:"created_at"`
+	UpdatedBy   string     `json:"updated_by"`
+	UpdatedAt   time.Time  `json:"updated_at"`
+	// UpdatedByRole is the author's role (design note 054); empty is an administrator.
+	UpdatedByRole string          `json:"updated_by_role,omitempty"`
+	LastRun       *EvalRunSummary `json:"last_run,omitempty"` // filled in on reads
 }
 
 // EvalCheckResult is one check of one attempt.
@@ -367,8 +369,11 @@ func (s *Server) handleSaveSuite(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		x.ID, x.Agent, x.CreatedBy, x.CreatedAt = old.ID, old.Agent, old.CreatedBy, old.CreatedAt
+		if !s.mayChangeSuite(w, r, old.ID) {
+			return
+		}
 	}
-	x.UpdatedBy, x.UpdatedAt, x.LastRun = who.Name, now, nil
+	x.UpdatedBy, x.UpdatedByRole, x.UpdatedAt, x.LastRun = who.Name, string(who.Role), now, nil
 	if err := s.docs.Put(ctx, kindEvalSuite, x.ID, x); err != nil {
 		s.internalError(w, "saving the suite", err)
 		return
@@ -386,6 +391,9 @@ func (s *Server) handleDeleteSuite(w http.ResponseWriter, r *http.Request) {
 	x, err := s.loadSuite(ctx, r.PathValue("id"))
 	if err != nil {
 		s.defError(w, "suite", err)
+		return
+	}
+	if !s.mayChangeSuite(w, r, x.ID) {
 		return
 	}
 	s.docs.Delete(ctx, kindEvalSuite, x.ID)
@@ -475,6 +483,11 @@ func (s *Server) handleRunSuite(w http.ResponseWriter, r *http.Request) {
 // startSuiteRun saves a new run and runs it in the background. publish, when not 0, is the version to make current
 // if every case passes.
 func (s *Server) startSuiteRun(ctx context.Context, p Principal, x EvalSuite, a AIAgent, v AgentVersion, model string, publish int) (EvalRun, int, string) {
+	// A suite's cases are what the agent is asked, so a developer's suite, or agent, runs with a developer's rights.
+	if byDeveloper(x.UpdatedByRole) || s.developerAgent(ctx, v) {
+		p = capped(p)
+	}
+	ctx = context.WithValue(ctx, principalKey{}, p)
 	run, status, msg := s.beginSuiteRun(ctx, p, x, a, v, model, publish)
 	if msg != "" {
 		return EvalRun{}, status, msg

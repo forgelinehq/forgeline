@@ -1,4 +1,4 @@
-// Runbooks (design note 051): scripts an administrator writes and a different administrator reviews, run on servers
+// Runbooks (design note 051): scripts a developer or administrator writes and a different administrator reviews, run on servers
 // through SSM. A check (it only reads) runs when asked; a fix waits for a different administrator each time.
 import { h, icon, mount, pageHeader, relTime, absTime, pill, spinner, errorBox, notice, toast, confirmDialog, drawer, field, emptyState } from '../lib/dom.js';
 import { chipInput, choiceCards } from '../lib/controls.js';
@@ -25,7 +25,8 @@ export async function runbooksPage() {
   let d;
   try { d = await get('/v1/runbooks'); } catch (e) { mount(el, errorBox(e.message)); return el; }
   const admin = atLeast(session.role, 'admin');
-  const add = admin && h('button', { class: 'btn-primary', type: 'button', id: 'new-runbook', onclick: () => editDrawer(null, null) }, icon('plus', 'size-4'), 'New runbook');
+  const writer = atLeast(session.role, 'developer');
+  const add = writer && h('button', { class: 'btn-primary', type: 'button', id: 'new-runbook', onclick: () => editDrawer(null, null) }, icon('plus', 'size-4'), 'New runbook');
   const list = d.runbooks.length
     ? h('section', { class: 'card overflow-x-auto', id: 'runbooks' }, h('table', { class: 'tbl' },
       h('thead', {}, h('tr', {}, ['Runbook', 'Kind', 'Runs on', 'Version', ''].map(x => h('th', {}, x)))),
@@ -46,10 +47,10 @@ export async function runbooksPage() {
     h('div', { class: 'grid gap-3 md:grid-cols-3' }, d.examples.map(ex => h('div', { class: 'card card-pad flex flex-col gap-2', 'data-example': ex.name },
       h('div', { class: 'flex items-center justify-between gap-2' }, h('span', { class: 'font-medium' }, ex.name), kindPill(ex.kind)),
       h('p', { class: 'muted flex-1 text-sm' }, ex.description),
-      admin ? h('button', { class: 'btn-secondary btn-sm self-start', type: 'button', onclick: () => editDrawer(null, ex) }, icon('copy', 'size-4'), 'Start from this') : null))));
+      writer ? h('button', { class: 'btn-secondary btn-sm self-start', type: 'button', onclick: () => editDrawer(null, ex) }, icon('copy', 'size-4'), 'Start from this') : null))));
   mount(el,
     pageHeader('Runbooks', 'Scripts that check or fix things on your servers through AWS Systems Manager. Agents choose a runbook and its values; they never write commands.', add || null),
-    notice('info', 'One administrator writes a runbook and a different one reviews it. Checks then run when asked; every fix waits for a different administrator to approve it.'),
+    notice('info', 'A developer or an administrator writes a runbook and a different administrator reviews it. Checks then run when asked; every fix waits for a different administrator to approve it.'),
     h('div', { class: 'mt-4' }, list), examples);
   return el;
 }
@@ -140,7 +141,7 @@ export async function runbookPage({ params }) {
     const pending = rb.versions.filter(x => !x.review && x.n > rb.current);
     mount(el,
       h('nav', { class: 'mb-2 text-sm', 'aria-label': 'Breadcrumb' }, h('a', { href: '#/runbooks', class: 'muted hover:underline' }, 'Runbooks'), h('span', { class: 'muted' }, ' › '), h('span', {}, rb.name)),
-      pageHeader(rb.name, rb.description, kindPill(rb.kind), admin ? h('button', { class: 'btn-secondary', type: 'button', id: 'rb-new-version', onclick: () => editDrawer(rb, null) }, icon('edit', 'size-4'), 'New version') : null),
+      pageHeader(rb.name, rb.description, kindPill(rb.kind), atLeast(session.role, 'developer') ? h('button', { class: 'btn-secondary', type: 'button', id: 'rb-new-version', onclick: () => editDrawer(rb, null) }, icon('edit', 'size-4'), 'New version') : null),
       pending.map(v => reviewCard(rb, v, admin, load)),
       cur ? runCard(rb, cur, load) : h('div', { class: 'mb-4' }, notice('warn', 'No version has been reviewed yet, so this runbook cannot run.')),
       cur ? versionCard(cur, 'What runs now: v' + cur.n) : null,

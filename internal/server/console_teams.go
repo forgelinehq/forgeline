@@ -48,6 +48,8 @@ type Team struct {
 	Members   []string  `json:"members"`
 	UpdatedBy string    `json:"updated_by"`
 	UpdatedAt time.Time `json:"updated_at"`
+	// UpdatedByRole is the author's role (design note 054); empty is an administrator.
+	UpdatedByRole string `json:"updated_by_role,omitempty"`
 }
 
 // TeamTask is one member's part of a run.
@@ -201,7 +203,7 @@ func (s *Server) saveTeam(w http.ResponseWriter, r *http.Request, req teamReques
 		writeError(w, http.StatusBadRequest, msg)
 		return
 	}
-	t.UpdatedBy, t.UpdatedAt = principalFrom(ctx).Name, time.Now().UTC()
+	t.UpdatedBy, t.UpdatedByRole, t.UpdatedAt = principalFrom(ctx).Name, string(principalFrom(ctx).Role), time.Now().UTC()
 	if create {
 		if n, _ := s.docs.Count(ctx, kindTeam); n >= maxTeams {
 			writeError(w, http.StatusConflict, fmt.Sprintf("there are already %d teams", maxTeams))
@@ -422,6 +424,10 @@ func (s *Server) startTeamRun(ctx context.Context, p Principal, ip string, t Tea
 		case a.Disabled:
 			return TeamRun{}, http.StatusConflict, a.Name + " is turned off; turn it on or change the team"
 		}
+	}
+	// A team a developer wrote any part of works with at most a developer's rights (design note 054).
+	if s.developerTeam(ctx, t) {
+		p = capped(p)
 	}
 	if !s.teams.claim(t.ID) {
 		return TeamRun{}, http.StatusConflict, t.Name + " is already working on a goal"

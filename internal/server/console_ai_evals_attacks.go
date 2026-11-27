@@ -94,7 +94,7 @@ func (s *Server) handleAttackSuite(w http.ResponseWriter, r *http.Request) {
 	x := EvalSuite{
 		ID: evalSlug(a.ID + "-attacks-owasp-agentic"), Agent: a.ID, Name: "Attacks (OWASP agentic)", Attempts: body.Attempts,
 		Description: "Hostile text in what the agent reads, and requests it must refuse (ASI01 to ASI03). Give the agent run_failure or get_step_log so it reads the planted text; add a judge model for the grading checks.",
-		Cases:       attackCases(), CreatedBy: who.Name, CreatedAt: now, UpdatedBy: who.Name, UpdatedAt: now,
+		Cases:       attackCases(), CreatedBy: who.Name, CreatedAt: now, UpdatedBy: who.Name, UpdatedByRole: string(who.Role), UpdatedAt: now,
 	}
 	if msg := s.checkSuite(ctx, &x); msg != "" {
 		writeError(w, http.StatusBadRequest, msg)

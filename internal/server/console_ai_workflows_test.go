@@ -89,12 +89,12 @@ func TestWorkflowValidationAndPinning(t *testing.T) {
 	if w.ID != "pinned" || w.Versions[0].Stages[0].Steps[0].AgentN != 1 || w.Versions[0].Stages[0].Name != "Stage 1" || w.Versions[0].Stages[0].Steps[0].ID != "s1-1" {
 		t.Errorf("created = %+v", w.Versions[0].Stages)
 	}
-	// Roles: administrators write, developers read and run, viewers see nothing.
-	m.dev.expect(403, "POST", "/v1/ai/workflows", wfBody("x", nil))
+	// Roles: developers and administrators write and run, viewers see nothing.
+	m.v.expect(403, "POST", "/v1/ai/workflows", wfBody("x", nil))
 	m.dev.expect(200, "GET", "/v1/ai/workflows", nil)
 	m.v.expect(403, "GET", "/v1/ai/workflows", nil)
 	m.v.expect(403, "POST", "/v1/ai/workflows/"+w.ID+"/run", map[string]any{})
-	m.dev.expect(403, "POST", "/v1/ai/workflows/"+w.ID+"/disable", nil)
+	m.v.expect(403, "POST", "/v1/ai/workflows/"+w.ID+"/disable", nil)
 }
 
 func TestWorkflowVersionsRollbackAndUnchangedSave(t *testing.T) {

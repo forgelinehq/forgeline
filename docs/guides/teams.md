@@ -26,8 +26,8 @@ underneath?"
 | --- | --- | --- |
 | See teams and their runs | Developer | |
 | Give a team a goal | Developer | 2000 characters at most; one run at a time per team |
-| Create, change or remove a team | Administrator | A team has 1 to 8 members besides the lead; at most 50 teams; removal is refused while it is working |
-| Schedule a goal | Administrator | See [Schedules](schedules.md) |
+| Create, change or remove a team | Developer | A team has 1 to 8 members besides the lead; at most 50 teams; removal is refused while it is working |
+| Schedule a goal | Developer | See [Schedules](schedules.md) |
 
 ## How it works
 
@@ -43,7 +43,8 @@ answer, live. A change a member proposes goes to **Approvals** like any other.
 
 ## Make a team
 
-1. As an administrator, choose **New team** (developers do not see the button).
+1. Choose **New team**. A team a developer saved, or with an agent a developer wrote, works with at most a developer's
+   rights, whoever gives it a goal.
 2. In the side panel give it a name, a purpose (the lead reads it), the lead, and the members, picked from a searchable
    list of agents. An agent can be in several teams.
 3. Choose **Make the team**, open it, type a goal and choose **Give the goal**. (On the **Teams** page, **Give a goal** on a

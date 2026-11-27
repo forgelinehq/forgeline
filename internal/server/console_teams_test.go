@@ -100,9 +100,10 @@ func TestTeamPlansWorksAndAnswers(t *testing.T) {
 			t.Errorf("%s: %d %s, want 400", name, resp.StatusCode, out)
 		}
 	}
+	admin.createUser("looker", authn.Viewer)
+	h.login("looker").expect(403, "POST", "/v1/ai/teams", team)
 	admin.createUser("dev", authn.Developer)
 	dev := h.login("dev")
-	dev.expect(403, "POST", "/v1/ai/teams", team)
 	var tm Team
 	json.Unmarshal(admin.expect(201, "POST", "/v1/ai/teams", team), &tm)
 	if tm.ID != "platform-health" {

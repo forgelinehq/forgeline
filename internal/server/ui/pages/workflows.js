@@ -52,8 +52,8 @@ const statusPill = (s) => pill(s, s === 'waiting' ? 'Waiting for approval' : s =
 
 // ------------------------------------------------------------------ list (a tab on the Agents page)
 
-export function workflowList(workflows, admin) {
-  if (!workflows.length) return emptyState('flow', 'No workflows yet', admin ? 'A workflow runs agents in stages, optionally on a schedule, and can pause for your approval before a stage.' : 'An administrator can create workflows.');
+export function workflowList(workflows, writer) {
+  if (!workflows.length) return emptyState('flow', 'No workflows yet', writer ? 'A workflow runs agents in stages, optionally on a schedule, and can pause for your approval before a stage.' : 'A developer or an administrator can create workflows.');
   return h('div', { class: 'card overflow-x-auto' }, h('table', { class: 'tbl' }, h('thead', {}, h('tr', {}, ['Workflow', 'Stages', 'Runs', 'Run as', 'Version'].map(x => h('th', {}, x)))),
     h('tbody', {}, workflows.map(w => h('tr', { class: 'row-link', tabindex: '0', 'data-workflow': w.id, onclick: () => navigate('/workflows/' + w.id), onkeydown: (e) => { if (e.key === 'Enter') navigate('/workflows/' + w.id); } },
       h('td', {}, h('div', { class: 'font-medium' }, w.name, w.disabled && h('span', { class: 'pill-idle ml-2' }, 'off')), h('div', { class: 'muted max-w-md truncate text-xs' }, w.description)),
@@ -82,16 +82,16 @@ function triggerPills(w) {
 }
 
 export async function workflowsHomePage({ query }) {
-  const admin = atLeast(session.role, 'admin'), dev = atLeast(session.role, 'developer');
+  const dev = atLeast(session.role, 'developer');
   const tab = ['runs', 'archived'].includes(query.tab) ? query.tab : 'workflows';
   const el = h('div', {});
   const header = () => pageHeader('Workflows', 'Agents working in an order you draw, like n8n: agents, lookups, decisions, questions for people, merges and loops, with shared state. Started by hand, on a schedule, by a webhook or after a pipeline run fails; every run is drawn on the canvas.',
-    admin && h('a', { class: 'btn-primary', id: 'new-graph', href: '#/workflows/new/canvas' }, icon('plus', 'size-4'), 'New workflow'));
+    dev && h('a', { class: 'btn-primary', id: 'new-graph', href: '#/workflows/new/canvas' }, icon('plus', 'size-4'), 'New workflow'));
   mount(el, header(), spinner());
   let wfs, runs, archived = [];
   try {
     [wfs, runs, archived] = await Promise.all([get('/v1/ai/workflows').then(r => r.workflows), get('/v1/ai/workflow-runs').then(r => r.runs),
-      admin ? get('/v1/ai/workflows?archived=1').then(r => r.workflows) : Promise.resolve([])]);
+      dev ? get('/v1/ai/workflows?archived=1').then(r => r.workflows) : Promise.resolve([])]);
   } catch (e) { mount(el, header(), errorBox(e.message)); return el; }
   const tabBtn = (id, label) => h('a', { href: '#/workflows' + (id === 'workflows' ? '' : '?tab=' + id), role: 'tab', 'aria-selected': String(tab === id), id: 'tab-' + id,
     class: 'rounded-lg px-3 py-1.5 text-sm font-medium ' + (tab === id ? 'bg-brand-50 text-brand-700 dark:bg-brand-950/40 dark:text-brand-200' : 'muted hover:bg-slate-100 dark:hover:bg-slate-800') }, label);
@@ -109,14 +109,14 @@ export async function workflowsHomePage({ query }) {
       w.last_run ? h('a', { href: '#/workflow-runs/' + w.last_run.id, class: 'flex min-w-0 items-center gap-2' }, statusPill(w.last_run.status), h('span', { class: 'muted truncate', title: absTime(w.last_run.started_at) }, relTime(w.last_run.started_at) + (RUN_HOW[w.last_run.trigger] ? ' · ' + RUN_HOW[w.last_run.trigger] : '')))
         : h('span', { class: 'muted' }, 'Not run yet'),
       h('span', { class: 'ml-auto flex flex-none gap-1.5' },
-        admin && w.graph ? h('a', { class: 'btn-ghost btn-sm', href: '#/workflows/' + w.id + '/canvas', 'aria-label': 'Open ' + w.name + ' on the canvas', title: 'Canvas' }, icon('edit', 'size-3.5')) : null,
+        dev && w.graph ? h('a', { class: 'btn-ghost btn-sm', href: '#/workflows/' + w.id + '/canvas', 'aria-label': 'Open ' + w.name + ' on the canvas', title: 'Canvas' }, icon('edit', 'size-3.5')) : null,
         dev ? h('button', { class: 'btn-secondary btn-sm', type: 'button', disabled: w.disabled, 'data-run': w.id, onclick: async () => {
           try { const r = await post('/v1/ai/workflows/' + w.id + '/run', {}); navigate('/workflow-runs/' + r.id); } catch (e) { toast(e.message, 'error'); }
         } }, icon('play', 'size-3.5'), 'Run') : null)));
 
   const list = wfs.length ? h('div', { class: 'grid gap-4 md:grid-cols-2 xl:grid-cols-3', id: 'workflow-cards' }, wfs.map(card))
-    : emptyState('flow', 'No workflows yet', admin ? 'Draw one on the canvas: drag agents, lookups, decisions and questions for people from the palette and wire them together.' : 'An administrator can create workflows.',
-        admin && h('div', { class: 'mt-4 flex justify-center' }, h('a', { class: 'btn-primary', href: '#/workflows/new/canvas' }, 'Draw a workflow')));
+    : emptyState('flow', 'No workflows yet', dev ? 'Draw one on the canvas: drag agents, lookups, decisions and questions for people from the palette and wire them together.' : 'A developer or an administrator can create workflows.',
+        dev && h('div', { class: 'mt-4 flex justify-center' }, h('a', { class: 'btn-primary', href: '#/workflows/new/canvas' }, 'Draw a workflow')));
 
   const runTable = runs.length ? h('div', { class: 'card overflow-x-auto' }, h('table', { class: 'tbl', id: 'all-runs' },
     h('thead', {}, h('tr', {}, ['Workflow', 'Started', 'How', 'By', 'Status', 'Took'].map(x => h('th', {}, x)))),
@@ -135,12 +135,14 @@ export async function workflowsHomePage({ query }) {
     : h('p', { class: 'muted text-sm' }, 'Nothing archived. A deleted workflow waits here for 30 days.');
 
   mount(el, header(),
-    h('div', { class: 'mb-4 flex gap-1', role: 'tablist' }, tabBtn('workflows', `Workflows (${wfs.length})`), tabBtn('runs', `Runs (${runs.length})`), admin && tabBtn('archived', `Archived (${archived.length})`)),
+    h('div', { class: 'mb-4 flex gap-1', role: 'tablist' }, tabBtn('workflows', `Workflows (${wfs.length})`), tabBtn('runs', `Runs (${runs.length})`), dev && tabBtn('archived', `Archived (${archived.length})`)),
     tab === 'runs' ? runTable : tab === 'archived' ? archivedList : list);
   return el;
 }
 
 // ------------------------------------------------------------------ workflow page
+
+const approvalOfAdmin = (v) => !!v && (!v.by_role || v.by_role === 'admin') && ((v.stages || []).some(st => st.gate) || !!v.graph?.nodes.some(n => n.kind === 'ask'));
 
 export async function workflowPage({ params }) {
   const admin = atLeast(session.role, 'admin'), dev = atLeast(session.role, 'developer');
@@ -154,6 +156,8 @@ export async function workflowPage({ params }) {
   const agentName = (id) => agents.find(a => a.id === id)?.name || id;
   function draw() {
     const v = wf.versions.find(x => x.n === selected);
+    // An administrator's approval step keeps the workflow theirs to change (design note 054); the server checks it too.
+    const writer = dev && (admin || !approvalOfAdmin(wf.versions.find(x => x.n === wf.current)));
     const active = runs.find(r => r.status === 'running' || r.status === 'waiting');
     const start = h('button', { class: 'btn-primary btn-sm', id: 'run-workflow', type: 'button', disabled: !dev || wf.disabled || !!active, title: active ? 'A run is already in progress' : '', onclick: async () => {
       try { const r = await post('/v1/ai/workflows/' + wf.id + '/run', { version: v.n }); navigate('/workflow-runs/' + r.id); } catch (e) { toast(e.message, 'error'); }
@@ -170,10 +174,10 @@ export async function workflowPage({ params }) {
             notice('warn', 'This is the only time it is shown. Keep it where the sender keeps secrets.')));
         } catch (e) { toast(e.message, 'error'); }
       } }, icon('key', 'size-3.5'), 'Webhook secret'),
-      admin && h('a', { class: 'btn-secondary btn-sm', id: 'edit-canvas', href: '#/workflows/' + wf.id + '/canvas' }, icon('edit', 'size-3.5'), 'Edit on the canvas'),
-      admin && !v.graph && h('button', { class: 'btn-secondary btn-sm', id: 'new-version', type: 'button', onclick: () => workflowForm(wf, agents, () => load(false), v) }, icon('plus', 'size-3.5'), 'New version'),
-      admin && h('button', { class: 'btn-secondary btn-sm', type: 'button', onclick: async () => { try { await post('/v1/ai/workflows/' + wf.id + (wf.disabled ? '/enable' : '/disable')); load(true); } catch (e) { toast(e.message, 'error'); } } }, wf.disabled ? 'Turn on' : 'Turn off'),
-      admin && !wf.archived_at && h('button', { class: 'btn-ghost btn-sm text-rose-600 dark:text-rose-400', type: 'button', id: 'delete-workflow', onclick: async () => {
+      writer && h('a', { class: 'btn-secondary btn-sm', id: 'edit-canvas', href: '#/workflows/' + wf.id + '/canvas' }, icon('edit', 'size-3.5'), 'Edit on the canvas'),
+      writer && !v.graph && h('button', { class: 'btn-secondary btn-sm', id: 'new-version', type: 'button', onclick: () => workflowForm(wf, agents, () => load(false), v) }, icon('plus', 'size-3.5'), 'New version'),
+      writer && h('button', { class: 'btn-secondary btn-sm', type: 'button', onclick: async () => { try { await post('/v1/ai/workflows/' + wf.id + (wf.disabled ? '/enable' : '/disable')); load(true); } catch (e) { toast(e.message, 'error'); } } }, wf.disabled ? 'Turn on' : 'Turn off'),
+      writer && !wf.archived_at && h('button', { class: 'btn-ghost btn-sm text-rose-600 dark:text-rose-400', type: 'button', id: 'delete-workflow', onclick: async () => {
         if (!await confirmDialog({ title: 'Delete ' + wf.name + '?', body: 'It is turned off and moved to the archive. You can restore it for 30 days; after that it is deleted for good. Its past runs stay.', confirmLabel: 'Delete', danger: true })) return;
         try { await del('/v1/ai/workflows/' + wf.id); toast(wf.name + ' moved to the archive', 'ok'); navigate('/workflows'); } catch (e) { toast(e.message, 'error'); }
       } }, icon('trash', 'size-3.5'), 'Delete')),
@@ -201,7 +205,7 @@ export async function workflowPage({ params }) {
             h('tbody', {}, [...wf.versions].reverse().map(x => h('tr', { class: 'row-link' + (x.n === selected ? ' bg-brand-50/60 dark:bg-brand-950/20' : ''), tabindex: '0', 'data-version': String(x.n), onclick: () => { selected = x.n; draw(); } },
               h('td', { class: 'whitespace-nowrap font-medium' }, 'v' + x.n, x.n === wf.current && h('span', { class: 'pill-ok ml-2' }, 'current')), h('td', { class: 'text-sm' }, x.by),
               h('td', { class: 'muted whitespace-nowrap text-sm', title: absTime(x.at) }, relTime(x.at)), h('td', { class: 'max-w-xs truncate text-sm' }, x.note || h('span', { class: 'muted' }, '–')), h('td', {}, shortHash(x.hash)),
-              h('td', { class: 'text-right' }, admin && x.n !== wf.current && h('button', { class: 'btn-ghost btn-sm', type: 'button', 'data-rollback': String(x.n), onclick: async (e) => {
+              h('td', { class: 'text-right' }, writer && x.n !== wf.current && h('button', { class: 'btn-ghost btn-sm', type: 'button', 'data-rollback': String(x.n), onclick: async (e) => {
                 e.stopPropagation();
                 if (!await confirmDialog({ title: `Make v${x.n} current again?`, body: 'It is saved as a new version with the same stages and schedule. Nothing is erased.', confirmLabel: 'Roll back' })) return;
                 try { await post('/v1/ai/workflows/' + wf.id + '/rollback', { to: x.n }); toast('Rolled back', 'ok'); load(false); } catch (err) { toast(err.message, 'error'); }

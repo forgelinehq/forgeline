@@ -27,7 +27,7 @@ as an [agent step](agent-steps.md), which is a step in a pipeline that runs insi
 | --- | --- | --- |
 | Ask the assistant | Developer | 20 questions a minute per person |
 | Confirm or dismiss a card it prepared | Developer | Only the person it was prepared for; once only; not after 30 minutes |
-| Get a card that saves an agent, skill or workflow | Administrator | A developer can ask for one but only an administrator gets the card |
+| Get a card that saves an agent, skill or workflow | Developer | A developer's card cannot give an agent an administrator's tool |
 | Choose the sign-in, save it and **Test** it | Administrator | A developer can open the page but not change it |
 | Install an agent program it needs (see [Agent engines](assistant-agent-engines.md)) | Administrator | |
 | Read your saved conversations | Developer | Only your own; an administrator cannot read another person's |
@@ -81,7 +81,7 @@ Copilot choose, or name one. Meant for a single-person setup.
 
 ## Ask it to write things
 
-The assistant can **write skills, agents and workflows** for an administrator ("write an agent that explains failed
+The assistant can **write skills, agents and workflows** for a developer or administrator ("write an agent that explains failed
 runs", "make a weekly workflow with the cost watcher"). Nothing is created by asking.
 
 1. It prepares a card that says, in words the server works out (not the model's), what saving would do: which tools the
@@ -156,7 +156,6 @@ On 2026-11-27 (main at `487f373`) a developer test user asked a real model (Clau
 | --- | --- |
 | **Test** fails | The key or token is wrong, or the local `claude` or `copilot` program is not installed or not signed in for the server's user. |
 | A card refuses to start a workflow | The workflow was changed or turned off after the card was prepared. |
-| A developer asked for an agent but got no card | Only an administrator gets the card that saves an agent, skill or workflow. |
 | A card does nothing after 30 minutes | A card cannot be confirmed after 30 minutes; ask again. |
 | It stops partway through a long task | A question may use up to 40 lookups and 5 minutes; say "continue". |
 

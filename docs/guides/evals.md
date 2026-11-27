@@ -26,8 +26,8 @@ not obey instructions planted in a log or an issue. A suite can also gate publis
 | Action | Minimum role | Extra rule |
 | --- | --- | --- |
 | See suites and runs | Developer | |
-| Create, change, delete a suite | Developer | At most 100 cases a suite, 12 checks a case, 4,000 characters of input a case |
-| Run a suite | Developer | Runs as you; one run at a time per suite |
+| Create, change, delete a suite | Developer | At most 100 cases a suite, 12 checks a case, 4,000 characters of input a case. A suite that is an agent's publishing gate is only an administrator's to change |
+| Run a suite | Developer | Runs as you, with at most a developer's rights when a developer wrote the suite or the version; one run at a time per suite |
 | Add the attack suite | Developer | 409 if the agent already has one |
 | Add a case from a trace | Developer | The trace must have kept its prompt |
 

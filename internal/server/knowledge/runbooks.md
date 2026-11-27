@@ -7,7 +7,7 @@ nav_order: 9
 # Runbooks
 
 A runbook is a reviewed shell script that checks or fixes something on your servers, run through AWS Systems Manager
-(SSM). One administrator writes it, a different administrator reviews it, and only the reviewed text ever runs.
+(SSM). A developer or administrator writes it, a different administrator reviews it, and only the reviewed text ever runs.
 People, agents and workflows can start a runbook, but none of them can change what it does.
 
 Use runbooks when an operational task is routine and risky enough to deserve a second pair of eyes: a build server
@@ -27,7 +27,7 @@ whose disk keeps filling up, a stuck service that needs a restart, a backup fold
 | Action | Minimum role | Extra rule |
 | --- | --- | --- |
 | See runbooks and their runs | Developer | |
-| Write a runbook or a new version | Administrator | |
+| Write a runbook or a new version | Developer | It runs only after review |
 | Review (approve) a version | Administrator | Not the version's author |
 | Run a **check** | Developer | Needs a reviewed version |
 | Ask for a **fix** | Developer | Needs a reason; waits for approval |
@@ -36,7 +36,7 @@ whose disk keeps filling up, a stuck service that needs a restart, a backup fold
 
 ## How it works
 
-1. An administrator saves a runbook. The version waits for **review**.
+1. A developer or administrator saves a runbook. The version waits for **review**.
 2. A different administrator reads the exact script and approves it. The approval is tied to the script's hash, so
    any later edit is a new version that needs its own review. The reviewed version keeps running until then.
 3. Someone picks a runbook and fills in its parameters.

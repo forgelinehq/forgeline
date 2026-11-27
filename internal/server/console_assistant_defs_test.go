@@ -73,15 +73,17 @@ func TestAssistantWritesASkillAnAgentAndAWorkflow(t *testing.T) {
 	}
 }
 
-func TestAssistantDefinitionsAreForAdministratorsAndChecked(t *testing.T) {
+func TestAssistantDefinitionsAreChecked(t *testing.T) {
 	m := newMCPHarness(t)
 	skill := map[string]any{"name": "S", "description": "d", "body": "1. x"}
 
-	// A developer cannot create these in the console, so the assistant cannot prepare them for one.
-	if cards := actionsIn(m.run(m.dev, map[string]any{"message": "a"}, prepareDef("save_skill", skill))); len(cards) != 0 {
-		t.Errorf("a developer got a card: %v", cards)
+	// A developer creates these too, but cannot give an agent a tool only an administrator may use.
+	confirmCard(t, m, m.dev, m.run(m.dev, map[string]any{"message": "a"}, prepareDef("save_skill", skill)), 200)
+	over := map[string]any{"name": "Reach", "description": "d", "instructions": "x", "tools": []string{"search_audit"}, "tier": "T0"}
+	if cards := actionsIn(m.run(m.dev, map[string]any{"message": "b"}, prepareDef("save_agent", over))); len(cards) != 0 {
+		t.Errorf("a developer got a card for an administrator's tool: %v", cards)
 	}
-	if !strings.Contains(m.llm.lastUser(1), "only an administrator") {
+	if !strings.Contains(m.llm.lastUser(1), "only an administrator can give an agent search_audit") {
 		t.Errorf("the model was not told why: %s", m.llm.lastUser(1))
 	}
 	for name, bad := range map[string]struct {

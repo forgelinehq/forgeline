@@ -28,7 +28,7 @@ use it for completion.
 | See pipelines and runs | Viewer | |
 | Validate a pipeline file | Viewer | Saves nothing |
 | Save a pipeline or a new version, run it, cancel a run, restore an old version | Developer | |
-| Delete a pipeline | Administrator | |
+| Delete a pipeline | Developer | |
 | List secret names | Developer | Never values |
 | Create, replace or delete a secret | Administrator | |
 | Choose the step container baseline | Administrator | **Settings → Step container limits**; developers can read it |

@@ -239,7 +239,7 @@ function pickNode(agents, lookups, afterName) {
 
 /** Workflows › a workflow › Edit on the canvas (or a new graph workflow when params.id is "new"). */
 export async function graphEditorPage({ params }) {
-  const admin = atLeast(session.role, 'admin');
+  const writer = atLeast(session.role, 'developer');
   const el = h('div', {});
   mount(el, spinner());
   let wf = null, agents = [], tools = [], skills = [];
@@ -247,7 +247,7 @@ export async function graphEditorPage({ params }) {
     [agents, tools, skills] = await Promise.all([get('/v1/ai/agents').then(r => r.agents), get('/v1/ai/tools').then(r => r.tools), get('/v1/ai/skills').then(r => r.skills).catch(() => [])]);
     if (params.id !== 'new') wf = await get('/v1/ai/workflows/' + encodeURIComponent(params.id));
   } catch (e) { mount(el, errorBox(e.message)); return el; }
-  if (!admin) { mount(el, notice('info', 'Only administrators change workflows.')); return el; }
+  if (!writer) { mount(el, notice('info', 'Developers and administrators change workflows.')); return el; }
   const live = agents.filter(a => !a.disabled);
   const agentName = (id) => agents.find(a => a.id === id)?.name || id || 'pick an agent';
   const lookups = tools.filter(t => !t.needs && !NO_LOOKUP.has(t.name) && !t.name.startsWith('propose_')).map(t => t.name);

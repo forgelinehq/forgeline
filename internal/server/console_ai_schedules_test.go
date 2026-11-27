@@ -61,13 +61,13 @@ func TestWorkflowCronScheduleAndPause(t *testing.T) {
 		t.Error("ran twice for one time")
 	}
 
-	// The list says when it runs next; a developer can read it but not pause it.
+	// The list says when it runs next; a viewer cannot pause it.
 	var list struct{ Schedules []scheduleItem }
 	json.Unmarshal(m.dev.expect(200, "GET", "/v1/ai/schedules", nil), &list)
 	if len(list.Schedules) != 1 || list.Schedules[0].Kind != "workflow" || list.Schedules[0].Describe != "cron 0 9 * * * (Europe/Berlin)" || len(list.Schedules[0].Next) != 3 {
 		t.Errorf("list %+v", list.Schedules)
 	}
-	m.dev.expect(403, "POST", "/v1/ai/workflows/"+w.ID+"/schedule/pause", nil)
+	m.v.expect(403, "POST", "/v1/ai/workflows/"+w.ID+"/schedule/pause", nil)
 	m.admin.expect(204, "POST", "/v1/ai/workflows/"+w.ID+"/schedule/pause", nil)
 	m.srv.scheduleTick(ctx, nine.Add(24*time.Hour+5*time.Minute))
 	if len(runs()) != 1 {
@@ -133,9 +133,10 @@ func TestTeamSchedule(t *testing.T) {
 			t.Errorf("%s: %d %s", name, resp.StatusCode, out)
 		}
 	}
+	admin.createUser("looker", authn.Viewer)
+	h.login("looker").expect(403, "POST", "/v1/ai/teams/"+tm.ID+"/schedules", good)
 	admin.createUser("dev", authn.Developer)
 	dev := h.login("dev")
-	dev.expect(403, "POST", "/v1/ai/teams/"+tm.ID+"/schedules", good)
 	var ts TeamSchedule
 	json.Unmarshal(admin.expect(201, "POST", "/v1/ai/teams/"+tm.ID+"/schedules", good), &ts)
 
@@ -175,7 +176,7 @@ func TestTeamSchedule(t *testing.T) {
 	if len(teamRuns()) != 1 {
 		t.Error("a paused team schedule ran")
 	}
-	dev.expect(403, "DELETE", "/v1/ai/team-schedules/"+ts.ID, nil)
+	h.login("looker").expect(403, "DELETE", "/v1/ai/team-schedules/"+ts.ID, nil)
 	admin.expect(204, "DELETE", "/v1/ai/team-schedules/"+ts.ID, nil)
 	if au := string(admin.expect(200, "GET", "/v1/audit?action=ai.schedule.update", nil)); !strings.Contains(au, "paused") {
 		t.Errorf("audit: %s", au)

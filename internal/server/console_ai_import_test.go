@@ -79,11 +79,11 @@ func TestImportABundleIntoAnotherServer(t *testing.T) {
 		t.Errorf("the skill was created twice: %s", out)
 	}
 
-	// Audited; only administrators; a bad bundle says what is wrong.
+	// Audited; not for viewers; a bad bundle says what is wrong.
 	if au := string(dst.admin.expect(200, "GET", "/v1/audit?action=ai.agent.import", nil)); !strings.Contains(au, a.ID+" v1") || !strings.Contains(au, "1 skill(s) created, 1 tool(s) dropped") {
 		t.Errorf("audit: %s", au)
 	}
-	dst.dev.expect(403, "POST", "/v1/ai/agents/import", map[string]any{"bundle": bundle, "dry_run": true})
+	dst.v.expect(403, "POST", "/v1/ai/agents/import", map[string]any{"bundle": bundle, "dry_run": true})
 	if out := string(dst.admin.expect(400, "POST", "/v1/ai/agents/import", map[string]any{"bundle": []byte("not a zip")})); !strings.Contains(out, "not a zip") {
 		t.Errorf("bad bundle: %s", out)
 	}

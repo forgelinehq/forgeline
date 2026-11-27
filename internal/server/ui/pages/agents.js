@@ -73,7 +73,7 @@ function versionTable(versions, current, selected, onPick, onRollback) {
 export async function agentsPage({ query }) {
   if (query.tab === 'workflows') { navigate('/workflows'); return h('div', {}); } // workflows have their own tab now
   const tab = query.tab === 'skills' ? 'skills' : 'agents';
-  const admin = atLeast(session.role, 'admin');
+  const writer = atLeast(session.role, 'developer');
   const el = h('div', {});
   let agents, skills, tools, workflows;
   let archived = { agents: [] };
@@ -89,15 +89,15 @@ export async function agentsPage({ query }) {
           h('div', { class: 'mt-0.5 flex items-center gap-1.5 text-xs' }, a.disabled ? h('span', { class: 'pill-idle' }, 'Off') : h('span', { class: 'pill-ok' }, 'On'), tierPill(a.tier)))),
       h('p', { class: 'muted line-clamp-2 text-sm' }, a.description || 'No description.'),
       h('div', { class: 'muted mt-auto flex flex-wrap gap-x-4 border-t border-slate-100 pt-3 text-xs dark:border-slate-800' }, h('span', {}, a.tools.length + ' tool' + (a.tools.length === 1 ? '' : 's')), h('span', {}, a.skills.length + ' skill' + (a.skills.length === 1 ? '' : 's')), h('span', {}, 'version ' + a.current)))))
-    : emptyState('sparkle', 'No agents yet', admin ? 'An agent is instructions, skills and a short list of tools. Create one, then talk to it here or let the assistant hand it work.' : 'An administrator can create agents.');
+    : emptyState('sparkle', 'No agents yet', writer ? 'An agent is instructions, skills and a short list of tools. Create one, then talk to it here or let the assistant hand it work.' : 'A developer or an administrator can create agents.');
 
   const skillRows = skills.skills.length ? h('div', { class: 'card overflow-x-auto' }, h('table', { class: 'tbl' }, h('thead', {}, h('tr', {}, ['Skill', 'Description', 'Version'].map(x => h('th', {}, x)))),
     h('tbody', {}, skills.skills.map(s => h('tr', { class: 'row-link', tabindex: '0', 'data-skill': s.id, onclick: () => navigate('/skills/' + s.id), onkeydown: (e) => { if (e.key === 'Enter') navigate('/skills/' + s.id); } },
       h('td', { class: 'font-medium' }, s.name), h('td', { class: 'muted max-w-lg truncate text-sm' }, s.description), h('td', { class: 'text-sm' }, 'v' + s.current))))))
-    : emptyState('list', 'No skills yet', admin ? 'A skill is a procedure, such as how to right-size an ECS service, that agents follow.' : 'An administrator can create skills.');
+    : emptyState('list', 'No skills yet', writer ? 'A skill is a procedure, such as how to right-size an ECS service, that agents follow.' : 'A developer or an administrator can create skills.');
 
   mount(el, pageHeader('Agents', 'Your AI team. Each agent has instructions, skills it follows and a short list of tools, and works as the person who asks it. Every save is a version you can roll back.',
-    admin && (tab === 'agents' ? h('div', { class: 'flex gap-2' },
+    writer && (tab === 'agents' ? h('div', { class: 'flex gap-2' },
       h('button', { class: 'btn-secondary', id: 'import-agent', type: 'button', onclick: () => importDialog() }, icon('upload', 'size-4'), 'Import'),
       h('button', { class: 'btn-primary', id: 'new-agent', type: 'button', onclick: () => navigate('/agents/new/build') }, icon('plus', 'size-4'), 'New agent'))
       : tab === 'skills' ? h('button', { class: 'btn-primary', id: 'new-skill', type: 'button', onclick: () => skillForm(null) }, icon('plus', 'size-4'), 'New skill')
@@ -166,7 +166,7 @@ function importDialog() {
 // ------------------------------------------------------------------ skill detail
 
 export async function skillPage({ params }) {
-  const admin = atLeast(session.role, 'admin');
+  const writer = atLeast(session.role, 'developer');
   const el = h('div', {});
   let sk, selected = 0;
   async function load(keep) {
@@ -177,8 +177,8 @@ export async function skillPage({ params }) {
   function draw() {
     const v = sk.versions.find(x => x.n === selected), prev = sk.versions.find(x => x.n === selected - 1);
     mount(el, pageHeader(sk.name, sk.description, h('a', { class: 'btn-secondary btn-sm', href: '#/agents?tab=skills' }, 'All skills'),
-      admin && h('button', { class: 'btn-primary btn-sm', id: 'new-version', type: 'button', onclick: () => skillForm(sk, load) }, icon('edit', 'size-3.5'), 'Edit'),
-      admin && h('button', { class: 'btn-ghost btn-sm text-rose-600 dark:text-rose-400', type: 'button', onclick: async () => {
+      writer && h('button', { class: 'btn-primary btn-sm', id: 'new-version', type: 'button', onclick: () => skillForm(sk, load) }, icon('edit', 'size-3.5'), 'Edit'),
+      writer && h('button', { class: 'btn-ghost btn-sm text-rose-600 dark:text-rose-400', type: 'button', onclick: async () => {
         if (!await confirmDialog({ title: 'Delete ' + sk.name + '?', body: 'Its history is deleted too. Skills an agent version uses cannot be deleted.', confirmLabel: 'Delete', danger: true })) return;
         try { await del('/v1/ai/skills/' + sk.id); toast('Deleted', 'ok'); navigate('/agents?tab=skills'); } catch (e) { toast(e.message, 'error'); }
       } }, icon('trash', 'size-3.5'), 'Delete')),
@@ -187,7 +187,7 @@ export async function skillPage({ params }) {
           markdownBox(v.body, 'skill-body')),
         prev && h('section', { class: 'card card-pad' }, h('h2', { class: 'h-section mb-2' }, `Changes from v${prev.n}`), diffView(prev.body, v.body)),
         h('section', { class: 'card' }, h('div', { class: 'border-b border-slate-200 px-5 py-3 dark:border-slate-800' }, h('h2', { class: 'h-section' }, 'History')),
-          versionTable(sk.versions, sk.current, selected, (n) => { selected = n; draw(); }, admin && rollback))));
+          versionTable(sk.versions, sk.current, selected, (n) => { selected = n; draw(); }, writer && rollback))));
   }
   async function rollback(n) {
     if (!await confirmDialog({ title: `Make v${n} current again?`, body: `It is saved as a new version with the same text as v${n}. Nothing is erased.`, confirmLabel: 'Roll back' })) return;
@@ -227,7 +227,7 @@ function skillForm(sk, after) {
 // ------------------------------------------------------------------ agent detail
 
 export async function agentPage({ params }) {
-  const admin = atLeast(session.role, 'admin');
+  const admin = atLeast(session.role, 'admin'), writer = atLeast(session.role, 'developer');
   const el = h('div', {});
   let ag, selected = 0, skills = [], tools = [], suites = [];
   async function load(keep) {
@@ -252,11 +252,11 @@ export async function agentPage({ params }) {
             h('span', { class: 'muted' }, 'Version ' + v.n + (v.n === ag.current ? ' (current)' : ' (older)')), shortHash(v.hash))),
         downloadMenu(ag, v),
         admin && !ag.archived_at && h('button', { class: 'btn-secondary btn-sm', type: 'button', id: 'agent-push', onclick: () => pushDrawer(ag, v) }, icon('upload', 'size-3.5'), 'Push v' + v.n),
-        admin && ag.archived_at && h('div', { class: 'flex w-full flex-wrap gap-2 sm:w-auto' },
+        writer && ag.archived_at && h('div', { class: 'flex w-full flex-wrap gap-2 sm:w-auto' },
           h('button', { class: 'btn-primary btn-sm', type: 'button', id: 'restore-agent', onclick: async () => {
             try { await post('/v1/ai/agents/' + ag.id + '/restore'); toast('Restored. It is still turned off.', 'ok'); load(true); } catch (e) { toast(e.message, 'error'); }
           } }, icon('history', 'size-3.5'), 'Restore')),
-        admin && !ag.archived_at && h('div', { class: 'flex w-full flex-wrap gap-2 sm:w-auto' },
+        writer && !ag.archived_at && h('div', { class: 'flex w-full flex-wrap gap-2 sm:w-auto' },
           h('button', { class: 'btn-ghost btn-sm text-rose-600 dark:text-rose-400', type: 'button', id: 'delete-agent', onclick: async () => {
             if (!await confirmDialog({ title: 'Delete ' + ag.name + '?', body: 'It is turned off and moved to the archive. You can restore it for 30 days; after that it is deleted for good. Past runs and missions keep its name.', confirmLabel: 'Delete', danger: true })) return;
             try { await del('/v1/ai/agents/' + ag.id); toast(ag.name + ' moved to the archive', 'ok'); navigate('/agents'); } catch (e) { toast(e.message, 'error'); }
@@ -281,9 +281,9 @@ export async function agentPage({ params }) {
             h('div', { class: 'h-section mb-1 mt-1' }, 'Instructions'), diffView(prev.instructions, v.instructions),
             (() => { const ch = [...setDiff(prev.skills.map(pinLabel), v.skills.map(pinLabel)).map(x => 'Skill ' + x), ...setDiff(prev.tools, v.tools).map(x => 'Tool ' + x), ...(prev.tier !== v.tier ? [`Tier ${tierTitle(prev.tier)} → ${tierTitle(v.tier)}`] : [])];
               return ch.length ? h('ul', { class: 'mt-3 space-y-0.5 text-sm', id: 'agent-changes' }, ch.map(c => h('li', {}, c))) : null; })()),
-          publishingCard(ag, suites, admin, () => load(true)),
+          publishingCard(ag, suites, admin, writer, () => load(true)),
           h('section', { class: 'card' }, h('div', { class: 'border-b border-slate-200 px-5 py-3 dark:border-slate-800' }, h('h2', { class: 'h-section' }, 'Versions')),
-            versionTable(ag.versions, ag.current, selected, (n) => { selected = n; draw(); }, admin && rollback))),
+            versionTable(ag.versions, ag.current, selected, (n) => { selected = n; draw(); }, writer && (admin || !ag.gate) && rollback))),
         h('div', { class: 'min-w-0 lg:col-span-2' }, chatPanel(ag, v))));
   }
   async function rollback(n) {
@@ -343,7 +343,7 @@ function downloadMenu(ag, v) {
 
 // Publishing (design note 050, decision 5): with a gate, a saved version is a candidate until its suite passes on it and
 // it is published. Workflows, teams and schedules use the current version meanwhile.
-function publishingCard(ag, suites, admin, reload) {
+function publishingCard(ag, suites, admin, writer, reload) {
   const gate = ag.gate && suites.find(x => x.id === ag.gate.suite);
   const candidate = Math.max(...ag.versions.map(v => v.n)) > ag.current ? Math.max(...ag.versions.map(v => v.n)) : 0;
   const pick = h('select', { class: 'input w-auto py-1.5 text-sm', id: 'gate-suite', 'aria-label': 'Gate suite', disabled: !admin },
@@ -366,6 +366,6 @@ function publishingCard(ag, suites, admin, reload) {
       suites.length ? pick : h('a', { class: 'btn-ghost btn-sm', href: '#/evals?agent=' + ag.id }, icon('plus', 'size-3.5'), 'Make a suite first')),
     candidate ? h('div', { class: 'flex flex-wrap items-center gap-2 rounded-lg border border-amber-200 bg-amber-50/70 px-3 py-2.5 text-sm dark:border-amber-500/30 dark:bg-amber-950/30', id: 'candidate-banner' },
       h('span', { class: 'min-w-0 flex-1' }, h('b', {}, 'v' + candidate + ' is a candidate.'), ' v' + ag.current + ' stays current until v' + candidate + (gate ? ' passes ' + gate.name + ' and is published.' : ' is published.')),
-      admin ? [h('button', { class: 'btn-secondary btn-sm', type: 'button', id: 'publish-now', onclick: () => publish(false) }, icon('check', 'size-3.5'), 'Publish v' + candidate),
+      writer ? [h('button', { class: 'btn-secondary btn-sm', type: 'button', id: 'publish-now', onclick: () => publish(false) }, icon('check', 'size-3.5'), 'Publish v' + candidate),
         gate ? h('button', { class: 'btn-primary btn-sm', type: 'button', id: 'publish-when-passes', onclick: () => publish(true) }, icon('play', 'size-3.5'), 'Run the suite, publish if it passes') : null] : null) : null);
 }

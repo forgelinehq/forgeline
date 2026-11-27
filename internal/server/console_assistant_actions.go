@@ -29,7 +29,7 @@ const (
 	actSavePipeline = "save_pipeline"
 	actRunPipeline  = "run_pipeline"
 	actSaveSkill    = "save_skill"    // note 028, 2026-11-12: the assistant writes skills, agents and workflows
-	actSaveAgent    = "save_agent"    // as cards an administrator confirms, through the console's own checks
+	actSaveAgent    = "save_agent"    // as cards the person confirms, through the console's own checks
 	actSaveWorkflow = "save_workflow" //
 
 	actPending   = "pending"
@@ -118,10 +118,6 @@ func (s *Server) lookupPrepareAction(ctx context.Context, raw json.RawMessage) (
 			act.Title = "Run " + sp.ID
 		}
 	case actSaveSkill, actSaveAgent, actSaveWorkflow:
-		// Creating these is for administrators in the console, so the card is too.
-		if !t.p.Role.AtLeast(authn.Admin) {
-			return "", errors.New("only an administrator can create skills, agents and workflows; tell the person what you would write instead")
-		}
 		if len(a.Spec) == 0 || len(a.Spec) > maxActionYAML {
 			return "", errors.New("give the skill, agent or workflow as spec (see the tool's description)")
 		}
@@ -465,8 +461,8 @@ func (s *Server) checkDefinition(ctx context.Context, kind string, spec json.Raw
 // doSaveDefinition saves a confirmed skill, agent or workflow, checking it again: things may have changed since the
 // card was prepared (an agent turned off, a name taken).
 func (s *Server) doSaveDefinition(ctx context.Context, p Principal, ip string, a AssistAction) (string, string, *apiError) {
-	if !p.Role.AtLeast(authn.Admin) {
-		return "", "", &apiError{http.StatusForbidden, ErrorJSON{Error: "only an administrator can create skills, agents and workflows"}}
+	if !p.Role.AtLeast(authn.Developer) {
+		return "", "", &apiError{http.StatusForbidden, ErrorJSON{Error: "your role cannot create skills, agents and workflows"}}
 	}
 	if _, _, _, msg := s.checkDefinition(ctx, a.Kind, a.Spec); msg != "" {
 		return "", "", badRequest("this is no longer valid: " + msg)

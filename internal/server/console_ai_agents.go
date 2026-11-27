@@ -48,6 +48,8 @@ type SkillVersion struct {
 	By   string    `json:"by"`
 	At   time.Time `json:"at"`
 	Hash string    `json:"hash"`
+	// ByRole is the author's role (design note 054); empty is an administrator.
+	ByRole string `json:"by_role,omitempty"`
 }
 
 // AISkill is a procedure the assistant or an agent can follow.
@@ -78,19 +80,23 @@ type AgentVersion struct {
 	By    string    `json:"by"`
 	At    time.Time `json:"at"`
 	Hash  string    `json:"hash"`
+	// ByRole is the author's role (design note 054); empty is an administrator.
+	ByRole string `json:"by_role,omitempty"`
 }
 
 // AIAgent is a named worker with a history.
 type AIAgent struct {
-	ID          string       `json:"id"`
-	Name        string       `json:"name"`
-	Description string       `json:"description"`
-	Current     int          `json:"current"`
-	Disabled    bool         `json:"disabled,omitempty"`
-	ReportsTo   string       `json:"reports_to,omitempty"`  // another agent; empty reports to people (frame 5)
-	Budget      *AgentBudget `json:"budget,omitempty"`      // a monthly limit (note 036); kept on the agent, not in its versions
-	ArchivedAt  *time.Time   `json:"archived_at,omitempty"` // deleted: hidden, restorable until the sweep removes it
-	ArchivedBy  string       `json:"archived_by,omitempty"`
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Current     int    `json:"current"`
+	Disabled    bool   `json:"disabled,omitempty"`
+	// DisabledByRole is who turned it off: only an administrator turns on what an administrator turned off.
+	DisabledByRole string       `json:"disabled_by_role,omitempty"`
+	ReportsTo      string       `json:"reports_to,omitempty"`  // another agent; empty reports to people (frame 5)
+	Budget         *AgentBudget `json:"budget,omitempty"`      // a monthly limit (note 036); kept on the agent, not in its versions
+	ArchivedAt     *time.Time   `json:"archived_at,omitempty"` // deleted: hidden, restorable until the sweep removes it
+	ArchivedBy     string       `json:"archived_by,omitempty"`
 	// Gate (note 050, decision 5): when set, a new version is a candidate until its suite passes on it and it is
 	// published. Workflows, teams and schedules keep using the current version meanwhile.
 	Gate     *AgentGate     `json:"gate,omitempty"`
@@ -361,7 +367,7 @@ func (s *Server) saveNewSkill(ctx context.Context, p Principal, ip string, req s
 	if err != nil {
 		return AISkill{}, err
 	}
-	sv := SkillVersion{N: 1, Body: req.Body, Note: req.Note, By: p.Name, At: time.Now().UTC()}
+	sv := SkillVersion{N: 1, Body: req.Body, Note: req.Note, By: p.Name, ByRole: string(p.Role), At: time.Now().UTC()}
 	sv.Hash = sv.computeHash(id)
 	sk := AISkill{ID: id, Name: strings.TrimSpace(req.Name), Description: req.Description, Current: 1, Versions: []SkillVersion{sv}}
 	if err := s.docs.Put(ctx, kindAISkill, id, sk); err != nil {
@@ -394,12 +400,14 @@ func (s *Server) handleSkillVersion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	last := sk.Versions[len(sk.Versions)-1]
-	if last.Body == req.Body && sk.Name == strings.TrimSpace(req.Name) && sk.Description == req.Description {
+	p := principalFrom(ctx)
+	// An administrator may save a developer's text unchanged: that makes it theirs.
+	adopts := byDeveloper(last.ByRole) && p.Role.AtLeast(authn.Admin)
+	if !adopts && last.Body == req.Body && sk.Name == strings.TrimSpace(req.Name) && sk.Description == req.Description {
 		writeError(w, http.StatusConflict, "nothing changed since the latest version")
 		return
 	}
-	p := principalFrom(ctx)
-	sv := SkillVersion{N: last.N + 1, Body: req.Body, Note: req.Note, By: p.Name, At: time.Now().UTC()}
+	sv := SkillVersion{N: last.N + 1, Body: req.Body, Note: req.Note, By: p.Name, ByRole: string(p.Role), At: time.Now().UTC()}
 	sv.Hash = sv.computeHash(sk.ID)
 	sk.Name, sk.Description = strings.TrimSpace(req.Name), req.Description
 	sk.Versions = append(sk.Versions, sv)
@@ -448,7 +456,7 @@ func (s *Server) handleSkillRollback(w http.ResponseWriter, r *http.Request) {
 	if note == "" {
 		note = fmt.Sprintf("rolled back to v%d", old.N)
 	}
-	sv := SkillVersion{N: sk.Versions[len(sk.Versions)-1].N + 1, Body: old.Body, Note: truncate(note, maxNote), By: p.Name, At: time.Now().UTC()}
+	sv := SkillVersion{N: sk.Versions[len(sk.Versions)-1].N + 1, Body: old.Body, Note: truncate(note, maxNote), By: p.Name, ByRole: old.ByRole, At: time.Now().UTC()}
 	sv.Hash = sv.computeHash(sk.ID)
 	sk.Versions = append(sk.Versions, sv)
 	sk.Current = sv.N
@@ -533,6 +541,9 @@ func (s *Server) resolveAgent(ctx context.Context, req agentRequest) (AgentVersi
 	}
 	if err := validTools(req.Tools, req.Tier, append(s.pluginToolNames(ctx), s.extMCPToolNames(ctx)...)...); err != nil {
 		return AgentVersion{}, err.Error()
+	}
+	if msg := adminOnlyTools(req.Tools, principalFrom(ctx).Role); msg != "" {
+		return AgentVersion{}, msg
 	}
 	pins := []SkillPin{}
 	seen := map[string]bool{}
@@ -621,7 +632,7 @@ func (s *Server) saveNewAgent(ctx context.Context, p Principal, ip string, req a
 	if err != nil {
 		return AIAgent{}, err
 	}
-	v.N, v.By, v.At = 1, p.Name, time.Now().UTC()
+	v.N, v.By, v.ByRole, v.At = 1, p.Name, string(p.Role), time.Now().UTC()
 	v.Hash = v.computeHash(id)
 	a := AIAgent{ID: id, Name: strings.TrimSpace(req.Name), Description: req.Description, Current: 1, Versions: []AgentVersion{v}}
 	if err := s.docs.Put(ctx, kindAIAgent, id, a); err != nil {
@@ -677,10 +688,12 @@ func (s *Server) appendAgentVersion(ctx context.Context, p Principal, ip string,
 		return a, http.StatusConflict, fmt.Sprintf("an agent keeps at most %d versions", maxVersions)
 	}
 	last := a.Versions[len(a.Versions)-1]
-	if sameVersionContent(last, v) && a.Name == strings.TrimSpace(req.Name) && a.Description == req.Description {
+	// An administrator may save a developer's version unchanged: that makes it theirs.
+	adopts := byDeveloper(last.ByRole) && p.Role.AtLeast(authn.Admin)
+	if !adopts && sameVersionContent(last, v) && a.Name == strings.TrimSpace(req.Name) && a.Description == req.Description {
 		return a, http.StatusConflict, "nothing changed since the latest version"
 	}
-	v.N, v.By, v.At = last.N+1, p.Name, time.Now().UTC()
+	v.N, v.By, v.ByRole, v.At = last.N+1, p.Name, string(p.Role), time.Now().UTC()
 	v.Hash = v.computeHash(a.ID)
 	a.Name, a.Description = strings.TrimSpace(req.Name), req.Description
 	a.Versions = append(a.Versions, v)
@@ -722,6 +735,11 @@ func (s *Server) handleAgentRollback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p := principalFrom(ctx)
+	// A rollback is not gated, and could bring back a candidate that never passed.
+	if a.Gate != nil && !p.Role.AtLeast(authn.Admin) {
+		writeError(w, http.StatusForbidden, "this agent has a publishing gate: an administrator rolls it back, or publish a version that passes the gate")
+		return
+	}
 	note := strings.TrimSpace(req.Note)
 	if note == "" {
 		note = fmt.Sprintf("rolled back to v%d", old.N)
@@ -749,6 +767,15 @@ func (s *Server) handleAgentEnable(disabled bool) http.HandlerFunc {
 		if a.archived() && !disabled {
 			writeError(w, http.StatusConflict, a.Name+" is archived; restore it first")
 			return
+		}
+		p := principalFrom(r.Context())
+		if !disabled && a.Disabled && !byDeveloper(a.DisabledByRole) && !p.Role.AtLeast(authn.Admin) {
+			writeError(w, http.StatusForbidden, "an administrator turned this agent off, so an administrator turns it on")
+			return
+		}
+		// Turning off again does not take an administrator's decision over.
+		if disabled && (!a.Disabled || byDeveloper(a.DisabledByRole)) {
+			a.DisabledByRole = string(p.Role)
 		}
 		a.Disabled = disabled
 		if err := s.docs.Put(r.Context(), kindAIAgent, a.ID, a); err != nil {
@@ -856,7 +883,11 @@ func (s *Server) runAgent(ctx context.Context, p Principal, a AIAgent, v AgentVe
 	if err != nil {
 		return "", nil, "", err
 	}
-	ctx = context.WithValue(ctx, agentScopeKey{}, sc)
+	// What a developer wrote runs with at most a developer's rights, whoever asks (design note 054).
+	if s.developerAgent(ctx, v) {
+		p = capped(p)
+	}
+	ctx = context.WithValue(context.WithValue(ctx, principalKey{}, p), agentScopeKey{}, sc)
 	reply, lookups, err := s.askWithLookups(ctx, p, turns, "", audit)
 	return reply, lookups, sc.label, err
 }

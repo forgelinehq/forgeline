@@ -86,6 +86,9 @@ func (s *Server) handleArchiveAgent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	now := time.Now().UTC()
+	if !a.Disabled || byDeveloper(a.DisabledByRole) {
+		a.DisabledByRole = string(principalFrom(ctx).Role)
+	}
 	a.ArchivedAt, a.ArchivedBy, a.Disabled, a.ReportsTo = &now, principalFrom(ctx).Name, true, ""
 	if err := s.docs.Put(ctx, kindAIAgent, a.ID, a); err != nil {
 		s.internalError(w, "archiving the agent", err)
@@ -183,6 +186,12 @@ func (s *Server) handleArchiveWorkflow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	now := time.Now().UTC()
+	if !s.mayChangeWorkflow(w, r, wf) {
+		return
+	}
+	if !wf.Disabled || byDeveloper(wf.DisabledByRole) {
+		wf.DisabledByRole = string(principalFrom(ctx).Role)
+	}
 	wf.ArchivedAt, wf.ArchivedBy, wf.Disabled = &now, principalFrom(ctx).Name, true
 	if err := s.docs.Put(ctx, kindWorkflow, wf.ID, wf); err != nil {
 		s.internalError(w, "archiving the workflow", err)
@@ -201,6 +210,9 @@ func (s *Server) handleRestoreWorkflow(w http.ResponseWriter, r *http.Request) {
 	}
 	if wf.ArchivedAt == nil {
 		writeError(w, http.StatusConflict, wf.Name+" is not archived")
+		return
+	}
+	if !s.mayChangeWorkflow(w, r, wf) {
 		return
 	}
 	wf.ArchivedAt, wf.ArchivedBy = nil, ""

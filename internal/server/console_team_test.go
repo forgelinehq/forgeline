@@ -24,7 +24,7 @@ func TestTeamReportingLines(t *testing.T) {
 	cost := newAgent(t, m.admin, agentBody("Cost watcher", nil, nil, "T1"))
 	guard := newAgent(t, m.admin, agentBody("Security guard", nil, nil, "T0"))
 
-	m.dev.expect(403, "PUT", "/v1/ai/agents/"+cost.ID+"/reports-to", map[string]any{"reports_to": lead.ID})
+	m.v.expect(403, "PUT", "/v1/ai/agents/"+cost.ID+"/reports-to", map[string]any{"reports_to": lead.ID})
 	if out := string(m.admin.expect(400, "PUT", "/v1/ai/agents/"+cost.ID+"/reports-to", map[string]any{"reports_to": cost.ID})); !strings.Contains(out, "cannot report to itself") {
 		t.Errorf("self message: %s", out)
 	}
