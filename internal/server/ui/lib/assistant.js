@@ -12,7 +12,7 @@ import { newQueue, queueView, decide, takeReply } from './cardqueue.js';
 import { RUN_KINDS, followRun, outcomeWords } from './runfollow.js';
 
 // What the card's detail holds, by kind of action (note 028).
-const DETAIL_LABEL = { save_skill: 'Show the steps', save_agent: 'Show the instructions', save_workflow: 'Show the stages' };
+const DETAIL_LABEL = { save_skill: 'Show the steps', save_agent: 'Show the instructions', save_workflow: 'Show the stages', run_team: 'Show the goal' };
 
 const DRAFT_KEY = 'forgeline-draft';
 
