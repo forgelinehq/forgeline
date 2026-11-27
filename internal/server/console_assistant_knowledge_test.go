@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -151,5 +152,25 @@ func TestAssistantIsToldThePageAndWhatTheDocsSayAboutIt(t *testing.T) {
 	dev.expect(200, "POST", "/v1/assistant/chat", map[string]any{"message": "how do teams work?"})
 	if res := llm.lastUser(1); !strings.Contains(res, "The lead plans") {
 		t.Fatalf("search_docs result = %s", res)
+	}
+}
+
+// The assistant answers "where is X" from the page list in its prompt. Every tab and every settings page of the console must be
+// named there, or it invents a path or says it cannot find one (it could not name Evals, and made up a Memory page).
+func TestAssistantPromptNamesEveryPageOfTheConsole(t *testing.T) {
+	for _, f := range []string{"nav.js", "settingsnav.js"} {
+		src, err := uiFiles.ReadFile("ui/lib/" + f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		labels := regexp.MustCompile(`label: '([^']+)'`).FindAllStringSubmatch(string(src), -1)
+		if len(labels) < 10 {
+			t.Fatalf("%s: found only %d labels; the pattern needs updating", f, len(labels))
+		}
+		for _, m := range labels {
+			if !strings.Contains(assistantSystem, m[1]) {
+				t.Errorf("the assistant's page list does not name %q (%s)", m[1], f)
+			}
+		}
 	}
 }

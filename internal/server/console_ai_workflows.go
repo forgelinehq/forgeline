@@ -1068,6 +1068,11 @@ func (s *Server) toolsBeyondRole(ctx context.Context, at, agentID string, n int,
 	if len(bad) == 0 {
 		return ""
 	}
-	return fmt.Sprintf("%s: agent %q v%d has %s, which a run as %s may never use, so every call would be refused. Run the workflow as a developer if that is enough, or give the agent a tool its role may use (for example inspector_findings, guard_findings or aws_resources instead of call_aws)",
-		at, a.Name, v.N, strings.Join(bad, ", "), role)
+	// A workflow already run as a developer cannot be run "as a developer" to fix it.
+	advice := "Run the workflow as a developer if that is enough, or give the agent"
+	if role != "viewer" {
+		advice = "Give the agent"
+	}
+	return fmt.Sprintf("%s: agent %q v%d has %s, which a run as %s may never use, so every call would be refused. %s a tool its role may use (for example inspector_findings, guard_findings or aws_resources instead of call_aws)",
+		at, a.Name, v.N, strings.Join(bad, ", "), role, advice)
 }

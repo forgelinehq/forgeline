@@ -194,6 +194,7 @@ the server token, and a stale preview and a missing preview were refused with th
 | --- | --- |
 | **Save** is off | A check found a problem; the canvas names it. |
 | **Send for approval** is off or refused (texts under How it works) | The preview is not finished, is older than an hour, is not of the saved blueprint, changes nothing, or a guardrail says **deny**. Preview again. |
+| Two changes wait for the same preview (**Send for approval** pressed twice) | Each press files one. Approve one; the other then fails with "built again" because the preview is stale. Withdraw the extra with **Withdraw this proposal**. |
 | The preview says planning for a long time | Another preview or build of the same blueprint is running. |
 | **Suggest a repository** finds nothing | GitHub is not connected, or the repository is not on the GitHub allow list. |
 | **Run a new image** is empty | The block's repository has no pushed images yet, or the blueprint is not built. |

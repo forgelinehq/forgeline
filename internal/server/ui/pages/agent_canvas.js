@@ -47,6 +47,9 @@ export const newView = () => ({ x: 0, y: 0, k: 1, fitted: false });
  * view (from newView, kept across redraws), height (classes), startSummary, onSelect(id), onMove(id, x, y),
  * onWire(from, to), onPick(after) (the + of a node, or '' for the Add node button), onDelete(id), onTidy() }.
  */
+// The node a click just selected: the canvas is drawn again for it, and the new node takes the keyboard focus.
+let refocus = null;
+
 export function graphCanvas(g, opts = {}) {
   const { selected = '', statuses = null, editable = false, agentName = (id) => id, view = newView(), height = 'h-[28rem]' } = opts;
   const byId = Object.fromEntries(g.nodes.map(n => [n.id, n]));
@@ -143,11 +146,20 @@ export function graphCanvas(g, opts = {}) {
         grp.removeEventListener('pointermove', move);
         grp.removeEventListener('pointerup', up);
         if (moved) opts.onMove?.(n.id, start.nx + (e2.clientX - start.x) / view.k, start.ny + (e2.clientY - start.y) / view.k);
-        else opts.onSelect?.(n.id === selected ? '' : n.id);
+        else {
+          // Selecting redraws the canvas, which dropped the node's keyboard focus, so Delete and the arrow keys did nothing
+          // until Tab found the node again. The redrawn node takes the focus back (see refocus below).
+          refocus = n.id;
+          opts.onSelect?.(n.id === selected ? '' : n.id);
+        }
       };
       grp.addEventListener('pointermove', move);
       grp.addEventListener('pointerup', up);
     });
+    if (refocus === n.id) {
+      refocus = null;
+      requestAnimationFrame(() => { if (grp.isConnected) grp.focus(); });
+    }
     grp.addEventListener('keydown', (e) => {
       const step = e.shiftKey ? 40 : 10, d = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[e.key];
       if (d && editable) { e.preventDefault(); opts.onMove?.(n.id, n.x + d[0], n.y + d[1]); }

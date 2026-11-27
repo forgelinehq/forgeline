@@ -126,7 +126,7 @@ func TestWorkdirRefusesModulePathsOutsideTemplates(t *testing.T) {
 func TestPassRoleFailureSaysWhatToAllow(t *testing.T) {
 	aws := "Error: creating Lambda Function: AccessDeniedException: User: arn:aws:sts::111122223333:assumed-role/X/y is not authorized to perform: iam:PassRole on resource: arn:aws:iam::111122223333:role/fl-1-fn"
 	got := tofuFailure(aws, nil)
-	if !strings.Contains(got, "lambda.amazonaws.com") || !strings.Contains(got, "states.amazonaws.com") || !strings.Contains(got, "Building blueprints") || !strings.HasSuffix(got, aws) {
+	if !strings.Contains(got, "lambda.amazonaws.com") || !strings.Contains(got, "states.amazonaws.com") || !strings.Contains(got, "Permissions for blueprints") || !strings.HasSuffix(got, aws) {
 		t.Errorf("hint = %s", got)
 	}
 	attach := "Error: attaching policy: AccessDenied: User: arn:aws:sts::111122223333:assumed-role/X/y is not authorized to perform: iam:AttachRolePolicy on resource: role fl-1-k8s-nodes"

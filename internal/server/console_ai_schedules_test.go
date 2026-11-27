@@ -181,3 +181,47 @@ func TestTeamSchedule(t *testing.T) {
 		t.Errorf("audit: %s", au)
 	}
 }
+
+// Deleting a team takes its schedules and runs with it: they are keyed by the team's id, so a team made later with the same
+// name must not find them again (a schedule nobody could list or remove, still starting runs by itself).
+func TestDeletingATeamRemovesItsSchedulesAndRuns(t *testing.T) {
+	h := newHarness(t, &executor.Fake{})
+	admin := h.adminBrowser("ada")
+	model := &teamModel{}
+	srv := model.server(t)
+	admin.expect(201, "POST", "/v1/providers", anthropicProvider("anthropic", srv.URL, "claude-haiku-5-5"))
+	mk := func(name string) AIAgent {
+		b := agentBody(name, nil, nil, "T0")
+		b["model"] = "anthropic/claude-haiku-5-5"
+		return newAgent(t, admin, b)
+	}
+	lead, member := mk("Lead"), mk("Reader")
+	makeTeam := func() Team {
+		var tm Team
+		json.Unmarshal(admin.expect(201, "POST", "/v1/ai/teams", map[string]any{"name": "Night watch", "purpose": "p", "lead": lead.ID, "members": []string{member.ID}}), &tm)
+		return tm
+	}
+	tm := makeTeam()
+	model.plan = `{"note":"n","tasks":[{"member":"` + member.ID + `","task":"Look"}]}`
+	admin.expect(201, "POST", "/v1/ai/teams/"+tm.ID+"/schedules", map[string]any{"goal": "Check", "cron": "0 9 * * *", "tz": "Europe/Berlin", "run_as": "viewer", "paused": true})
+	var run TeamRun
+	json.Unmarshal(admin.expect(202, "POST", "/v1/ai/teams/"+tm.ID+"/runs", map[string]any{"goal": "Say hi"}), &run)
+	waitTeamRun(t, admin, run.ID)
+
+	admin.expect(204, "DELETE", "/v1/ai/teams/"+tm.ID, nil)
+	again := makeTeam()
+	if again.ID != tm.ID {
+		t.Fatalf("expected the same id for the same name, got %q and %q", again.ID, tm.ID)
+	}
+	var detail struct {
+		Runs      []TeamRun
+		Schedules []TeamSchedule
+	}
+	json.Unmarshal(admin.expect(200, "GET", "/v1/ai/teams/"+again.ID, nil), &detail)
+	if len(detail.Runs) != 0 || len(detail.Schedules) != 0 {
+		t.Errorf("a new team with the old name found %d runs and %d schedules of the deleted one", len(detail.Runs), len(detail.Schedules))
+	}
+	if left, _ := h.srv.listTeamSchedules(context.Background()); len(left) != 0 {
+		t.Errorf("schedules left in the store: %+v", left)
+	}
+}

@@ -285,8 +285,31 @@ func (s *Server) handleDeleteTeam(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, "removing the team", err)
 		return
 	}
-	s.auditReq(r, "ai.team.delete", "team/"+t.ID, t.Name+"; its agents are kept", true)
+	// A team's schedules and runs are keyed by its id, so a team made later with the same name would find them again: a
+	// schedule nobody can see (the list skips teams that do not exist) that starts runs by itself.
+	schedules, runs := s.removeTeamLeftovers(ctx, t.ID)
+	s.auditReq(r, "ai.team.delete", "team/"+t.ID, fmt.Sprintf("%s; its agents are kept; %d schedules and %d runs removed", t.Name, schedules, runs), true)
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// removeTeamLeftovers deletes the schedules and the run history of a team that was just deleted.
+func (s *Server) removeTeamLeftovers(ctx context.Context, team string) (schedules, runs int) {
+	if tss, err := s.listTeamSchedules(ctx); err == nil {
+		for _, ts := range tss {
+			if ts.Team == team && s.docs.Delete(ctx, kindTeamSchedule, ts.ID) == nil {
+				schedules++
+			}
+		}
+	}
+	if docs, err := s.docs.List(ctx, kindTeamRun, docstore.ListOptions{}); err == nil {
+		all, _ := docstore.Decode[TeamRun](docs)
+		for _, r := range all {
+			if r.Team == team && s.docs.Delete(ctx, kindTeamRun, r.ID) == nil {
+				runs++
+			}
+		}
+	}
+	return schedules, runs
 }
 
 func (tr *teamRuns) isBusy(id string) bool {

@@ -64,8 +64,8 @@ teams it is in, and what it used this month.
 ## Limits and verification
 
 A goal is refused before anything is spent when the lead or a member is turned off. A team keeps its last 50 runs. Removing a
-team keeps its agents and past runs. Past runs are kept under the team's id, so a new team made with the same name shows
-them again.
+team keeps its agents, and removes its schedules and run history with it (the audit log keeps how many went), so a new team made
+with the same name starts empty.
 
 {: .warning }
 **Checked through the console on 2026-11-27**, on the UAT instance at commit `487f373`, with the real model

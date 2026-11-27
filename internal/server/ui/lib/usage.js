@@ -25,7 +25,8 @@ export function useLine(u) {
 /** What it cost, only as far as it is known. */
 export function costLine(u) {
   if (!u.costed_calls) return 'cost not reported';
-  const c = '$' + u.cost_usd.toFixed(2);
+  // A few small calls cost a fraction of a cent: two decimals would show $0.00 for money that was spent.
+  const c = '$' + (u.cost_usd > 0 && u.cost_usd < 0.01 ? u.cost_usd.toFixed(4) : u.cost_usd.toFixed(2));
   return u.costed_calls === u.calls ? c : `${c} for ${u.costed_calls} of ${u.calls} calls`;
 }
 

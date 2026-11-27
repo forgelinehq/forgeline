@@ -33,8 +33,8 @@ Use it to see where model use goes and to cap it.
    is calls, input and output tokens (including cache), the time the call took, and the cost in US dollars when the
    `claude` program reports it. A call to a [provider's model](models-and-providers.md) is priced from the prices set on
    that provider (dollars per million tokens), so it has a cost. A call whose cost nobody reports has none, so the page
-   shows "$1.50 for 2 of 3 calls". A cost under one cent shows as `$0.00` here; the call log on Models and providers shows it
-   in full.
+   shows "$1.50 for 2 of 3 calls". A cost under one cent shows with four decimals (for example `$0.0013`); the call log on Models and providers
+   shows each call's cost.
 2. Use counts against the running agent, or one total for people's own questions. The period is the calendar month, in UTC.
 3. At **80%** of either limit the agent's card and the page warn (and the crossing is audited).
 4. At 100% the agent's next model call is refused before it is sent. Its row on this page says "stopped until next month or a
@@ -73,6 +73,7 @@ browser with a stand-in `claude`.
 | --- | --- |
 | An agent says **Stopped** | It used its monthly budget; raise it or wait for the next month (UTC). The error reads `over budget: <agent> has used its budget for YYYY-MM (<used> of <limit> tokens); an administrator can raise it under Agents → Usage and budgets`. |
 | A workflow step failed with a budget message | The agent it runs hit its budget. |
+| `POST /v1/ai/agents/{id}/chat` answers `429` with `over budget` | The agent used its monthly budget (a failure of the model behind it is `502`). |
 | Cost is missing for some calls | Only calls where the `claude` program reports cost have one. |
 | Totals look low | Some calls reported no tokens (shown as such on the page). |
 | I cannot set a budget | Only administrators can. |

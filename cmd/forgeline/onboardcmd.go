@@ -26,7 +26,7 @@ Each answer goes through the same checks as the console. Run it again at any tim
   --json             print the steps as JSON
 
 Environment:
-  FORGELINE_TOKEN   an administrator's API token, or the server token (required)
+  FORGELINE_TOKEN   the server token (required; personal API tokens work only on /mcp)
   FORGELINE_SERVER  server URL, if --server is not given (default http://127.0.0.1:8080)
 `
 
