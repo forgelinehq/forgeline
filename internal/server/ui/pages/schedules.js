@@ -51,7 +51,7 @@ export function nextLine(it) {
 }
 
 export async function schedulesPage() {
-  const admin = atLeast(session.role, 'admin');
+  const writer = atLeast(session.role, 'developer');
   const el = h('div', {});
   async function load() {
     let data, teams = [];
@@ -59,7 +59,7 @@ export async function schedulesPage() {
     const teamOf = (it) => teams.find(t => '/teams/' + t.id === it.target);
     const act = async (fn, ok) => { try { await fn(); toast(ok, 'ok'); load(); } catch (e) { toast(e.message, 'error'); } };
     const actions = (it) => {
-      if (!admin) return null;
+      if (!writer) return null;
       const out = [];
       if (it.kind === 'workflow') {
         out.push(h('button', { class: 'btn-ghost btn-sm', type: 'button', 'data-pause': it.id, onclick: () => act(() => post('/v1/ai/workflows/' + it.id + '/schedule/' + (it.paused ? 'resume' : 'pause')), it.paused ? 'Resumed' : 'Paused') }, it.paused ? 'Resume' : 'Pause'),

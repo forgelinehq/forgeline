@@ -70,7 +70,7 @@ func TestSkillVersionsAreAppendOnlyAndRollbackCopiesForward(t *testing.T) {
 func TestSkillsAndAgentsRoles(t *testing.T) {
 	m := newMCPHarness(t)
 	sk := newSkill(t, m.admin, "S", "body")
-	for _, c := range []*browser{m.dev, m.v} {
+	for _, c := range []*browser{m.v} { // developers write these now (TestADeveloperWritesButNeverBorrowsRights)
 		c.expect(403, "POST", "/v1/ai/skills", map[string]any{"name": "x", "body": "y"})
 		c.expect(403, "POST", "/v1/ai/skills/"+sk.ID+"/versions", map[string]any{"body": "z"})
 		c.expect(403, "POST", "/v1/ai/agents", agentBody("a", nil, nil, "T0"))

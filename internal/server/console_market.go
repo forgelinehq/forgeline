@@ -619,7 +619,7 @@ func (s *Server) installAgent(ctx context.Context, in *MarketInstall, m MarketAg
 			// Installing again brings the package's agents back: out of the archive and turned on, as its
 			// workflows are.
 			back := a.archived() || a.Disabled
-			a.ArchivedAt, a.ArchivedBy, a.Disabled = nil, "", false
+			a.ArchivedAt, a.ArchivedBy, a.Disabled, a.DisabledByRole = nil, "", false, ""
 			if sameVersionContent(last, v) && a.Name == m.Name && a.Description == m.Description {
 				if back {
 					return s.docs.Put(ctx, kindAIAgent, a.ID, a)
@@ -689,7 +689,7 @@ func (s *Server) installWorkflow(ctx context.Context, in *MarketInstall, m Marke
 			if len(wf.Versions) >= maxVersions {
 				return fmt.Errorf("workflow %q already has %d versions", wf.Name, maxVersions)
 			}
-			wf.Name, wf.Description, wf.Disabled = m.Name, m.Description, false
+			wf.Name, wf.Description, wf.Disabled, wf.DisabledByRole = m.Name, m.Description, false, ""
 			wf.Versions, wf.Current = append(wf.Versions, v), v.N
 			return s.docs.Put(ctx, kindWorkflow, wf.ID, wf)
 		}
@@ -783,7 +783,7 @@ func (s *Server) handleMarketUninstall(w http.ResponseWriter, r *http.Request) {
 			s.internalError(w, "disabling an agent", err)
 			return
 		}
-		a.Disabled = true
+		a.Disabled, a.DisabledByRole = true, ""
 		if err := s.docs.Put(ctx, kindAIAgent, a.ID, a); err != nil {
 			s.internalError(w, "disabling an agent", err)
 			return
@@ -803,7 +803,7 @@ func (s *Server) handleMarketUninstall(w http.ResponseWriter, r *http.Request) {
 			s.internalError(w, "turning off a workflow", err)
 			return
 		}
-		wf.Disabled = true
+		wf.Disabled, wf.DisabledByRole = true, ""
 		if err := s.docs.Put(ctx, kindWorkflow, wf.ID, wf); err != nil {
 			s.internalError(w, "turning off a workflow", err)
 			return

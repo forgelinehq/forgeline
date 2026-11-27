@@ -25,7 +25,7 @@ version control. Neither file holds a key or a secret.
 | Action | Minimum role | Extra rule |
 | --- | --- | --- |
 | Download (export) a version | Developer | Audited |
-| Import a bundle | Administrator | Audited; a dry run shows the result first |
+| Import a bundle | Developer | Audited; a dry run shows the result first |
 | Add, change, check or remove a registry | Administrator | At most 20 registries |
 | Propose a push | Administrator | Needs a reason |
 | Approve or reject a push | Administrator | Not the person who proposed it; [approval rules](people-and-security.md) also apply |

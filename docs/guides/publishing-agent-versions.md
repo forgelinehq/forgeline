@@ -24,9 +24,9 @@ Use it for agents that workflows, teams and schedules rely on, so a change canno
 
 | Action | Minimum role | Extra rule |
 | --- | --- | --- |
-| Set or clear the gate | Administrator | The suite must be one of this agent's |
-| Publish a version, or run the suite and publish if it passes | Administrator | |
-| Roll back | Administrator | Not gated |
+| Set or clear the gate | Administrator | The suite must be one of this agent's. While it gates an agent, only an administrator changes or deletes it |
+| Publish a version, or run the suite and publish if it passes | Developer | |
+| Roll back | Developer | Not gated, so with a gate only an administrator |
 | Run the suite | Developer | See [Evals](evals.md) |
 
 ## How it works

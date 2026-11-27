@@ -31,8 +31,8 @@ export function pageEntries(role) {
 /** Shortcuts that make something new, for the roles that may. */
 export function actionEntries(role) {
   return [
-    ['New agent', '/agents/new/build', 'admin', 'agents', 'create build'],
-    ['New workflow', '/workflows/new/canvas', 'admin', 'workflows', 'create graph flow'],
+    ['New agent', '/agents/new/build', 'developer', 'agents', 'create build'],
+    ['New workflow', '/workflows/new/canvas', 'developer', 'workflows', 'create graph flow'],
     ['New pipeline', '/pipelines/new', 'developer', 'pipeline', 'create ci'],
     ['Add an MCP server', '/mcp-servers', 'admin', 'plug', 'connect tools'],
     ['Add a model provider', '/providers', 'developer', 'model', 'llm openai anthropic gemini bedrock'],

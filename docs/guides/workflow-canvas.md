@@ -24,7 +24,7 @@ Use it to build or change a workflow, and to see what happened in a run.
 | Action | Minimum role | Extra rule |
 | --- | --- | --- |
 | See a graph and its runs | Developer | |
-| Save a graph version | Administrator | At most 40 nodes and 80 wires; one start; every node reachable |
+| Save a graph version | Developer | At most 40 nodes and 80 wires; one start; every node reachable |
 
 ## How it works
 

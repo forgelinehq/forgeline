@@ -25,11 +25,11 @@ Use agents to give a repeatable job a fixed shape: "explain failed runs", "watch
 | Action | Minimum role | Extra rule |
 | --- | --- | --- |
 | See agents and talk to one | Developer | It answers with its own tools, as you |
-| Create an agent, save a new version, roll back | Administrator | |
-| Turn an agent off or on | Administrator | |
-| Delete (archive) or restore an agent | Administrator | |
-| Create or change a skill | Administrator | Skills are listed on the Agents page; a skill no agent version uses can be deleted |
-| Set which agent reports to which | Administrator | Describes the team; gives no agent power over another |
+| Create an agent, save a new version, roll back | Developer | A version a developer saved runs with at most a developer's rights, whoever runs it ([why](../design/054-developers-write-agents.md)). With a publishing gate, only an administrator rolls back |
+| Turn an agent off or on | Developer | What an administrator turned off, only an administrator turns on |
+| Delete (archive) or restore an agent | Developer | |
+| Create or change a skill | Developer | Skills are listed on the Agents page; a skill no agent version uses can be deleted |
+| Set which agent reports to which | Developer | Describes the team; gives no agent power over another |
 
 ## How it works
 
@@ -58,7 +58,8 @@ Tools are Forgeline's own lookups, plugin tools, and [MCP server](mcp-servers.md
 tab in the builder says whether a tool reads or asks a person to approve. Some tools are limited by the role that runs the
 agent:
 
-- `aws_script` and `search_audit` are for administrators only.
+- `aws_script` and `search_audit` are for administrators only: a developer cannot give an agent either, and an agent
+  that follows anything a developer wrote cannot use them.
 - `call_aws` runs one read-only AWS CLI call (describe, list and get only; no secrets, data or logs) for developers and
   administrators.
 - For security reviews, `guard_findings` (Forgeline's own checks), `inspector_findings` (Amazon Inspector's active

@@ -64,9 +64,10 @@ func TestTheAssistantCanUpdateAndArchiveWhatExistsThroughTheConsoleAPIAsThePerso
 			t.Errorf("the audit log lacks %q", want)
 		}
 	}
-	// The role is the person's: a developer cannot change an agent through the assistant any more than in the console.
+	// The role is the person's: a developer cannot turn on, through the assistant, what an administrator turned off.
 	id2 := newTestAgent(t, m, "Other")
-	st = m.streamWith(m.dev, map[string]any{"message": "update it"}, apiCall("POST", "/v1/ai/agents/"+id2+"/versions", map[string]any{"instructions": "x"}), "Done.")
+	m.admin.expect(200, "POST", "/v1/ai/agents/"+id2+"/disable", map[string]any{})
+	st = m.streamWith(m.dev, map[string]any{"message": "turn it on"}, apiCall("POST", "/v1/ai/agents/"+id2+"/enable", nil), "Done.")
 	pid = m.waitPending(t)
 	m.dev.expect(200, "POST", "/v1/assistant/approvals/"+pid, map[string]any{"decision": "approve"})
 	events, res := answerOf(t, st)

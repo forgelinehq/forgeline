@@ -39,7 +39,7 @@ func TestAGatedVersionNeedsAPassingRun(t *testing.T) {
 	if got := agentNow(t, m.admin, a.ID); got.Current != 1 || len(got.Versions) != 2 || got.Gate == nil {
 		t.Fatalf("after saving: current %d, %d versions, gate %+v", got.Current, len(got.Versions), got.Gate)
 	}
-	m.dev.expect(403, "POST", "/v1/ai/agents/"+a.ID+"/publish", map[string]any{"version": 2})
+	m.v.expect(403, "POST", "/v1/ai/agents/"+a.ID+"/publish", map[string]any{"version": 2})
 	if out := string(m.admin.expect(409, "POST", "/v1/ai/agents/"+a.ID+"/publish", map[string]any{"version": 2})); !strings.Contains(out, "no passing run") {
 		t.Errorf("publish without a run: %s", out)
 	}
@@ -69,7 +69,7 @@ func TestAGatedVersionNeedsAPassingRun(t *testing.T) {
 	run(3, "ok")
 	time.Sleep(5 * time.Millisecond)
 	x.Cases[0].Name = "Says ok, renamed"
-	m.dev.expect(200, "PUT", "/v1/ai/evals/"+x.ID, x)
+	m.admin.expect(200, "PUT", "/v1/ai/evals/"+x.ID, x) // the gate's suite is an administrator's
 	m.admin.expect(409, "POST", "/v1/ai/agents/"+a.ID+"/publish", map[string]any{"version": 3})
 
 	// Run and publish if it passes: a failing run leaves it a candidate, a passing one publishes it.

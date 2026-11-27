@@ -18,7 +18,7 @@ someone when severity is high, a weekly review, a response to an alarm.
 
 | | |
 | --- | --- |
-| Where in the console | **Workflows** (cards, with a **Runs** tab and an **Archived** tab, administrators only) |
+| Where in the console | **Workflows** (cards, with a **Runs** tab and an **Archived** tab) |
 | Needs | One or more [agents](agents.md) |
 | Design notes | [044](../design/044-agent-graphs.md), [047](../design/047-schedules.md), [051](../design/051-runbooks.md) |
 
@@ -28,8 +28,8 @@ someone when severity is high, a weekly review, a response to an alarm.
 | --- | --- | --- |
 | See workflows and runs | Developer | |
 | Start a run | Developer | One at a time per workflow: "this workflow already has a run in progress" |
-| Create, save a version, roll back, turn off or on | Administrator | Agent versions are pinned at save |
-| Delete (archive) or restore | Administrator | Refused while a run is going or waiting: "<workflow> has a run that is running; let it finish or cancel it first" |
+| Create, save a version, roll back, turn off or on | Developer | Agent versions are pinned at save. A workflow an administrator saved with a gated stage or a question is only an administrator's to change, and what an administrator turned off only an administrator turns on |
+| Delete (archive) or restore | Developer | Refused while a run is going or waiting: "<workflow> has a run that is running; let it finish or cancel it first" |
 | Release a run waiting at a stage gate | Administrator | |
 | Answer a question in a graph run | Developer | If the node names answerers, only those people (an administrator not named is refused: "only <name> may answer this question"). If it names none, only an administrator: "an administrator answers this question". A person who may not answer sees "Waiting for an administrator to answer" and no answer box |
 | Cancel a run | Developer | Its starter, or an administrator: "only the person who started it, or an administrator, can cancel a run" |
@@ -37,7 +37,7 @@ someone when severity is high, a weekly review, a response to an alarm.
 
 ## How it works
 
-1. An administrator saves a workflow as version 1. Each save is a new version with its agent versions pinned.
+1. A developer or administrator saves a workflow as version 1. Each save is a new version with its agent versions pinned.
 2. Something starts it (see below). Agents read what started it under `trigger`, as data.
 3. The run goes through its nodes (or stages). Agents work with the tools their run-as role may use.
 4. A question for a person waits at the top of the run until it is answered.

@@ -25,8 +25,8 @@ Use it to see what will run when, pause something, or run it now.
 | --- | --- | --- |
 | See schedules | Developer | |
 | Preview the next times | Developer | Saves nothing |
-| Pause, Resume, Change, Run now | Administrator | The buttons are shown to administrators; **Run now** runs as you |
-| Add a schedule to a team | Administrator | At most 10 per team; runs as a viewer or a developer, never an administrator |
+| Pause, Resume, Change, Run now | Developer | **Run now** runs as you. A workflow with an administrator's approval step is paused and resumed by an administrator |
+| Add a schedule to a team | Developer | At most 10 per team; runs as a viewer or a developer, never an administrator |
 
 ## How it works
 
@@ -52,7 +52,7 @@ Rules for missed and overlapping times:
 
 ## Schedule a team
 
-1. Open the team, and under **On a schedule** choose **Schedule a goal** (administrators only).
+1. Open the team, and under **On a schedule** choose **Schedule a goal**.
 2. Type the goal, pick the time, the time zone and the role it runs as (viewer or developer). The next three runs show
    under the picker.
 3. Choose **Schedule it**.
@@ -83,7 +83,7 @@ in its settings". Not run: a schedule firing at its time, **Run now**, a workflo
 | --- | --- |
 | Nothing ran at the set time | The server was down for more than an hour, or the workflow or team was still working. |
 | A schedule shows why it is **off** | The workflow is turned off ("the workflow is turned off"), or no model is set up ("no model is set up, so nothing runs by itself"). |
-| I cannot pause or change one | Only administrators see the buttons. |
+| I cannot pause or change one | Viewers see no buttons; a workflow with an administrator's approval step is an administrator's. |
 | A team gets "a team has at most 10 schedules" | The limit is 10 schedules a team. |
 | "this workflow has no schedule; set one in its settings" | Pause or resume was used on a workflow that has no schedule. |
 

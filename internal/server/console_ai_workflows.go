@@ -73,6 +73,8 @@ type WFVersion struct {
 	By           string    `json:"by"`
 	At           time.Time `json:"at"`
 	Hash         string    `json:"hash"`
+	// ByRole is the author's role (design note 054); empty is an administrator.
+	ByRole string `json:"by_role,omitempty"`
 	// Graph is a graph workflow (note 044); a version has either stages or a graph.
 	Graph *WFGraph `json:"graph,omitempty"`
 	// Triggers of a graph workflow (note 044, part 4): a signed webhook, and failed runs of the named pipelines ("*":
@@ -86,14 +88,16 @@ type WFVersion struct {
 
 // Workflow is a named sequence with a history.
 type Workflow struct {
-	ID          string      `json:"id"`
-	Name        string      `json:"name"`
-	Description string      `json:"description"`
-	Current     int         `json:"current"`
-	Disabled    bool        `json:"disabled,omitempty"`
-	ArchivedAt  *time.Time  `json:"archived_at,omitempty"` // deleted: hidden, restorable until the sweep removes it
-	ArchivedBy  string      `json:"archived_by,omitempty"`
-	Versions    []WFVersion `json:"versions"`
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Current     int    `json:"current"`
+	Disabled    bool   `json:"disabled,omitempty"`
+	// DisabledByRole is who turned it off: only an administrator turns on what an administrator turned off.
+	DisabledByRole string      `json:"disabled_by_role,omitempty"`
+	ArchivedAt     *time.Time  `json:"archived_at,omitempty"` // deleted: hidden, restorable until the sweep removes it
+	ArchivedBy     string      `json:"archived_by,omitempty"`
+	Versions       []WFVersion `json:"versions"`
 }
 
 func (v WFVersion) computeHash(id string) string {
@@ -417,7 +421,7 @@ func (s *Server) saveNewWorkflow(ctx context.Context, p Principal, ip string, re
 	if err != nil {
 		return Workflow{}, err
 	}
-	v.N, v.By, v.At = 1, p.Name, time.Now().UTC()
+	v.N, v.By, v.ByRole, v.At = 1, p.Name, string(p.Role), time.Now().UTC()
 	v.Hash = v.computeHash(id)
 	wf := Workflow{ID: id, Name: strings.TrimSpace(req.Name), Description: req.Description, Current: 1, Versions: []WFVersion{v}}
 	if err := s.docs.Put(ctx, kindWorkflow, id, wf); err != nil {
@@ -446,14 +450,19 @@ func (s *Server) handleWorkflowVersion(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, msg)
 		return
 	}
+	if !s.mayChangeWorkflow(w, r, wf) {
+		return
+	}
 	if len(wf.Versions) >= maxVersions {
 		writeError(w, http.StatusConflict, fmt.Sprintf("a workflow keeps at most %d versions", maxVersions))
 		return
 	}
 	last := wf.Versions[len(wf.Versions)-1]
-	v.N, v.By, v.At = last.N+1, principalFrom(ctx).Name, time.Now().UTC()
+	who := principalFrom(ctx)
+	v.N, v.By, v.ByRole, v.At = last.N+1, who.Name, string(who.Role), time.Now().UTC()
 	v.Hash = v.computeHash(wf.ID)
-	if fmt.Sprint(wfContent(last)) == fmt.Sprint(wfContent(v)) && wf.Name == strings.TrimSpace(req.Name) && wf.Description == req.Description {
+	adopts := byDeveloper(last.ByRole) && who.Role.AtLeast(authn.Admin)
+	if !adopts && fmt.Sprint(wfContent(last)) == fmt.Sprint(wfContent(v)) && wf.Name == strings.TrimSpace(req.Name) && wf.Description == req.Description {
 		writeError(w, http.StatusConflict, "nothing changed since the latest version")
 		return
 	}
@@ -470,7 +479,7 @@ func (s *Server) handleWorkflowVersion(w http.ResponseWriter, r *http.Request) {
 
 // wfContent is a version's content without its number, who saved it and when, for "nothing changed".
 func wfContent(v WFVersion) any {
-	v.N, v.Note, v.By, v.At, v.Hash = 0, "", "", time.Time{}, ""
+	v.N, v.Note, v.By, v.ByRole, v.At, v.Hash = 0, "", "", "", time.Time{}, ""
 	return v
 }
 
@@ -483,6 +492,9 @@ func (s *Server) handleWorkflowRollback(w http.ResponseWriter, r *http.Request) 
 	wf, err := s.loadWorkflow(ctx, r.PathValue("id"))
 	if err != nil {
 		s.defError(w, "workflow", err)
+		return
+	}
+	if !s.mayChangeWorkflow(w, r, wf) {
 		return
 	}
 	old, ok := wf.version(req.To)
@@ -524,6 +536,17 @@ func (s *Server) handleWorkflowEnable(disabled bool) http.HandlerFunc {
 		if wf.ArchivedAt != nil && !disabled {
 			writeError(w, http.StatusConflict, wf.Name+" is archived; restore it first")
 			return
+		}
+		if !s.mayChangeWorkflow(w, r, wf) {
+			return
+		}
+		p := principalFrom(r.Context())
+		if !disabled && wf.Disabled && !byDeveloper(wf.DisabledByRole) && !p.Role.AtLeast(authn.Admin) {
+			writeError(w, http.StatusForbidden, "an administrator turned this workflow off, so an administrator turns it on")
+			return
+		}
+		if disabled && (!wf.Disabled || byDeveloper(wf.DisabledByRole)) {
+			wf.DisabledByRole = string(p.Role)
 		}
 		wf.Disabled = disabled
 		if err := s.docs.Put(r.Context(), kindWorkflow, wf.ID, wf); err != nil {

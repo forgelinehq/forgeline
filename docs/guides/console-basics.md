@@ -66,7 +66,7 @@ Most spaces and tabs have their own guides; see [Related](#related) and the [gui
    in order also match ("wfs" finds Workflows).
 3. Move with the arrows, open with Enter, close with Escape.
 
-With nothing typed it lists pages and shortcuts. The shortcuts are **New agent** and **New workflow** (administrators),
+With nothing typed it lists pages and shortcuts. The shortcuts are **New agent** and **New workflow** (developers),
 **New pipeline** and **Add a model provider** (developers), and **Add an MCP server** (administrators). Search lists only
 what your role may open. The lists of agents, workflows and the rest are read when the box opens and kept for a minute,
 so something created a few seconds ago may not show yet. A viewer finds pages and pipelines only.

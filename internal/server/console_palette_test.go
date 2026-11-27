@@ -17,7 +17,7 @@ const admin = [...pageEntries('admin'), ...actionEntries('admin')];
 const viewer = [...pageEntries('viewer'), ...actionEntries('viewer')];
 eq('a viewer finds no agent pages, settings or actions', [viewer.some(e => e.path === '/agents'), viewer.some(e => e.path === '/people'), viewer.filter(e => e.kind === 'action').length], [false, false, 0]);
 eq('an administrator finds the audit log and settings', [admin.some(e => e.path === '/audit'), admin.some(e => e.path === '/registries')], [true, true]);
-eq('a developer may make a pipeline but not an agent', actionEntries('developer').map(e => e.label), ['New pipeline', 'Add a model provider']);
+eq('a developer makes agents, workflows and pipelines, but does not connect an MCP server', actionEntries('developer').map(e => e.label), ['New agent', 'New workflow', 'New pipeline', 'Add a model provider']);
 
 const things = thingEntries({
   agents: [{ id: 'run-explainer', name: 'Run explainer', description: 'Explains failed runs' }, { id: 'old', name: 'Old one', archived_at: '2026-11-01' }],

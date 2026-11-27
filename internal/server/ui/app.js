@@ -265,11 +265,11 @@ async function boot() {
     route('/team', guard('developer', teamPage));
     route('/teams/:id', guard('developer', teamDetailPage));
     route('/agents', guard('developer', agentsPage));
-    route('/agents/:id/build', guard('admin', agentBuilderPage));
+    route('/agents/:id/build', guard('developer', agentBuilderPage));
     route('/agents/:id', guard('developer', agentPage));
     route('/skills/:id', guard('developer', skillPage));
     route('/workflows', guard('developer', workflowsHomePage));
-    route('/workflows/:id/canvas', guard('admin', graphEditorPage));
+    route('/workflows/:id/canvas', guard('developer', graphEditorPage));
     route('/workflows/:id', guard('developer', workflowPage));
     route('/workflow-runs/:id', guard('developer', workflowRunPage));
     route('/proposals', guard('viewer', proposalsPage));

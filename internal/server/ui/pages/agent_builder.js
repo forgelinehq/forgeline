@@ -16,13 +16,16 @@ const tagPill = (t) => h('span', { class: TONE[t.tone] + ' px-1.5 py-0 text-[11p
 /** Agents › an agent › Build (or a new agent when params.id is "new"). */
 export async function agentBuilderPage({ params }) {
   const el = h('div', {});
-  if (!atLeast(session.role, 'admin')) return mount(el, notice('info', 'Only administrators change agents.'));
+  if (!atLeast(session.role, 'developer')) return mount(el, notice('info', 'Developers and administrators change agents.'));
   mount(el, spinner());
   let ag = null, data;
   try {
     const [skills, tools, models] = await Promise.all([get('/v1/ai/skills').then(r => r.skills), get('/v1/ai/tools').then(r => r.tools), get('/v1/models').then(r => r.models).catch(() => [])]);
-    data = { skills, tools, models };
     if (params.id !== 'new') ag = await get('/v1/ai/agents/' + encodeURIComponent(params.id));
+    // Nobody gives an agent a tool their own role may not use; the server refuses it too. One the agent already has stays
+    // listed, so it can be taken off before saving.
+    const has = ag?.versions.find(v => v.n === ag.current)?.tools || [];
+    data = { skills, tools: tools.filter(t => atLeast(session.role, t.min) || has.includes(t.name)), models };
   } catch (e) { return mount(el, errorBox(e.message)); }
   const cur = ag && ag.versions.find(v => v.n === ag.current);
   const base = draftFrom(ag, cur);

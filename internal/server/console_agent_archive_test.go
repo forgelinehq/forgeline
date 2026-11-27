@@ -27,9 +27,8 @@ func TestDeletingAnAgentArchivesItThenTheSweepRemovesIt(t *testing.T) {
 	}
 	admin.expect(200, "POST", "/v1/ai/workflows/"+wf.ID+"/disable", map[string]any{})
 
-	admin.createUser("dev", authn.Developer)
-	dev := h.login("dev")
-	dev.expect(403, "DELETE", "/v1/ai/agents/"+lead.ID, nil)
+	admin.createUser("looker", authn.Viewer)
+	h.login("looker").expect(403, "DELETE", "/v1/ai/agents/"+lead.ID, nil)
 	admin.expect(200, "DELETE", "/v1/ai/agents/"+lead.ID, nil)
 	admin.expect(409, "DELETE", "/v1/ai/agents/"+lead.ID, nil)
 

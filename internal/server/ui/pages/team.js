@@ -30,9 +30,9 @@ const active = (r) => r && !['done', 'failed'].includes(r.status);
 
 export async function teamPage() {
   const el = h('div', {});
-  const admin = atLeast(session.role, 'admin');
+  const writer = atLeast(session.role, 'developer');
   const header = () => pageHeader('Teams', 'Give a team a goal: its lead splits the work, the members look into it at the same time with their own tools, and the lead writes one answer. Anything that would change your cloud still waits for your approval.',
-    admin && h('button', { class: 'btn-primary', type: 'button', id: 'new-team', onclick: () => teamDrawer(null, agents, () => reload()) }, icon('plus', 'size-4'), 'New team'));
+    writer && h('button', { class: 'btn-primary', type: 'button', id: 'new-team', onclick: () => teamDrawer(null, agents, () => reload()) }, icon('plus', 'size-4'), 'New team'));
   let teams, roster, agents;
   async function reload() { el.replaceWith(await teamPage()); }
   mount(el, header(), spinner());
@@ -62,7 +62,7 @@ export async function teamPage() {
   const teamsBlock = teams.length
     ? h('div', { class: 'grid gap-4 md:grid-cols-2 xl:grid-cols-3', id: 'teams' }, teams.map(teamCard))
     : emptyState('users', 'No teams yet', 'A team is a lead and a few agents who work on one goal together. Make one from your agents, or install a ready-made team from the library (Incident triage, Platform review).',
-        h('div', { class: 'mt-4 flex justify-center gap-2' }, admin && h('button', { class: 'btn-primary', type: 'button', onclick: () => teamDrawer(null, agents, () => reload()) }, 'Make a team'), h('a', { class: 'btn-secondary', href: '#/library' }, 'Open the library')));
+        h('div', { class: 'mt-4 flex justify-center gap-2' }, writer && h('button', { class: 'btn-primary', type: 'button', onclick: () => teamDrawer(null, agents, () => reload()) }, 'Make a team'), h('a', { class: 'btn-secondary', href: '#/library' }, 'Open the library')));
 
   // Every agent, one row each: what it is doing and what it used this month.
   const inTeams = new Map();
@@ -84,7 +84,7 @@ export async function teamPage() {
     roster.schedules_stopped && h('div', { class: 'mb-4' }, notice('warn', 'The assistant is off, so no agent wakes on a schedule. Agents with a model of their own still work when asked.')),
     teamsBlock,
     h('section', { class: 'mt-8' },
-      h('div', { class: 'mb-2 flex items-baseline justify-between' }, h('h2', { class: 'h-section' }, `All agents (${members.length})`), admin && h('a', { class: 'text-sm text-brand-700 hover:underline dark:text-brand-300', href: '#/agents' }, 'Manage agents')),
+      h('div', { class: 'mb-2 flex items-baseline justify-between' }, h('h2', { class: 'h-section' }, `All agents (${members.length})`), writer && h('a', { class: 'text-sm text-brand-700 hover:underline dark:text-brand-300', href: '#/agents' }, 'Manage agents')),
       members.length ? h('ul', { class: 'card divide-y divide-slate-100 dark:divide-slate-800', id: 'team-agents' }, members.map(agentRow))
         : h('p', { class: 'muted text-sm' }, 'No agents yet.')));
   return el;
@@ -137,7 +137,7 @@ export function teamDrawer(t, agents, after) {
 /** One team: its people, a box to give it a goal, and its runs with the plan, each member's work and the answer. */
 export async function teamDetailPage({ params }) {
   const el = h('div', {});
-  const admin = atLeast(session.role, 'admin');
+  const writer = atLeast(session.role, 'developer');
   let data, agents, scheds = [], selected = null, timer = null;
   async function load() {
     try { [data, agents, scheds] = await Promise.all([get('/v1/ai/teams/' + encodeURIComponent(params.id)), get('/v1/ai/agents').then(r => r.agents), get('/v1/ai/schedules').then(r => r.schedules.filter(x => x.target === '/teams/' + params.id)).catch(() => [])]); }
@@ -163,19 +163,19 @@ export async function teamDetailPage({ params }) {
       avatar(nm(id), id, 'size-8 text-[11px]'), h('span', { class: 'min-w-0' }, h('span', { class: 'block truncate text-sm font-medium' }, nm(id)), h('span', { class: 'muted block text-xs' }, role)));
     mount(el,
       h('a', { class: 'muted mb-4 inline-flex items-center gap-1 text-sm hover:text-slate-900 dark:hover:text-white', href: '#/team' }, icon('chevron', 'size-3 rotate-180'), 'All teams'),
-      pageHeader(t.name, t.purpose, admin && h('button', { class: 'btn-secondary btn-sm', type: 'button', id: 'team-edit', onclick: () => teamDrawer(t, agents, () => load()) }, icon('edit', 'size-3.5'), 'Change')),
+      pageHeader(t.name, t.purpose, writer && h('button', { class: 'btn-secondary btn-sm', type: 'button', id: 'team-edit', onclick: () => teamDrawer(t, agents, () => load()) }, icon('edit', 'size-3.5'), 'Change')),
       h('div', { class: 'mb-6 flex flex-wrap gap-2', id: 'team-people' }, person(t.lead, 'Lead'), t.members.map(m => person(m, 'Member'))),
       h('section', { class: 'card card-pad mb-6' }, h('h2', { class: 'h-section mb-2' }, 'Give the team a goal'), goal,
         h('div', { class: 'mt-3 flex flex-wrap items-center gap-3' }, go, h('span', { class: 'muted text-xs' }, 'Every agent works as you, with its own tools and budget. Each model call is in the call log.'))),
       h('section', { class: 'card card-pad mb-6', id: 'team-schedules' },
         h('div', { class: 'mb-2 flex flex-wrap items-center justify-between gap-2' }, h('div', {}, h('h2', { class: 'h-section' }, 'On a schedule'), h('p', { class: 'muted text-xs' }, 'Goals the team gets by itself, at set times.')),
-          admin && h('button', { class: 'btn-secondary btn-sm', type: 'button', id: 'team-schedule-add', onclick: () => teamScheduleDrawer(t, null, load) }, icon('clock', 'size-3.5'), 'Schedule a goal')),
+          writer && h('button', { class: 'btn-secondary btn-sm', type: 'button', id: 'team-schedule-add', onclick: () => teamScheduleDrawer(t, null, load) }, icon('clock', 'size-3.5'), 'Schedule a goal')),
         scheds.length ? h('ul', { class: 'divide-y divide-slate-100 dark:divide-slate-800' }, scheds.map(it => h('li', { class: 'flex flex-wrap items-center gap-x-4 gap-y-1 py-2 text-sm', 'data-schedule': it.id },
           h('span', { class: 'min-w-0 flex-1 truncate font-medium', title: it.goal }, it.goal),
           h('span', { class: 'muted' }, describe({ every_minutes: it.every_minutes, cron: it.cron, tz: it.tz }) + ', as ' + it.run_as),
           h('span', { class: 'text-xs' }, 'next: ', nextLine(it)),
-          admin && h('button', { class: 'btn-ghost btn-sm', type: 'button', onclick: () => teamScheduleDrawer(t, it, load) }, 'Change'))))
-          : h('p', { class: 'muted text-sm' }, admin ? 'None yet. Schedule a goal to have the team work on it every morning, every week or by a cron expression.' : 'None.')),
+          writer && h('button', { class: 'btn-ghost btn-sm', type: 'button', onclick: () => teamScheduleDrawer(t, it, load) }, 'Change'))))
+          : h('p', { class: 'muted text-sm' }, writer ? 'None yet. Schedule a goal to have the team work on it every morning, every week or by a cron expression.' : 'None.')),
       h('div', { class: 'grid gap-6 lg:grid-cols-[18rem_minmax(0,1fr)]' },
         h('nav', { 'aria-label': 'Runs' }, h('h2', { class: 'h-section mb-2' }, 'Runs'),
           data.runs.length ? h('ul', { class: 'space-y-1', id: 'team-runs' }, data.runs.map(r => h('li', {}, h('button', { type: 'button', 'data-run': r.id,

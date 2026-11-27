@@ -16,14 +16,14 @@ Use it for any change to an agent's instructions, model, skills or tools. Every 
 | | |
 | --- | --- |
 | Where in the console | **Agents → Agents → New agent** or **Edit** |
-| Needs | An administrator (the builder page is closed to anyone else); a model |
+| Needs | The developer or administrator role; a model |
 | Design note | [045](../design/045-agent-studio.md) |
 
 ## Who can do what
 
 | Action | Minimum role | Extra rule |
 | --- | --- | --- |
-| Open the builder and save a version | Administrator | A developer who opens its address gets "You do not have access to this page", and has no **New agent** or **Edit** button |
+| Open the builder and save a version | Developer | The tool list holds only what your role may use. A version a developer saved runs with at most a developer's rights, whoever runs it ([why](../design/054-developers-write-agents.md)). |
 | Talk to the agent | Developer | On the agent's own page, not in the builder; it talks to the saved version as you |
 
 ## How it works
