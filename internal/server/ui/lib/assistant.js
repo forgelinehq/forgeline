@@ -1,6 +1,6 @@
 // The assistant panel: a colleague that answers questions about the page you are on, looks things up, and changes
 // things only after you approve the exact action (or inside an autopilot envelope you set).
-import { h, icon, mount, errorBox, notice, copyButton, toast, pill, relTime, bytes } from './dom.js';
+import { h, append, icon, mount, errorBox, notice, copyButton, toast, pill, relTime, bytes } from './dom.js';
 import { get, post, del, atLeast, streamPost } from './api.js';
 import { currentPath, navigate } from './router.js';
 import { pageContext as contextOf } from './pagectx.js';
@@ -255,14 +255,14 @@ function build(close, role) {
       }
       catch (err) { toast(err.message, 'error'); busy(false); }
     };
-    box.append(
+    append(box, [
       h('div', { class: 'flex items-center gap-2 font-semibold' }, icon('bolt', 'size-4 shrink-0'), a.title || 'Waiting for you'),
       h('ul', { class: 'list-disc space-y-0.5 pl-5 text-xs' }, a.effects.map(e => h('li', {}, e))),
       a.detail ? h('details', {}, h('summary', { class: 'cursor-pointer text-xs underline' }, DETAIL_LABEL[a.kind] || 'Show the file'),
         h('pre', { class: 'mt-1 max-h-48 w-full overflow-auto whitespace-pre-wrap break-words rounded-lg bg-white/70 p-2 font-mono text-[11px] dark:bg-slate-900/50' }, a.detail)) : null,
       h('div', { class: 'flex gap-2' },
         h('button', { type: 'button', class: 'btn-primary btn-sm', 'data-action': 'confirm', onclick: () => send('confirm') }, 'Confirm'),
-        h('button', { type: 'button', class: 'btn-secondary btn-sm', 'data-action': 'dismiss', onclick: () => send('dismiss') }, 'Dismiss')));
+        h('button', { type: 'button', class: 'btn-secondary btn-sm', 'data-action': 'dismiss', onclick: () => send('dismiss') }, 'Dismiss'))]);
     if (a.done) done(a.result || 'Done.', a.link); // autopilot already confirmed it
     return box;
   }

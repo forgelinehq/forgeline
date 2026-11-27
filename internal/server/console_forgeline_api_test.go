@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/forgelinehq/forgeline/internal/authn"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -152,5 +153,36 @@ func TestAnAgentAndAMalformedPathCannotUseTheAPITool(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), "API path") {
 			t.Errorf("%q: %v", path, err)
 		}
+	}
+}
+
+// The example in a tool's help becomes its schema. An object as the example of body once made the model send
+// {"optional": "<the request as text>"}, which the console API refused, after the person had approved it.
+func TestTheAPIToolAsksForTheRequestItselfAsItsBody(t *testing.T) {
+	for _, l := range assistantLookups() {
+		if l.name != forgelineAPITool {
+			continue
+		}
+		schema, desc := schemaFromHelp(l.help)
+		body, _ := schema["properties"].(map[string]any)["body"].(map[string]any)
+		if body["type"] != "object" || body["properties"] != nil {
+			t.Errorf("body must be a free object, got %v", body)
+		}
+		if req, _ := schema["required"].([]string); slices.Contains(req, "body") {
+			t.Error("a read needs no body")
+		}
+		if len(desc) > 1500 {
+			t.Errorf("the description is %d characters and would be cut at 1500", len(desc))
+		}
+		return
+	}
+	t.Fatal("the tool is missing")
+}
+
+func TestARefusedRunPathSaysWhereToReadARun(t *testing.T) {
+	m := newMCPHarness(t)
+	r := results(m.run(m.admin, map[string]any{"message": "read"}, apiCall("GET", "/v1/ai/workflows/w/runs/r", nil)))
+	if !strings.Contains(r[0], "/v1/ai/workflow-runs/{id}") {
+		t.Errorf("no way on: %s", r[0])
 	}
 }

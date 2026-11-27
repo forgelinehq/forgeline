@@ -51,7 +51,7 @@ func (s *Server) lookupForgelineAPI(ctx context.Context, raw json.RawMessage) (s
 		bare = bare[:i]
 	}
 	if forgelineNever.MatchString(bare) {
-		return "", fmt.Errorf("%s is not something the assistant may call: it decides who may do what, approves, applies or starts work. Use the console, or a card or proposal where one exists", bare)
+		return "", fmt.Errorf("%s is not something the assistant may call: it decides who may do what, approves, applies or starts work. Use the console, or a card or proposal where one exists. To read what a run did, use GET /v1/ai/workflow-runs/{id} or /v1/ai/team-runs/{id}, or the tool get_run for a pipeline run", bare)
 	}
 	switch method {
 	case "GET":
