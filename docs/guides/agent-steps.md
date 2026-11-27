@@ -75,9 +75,8 @@ production choice. Codex and Copilot agent steps are not built yet; Copilot can 
 [assistant](assistant.md).
 
 {: .warning }
-**Checked against the code, not run for this review.** The fields, defaults, command line and validation were compared
-with `internal/pipeline`. Design note 007 records a run with a real `setup-token` login on 2026-10-28; no agent step was run
-for this review.
+**Run on the UAT instance on 2026-11-27** (main at `487f373`, a real `CLAUDE_CODE_OAUTH_TOKEN` in the vault, an agent image already on its Docker): a one-turn agent step answered `OK`; a step asking the agent to use `Bash` without listing it got "NOT ALLOWED" and the command did not run; a run listing `ANTHROPIC_API_KEY` (not stored) failed at once with the "is not configured" message; the guide's own image name failed with "pull access denied" because it was not built there; the validation messages for no credential, `network: none`, an unknown provider and `maxTurns: 101` match this page; a viewer cannot run a pipeline. The fields, defaults and command line were also compared with `internal/pipeline`. Design note 007 records a run with a real `setup-token` login on 2026-10-28.
+**Not checked.** An agent step in a run GitHub started (the withheld credential), `Edit` and `Bash(...)` tools that are listed, `model`, and a build of `deploy/agent`.
 
 ## Troubleshooting
 
@@ -89,7 +88,8 @@ for this review.
 | `steps[0].agent.maxTurns: must be between 1 and 100` | `maxTurns` is out of range. |
 | The step fails because the agent refused a tool | The tool is not in `tools`. Add it, knowing the agent can then use it. |
 | The step fails naming the secret, in a run for a pull request | Untrusted runs get no secrets. |
-| The image cannot be pulled | `forgeline-agent-claude` is not built on the server's Docker; build it from `deploy/agent`. |
+| The step fails with exit code 125 and "pull access denied" in its output | `forgeline-agent-claude` is not built on the server's Docker; build it from `deploy/agent`, or name an image the server has. The run page's "What went wrong" may wrongly blame the credentials for this (exit code 125 matches its credentials rule); read the end of the output. |
+| The step fails with `secret "ANTHROPIC_API_KEY" is not configured; set FORGELINE_SECRET_ANTHROPIC_API_KEY ...` | The step lists a credential that is not stored under **Secrets** (or set in the server's environment). Store it, or list the one you have. |
 
 ## Related
 

@@ -86,10 +86,7 @@ Enterprise Server). **Disconnect** (a red button) removes a connection made in t
 ## Limits and verification
 
 {: .warning }
-**Checked against the code for this review:** the console labels, roles, webhook responses and App permissions. Earlier
-checks, as recorded: the whole flow against a stand-in for GitHub, including a signed webhook starting a run and statuses
-posted with an installation token. The app was also created and installed on github.com, and the connection test read 19
-repositories with an installation token. **Not yet:** a real webhook delivery or a commit status on a real repository.
+**Checked on the UAT instance on 2026-11-27** (main at `487f373`, a GitHub App connected to 18 repositories): the Connections page lists GitHub as working; the GitHub page showed the allow list with **Secrets for pushes** off on every row, the webhook instructions and "No deliveries yet"; **Test connection** (run as an administrator on the server) answered "readable with this token" for all 18 repositories; a developer is refused `POST /v1/integrations/github/test`, `PUT /v1/integrations/github` and the App start with 403 "admin is required"; a webhook with no signature, and one with a wrong signature, got `401 missing or invalid signature`. Earlier checks, as recorded: the whole flow against a stand-in for GitHub, including a signed webhook starting a run and statuses posted with an installation token; the App created and installed on github.com. **Not checked.** Creating or installing the App, the token route, a real webhook delivery or a commit status on a real repository, changing the rules, and the **Connect with a GitHub App** card (a developer does not see it on the page; the picture shows it for an administrator).
 
 ## Troubleshooting
 

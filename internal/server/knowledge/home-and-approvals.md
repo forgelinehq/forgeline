@@ -64,7 +64,7 @@ Top to bottom:
 - A strip shows the Docker host, the server and the disk. The **Pipelines** table and **Recent runs** follow; see
   [Pipelines](pipelines.md).
 
-![Home with the greeting, tiles, Needs you and Recent changes]({{ '/console/home-today.png' | relative_url }})
+![The top of Home on a new server: the Ask box and the Set up Forgeline card]({{ '/console/home-today.png' | relative_url }})
 
 | Needs you shows | When |
 | --- | --- |
@@ -104,9 +104,7 @@ removing the "not your own proposal" rule and the "administrators only" rule eac
 ([note 029](../design/029-console-spaces-and-home.md), "What was checked").
 
 {: .warning }
-**Not checked.** A screen reader on the Needs you list. The Home picture predates the rename of "marketplace" to
-"library" in **Start something**. This page was compared with `overview.js`, `inbox.js`, `proposals.js` and the route
-table; it was not run again in a browser.
+**Checked in a browser on 2026-11-27**, on the UAT instance (main at `487f373`), as a developer and as a viewer: the Home greeting, tiles, **Needs you** (a failed run, two findings, a change waiting for approval), **Start something**, **Recent changes** (last four), the strip and the tables; the viewer's Home without the Ask box, Spend and AI team tile; the Approvals list and one proposal's reason, calls, exact script and hash; that a cloud change is not on Approvals; `POST /v1/ai/proposals/{id}/approve` as a developer answers 403 "admin is required"; the setup card was hidden and **Settings → Setup** listed the seven steps as done. **Not checked.** Approving, rejecting or withdrawing (the instance has no administrator test user), the two-approval button, expiry after 24 hours, skipping a setup step, Spend (it costs a Cost Explorer call), and a screen reader. The Home picture shows only the top of a new server's Home, not the tiles.
 
 ## Troubleshooting
 

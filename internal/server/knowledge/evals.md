@@ -91,6 +91,7 @@ can change them or add your own.
 **Not checked against a real model**, or a real pipeline in a repository ([note 050](../design/050-evals.md)). The checks
 were tested with a stand-in agent that obeys (fails) and one that refuses (passes), by removing each kind of check in turn,
 and in a browser on 2026-11-23. Whether a given agent has the tools to read the planted text depends on its tool list.
+On 2026-11-27 (main at `487f373`) on the UAT instance one suite with a fixture ran against Haiku 5.5 and passed, a failing case failed, the attack suite was added (seven cases; not run) and the limits and messages were checked. Judge checks and the attack suite's run were not. See the [note 2026-11-27](../testing/2026-11-27-uat-assistant-agents.md).
 
 ## Troubleshooting
 

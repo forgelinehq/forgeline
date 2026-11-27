@@ -27,11 +27,11 @@ someone when severity is high, a weekly review, a response to an alarm.
 | Action | Minimum role | Extra rule |
 | --- | --- | --- |
 | See workflows and runs | Developer | |
-| Start a run | Developer | One at a time per workflow |
+| Start a run | Developer | One at a time per workflow: "this workflow already has a run in progress" |
 | Create, save a version, roll back, turn off or on | Administrator | Agent versions are pinned at save |
-| Delete (archive) or restore | Administrator | Refused while a run is going or waiting |
+| Delete (archive) or restore | Administrator | Refused while a run is going or waiting: "<workflow> has a run that is running; let it finish or cancel it first" |
 | Release a run waiting at a stage gate | Administrator | |
-| Answer a question in a graph run | Developer | If the node names answerers, only those people (an administrator not named is refused). If it names none, only an administrator: "an administrator answers this question" |
+| Answer a question in a graph run | Developer | If the node names answerers, only those people (an administrator not named is refused: "only <name> may answer this question"). If it names none, only an administrator: "an administrator answers this question". A person who may not answer sees "Waiting for an administrator to answer" and no answer box |
 | Cancel a run | Developer | Its starter, or an administrator: "only the person who started it, or an administrator, can cancel a run" |
 | Make the webhook secret | Administrator | Shown once; the old one stops working |
 
@@ -92,11 +92,24 @@ A stage workflow has at most 6 stages of 4 steps each (a task is at most 4,000 c
 12-node graph ([test note](../testing/2026-11-17-agent-graphs.md)). Other graphs and the alarm trigger have not all been run
 against a real model; see [Alarm intake](alarm-intake.md) for its own check.
 
+**Checked again through the console on 2026-11-27**, on the UAT instance at commit `487f373`, with the real model: a graph
+drawn in the canvas (an agent and two questions) was started by a developer, one question was answered by an
+administrator and the other by the one person it named, and each refusal in the table above was seen (a developer on a
+question for administrators, an administrator on a question for a named person, a second start, a delete while running,
+and 403 for a developer on create, delete and the webhook secret and for a viewer on start). Saving was refused with the
+messages in Troubleshooting for 41 nodes, an unreachable node, a decision without `else` and an agent with `aws_script` in
+a workflow run as a developer; the webhook answered 401 for no or a wrong signature, 409 for a workflow whose version has no
+webhook and 413 for a body over 64 KB. Not run: a stage workflow, the 30-an-hour webhook limit, a webhook that starts a
+run, and the alarm and failed-pipeline triggers. Delete archived the workflow (it left the list and showed under
+**Archived**), and restoring brought it back turned off ("this workflow is turned off" on a start). See the
+[test note](../testing/2026-11-27-uat-workflows-teams.md).
+
 ## Troubleshooting
 
 | Symptom | Likely cause |
 | --- | --- |
-| Saving is refused, naming a tool | The tool is not allowed for the workflow's run-as role. |
+| Saving is refused, naming a tool | The tool is not allowed for the workflow's run-as role, for example "agent \"x\" v1 has aws_script (needs admin), which a run as developer may never use". |
+| Start is refused with 409 "this workflow already has a run in progress" | A run is going or waiting for an answer; let it finish or cancel it. |
 | A webhook answers 401 | Wrong signature, unknown workflow, or no secret made yet. |
 | A webhook answers 409 | "the current version of this workflow does not start from a webhook", "this workflow is turned off", or "a run of this workflow is already in progress". |
 | A webhook answers 413 | The body is over 64 KB. |

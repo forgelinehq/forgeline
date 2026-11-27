@@ -36,7 +36,7 @@ before you let agents loose on an account.
 1. Open **Settings → Connections**. Each connection shows **Working** or **Needs attention**, with what to do. Logins
    found on the server (an AWS profile, for example) are listed by name only, as **Found, not connected**.
 2. Pick one to see its tabs: **Overview** (with **Test connection**), **Services** (AWS only), **What the AI may do**
-   and **Activity**.
+   and **Activity**. A developer sees the tabs but not **Activity**, and the test button is for administrators.
 3. **Add a connection** lists everything not connected yet, including systems coming soon.
 4. For setup details of each system see [Connect AWS](connect-aws.md), [Connect GitHub](connect-github.md),
    [Connect Google Cloud](connect-gcp.md) and [Connect Azure](connect-azure.md).
@@ -91,12 +91,7 @@ be **Needs approval** or **Blocked**. Setting it to Allow is refused. A table sh
 ## Limits and verification
 
 {: .warning }
-**Checked with stand-ins, not every real system.** The access policy was tested through the real server with a stub for
-the command-line tools, and in a browser against stand-ins ([note 026](../design/026-access-policy.md)). The service
-switches were tested with eleven rules each removed in turn to confirm a test fails, and **not checked against real AWS**
-beyond the existing write test ([note 030](../design/030-service-switches.md)). Nothing is recorded about a real Google
-Cloud or Azure account beyond their read-only checks, and how the real AWS MCP Server behaves when a tool is blocked in
-the middle of a conversation was not checked.
+**Read through the console on 2026-11-27**, on the UAT instance (main at `487f373`, AWS, the AWS MCP Server, Claude, the Docker host and GitHub connected): the Connections page (five working connections, two server logins "Found, not connected", **Add a connection**), the AWS connection's **Overview** with the result of the last test (three checks, "created nothing, changed nothing"), its **Services** tab (one three-way switch per service) and its **What the AI may do** tab (the tools with their kind and Allow, Needs approval, Blocked). The test was run as an administrator on the server; it was recorded in **Activity** as `integration.test` with the actor, and an older entry `policy.refused` shows the switch refusing a proposal. A developer is refused the test, a policy change and a switch change with 403 "admin is required". The access policy was also tested through the real server with a stub for the command-line tools, and in a browser against stand-ins ([note 026](../design/026-access-policy.md)); the service switches with eleven rules each removed in turn to confirm a test fails ([note 030](../design/030-service-switches.md)). **Not checked.** Changing any switch or tool setting on the instance (the maintainer's settings), setting a changing tool to Allow, fail-closed behaviour, a real Google Cloud or Azure account beyond their read-only checks, the Claude test, and how the real AWS MCP Server behaves when a tool is blocked in the middle of a conversation.
 
 ## Troubleshooting
 

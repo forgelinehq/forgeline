@@ -144,9 +144,10 @@ change to AWS still shows you the exact command first, and IAM, Organizations, a
 ## Limits and verification
 
 {: .warning }
-**Checked against a stand-in for the `claude` program, not a real model.** The answer arrives in one piece, and the
+**Checked mostly against a stand-in for the `claude` program; a real model only in part (below).** The answer arrives in one piece, and the
 surface was checked with that stand-in (see [note 024](../design/024-assistant-agent-surface.md)). How well each real model
 chooses to plan and when to ask has not been measured yet.
+On 2026-11-27 (main at `487f373`) a developer test user asked a real model (Claude Code as the agent) six questions in the console on the UAT instance: failed run, AWS contents and a planted instruction in a log were answered correctly; it invented a second Memory page once and could not name the path of Evals. Not run: setting up the sign-in, confirming a card as an administrator. See the [note 2026-11-27](../testing/2026-11-27-uat-assistant-agents.md).
 
 ## Troubleshooting
 

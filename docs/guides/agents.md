@@ -100,6 +100,7 @@ another agent first`.
 **Checked on a real model only in part.** The Anthropic provider was checked on the Pi with the real API on 2026-11-18
 ([note 045](../design/045-agent-studio.md)). Gemini, Azure OpenAI and AWS Bedrock were tested against stand-ins only, not the real services; see
 [Models and providers](models-and-providers.md).
+On 2026-11-27 (main at `487f373`) on the UAT instance a developer talked to an agent on a real model (Haiku 5.5), watched versions, rollback, archive and restore, and the role refusals in the console and API. See the [note 2026-11-27](../testing/2026-11-27-uat-assistant-agents.md).
 
 ## Troubleshooting
 

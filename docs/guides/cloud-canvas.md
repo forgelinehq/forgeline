@@ -42,7 +42,8 @@ Use the canvas to create or change infrastructure without writing OpenTofu. A dr
    stays off until a problem is fixed.
 3. Choose **Preview changes**. Forgeline asks OpenTofu what building the saved blueprint would do. Each block says
    whether it would be added, changed, replaced or removed.
-4. Choose **Send for approval** and give a reason. This files the preview as a cloud change. The server refuses it when the
+4. Choose **Send for approval** and give a reason of 5 to 500 characters (`say why in 5 to 500 characters; the approver reads
+   it`). This files the preview as a cloud change. Until it is approved the person who sent it (or an administrator) can withdraw it with **Withdraw this proposal** on its page. The server refuses it when the
    preview is not ready (`preview the changes first`), is for an older version of the blueprint (`the blueprint changed
    after the preview; preview again`), is over an hour old (`the preview is more than an hour old; preview again`),
    changes nothing (`the preview changes nothing; there is nothing to approve`) or breaks a guardrail.
@@ -184,6 +185,8 @@ table, a protected bucket and a log group, each step approved by a second princi
 database (RDS), with or without a final snapshot, because building one costs money. The AgentCore agent template needs a
 raised AgentCore quota on the account and its real build is still to do ([note 040](../design/040-any-resource-any-cloud.md)).
 The generated OpenTofu was validated with OpenTofu 1.13.9 and AWS provider 6.72 in the tests.
+On 2026-11-27 (commit `487f373`) a queue, a table and a log group were built and then removed through the API as a developer, each change approved by
+the server token, and a stale preview and a missing preview were refused with the texts above ([note](../testing/2026-11-27-uat-cloud-security.md)).
 
 ## Troubleshooting
 

@@ -100,9 +100,7 @@ In the editor use **Add step → Kind → GitHub Actions workflow**.
 - A workflow can take at most 25 inputs, each value up to 1000 bytes.
 
 {: .warning }
-**Not run for this review.** The labels, limits and messages were compared with `actions.js`, `console_actions.go` and
-`console_workflow_step.go`; the real-GitHub behaviour (permissions, dispatch, fork tag) was not re-tested. The "Actions
-read and write" permission list and the classic `repo` scope are not checked in the code.
+**Read-only check on the UAT instance on 2026-11-27** (main at `487f373`, as a developer; nothing was started, canceled or re-run). Read: the repository list, a repository's workflows, its three runs, one run's jobs and steps, and the empty states ("No workflows", "No runs yet"). The App there does not have the Actions permission yet, so 9 of the 18 repositories (the private ones) answered "GitHub refused: the GitHub App does not have the Actions permission yet. Approve it on the App's page, then try again", exactly as this page says, while the public ones listed fine. A repository outside the allow list is refused with `403 that repository is not on the GitHub allow list`; a viewer gets 403 and "You do not have access to this page". The labels, limits and messages were also compared with `actions.js`, `console_actions.go` and `console_workflow_step.go`. **Not checked.** **Run**, **Cancel run** and the re-runs (they change GitHub; they need a test repository and branch the maintainer names), the branch refusal on **Run**, the 20-writes-a-minute limit, a `workflow` step in a pipeline, the fork tag, and the permission lists (the "Actions read and write" wording and the classic `repo` scope).
 
 ## Troubleshooting
 
@@ -115,6 +113,7 @@ read and write" permission list and the classic `repo` scope are not checked in 
 | "too many actions; wait a minute" | More than 20 writes in a minute from you. |
 | "that repository is not on the GitHub allow list" | Add it under **Settings → Connections → GitHub**. |
 | "GitHub rejected the stored credentials; reconnect GitHub" | The token or App credential is no longer valid. |
+| A job's log shows `GitHub answered 410: Server Error` | GitHub no longer keeps that log. It deletes logs of old runs (after 90 days by default). **Open on GitHub** shows what is left. |
 | A pipeline with a `workflow` step fails when GitHub starts it | Runs started by GitHub cannot use that step. |
 
 ## Related

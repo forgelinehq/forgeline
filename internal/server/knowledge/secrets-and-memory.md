@@ -99,6 +99,11 @@ itself, see [Assistant memory](assistant-memory.md).
 ## Limits and verification
 
 {: .warning }
+**Secrets were run on the UAT instance on 2026-11-27 (commit `487f373`):** a secret was added, rotated and deleted; its value was never listed; a
+pipeline step that printed it showed `***`; the name, value and developer-role refusals gave the texts above ([note](../testing/2026-11-27-uat-cloud-security.md)). **Not checked there:** a secret set by the
+server's environment, Memory beyond reading the page, and the Memory page's writes.
+
+{: .warning }
 **Memory was checked with a scripted model.** The rules were tested through the real server, with 30 rules removed in turn
 to confirm a test fails, and in a browser. **Not checked:** a real model deciding when to save a note or how it uses
 notes, an installation with very many conversations (they are found by listing and filtering), and phones

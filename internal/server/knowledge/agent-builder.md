@@ -16,15 +16,15 @@ Use it for any change to an agent's instructions, model, skills or tools. Every 
 | | |
 | --- | --- |
 | Where in the console | **Agents → Agents → New agent** or **Edit** |
-| Needs | An administrator to save; a model |
+| Needs | An administrator (the builder page is closed to anyone else); a model |
 | Design note | [045](../design/045-agent-studio.md) |
 
 ## Who can do what
 
 | Action | Minimum role | Extra rule |
 | --- | --- | --- |
-| Open the builder and talk to the agent | Developer | Talks to the saved version as you |
-| Save a version | Administrator | |
+| Open the builder and save a version | Administrator | A developer who opens its address gets "You do not have access to this page", and has no **New agent** or **Edit** button |
+| Talk to the agent | Developer | On the agent's own page, not in the builder; it talks to the saved version as you |
 
 ## How it works
 
@@ -66,6 +66,11 @@ Leaving the builder (or the workflow canvas) with unsaved changes asks first: sa
 - A tool or a higher tier needs a new saved version, which is audited.
 - The playground runs as you with real read tools. A T1 agent's proposal there is shown as a draft marked as such and never
   filed.
+
+## Limits and verification
+
+{: .warning }
+**Run on the UAT instance, in part.** On 2026-11-27 (main at `487f373`) the builder was not opened in a browser: it is for administrators and the test sign-in is a developer. A developer's refusal was checked. See the [note 2026-11-27](../testing/2026-11-27-uat-assistant-agents.md).
 
 ## Troubleshooting
 

@@ -97,8 +97,8 @@ The server's own tests cover validation, runs and the failure explanation. The e
 with `editor.js`, `run.js` and `console_pipelines.go`.
 
 {: .warning }
-**Not checked.** This page was not run in a browser again. The real-service checks for pipelines that build images or
-start GitHub workflows are on [Write pipelines](pipelines.md) and [GitHub Actions](github-actions.md).
+**Run in a browser on 2026-11-27**, on the UAT instance (main at `487f373`), as a developer and a viewer: **New pipeline** with the live check (an unknown `needs` showed `steps[1].needs[0]  unknown step "x"` and kept **Create** off), **Create & run**, the run page and its output, a failed run with **What went wrong** (exit code 127, the skipped step, the end of the output), **History** with **Restore** (it made version 4), **Cancel** with its confirmation dialog, the **Add step** form, and the viewer's page (no Save, Run or Add step; only **History**). Through the API: a rename, a duplicate name, a stale save (409), restoring a version that is no longer kept, and the 403 for a viewer. The real-service checks for pipelines that build images or start GitHub workflows are on [Write pipelines](pipelines.md) and [GitHub Actions](github-actions.md).
+**Not checked.** The **This pipeline changed** dialog in the browser (the 409 behind it was checked), a **Source repository**, **Follow** with a long log, **Ask the assistant**, the administrator's delete button, and the 1 MiB limit.
 
 ## Troubleshooting
 

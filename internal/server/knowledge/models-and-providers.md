@@ -103,6 +103,7 @@ on an agent's page before giving it to a team.
 **Only the Anthropic provider was checked against the real API.** That was on a Raspberry Pi on 2026-11-18: the Test
 button, and an agent on `anthropic/claude-haiku-5-5` answering while the assistant used a different login. The other
 providers are tested against stand-ins only.
+On 2026-11-27 (main at `487f373`) the page, the call log and the API were read on the UAT instance as a developer (Anthropic and Gemini connected); adding, testing and removing a provider were not run. See the [note 2026-11-27](../testing/2026-11-27-uat-assistant-agents.md).
 
 ## Troubleshooting
 

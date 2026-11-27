@@ -89,6 +89,7 @@ pushes (kind **Pushing an agent to a registry**).
 ([note 046](../design/046-agent-export.md)). Pushing to a registry is checked against a local registry when
 `FORGELINE_TEST_REGISTRY` names one. ECR through a connected AWS account, and the bundle as a second artifact type, are not
 built.
+On 2026-11-27 (main at `487f373`) on the UAT instance a developer exported both formats and an administrator imported a renamed bundle (dry run, create, unchanged); registries and pushes were not run (no registry there). See the [note 2026-11-27](../testing/2026-11-27-uat-assistant-agents.md).
 
 ## Troubleshooting
 

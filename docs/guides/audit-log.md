@@ -87,6 +87,11 @@ change of the period as `audit.retention`.
 ## Limits and verification
 
 {: .warning }
+**Run on the UAT instance on 2026-11-27 (commit `487f373`):** the events of blueprint, cloud-change, user, secret, token and run work were all found by
+filter, CSV and JSON Lines were downloaded, each download wrote `audit.export`, a developer was refused, and the page was not opened in a browser
+(administrator only); retention was left alone ([note](../testing/2026-11-27-uat-cloud-security.md)).
+
+{: .warning }
 **Tested, but not at very large sizes.** Only administrators can export or change retention; CSV validity, ordering,
 formula protection, filters and the audit of every export and prune are covered by tests, and each of 13 rules was removed
 in turn to confirm a test fails ([note 033](../design/033-audit-export.md)). **Not checked:** exporting a very large log on

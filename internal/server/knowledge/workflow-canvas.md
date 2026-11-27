@@ -29,8 +29,10 @@ Use it to build or change a workflow, and to see what happened in a run.
 ## How it works
 
 1. Choose **New workflow**. Press a node's **+** (or **Add node**) and pick from a searchable side panel of your agents,
-   the logic nodes and the lookups. The new node is wired in after the one you came from.
-2. Drag from a node's port to another node to wire them. Pick a node to set it in the panel; press Delete to remove it.
+   the logic nodes and the lookups. The new node is wired in after the one you came from (between it and the node that
+   followed). A node with two wires that name no branch starts both next nodes together.
+2. Drag from a node's port to another node to wire them. Pick a node to set it in the panel; remove it with **Remove node**
+   in its panel, or Tab to it and press Delete.
 3. Drag the background to move, scroll with Ctrl (Cmd on a Mac) to zoom. **Fit** shows the whole graph; the grid button
    lays it out left to right.
 4. **Settings** holds three tabs: **About**, **Trigger** (by hand, on a schedule, from a webhook, after failed pipeline
@@ -65,7 +67,10 @@ number on a tab says how many things are set there.
 | **Next** | Each wire as a card with the node it leads to and its branch |
 | **Limits** | How many times the node may run |
 
-A Decide node chooses **by a rule** or **by an agent**. An Ask node's choices and the people who may answer are chips.
+Other nodes have their own tabs: an **Ask a person** node has **Question** (the question, its choices and **Who may answer**),
+**Next** and **Limits**; an **End** node has **Ending** (Done or Failed, and a summary for the run list). A Decide node chooses
+**by a rule** or **by an agent**. An Ask node's choices and the people who may answer are chips; with nobody named, any
+administrator may answer.
 
 ## Read a run
 
@@ -82,6 +87,15 @@ formatted Markdown.
 ## Limits and verification
 
 {: .warning }
+**Checked through the console on 2026-11-27**, on the UAT instance at commit `487f373`, as an administrator in a real browser:
+**New workflow**, nodes added from the side panel (an agent and two **Ask a person** nodes), the Agent, Input, Output, Next and
+Limits tabs and the Question tab, the **Settings** tabs About, Trigger (five cards) and Permissions, **Create workflow**, then
+**Edit on the canvas**: a wire dragged from one node to another, a node removed, the "Save your changes?" box on leaving, and
+**Save version**. The graph ran with the real model and the questions were answered as in [Workflows](workflows.md). **Try it**
+opened the playground with the node's task filled in; sending it was not run. The page matched the picture. Save refusals
+for 41 nodes, an unreachable node and a decision without `else` came back as in Troubleshooting. Not run: Decide, Merge and
+Lookup nodes, loops, and the 80-wire limit. See the [test note](../testing/2026-11-27-uat-workflows-teams.md).
+
 **Graphs were checked with the real model on 2026-11-17**, on a graph of 12 nodes with lookups, a merge, a rule decision, a
 question and an agent decision ([test note](../testing/2026-11-17-agent-graphs.md)). That check found that a lookup given
 `limit` as text failed; the error now says what the tool takes, and the canvas shows it beside the arguments.
