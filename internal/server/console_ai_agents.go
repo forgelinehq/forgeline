@@ -821,6 +821,11 @@ func (s *Server) handleAgentChat(w http.ResponseWriter, r *http.Request) {
 	})
 	s.auditReq(r, "ai.agent.run", "agent/"+a.ID, fmt.Sprintf("v%d, %d lookups, %v", v.N, len(lookups), err == nil), err == nil)
 	if err != nil {
+		// A used-up monthly budget is a limit the caller reached, not a failure of the model behind it.
+		if errors.Is(err, errOverBudget) {
+			writeError(w, http.StatusTooManyRequests, err.Error())
+			return
+		}
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
 	}

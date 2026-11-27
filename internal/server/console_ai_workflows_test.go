@@ -382,3 +382,21 @@ func TestWorkflowPinsTheAgentVersionCurrentWhenSaved(t *testing.T) {
 		t.Errorf("ran %s, want %s@2", run.Stages[0].Steps[0].AgentLabel, a.ID)
 	}
 }
+
+// The advice on a tool above the run's role depends on the role: a viewer's run can be run as a developer instead; a
+// developer's run cannot (no workflow runs as an administrator), so the only way out is another tool.
+func TestWorkflowToolRoleAdviceFitsTheRole(t *testing.T) {
+	m := newMCPHarness(t)
+	a := newAgent(t, m.admin, agentBody("Scripter", nil, []string{"aws_script"}, "T0"))
+	for role, want := range map[string]string{"viewer": "Run the workflow as a developer if that is enough", "developer": "Give the agent a tool"} {
+		body := wfBody("Scripts "+role, []WFStage{{Steps: []WFStep{step(a.ID, "run it")}}})
+		body["run_as"] = role
+		out := string(m.admin.expect(400, "POST", "/v1/ai/workflows", body))
+		if !strings.Contains(out, "may never use") || !strings.Contains(out, want) {
+			t.Errorf("%s: %s", role, out)
+		}
+		if role == "developer" && strings.Contains(out, "Run the workflow as a developer") {
+			t.Errorf("a developer's run was told to run as a developer: %s", out)
+		}
+	}
+}

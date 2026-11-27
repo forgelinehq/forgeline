@@ -212,14 +212,14 @@ func tofuFailure(errText string, out []byte) string {
 		// The commonest setup gap: the role Forgeline builds with may create fl-* roles but not hand one to a service.
 		if svcs, err := blueprint.PassRoleServices(); err == nil {
 			e = "The role Forgeline builds with may not hand this role to the service that needs it. Its iam:PassRole " +
-				"permission (forgeline-blueprint-roles, see Connect AWS › Building blueprints) must allow iam:PassedToService: " +
+				"permission (forgeline-blueprint-roles, see the guide Connect AWS, section Permissions for blueprints) must allow iam:PassedToService: " +
 				strings.Join(svcs, ", ") + ".\n\n" + e
 		}
 	}
 	if strings.Contains(e, "iam:AttachRolePolicy") && strings.Contains(e, "not authorized") {
 		if pols, err := blueprint.AttachedPolicies(); err == nil {
 			e = "The role Forgeline builds with may not attach this AWS managed policy. Its iam:AttachRolePolicy " +
-				"permission (forgeline-blueprint-roles, see Connect AWS › Building blueprints) must allow iam:PolicyARN: " +
+				"permission (forgeline-blueprint-roles, see the guide Connect AWS, section Permissions for blueprints) must allow iam:PolicyARN: " +
 				strings.Join(pols, ", ") + ".\n\n" + e
 		}
 	}

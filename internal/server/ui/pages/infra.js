@@ -254,7 +254,7 @@ async function aws(body) {
 
   function costCard() {
     const out = h('div', {});
-    const loadBtn = h('button', { class: 'btn-secondary btn-sm', type: 'button', disabled: !devRole, onclick: async () => {
+    const loadBtn = h('button', { class: 'btn-secondary btn-sm', type: 'button', disabled: !devRole, title: devRole ? '' : 'Loading spend needs the developer role', onclick: async () => {
       loadBtn.disabled = true; mount(out, spinner());
       try {
         const c = await get('/v1/infra/aws/cost' + q());

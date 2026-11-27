@@ -59,7 +59,7 @@ func TestAgentUseIsCountedAndBudgetsStopIt(t *testing.T) {
 
 	// The next call goes through (it was under the limit before it), then the agent stops.
 	m.dev.expect(200, "POST", "/v1/ai/agents/"+a.ID+"/chat", map[string]any{"message": "go"})
-	out := string(m.dev.expect(502, "POST", "/v1/ai/agents/"+a.ID+"/chat", map[string]any{"message": "go"}))
+	out := string(m.dev.expect(429, "POST", "/v1/ai/agents/"+a.ID+"/chat", map[string]any{"message": "go"}))
 	if !strings.Contains(out, "has used its budget") || !strings.Contains(out, "3000 of 1800 tokens") {
 		t.Errorf("over budget: %s", out)
 	}
@@ -132,6 +132,7 @@ eq('use line', useLine({ input_tokens: 1200, output_tokens: 300, millis: 90000, 
 eq('one call', useLine({ input_tokens: 1, output_tokens: 1, millis: 0, calls: 1 }), '2 tokens · 0 min · 1 call');
 eq('cost unknown', costLine({ calls: 2, costed_calls: 0 }), 'cost not reported');
 eq('cost known', costLine({ calls: 2, costed_calls: 2, cost_usd: 0.1234 }), '$0.12');
+eq('a fraction of a cent is not $0.00', costLine({ calls: 4, costed_calls: 4, cost_usd: 0.0013 }), '$0.0013');
 eq('cost partly known', costLine({ calls: 3, costed_calls: 2, cost_usd: 1.5 }), '$1.50 for 2 of 3 calls');
 eq('no budget', budgetLine({ used: {}, level: 'ok' }), null);
 eq('warn', budgetLine({ budget: { tokens: 10000 }, used: { input_tokens: 8000, output_tokens: 500 }, fraction: 0.85, level: 'warn' }), { text: '8.5k of 10k tokens this month · nearly used up', pct: 85, level: 'warn' });

@@ -33,15 +33,22 @@ type failureHint struct {
 	cause string
 }
 
+// credentialsHint is the pattern for a rejected credential; a failed image pull is told apart from it below.
+const credentialsHint = `(?i)\b401\b|\b403\b|unauthorized|authentication failed|bad credentials|access denied`
+
 var logHints = []failureHint{
 	{regexp.MustCompile(`(?i)command not found|executable file not found|not found in \$PATH`), "A command is missing from the image. Use an image that has the tool, or install it in an earlier step."},
 	{regexp.MustCompile(`(?i)(^|\n)\s*(--- FAIL|FAIL\b)|AssertionError|\d+ (tests? )?failed|tests? failed`), "A test failed. The lines at the end of the output say which one."},
 	{regexp.MustCompile(`(?i)permission denied`), "A file or command refused access. Check who owns the file and which user the image runs as."},
 	{regexp.MustCompile(`(?i)no such file or directory`), "A path does not exist. Check the working directory and that an earlier step produced the file."},
-	{regexp.MustCompile(`(?i)\b401\b|\b403\b|unauthorized|authentication failed|bad credentials|access denied`), "Something rejected the credentials. Check the secret's value, and that the step lists it in permissions.secrets."},
+	{regexp.MustCompile(credentialsHint), "Something rejected the credentials. Check the secret's value, and that the step lists it in permissions.secrets."},
 	{regexp.MustCompile(`(?i)out of memory|\boom\b|oom-kill|cannot allocate memory`), "The step ran out of memory."},
 	{regexp.MustCompile(`(?i)no space left on device`), "The disk filled up."},
 }
+
+// imagePullRE is how Docker says it could not get the image, which it writes to the step's output (the step's own error is
+// only "exited with code 125"). "pull access denied" must not be read as a rejected credential.
+var imagePullRE = regexp.MustCompile(`(?i)pull access denied|manifest unknown|no such image|unable to find image|repository does not exist`)
 
 var exitedWithCode = regexp.MustCompile(`^exited with code -?\d+$`)
 
@@ -128,7 +135,14 @@ func (s *Server) explainFailure(ctx context.Context, run store.Run, steps []stor
 	case strings.Contains(errText, "invalid secret name"), strings.Contains(errText, "preparing secrets"):
 		add("A secret the step asks for is missing or can't be passed. Check Secrets and permissions.secrets.")
 	}
+	pulled := imagePullRE.MatchString(tail)
+	if pulled {
+		add("The image could not be pulled. Check its name, tag or digest, and that the server can reach the registry.")
+	}
 	for _, h := range logHints {
+		if pulled && h.re.String() == credentialsHint {
+			continue // "pull access denied" is about the image, not a secret
+		}
 		if h.re.MatchString(tail) {
 			add(h.cause)
 		}

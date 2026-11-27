@@ -32,7 +32,7 @@ Use it to build or change a workflow, and to see what happened in a run.
    the logic nodes and the lookups. The new node is wired in after the one you came from (between it and the node that
    followed). A node with two wires that name no branch starts both next nodes together.
 2. Drag from a node's port to another node to wire them. Pick a node to set it in the panel; remove it with **Remove node**
-   in its panel, or Tab to it and press Delete.
+   in its panel, or press Delete (a clicked node keeps the keyboard focus; the arrow keys move it).
 3. Drag the background to move, scroll with Ctrl (Cmd on a Mac) to zoom. **Fit** shows the whole graph; the grid button
    lays it out left to right.
 4. **Settings** holds three tabs: **About**, **Trigger** (by hand, on a schedule, from a webhook, after failed pipeline

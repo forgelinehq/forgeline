@@ -331,3 +331,51 @@ func TestRunsStartedWithTheBearerTokenAreAttributed(t *testing.T) {
 		t.Fatalf("status %d, triggered_by %q", resp.StatusCode, run.TriggeredBy)
 	}
 }
+
+// A filtered page is a full page of that pipeline's own runs, however many runs of other pipelines sit between them, and the
+// cursor continues after the last one returned, so paging neither comes up short nor skips a run.
+func TestFilteredRunListPagesThroughOtherPipelinesRuns(t *testing.T) {
+	h := newHarness(t, &executor.Fake{})
+	admin := h.adminBrowser("ada")
+	admin.expect(201, "POST", "/v1/pipelines", map[string]any{"yaml": twoSteps, "description": "demo build"})
+	other := "version: v1alpha1\nname: other\nsteps:\n  - id: a\n    image: alpine:3.24\n    run: echo hi\n"
+	admin.expect(201, "POST", "/v1/pipelines", map[string]any{"yaml": other, "description": "another"})
+	start := func(name string) string {
+		var run RunJSON
+		json.Unmarshal(admin.expect(202, "POST", "/v1/pipelines/"+name+"/run", nil), &run)
+		h.waitStatus(run.ID, "succeeded")
+		return run.ID
+	}
+	var demoRuns []string
+	for _, name := range []string{"demo", "other", "other", "other", "demo", "other", "demo"} {
+		if id := start(name); name == "demo" {
+			demoRuns = append(demoRuns, id)
+		}
+	}
+	var seen []string
+	before := ""
+	for page := 0; page < 5; page++ {
+		var list ListJSON
+		q := "/v1/runs?pipeline=demo&limit=2"
+		if before != "" {
+			q += "&before=" + before
+		}
+		json.Unmarshal(admin.expect(200, "GET", q, nil), &list)
+		for _, r := range list.Runs {
+			if r.Pipeline != "demo" {
+				t.Fatalf("a run of %q in the demo list", r.Pipeline)
+			}
+			seen = append(seen, r.ID)
+		}
+		if page == 0 && len(list.Runs) != 2 {
+			t.Fatalf("the first page held %d runs of demo, want 2 (the other pipeline's runs sit between them)", len(list.Runs))
+		}
+		if list.NextBefore == "" {
+			break
+		}
+		before = list.NextBefore
+	}
+	if len(seen) != 3 {
+		t.Errorf("paging saw %d of the 3 demo runs: %v (want all of %v)", len(seen), seen, demoRuns)
+	}
+}

@@ -59,6 +59,7 @@ func TestRunFailureNamesTheFirstFailedStepAndItsLikelyCause(t *testing.T) {
 		{"crash", "", "x\n", 139, "segmentation fault"},
 		{"timeout", `step "build" timed out after 1m`, "x\n", -1, "time limit"},
 		{"pull", "pull access denied for ghost/img", "", 0, "could not be pulled"},
+		{"pull, said in the log", "exited with code 125", "Unable to find image 'ghost/img:1' locally\ndocker: Error response from daemon: pull access denied for ghost/img, repository does not exist or may require 'docker login'\n", 125, "could not be pulled"},
 		{"secret", `step "build": preparing secrets: x`, "", 0, "secret the step asks for"},
 		{"test failure", "", "ok pkg/a\n--- FAIL: TestX (0.00s)\nFAIL\n", 1, "A test failed"},
 		{"permission", "", "cp: cannot create: Permission denied\n", 1, "refused access"},
@@ -72,6 +73,9 @@ func TestRunFailureNamesTheFirstFailedStepAndItsLikelyCause(t *testing.T) {
 		f := m.failure(m.failedRun(twoStepYAML, c.exit, c.errText, c.log))
 		if !f.Failed || f.Step != "build" || len(f.Skipped) != 1 || f.Skipped[0] != "ship" || !hasCause(f, c.cause) {
 			t.Errorf("%s: %+v", c.name, f)
+		}
+		if strings.HasPrefix(c.name, "pull") && hasCause(f, "rejected the credentials") {
+			t.Errorf("%s: a failed image pull was explained as a rejected credential: %+v", c.name, f.Causes)
 		}
 		if strings.Contains(f.Headline, "exited with code") {
 			t.Errorf("%s: the headline repeats the exit code: %q", c.name, f.Headline)

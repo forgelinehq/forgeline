@@ -589,7 +589,37 @@ func (s *Server) handleList(w http.ResponseWriter, r *http.Request) {
 		}
 		opts.Limit = n
 	}
-	runs, err := s.cfg.Store.ListRuns(r.Context(), opts)
+	name := r.URL.Query().Get("pipeline")
+	limit := opts.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	limit = min(limit, 200)
+	var runs []store.Run
+	var err error
+	if name == "" {
+		runs, err = s.cfg.Store.ListRuns(r.Context(), opts)
+	} else {
+		// Filtering a page after it was cut left short pages and a cursor that skipped runs. Read pages until this
+		// pipeline has a full page of its own runs (or the history ends), and continue after the last one returned.
+		cursor := opts.Before
+		for pages := 0; len(runs) < limit && pages < 100; pages++ {
+			var page []store.Run
+			page, err = s.cfg.Store.ListRuns(r.Context(), store.ListOptions{Limit: 200, Before: cursor})
+			if err != nil {
+				break
+			}
+			for _, run := range page {
+				if run.PipelineName == name && len(runs) < limit {
+					runs = append(runs, run)
+				}
+			}
+			if len(page) < 200 {
+				break
+			}
+			cursor = page[len(page)-1].ID
+		}
+	}
 	if errors.Is(err, store.ErrNotFound) {
 		writeError(w, http.StatusBadRequest, "unknown before cursor")
 		return
@@ -598,24 +628,11 @@ func (s *Server) handleList(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, "listing runs", err)
 		return
 	}
-	if name := r.URL.Query().Get("pipeline"); name != "" {
-		kept := runs[:0:0]
-		for _, run := range runs {
-			if run.PipelineName == name {
-				kept = append(kept, run)
-			}
-		}
-		runs = kept
-	}
 	out := ListJSON{Runs: make([]RunJSON, len(runs))}
 	for i, run := range runs {
 		out.Runs[i] = s.decorate(r.Context(), runJSON(run, nil))
 	}
-	limit := opts.Limit
-	if limit <= 0 {
-		limit = 50
-	}
-	if len(runs) > 0 && len(runs) >= min(limit, 200) {
+	if len(runs) > 0 && len(runs) >= limit {
 		out.NextBefore = runs[len(runs)-1].ID
 	}
 	writeJSON(w, http.StatusOK, out)

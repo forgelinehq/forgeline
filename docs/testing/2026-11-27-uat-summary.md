@@ -32,22 +32,23 @@ refused; an approver had to differ from the proposer; the plan applied was the o
 `***`; a disabled account's session and tokens stopped at once; a step with `network: none` reached nothing; a planted instruction in
 a log was named as log text and not followed; an unsigned webhook got 401.
 
-## Open product bugs (not fixed here)
+## Product bugs, and what became of them
 
-1. **Deleting a team does not remove its schedules.** They come back, with the old runs, when a team with the same name is made, and
-   while the team does not exist they cannot be listed or removed.
-2. **Proposing a blueprint twice** for one ready preview files two pending changes.
-3. **A budget refusal answers HTTP 502** to an API caller (`POST /v1/ai/agents/{id}/chat`); it is a refusal and should be a 4xx.
-4. **The usage page shows `$0.00`** for an agent whose provider call log shows a cost.
-5. **A missing image is explained wrongly.** A step that cannot pull its image exits 125 ("pull access denied") and the failure
-   explanation says something rejected the credentials.
-6. **The Spend button is shown to a viewer**, whose click would be refused (`developer is required`).
-7. **Delete does nothing on a clicked canvas node** (it loses keyboard focus); it works after Tab, or with **Remove node**.
-8. **Message wording:** saving a workflow run as a developer with an `aws_script` agent says to run it as a developer; the error for a
-   role that cannot be passed points to a guide heading that does not exist.
-9. **`GET /v1/runs?pipeline=NAME` filters after cutting the page**, so a filtered page can be short and paging can skip runs.
-10. **`forgeline onboard` help** says the token may be an administrator's API token; personal tokens work only on `/mcp`.
-11. The assistant invented a separate "Settings → Memory" page, and could not name the path to Evals.
+Found by this test; fixed afterwards with a test for each that fails without its fix, except where noted.
+
+| # | Bug | Result |
+| --- | --- | --- |
+| 1 | Deleting a team left its schedules and runs, which came back with a team of the same name | Fixed: the team's schedules and run history are removed with it |
+| 2 | Proposing a blueprint twice files two pending changes | By design: an existing test files the same preview twice to prove a stale second plan cannot run. Documented in the guide |
+| 3 | A budget refusal answered HTTP 502 | Fixed: `429` |
+| 4 | The usage page showed `$0.00` for calls that cost a fraction of a cent | Fixed: four decimals under one cent |
+| 5 | A missing image was explained as a rejected credential | Fixed: the pull error in the output is recognised first |
+| 6 | The Spend button looked available to a viewer | Not a bug: it is disabled; it now says why |
+| 7 | Delete did nothing on a clicked canvas node | Fixed: the clicked node keeps the keyboard focus (checked in a browser) |
+| 8 | Two misleading messages (a developer's run told to run as a developer; a guide heading that does not exist) | Fixed |
+| 9 | `GET /v1/runs?pipeline=NAME` filtered after cutting the page | Fixed: pages are read until the pipeline has a full page of its own runs |
+| 10 | `forgeline onboard` help said an administrator's API token works | Fixed: only the server token does |
+| 11 | The assistant invented a Memory page and could not name Evals | Fixed: its page list now names every tab of the console, and a test keeps it so |
 
 ## What this test did not cover
 
