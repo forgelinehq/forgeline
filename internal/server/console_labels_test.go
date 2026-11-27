@@ -25,6 +25,8 @@ const eq = (name, got, want) => {
 eq('done with details', stepLabel('aws_resources', '{"account":"primary","service":"sqs"}', 'done'), { text: 'Listed AWS resources', detail: 'primary · sqs' });
 eq('running', stepLabel('aws_resources', '', 'running').text, 'Listing AWS resources');
 eq('failed', stepLabel('aws_accounts', '{}', 'failed').text, 'Could not finish: checked which AWS accounts are connected');
+eq('an API read says so', [stepLabel('forgeline_api', '{"method":"get","path":"/v1/ai/workflow-runs"}', 'done').text, stepLabel('forgeline_api', '{"method":"GET","path":"/v1/ai/teams"}', 'running').text], ['Read from Forgeline', 'Reading from Forgeline']);
+eq('an API change says so', ['{"body":{},"method":"POST","path":"/v1/ai/teams"}', '{"body":{"name":"cut off', ''].map(x => stepLabel('forgeline_api', x, 'done').text), Array(3).fill('Changed something in Forgeline'));
 eq('unknown tool', stepLabel('new_tool', '', 'done').text, 'Used new tool');
 eq('bad args are ignored', stepLabel('get_run', 'not json', 'done').detail, '');
 eq('long values are cut', stepLabel('github_files', JSON.stringify({ repo: 'x'.repeat(80) }), 'done').detail.length, 40);

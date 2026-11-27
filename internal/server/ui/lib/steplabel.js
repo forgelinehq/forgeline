@@ -71,11 +71,13 @@ function parseArgs(args) {
  * Returns { text, detail } where detail is a short "primary · sqs" style note, or ''.
  */
 export function stepLabel(name, args, status) {
-  const v = VERBS[name];
+  // The API tool both reads and changes. A read says so. Arguments too long to parse carry a body, so they are a change.
+  const a = parseArgs(args);
+  const reads = name === 'forgeline_api' && !!a && String(a.method || '').trim().toUpperCase() === 'GET';
+  const v = reads ? ['Read from Forgeline', 'Reading from Forgeline'] : VERBS[name];
   const running = status === 'running';
   let text = v ? v[running ? 1 : 0] : (running ? 'Using ' : 'Used ') + String(name || 'a tool').replace(/_/g, ' ');
   if (status === 'failed') text = 'Could not finish: ' + text.charAt(0).toLowerCase() + text.slice(1);
-  const a = parseArgs(args);
   const parts = [];
   if (a) {
     for (const k of DETAIL_KEYS) {
