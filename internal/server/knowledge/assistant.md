@@ -96,6 +96,12 @@ model provider and counts against their budgets; anything an agent proposes stil
 the workflow is changed or turned off before you press Confirm, the card refuses to start it. The run is yours, in the
 audit log and on the workflow's page.
 
+**Runs.** The assistant can prepare a run of a pipeline, a workflow or a team (a team's card shows the goal it will be
+given). After you press Confirm the card becomes the run: its status, its steps and the end of what it produced, with a link
+to the run. The assistant is told how it went when it finishes, fails or stops to wait for a person (after 10 minutes, that it
+is still running); **Carry on without waiting** tells it at once. It is told the outcome, not the run's output, which it
+reads for itself. A card for a team or workflow that changed since it was prepared is refused.
+
 When one answer prepares several cards, they come **one at a time**: the next appears after you press Confirm or Dismiss
 on the one before, with a line saying how many there are. After the last one, your answers go back to the assistant as one
 message, so it carries on with the rest of what you asked.

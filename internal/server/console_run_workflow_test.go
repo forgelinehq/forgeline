@@ -55,6 +55,23 @@ func TestARunWorkflowCardStartsTheShownVersionOnlyOnConfirm(t *testing.T) {
 		t.Errorf("run = %+v", run)
 	}
 	m.dev.expect(409, "POST", "/v1/assistant/actions/"+id+"/confirm", nil)
+	var view RunViewJSON
+	json.Unmarshal(m.dev.expect(200, "GET", "/v1/assistant/actions/"+id+"/run", nil), &view)
+	if view.Status != "succeeded" || view.Title != "Weekly report" || view.Output != "The summary." || len(view.Steps) != 1 || view.Steps[0] != (RunViewStep{Name: "Look", Status: "succeeded"}) {
+		t.Errorf("view = %+v", view)
+	}
+	// A graph that stops at a question says what it waits for.
+	g := newWorkflow(t, m.admin, graphBody("Asks first", []WFNode{{ID: "start", Kind: nodeStart}, {ID: "ok", Kind: nodeAsk, Question: "Go ahead?"}, {ID: "end", Kind: nodeEnd}},
+		[]WFEdge{{From: "start", To: "ok"}, {From: "ok", To: "end"}}))
+	asks := actionsIn(m.run(m.dev, map[string]any{"message": "run that"}, runWorkflowCard(g.ID)))[0]["id"].(string)
+	var started AssistAction
+	json.Unmarshal(m.dev.expect(200, "POST", "/v1/assistant/actions/"+asks+"/confirm", nil), &started)
+	m.waitRun(strings.TrimPrefix(started.Link, "/workflow-runs/"), wfWaiting)
+	view = RunViewJSON{}
+	json.Unmarshal(m.dev.expect(200, "GET", "/v1/assistant/actions/"+asks+"/run", nil), &view)
+	if view.Status != wfWaiting || view.Waiting != "Go ahead?" {
+		t.Errorf("waiting view = %+v", view)
+	}
 	if aud := string(m.admin.expect(200, "GET", "/v1/audit?limit=60", nil)); !strings.Contains(aud, "confirmed by the person") || !strings.Contains(aud, "ai.workflow.run") {
 		t.Error("the run is not in the audit log as confirmed by the person")
 	}

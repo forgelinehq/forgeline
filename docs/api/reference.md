@@ -408,6 +408,7 @@ The chat assistant, its memory, sandbox, permissions and autopilot. See [Assista
 | `POST /v1/assistant/memory/{id}/approve` | developer | Confirm your own pending note, or approve a pending system note as an administrator. Anyone else gets 404. |
 | `POST /v1/assistant/actions/{id}/confirm` | developer | Do what the assistant prepared (save a pipeline, start a run), as you. Only the person it was prepared for; anyone else gets 404. Once only (409 after), and not after 30 minutes. Audited. |
 | `POST /v1/assistant/actions/{id}/dismiss` | developer | Discard a prepared action. Same ownership rule. |
+| `GET /v1/assistant/actions/{id}/run` | developer | How the run a confirmed card started is going: `status` (`running`, `waiting`, `succeeded`, `failed` or `cancelled`), `title`, `steps` (`name`, `status`), `waiting`, the end of `output`, and `link`. Same ownership rule; 409 for a card that has not started a run. |
 | `DELETE /v1/assistant/memory/{id}` | developer | Delete your own note; an administrator deletes system notes; you can withdraw a system note you suggested while it is pending. |
 | `DELETE /v1/assistant/memory` | developer | Forget every note about you. Audited as `memory.me.forget_all`. |
 | `PUT /v1/assistant/memory/settings` | admin | Turn memory on or off, body `{"enabled":false}`. Audited as `memory.settings`. |
