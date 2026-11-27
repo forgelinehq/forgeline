@@ -8,6 +8,7 @@ import { renderReply } from './mdview.js';
 import { newRun, applyEvent, progressLabel } from './runstate.js';
 import { dockWidth, wideDockWidth, floatRect, readPrefs } from './panelgeom.js';
 import { stepLabel, stepsSummary, permissionWording } from './steplabel.js';
+import { newQueue, queueView, decide, takeReply } from './cardqueue.js';
 
 // What the card's detail holds, by kind of action (note 028).
 const DETAIL_LABEL = { save_skill: 'Show the steps', save_agent: 'Show the instructions', save_workflow: 'Show the stages' };
@@ -239,7 +240,7 @@ function build(close, role) {
    * Something the assistant prepared inside Forgeline. Nothing has happened: the card lists the exact effects
    * (written by the server, not the model) and the file, and it only runs when you press Confirm.
    */
-  function actionCard(a) {
+  function actionCard(a, decided) {
     const box = h('div', { class: amber + ' flex-col', 'data-action-id': a.id, 'data-kind': a.kind });
     const done = (text, link) => { box.replaceChildren(h('div', { class: 'flex items-center gap-2' }, icon('check', 'size-4 shrink-0'), h('span', {}, text),
       link ? h('a', { href: '#' + link, class: 'font-semibold underline', onclick: close }, 'Open') : null)); };
@@ -249,11 +250,13 @@ function build(close, role) {
       try {
         const r = await post('/v1/assistant/actions/' + encodeURIComponent(a.id) + '/' + verb);
         verb === 'confirm' ? done(r.result || 'Done.', r.link) : done('Dismissed.');
-        // Your answer goes back to the assistant as your next message, so it carries on with the rest of its plan and the
-        // conversation shows which card you confirmed or dismissed.
-        follow(verb === 'confirm' ? 'I confirmed "' + (a.title || 'that') + '". ' + (r.result || '') + ' Carry on.' : 'I dismissed "' + (a.title || 'that') + '". Carry on without it.');
+        decided(verb, r.result);
+      } catch (err) {
+        toast(err.message, 'error');
+        // The server refused it: the card is used up, so the cards behind it are not held back, and the assistant is told.
+        if (err.status >= 400 && err.status < 500 && err.status !== 401) { mount(box, errorBox((a.title || 'This card') + ': ' + err.message)); decided('failed', err.message); }
+        else busy(false);
       }
-      catch (err) { toast(err.message, 'error'); busy(false); }
     };
     append(box, [
       h('div', { class: 'flex items-center gap-2 font-semibold' }, icon('bolt', 'size-4 shrink-0'), a.title || 'Waiting for you'),
@@ -265,6 +268,29 @@ function build(close, role) {
         h('button', { type: 'button', class: 'btn-secondary btn-sm', 'data-action': 'dismiss', onclick: () => send('dismiss') }, 'Dismiss'))]);
     if (a.done) done(a.result || 'Done.', a.link); // autopilot already confirmed it
     return box;
+  }
+
+  /**
+   * The cards of one answer, one at a time: the next appears when you have decided the one before, and your answers go
+   * back to the assistant as one message after the last, so it carries on and the conversation shows what you decided.
+   */
+  function cardQueue(run) {
+    const queue = newQueue(), drawn = new Map();
+    const rows = h('div', { class: 'space-y-3' }), foot = h('div', { class: 'muted px-1 text-xs', 'data-card-queue': '' });
+    const node = h('div', { class: 'space-y-1.5' }, rows, foot);
+    const update = () => {
+      const v = queueView(run.actions, queue);
+      for (const a of v.shown) {
+        if (drawn.has(a.id)) continue;
+        const card = actionCard(a, (verb, text) => { decide(queue, a, verb, text); update(); });
+        drawn.set(a.id, card);
+        rows.append(card);
+      }
+      foot.textContent = v.current && v.total > 1 ? `Card ${v.position} of ${v.total}` + (v.next.length ? ' · next: ' + v.next[0] : '') : '';
+      const reply = takeReply(queue, run.actions, run.status === 'running');
+      if (reply) follow(reply);
+    };
+    return { node, update };
   }
 
   /**
@@ -294,6 +320,14 @@ function build(close, role) {
       h('a', { class: 'btn-primary btn-sm', href: '/v1/assistant/files?path=' + encodeURIComponent(f.path), download: f.name, 'data-file-download': f.path }, icon('download', 'size-3.5'), 'Download'));
   }
 
+  function actionsOf(run, cards) {
+    if (!run.actions.length) return null;
+    if (!cards.has('actions')) cards.set('actions', cardQueue(run));
+    const q = cards.get('actions');
+    q.update();
+    return q.node;
+  }
+
   /** The run so far: its lookups as cards, what it is doing, the answer as cards, and anything it filed. */
   function runNode(run, opened, cards, stop) {
     const cardFor = (id) => { if (!cards.has(id)) cards.set(id, proposalCard(id)); return cards.get(id); };
@@ -321,7 +355,7 @@ function build(close, role) {
       run.text ? h('div', { class: 'text-sm leading-relaxed' }, renderReply(run.text, { codeBlock })) : null,
       run.error ? errorBox(run.error) : null,
       run.proposals.map(cardFor),
-      run.actions.map(a => { const k = 'action:' + a.id; if (!cards.has(k)) cards.set(k, actionCard(a)); return cards.get(k); }),
+      actionsOf(run, cards),
       run.files.map(f => { const k = 'file:' + f.path; if (!cards.has(k)) cards.set(k, fileCard(f)); return cards.get(k); }),
       run.memories.map(n => { const k = 'memory:' + n.id; if (!cards.has(k)) cards.set(k, memoryCard(n)); return cards.get(k); }),
       run.environments.length ? h('div', { class: amber, 'data-filed': 'environment' }, icon('server', 'mt-0.5 size-4 shrink-0'), h('div', {}, 'Environment requested. Nothing exists until an administrator approves: ',
@@ -348,8 +382,8 @@ function build(close, role) {
   }
 
   let queued = '';
-  /** Sends your answer to a card as your next message, now or when the assistant has finished what it is saying. */
-  function follow(text) { if (busy) queued = text; else ask(text); }
+  /** Sends your answers to cards as your next message, now or when the assistant has finished what it is saying. */
+  function follow(text) { if (busy) queued = (queued ? queued + ' ' : '') + text; else ask(text); }
 
   async function ask(question) {
     const q = (question ?? input.value).trim();
