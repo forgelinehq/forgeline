@@ -79,6 +79,8 @@ func (s *Server) lookupPrepareAction(ctx context.Context, raw json.RawMessage) (
 		Account     string          `json:"account"`
 		Workflow    string          `json:"workflow"`
 		Harness     string          `json:"harness"`
+		Team        string          `json:"team"`
+		Goal        string          `json:"goal"`
 	}
 	if err := decodeArgs(raw, &a); err != nil {
 		return "", err
@@ -141,12 +143,16 @@ func (s *Server) lookupPrepareAction(ctx context.Context, raw json.RawMessage) (
 		if err := s.prepareRunWorkflow(ctx, a.Workflow, &act); err != nil {
 			return "", err
 		}
+	case actRunTeam:
+		if err := s.prepareRunTeam(ctx, t.p, a.Team, a.Goal, &act); err != nil {
+			return "", err
+		}
 	case actInstallEngine:
 		if err := s.prepareInstallEngine(ctx, t.p, a.Harness, &act); err != nil {
 			return "", err
 		}
 	default:
-		return "", errors.New(`action must be "save_pipeline", "run_pipeline", "save_skill", "save_agent", "save_workflow", "run_workflow", "save_memory", "install_engine", "turn_on_sandbox" or "allow_aws_changes"`)
+		return "", errors.New(`action must be "save_pipeline", "run_pipeline", "save_skill", "save_agent", "save_workflow", "run_workflow", "run_team", "save_memory", "install_engine", "turn_on_sandbox" or "allow_aws_changes"`)
 	}
 	// The same card twice is one card: if the person already has this one waiting, show that one again. A changed version
 	// of a waiting card replaces it, so they are never asked to choose between two cards for one thing.
@@ -303,7 +309,7 @@ func (s *Server) handleConfirmAction(w http.ResponseWriter, r *http.Request) {
 // gateOfAction says which kind of approval a card is, for the autopilot gate.
 func gateOfAction(kind string) gateKind {
 	switch kind {
-	case actRunPipeline, actRunWorkflow:
+	case actRunPipeline, actRunWorkflow, actRunTeam:
 		return gateRunPipeline
 	case actEnableShell, actAllowChanges, actInstallEngine:
 		return gateCapability
@@ -326,6 +332,8 @@ func (s *Server) performAction(ctx context.Context, p Principal, ip string, a As
 		return s.doKeepMemory(ctx, p, a)
 	case actRunWorkflow:
 		return s.doRunWorkflow(ctx, p, a)
+	case actRunTeam:
+		return s.doRunTeam(ctx, p, ip, a)
 	case actInstallEngine:
 		return s.doInstallEngine(ctx, p, a)
 	}

@@ -9,6 +9,7 @@ import { newRun, applyEvent, progressLabel } from './runstate.js';
 import { dockWidth, wideDockWidth, floatRect, readPrefs } from './panelgeom.js';
 import { stepLabel, stepsSummary, permissionWording } from './steplabel.js';
 import { newQueue, queueView, decide, takeReply } from './cardqueue.js';
+import { RUN_KINDS, followRun, outcomeWords } from './runfollow.js';
 
 // What the card's detail holds, by kind of action (note 028).
 const DETAIL_LABEL = { save_skill: 'Show the steps', save_agent: 'Show the instructions', save_workflow: 'Show the stages' };
@@ -236,6 +237,45 @@ function build(close, role) {
         h('span', { class: i.status === 'done' ? 'muted line-through' : i.status === 'doing' ? 'font-medium' : '' }, i.text)))));
   }
 
+  const RUN_WORD = { running: 'Running', waiting: 'Waiting for a person', succeeded: 'Succeeded', failed: 'Failed', cancelled: 'Cancelled' };
+  const RUN_PILL = { running: 'pill-wait', waiting: 'pill-wait', succeeded: 'pill-ok', failed: 'pill-bad', cancelled: 'pill-idle' };
+  const runStepIcon = (status) => status === 'running' ? STEP_ICON.running() : status === 'failed' ? STEP_ICON.failed()
+    : status === 'succeeded' || status === 'cached' ? STEP_ICON.done() : icon(status === 'waiting' ? 'clock' : 'minus', 'size-3.5 shrink-0 text-slate-400');
+
+  /**
+   * The run a card started, live in the same place: its status, its steps and the end of what it produced. settled, when
+   * given, hears once how it went; until then "Carry on" tells the assistant without waiting.
+   */
+  function showRun(box, a, started, link, settled) {
+    box.className = 'space-y-2 rounded-xl border border-slate-200 p-3 text-xs dark:border-slate-700';
+    box.setAttribute('data-run-card', '');
+    const head = h('div', { class: 'flex flex-wrap items-center gap-2' });
+    const body = h('div', { class: 'space-y-2' });
+    const opened = new Set();
+    let waiting = !!settled;
+    const tell = (state) => { if (!waiting) return; waiting = false; skip?.remove(); settled(outcomeWords(state)); };
+    const skip = settled ? h('button', { type: 'button', class: 'btn-ghost btn-sm', 'data-run-skip': '', onclick: () => tell('running') }, 'Carry on without waiting') : null;
+    mount(head, icon('play', 'size-4 shrink-0'), h('span', { class: 'min-w-0 flex-1 text-sm font-semibold' }, a.title || 'Run'));
+    mount(box, head, body, h('div', { class: 'flex flex-wrap items-center gap-2' }, h('a', { href: '#' + link, class: 'font-semibold underline', onclick: close }, 'Open the run'), skip));
+    mount(body, h('div', { class: 'muted' }, started));
+    followRun({
+      read: () => get('/v1/assistant/actions/' + encodeURIComponent(a.id) + '/run'),
+      show: (v) => {
+        box.setAttribute('data-run-status', v.status);
+        mount(head, icon('play', 'size-4 shrink-0'), h('span', { class: 'min-w-0 flex-1 text-sm font-semibold' }, v.title || a.title || 'Run'), h('span', { class: RUN_PILL[v.status] || 'pill-idle' }, RUN_WORD[v.status] || v.status));
+        mount(body,
+          h('ul', { class: 'space-y-1' }, (v.steps || []).map(s => h('li', { class: 'flex items-center gap-2' }, runStepIcon(s.status), h('span', { class: 'min-w-0 flex-1 truncate' }, s.name), h('span', { class: 'muted' }, s.status)))),
+          v.waiting ? h('div', { class: amber }, icon('ask', 'size-4 shrink-0'), h('span', {}, v.waiting)) : null,
+          v.output ? h('details', { open: opened.has('output') || v.status === 'failed', ontoggle: (e) => { if (e.target.open) opened.add('output'); else opened.delete('output'); } },
+            h('summary', { class: 'cursor-pointer underline' }, v.status === 'failed' ? 'Why it failed' : 'What it produced'),
+            h('pre', { class: 'mt-1 max-h-60 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-slate-50 p-2 font-mono text-[11px] dark:bg-slate-800/60' }, v.output)) : null);
+      },
+      settled: tell,
+      alive: () => box.isConnected,
+      sleep: (ms) => new Promise(r => setTimeout(r, ms)),
+    });
+  }
+
   /**
    * Something the assistant prepared inside Forgeline. Nothing has happened: the card lists the exact effects
    * (written by the server, not the model) and the file, and it only runs when you press Confirm.
@@ -249,6 +289,8 @@ function build(close, role) {
       busy(true);
       try {
         const r = await post('/v1/assistant/actions/' + encodeURIComponent(a.id) + '/' + verb);
+        // A run card becomes the run: the assistant hears how it went, not only that it started.
+        if (verb === 'confirm' && RUN_KINDS.has(a.kind)) return showRun(box, a, r.result || 'Started.', r.link, (outcome) => decided(verb, (r.result || '') + ' ' + outcome));
         verb === 'confirm' ? done(r.result || 'Done.', r.link) : done('Dismissed.');
         decided(verb, r.result);
       } catch (err) {
@@ -266,7 +308,9 @@ function build(close, role) {
       h('div', { class: 'flex gap-2' },
         h('button', { type: 'button', class: 'btn-primary btn-sm', 'data-action': 'confirm', onclick: () => send('confirm') }, 'Confirm'),
         h('button', { type: 'button', class: 'btn-secondary btn-sm', 'data-action': 'dismiss', onclick: () => send('dismiss') }, 'Dismiss'))]);
-    if (a.done) done(a.result || 'Done.', a.link); // autopilot already confirmed it
+    if (a.done) { // autopilot already confirmed it
+      if (RUN_KINDS.has(a.kind) && a.link) showRun(box, a, a.result || 'Started.', a.link); else done(a.result || 'Done.', a.link);
+    }
     return box;
   }
 

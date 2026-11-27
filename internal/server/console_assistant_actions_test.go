@@ -115,6 +115,16 @@ func TestAConfirmedRunStartsARunOfTheSavedPipeline(t *testing.T) {
 		t.Fatalf("action = %+v", a)
 	}
 	m.dev.expect(200, "GET", "/v1/"+strings.TrimPrefix(a.Link, "/"), nil)
+	// The panel follows the run from the card.
+	var v RunViewJSON
+	for i := 0; i < 500 && (v.Status == "" || v.Status == "running"); i++ {
+		json.Unmarshal(m.dev.expect(200, "GET", "/v1/assistant/actions/"+cards[0]["id"].(string)+"/run", nil), &v)
+		time.Sleep(10 * time.Millisecond)
+	}
+	// This server's steps fail, so the view says which step did and why, not what the skipped one says.
+	if v.Status != "failed" || v.Title != "demo" || v.Link != a.Link || len(v.Steps) != 2 || v.Steps[0] != (RunViewStep{Name: "build", Status: "failed"}) || !strings.HasPrefix(v.Output, "build: ") {
+		t.Errorf("view = %+v", v)
+	}
 	// A pipeline that is not saved is refused at once.
 	if cards := actionsIn(m.run(m.dev, map[string]any{"message": "run x"}, lookupReply("prepare_action", map[string]string{"action": "run_pipeline", "pipeline": "nope"}))); len(cards) != 0 {
 		t.Errorf("a missing pipeline got a card: %v", cards)

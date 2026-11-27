@@ -287,6 +287,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /v1/assistant/conversations/{id}", s.requireRole(authn.Developer, s.handleGetConversation))
 	mux.Handle("DELETE /v1/assistant/conversations/{id}", s.requireRole(authn.Developer, s.handleDeleteConversation))
 	mux.Handle("POST /v1/assistant/actions/{id}/confirm", s.requireRole(authn.Developer, s.handleConfirmAction))
+	mux.Handle("GET /v1/assistant/actions/{id}/run", s.requireRole(authn.Developer, s.handleActionRun))
 	mux.Handle("POST /v1/assistant/actions/{id}/dismiss", s.requireRole(authn.Developer, s.handleDismissAction))
 	mux.Handle("GET /v1/assistant/memory", s.requireRole(authn.Developer, s.handleGetMemory))
 	mux.Handle("POST /v1/assistant/memory", s.requireRole(authn.Developer, s.handleAddNote))
