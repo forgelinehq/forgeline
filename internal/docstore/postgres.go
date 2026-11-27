@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -37,6 +38,48 @@ func OpenPostgres(ctx context.Context, url string) (*Postgres, error) {
 }
 
 func (p *Postgres) Close() { p.pool.Close() }
+
+// ImportFile copies a store file (see OpenFile) into an empty database, so a server that gets a database keeps its
+// users, pipelines and settings. It does nothing when the database already holds a document or there is no file, copies
+// everything or nothing, and leaves the file as it was. It returns how many documents it copied.
+func (p *Postgres) ImportFile(ctx context.Context, path string) (int, error) {
+	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
+		return 0, nil
+	}
+	file, err := OpenFile(path)
+	if err != nil {
+		return 0, err
+	}
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("docstore: importing %s: %w", path, err)
+	}
+	defer tx.Rollback(ctx)
+	// The lock makes two servers starting together import once.
+	if _, err := tx.Exec(ctx, `LOCK TABLE console_docs IN EXCLUSIVE MODE`); err != nil {
+		return 0, fmt.Errorf("docstore: importing %s: %w", path, err)
+	}
+	var used bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM console_docs)`).Scan(&used); err != nil {
+		return 0, fmt.Errorf("docstore: importing %s: %w", path, err)
+	}
+	if used {
+		return 0, nil
+	}
+	n := 0
+	for kind, docs := range file.data {
+		for id, body := range docs {
+			if _, err := tx.Exec(ctx, `INSERT INTO console_docs (kind, id, body) VALUES ($1, $2, $3)`, kind, id, []byte(body)); err != nil {
+				return 0, fmt.Errorf("docstore: importing %s/%s from %s: %w", kind, id, path, err)
+			}
+			n++
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return 0, fmt.Errorf("docstore: importing %s: %w", path, err)
+	}
+	return n, nil
+}
 
 func (p *Postgres) Create(ctx context.Context, kind, id string, v any) error {
 	body, err := json.Marshal(v)

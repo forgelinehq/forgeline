@@ -115,6 +115,15 @@ func runServer(ctx context.Context, args []string, stdout, stderr io.Writer, ex 
 			return 1
 		}
 		docs = pgDocs
+		file := filepath.Join(*dataDir, "console.json")
+		n, err := pgDocs.ImportFile(ctx, file)
+		if err != nil {
+			fmt.Fprintf(stderr, "forgeline: %v\n", err)
+			return 1
+		}
+		if n > 0 {
+			fmt.Fprintf(stderr, "forgeline: copied %d records from %s into the empty database; the file is no longer read while a database is set\n", n, file)
+		}
 		storeKind = "postgres"
 	} else {
 		fmt.Fprintln(stderr, "forgeline: FORGELINE_DATABASE_URL is not set; keeping runs in memory (lost on exit)")
