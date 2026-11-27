@@ -12,69 +12,32 @@ Open this repository in Claude Code and paste:
 > pull request and stop so I can review. Update docs/PLAN.md and docs/ROADMAP.md as part of the
 > change. Tell me what you verified and what you did not.
 
-## Where things stand (updated 2026-11-22)
+## Where things stand (updated 2026-11-27)
 
-`main` is at pull request #212. Everything listed below under "Built" is merged. The section after this one, "Since
-2026-10-28", summarises what was added after the detailed lists were last written; the detailed lists are kept as the record
-up to that date. The per-feature status is in [ROADMAP.md](ROADMAP.md) and each design note ends with what was and was not
-checked.
+`main` is at pull request #243. [ROADMAP.md](ROADMAP.md) has the status of each milestone and feature, [status.md](status.md)
+says what has been checked on real services, and each design note in [design/](design/) ends with what was and was not
+checked. This page holds only where to start and what to do next.
 
-### Since 2026-10-28 (design notes 029 to 053)
+**Built**
+- Pipelines (M1, M2) and the web console (M2c), with seven spaces, single sign-on, approval rules and audit export.
+- M3 slices 1 to 4: the network permission, secrets scoped to steps, a trust level per run, and audit of secret grants.
+  Slice 5 is half built: every step drops all Linux capabilities.
+- Cloud on AWS: blueprints on OpenTofu with approval, templates, policy packs, removal, native image builds.
+- Agents: workflows, teams, schedules, missions, six model providers, MCP servers, export, traces, evals, runbooks with
+  alarm intake, and the assistant as a sandboxed agent.
 
-- **Console:** five, then seven spaces (Home, Agents, Workflows, Delivery, Cloud, Operations, Security), Lucide icons, search
-  (Ctrl K), single sign-on, approval rules, audit export (notes 029 to 033, 048).
-- **Cloud:** blueprints on OpenTofu with preview, approval and apply of exactly that plan; more blocks; removal; templates,
-  policy packs, a generic resource block and a library; repositories linked to blocks; native image builds (notes 035, 039
-  to 043). AWS only. Real AWS checks are in `docs/testing/`.
-- **Agents:** graphs as workflows with a canvas, teams, schedules, Agent Studio with six model providers, export and import,
-  registry push, budgets, MCP servers (notes 036, 042, 044 to 047).
-- **Observability and quality:** traces with OTLP, evals with a publish gate (notes 049, 050). Slice 3 of evals is next.
-- **Operations:** runbooks over SSM with review and approval (note 051).
-- **Assistant:** sandbox, autopilot, memory as files, native tool calls, Claude Code as the agent in the sandbox, any agent over
-  ACP (notes 052, 053).
-- **Still only against stand-ins:** providers other than Anthropic, SSO with a real provider, a real GitHub webhook round trip,
-  `docker agent run`, ACP with real Copilot, Codex or Antigravity, the work VDI (proxy, Copilot, Inspector), demo-stack teardown,
-  TLS cookies behind a proxy.
-- **Not started:** M3 slices 3 to 5, M4 scanner steps and signing, M5, M7, the light helper model (note 038), audit forwarding,
-  a lead agent, other clouds.
-
-**Built and verified on real Docker**
-- M1: typed pipeline spec, YAML loader, DAG planner, Docker executor, scheduler, step caching,
-  `forgeline run`.
-- M2: `forgeline server` (REST API, runner, Postgres or in-memory run store), live logs,
-  GitHub webhook with commit statuses, a demo deployment on AWS (see `deploy/aws/README.md`).
-- M3 slice 1 (network permission, no-new-privileges) and slice 2 (secrets scoped to steps, private
-  env file, masking, never cached). Slices 3 to 5 are not built (see Next steps).
-- GitHub Actions page (design note 011, slice 1): list workflows and runs, start, cancel, re-run, read logs, limited to the GitHub allow list and its branches. Go tests and a browser walk-through against `scripts/dev/fake-github.py`. Needs the Actions permission on the GitHub App before it works on real GitHub. Slice 2 is built too: a `workflow:` step that starts a workflow and waits (server-side only, refused for GitHub-triggered runs, cancels the GitHub run if stopped). Slice 3 (JIT self-hosted runners, with the credential rules in the note) is designed, not built.
-- AWS MCP Server (design note 016): the assistant reads AWS through AWS's managed MCP endpoint and can file change proposals that a different administrator approves; Forgeline then applies exactly the approved script. Reads probed on the real endpoint; the apply path was only run against `scripts/dev/fake-aws-mcp`.
-- Agent steps (design note 007): `agent:` with provider `claude-code`, read-only tools by default, credential from the vault. Built and run on real Docker with a real `setup-token` login. Console runs have no source checkout yet, so the agent sees an empty workspace.
-- The assistant (design note 008): a read-only helper in the console's top bar. It can run read-only lookups itself (runs, logs, pipelines, AWS summary, audit for administrators), checked with tests and the real `claude`. Verified in a browser with the local `claude`; the API-key backend only against a stand-in.
-- AWS sign-in from the console (design note 009): IAM Identity Center device login, account and role chosen in the UI. Verified against `scripts/dev/fake-sso.py`; the real AWS accepted the registration and device-code steps, **the approval, token, account, role and credential steps were not run against real AWS**.
-- GitHub from the console (design note 010): "Connect with a GitHub App" creates a private app (manifest flow), installs it and picks repositories; Forgeline signs in with short-lived installation tokens. Verified against `scripts/dev/fake-github.py`; **not against real GitHub**.
-- The web console (design note 006), replacing the M2 page: accounts and roles, saved and
-  versioned pipelines with a live graph, a write-only encrypted vault, GitHub configured at
-  runtime, platform and AWS overview, cloud changes that need a second administrator, an audit
-  log. Tailwind from the standalone CLI. Pictures: `docs/console/README.md`.
-
-**Built but only verified against stand-ins** (so say so, and do not claim more)
-- Real webhook deliveries and commit statuses on GitHub (the App was created and read from real GitHub on 2026-10-28; a cloud change was executed on real AWS the same day).
-- GitHub Actions on real GitHub: the App needs the Actions permission first.
-- Session cookies over HTTPS behind a proxy (the `Secure` flag is unit tested, not browser tested).
-- Teardown of the demo stack (`deploy/aws/README.md`) has never been run.
-- Two server processes on one database (the last-administrator rule, the pipeline edit lock and
-  the per-target cloud lock are in-process).
+**Last tested as a user:** every guide on the maintainer's UAT instance on 2026-11-27, with the bugs found fixed in #243
+([summary](testing/2026-11-27-uat-summary.md)). The full test ran before those fixes; after them only the console smoke
+script was run.
 
 **Layout of the code** (what to read first)
 - `internal/pipeline`, `internal/scheduler`, `internal/executor`, `internal/cache`: the engine.
-- `internal/server`: the API. Console files are `console_*.go`; `github.go` is the webhook;
-  `runner.go` executes runs; `ui/` is the embedded front end (`ui/lib`, `ui/pages`, generated
-  `ui/app.css`).
-- `internal/docstore` (memory, file or Postgres documents), `internal/vault`, `internal/authn`,
-  `internal/secrets`, `internal/redact`: console storage, crypto and masking.
+- `internal/server`: the API. Console files are `console_*.go`; `github.go` is the webhook; `runner.go` executes runs;
+  `ui/` is the embedded front end (`ui/lib`, `ui/pages`, generated `ui/app.css`).
+- `internal/docstore` (memory, file or Postgres documents), `internal/vault`, `internal/authn`, `internal/secrets`,
+  `internal/redact`: console storage, crypto and masking.
 - `web/tailwind.css` is the stylesheet source; `scripts/tailwind.sh` fetches the pinned CLI.
-- `docs/design/`: one note per decision. 005 (threat model), 006 (console), 007 (agent steps) and 008 (assistant) are the live ones.
-
-**Earlier milestones, kept for the record** are described in the step sections below.
+- `docs/design/`: one note per decision. 005 (threat model) is the one to read before touching trust.
 
 ## Decisions already made
 
@@ -285,143 +248,50 @@ comes first). The GitHub webhook (step 11 above) is a prerequisite for O4 and fo
 
 ## M3: trust and sandbox model (in progress)
 
-Design: [docs/design/005-threat-model.md](design/005-threat-model.md), which lists 14 threats
-with their status, five slices, and three decisions for the maintainer.
+Design: [docs/design/005-threat-model.md](design/005-threat-model.md), which lists the threats, their status and the five
+slices.
 
-- Threat model: written. Measured facts about a default step container are in it.
-- Slice 1, hardening and the network permission: **done.** `permissions.network: none|egress`
-  in the spec, enforced with Docker's `none` network; `--security-opt no-new-privileges` for
-  every step; the setting is part of the cache key (format version 2). Tests run real
-  containers against TCP, DNS, HTTP, the bridge gateway and the metadata address, plus a control
-  that the default keeps a network, and both protections were mutation-checked. The
-  `no-new-privileges` test checks the flag; it does not demonstrate a blocked escalation.
-- Slice 2, secrets scoped to steps: **done.** `permissions.secrets: [NAME]`; values from
-  `FORGELINE_SECRET_<NAME>` in the environment of `forgeline server` or `forgeline run`
-  (new packages `internal/secrets` and `internal/redact`). Values go in a private
-  `--env-file`, never argv or the docker CLI's environment; every configured value is masked in
-  logs, including when split across writes; a step with secrets is never cached; a missing
-  secret fails the step by name before a container starts. Runs started by GitHub get no
-  secrets until slice 3. Tests run real containers (exact values with quotes, `$` and `=`,
-  a hostile `DOCKER_HOST` in step env that must not reach the CLI, and a process-list check
-  while the step runs); nine mutations of the protections were each caught. **Not covered:**
-  masking of transformed values (base64, split output), a secret in plain `env`, and any
-  secret store other than process environment variables.
-- Slice 3, trust of the run: **built 2026-11-25** (note 005): pull-request runs are untrusted and get no secrets; a push run gets them only where the repository's rule allows.
-- Slice 4, audit log: not started.
-- Slice 5, capability drop: **built 2026-11-26** (note 005): every step drops all capabilities and gets a baseline back, `relaxed` by default or `strict` by setting, with per-step grants audited. Resource limits (memory, PID, CPU) are still to do.
+- Slice 1, hardening and the network permission: **done.** `permissions.network: none|egress`, and `no-new-privileges` on
+  every step. Tests run real containers.
+- Slice 2, secrets scoped to steps: **done.** `permissions.secrets: [NAME]`, passed in a private env file, masked in
+  logs, never cached. Masking does not cover transformed values (base64, split output).
+- Slice 3, trust of the run: **done** (2026-11-25). Pull-request runs are untrusted and get no secrets; a push run gets
+  them only where the repository's rule allows.
+- Slice 4, audit log: **done** (2026-11-25). Secret grants, the secrets-plus-network combination and refusals are
+  recorded, and the log pages back with a cursor.
+- Slice 5: capability drop **done** (2026-11-26; `relaxed` by default, `strict` by setting, per-step grants audited, see
+  [the measurements](testing/2026-11-26-step-capabilities.md)). **Memory, PID and CPU limits are not started.**
 
 ## Web console (design note 006: built)
 
-Design: [docs/design/006-console.md](design/006-console.md). Pictures: [docs/console](console/README.md).
-
-- Storage and accounts: `internal/docstore` (memory, file or Postgres), `internal/vault` (AES-GCM),
-  `internal/authn` (PBKDF2, roles, sessions); first-run setup needs the server token; cookie
-  sessions with a CSRF header and origin check; throttled login; last-administrator rule; audit log.
-- Pipelines (versioned, validated with a graph preview), a write-only secrets vault, the GitHub
-  integration configured at runtime, infrastructure pages (Docker host, AWS read-only), and
-  cloud changes that need a different administrator's approval.
-- Front end: Tailwind v4 from the standalone CLI (`make css`, checked by `make css-check`), plain
-  ES modules, no innerHTML anywhere (a test enforces it), strict CSP.
-- Not checked: a change executed against a real AWS account, the real GitHub API, TLS, several
-  server processes on one database. The list is in the design note.
+Design: [docs/design/006-console.md](design/006-console.md). Storage and accounts, pipelines, a write-only vault, GitHub
+and cloud pages, and changes that need a second administrator. No `innerHTML` anywhere (a test enforces it) and a strict
+CSP. Still not checked: TLS behind a proxy and several server processes on one database.
 
 ## Next steps (in order)
 
-> **Order as of 2026-11-22** (the older lists below stay for the record; where they disagree, this one wins):
->
-> 1. ~~**Evals slice 3** (note 050): attack suites and an eval step for pipelines~~ **built 2026-11-22** (stand-in models only).
-> 2. ~~Fix the card confirm order~~ (done 2026-11-22: the card is saved as not pending before its action runs); then the open items of
->    notes 052 and 053 (~~validity dates~~ done 2026-11-22, ~~"keep this" card~~ done 2026-11-23, ~~context clearing~~ done 2026-11-23 (summarising old messages done 2026-11-25), ~~partial answers~~ done 2026-11-25, host shell mode, microVM).
-> 3. **Runbooks next** (note 051): the alarm intake is built (2026-11-26, SQS instead of a signed webhook because SNS needs a public address); the real-instance test ran on 2026-11-26 and passed (docs/testing/2026-11-26-alarm-runbook.md).
-> 4. **M3 slices 3 to 5**: need the maintainer's decisions (same-repository pull requests untrusted; compatibility cost of
->    capability drop). Ask once with a recommendation.
-> 5. **Workflow canvas** follow-ups (note 044): run data per node, Team and sub-workflow nodes, re-run from a node.
-> 6. **Verify against real services** where only stand-ins have run (list above), as the maintainer allows.
-> 7. Then M4 scanner steps, audit forwarding, the lead agent, cost estimates, the light helper model, other clouds.
+Do these top to bottom. Items marked **needs a decision** wait for the maintainer; ask once, with a recommendation, and
+do something else meanwhile.
 
-> Agentic missions (discover, propose, approve, apply, verify; ECS to IaC, CI/CD and canary as the worked example) are in `docs/design/014-agentic-missions.md`. AI use cases and how Claude can reach our infrastructure safely are in `docs/design/013-ai-use-cases.md`. Market research (2026-10-30) is in `docs/design/012-market-research.md`: pain points, enterprise gaps, integrations, a UI plan and a ranked backlog of 16 items. Pick from its ranking once the items below that need a real-service check are done or blocked.
-
-> **Console redesign and enterprise work (notes 029 to 038), state on 2026-11-08.**
->
-> **Built:** the five spaces (Home, Build, Ship, Team, Watch) and Settings; Connections with AWS service switches for the
-> AI (030); single sign-on with OpenID Connect (031, tested against a stand-in, not yet a real provider); approval rules
-> (032); audit export and retention (033); Team as an org chart (frame 5); the Watch map with stacks and stated links (034);
-> blueprints, the design canvas, preview with `tofu plan`, approval and apply of exactly that plan, and the assistant
-> beside the canvas (035; a real build verified on the Pi); AI use and budgets per agent (036); missions with a board and
-> a live view (037; a real advisory mission verified on the Pi). Decided: no automatic apply anywhere, OpenTofu for
-> blueprints, our own graph layout, Codex and Copilot later.
->
-> **Pending, in order** (each its own design note or pull request):
->
-> 1. ~~More blueprint blocks~~ **built** (note 039): databases (RDS MySQL or Postgres, password kept by AWS), Redis, secrets (value
->    never seen by Forgeline), service-to-service calls, autoscaling, and several paths behind one front door.
-> 2. **Any resource, any cloud** (note 040), in this order: ~~guardrails on every plan~~ (built); a template format and an AgentCore
->    agent template (format built; AgentCore set aside for now by the maintainer, 2026-11-18); ~~Lambda, Step Functions and ECS cluster templates~~ (built);
->    ~~repositories linked to blocks with suggested pipelines~~ (built); ~~EKS with namespaces and data pipeline templates~~ (built; the code pipeline is covered by repositories linked to blocks); ~~policy packs (Conftest, Checkov or Trivy)
->    in containers~~ (built); ~~a generic resource block from provider schemas behind an administrator's allow list~~ (built); ~~a library for
->    templates, skills, tools, agents and guardrail packs~~ (built). **AWS only until all of that is done**; then Google Cloud, then
->    Azure, then RunPod and others.
-> 3. **Agent graphs** (note 044, the maintainer's next area after note 040): ~~the engine and the canvas~~ (built);
->    ~~the real-model check on the Pi, models per agent, webhook and failed-run triggers~~ (built).
->    Then **Agent Studio** (note 045): ~~the providers: Anthropic, OpenAI, OpenAI-compatible, Gemini, Azure OpenAI, Bedrock~~ (built), agent playground, workflow test panel and agent teams,
->    publishing, code mode, the new sidebar.
-> 4. **Not started (to do):** **A very light helper model** (note 038, step 2, revised by the maintainer: no llama.cpp or Ollama, well under
->    500 MB): a 25 MB embedding model in the browser to match answers and find pages, then FunctionGemma 270M (fine-tuned
->    on Forgeline's own steps) only if a 60-case evaluation on a laptop and the Pi's browser shows it is reliable.
-> 4. ~~Removing what a blueprint built~~ **built** (note 041): a removal is a preview approved like a build; keep the data,
->    or remove everything in two approved steps (protection off, then delete). Not yet run against real AWS.
-> 5. **Audit forwarding to a SIEM and tamper evidence** (p2-11): stream audit events out (syslog, HTTPS webhook) and chain
->    their hashes.
-> 6. **A lead agent that hands out work** (p4-05): reporting lines become delegation, still within approvals and budgets.
-> 7. **Missions, next steps** (note 014): IaC adoption proposals, several agents per mission, pre-approved low-risk classes.
-> 8. **Cost estimates** for blueprints and missions, from a real price source.
-> 9. **Source checkout for agent runs** (note 012 item 1), then the coding engines (Codex, Copilot) when the maintainer asks.
-> 10. **Small fixes:** "turned off" when a switched-off AWS service is asked for by name; AWS account numbers accepted as
->    account ids; the Connections screenshot made with demo data.
-> 11. **Verify against real services:** single sign-on with a real provider (Google, Entra ID or Okta); an app block built
->     on AWS (needs the scoped IAM permission in note 035).
-
-Do these top to bottom. Items marked **needs a decision** must wait for the maintainer; ask once,
-with a recommendation, and do something else meanwhile.
-
-1. **Verify the unverified.** None needs new code, only a real run and an honest note.
-   - Execute one cloud change on the maintainer's real AWS account through the console, for
-     example starting the stopped demo instance (about $0.01 an hour; say so first and stop it
-     afterwards). Needs the maintainer to be logged in (`aws sso login`).
-   - Send a real GitHub webhook delivery (needs a public HTTPS address and a fine-grained token;
-     a tunnel such as `cloudflared` works). Check the commit status appears on the commit.
-   - Run the documented teardown of the demo stack once, so the documentation is tested.
-   - Put the console behind a TLS proxy and confirm the session cookie is `Secure`.
-2. **M3 slice 3, trust of the run (T4, T5).** Each run is trusted or untrusted by how it started;
-   untrusted runs get no secrets. Today GitHub-started runs are refused secrets outright and
-   console runs are trusted. **Needs a decision**: are same-repository pull requests untrusted
-   (the recommendation in note 005)? Add a `trust` field to runs, show it in the console, and
-   test that an untrusted run asks for a secret and is refused before any container starts.
-3. ~~**M3 slice 4, audit log.**~~ **Built 2026-11-25** (note 005): secret grants, the secrets-plus-network combination and refusals are in the log, and it pages back with a cursor. Original text: **M3 slice 4, audit log.** Mostly present through the console's audit log (who started a run,
-   secret changes, cloud approvals, refusals). Missing: an event for each secret *grant* to a
-   step, the secrets-plus-network combination from note 005, an export, and pagination beyond
-   the 5000 most recent events when filtering. Say in note 005 which T-rows this closes.
-4. **M3 slice 5, limits and capability drop.** Capability drop **built 2026-11-26** (relaxed by default, strict by setting; measured in
-   docs/testing/2026-11-26-step-capabilities.md). Still to do: memory, PID and CPU limits. Possible: run steps as the workspace's owner, so strict needs no `DAC_OVERRIDE`.
-5a. **Console redesign (note 022).** Built: grouped navigation, the ember palette, the Markdown editor for
-   agent and skill text, and the AWS map ([note 023](design/023-infrastructure-map-and-logs.md) step 1).
-   **Still to do, designed with the decisions made:** alarms and health, then the log viewer with its
-   per-account allowlist, then metrics (note 023 steps 2 to 4; the log endpoint needs the IAM check noted
-   there first); and the assistant as an agent surface ([note 024](design/024-assistant-agent-surface.md)).
-   The assistant reading logs is deferred until its own note answers the prompt-injection question. The
-   guides now use a few cropped screenshots each (`scripts/docs/crop.py`); retake one when its page changes.
-5. **Console hardening.** Postgres advisory locks (or a `SELECT ... FOR UPDATE`) for the
-   in-process locks; a list of active sessions with revoke; a master-key rotation command;
-   a committed browser test (the scripted checks in `docs/console/README.md` were done by hand
-   with Playwright; a repeatable one needs Node or a Go browser driver, **needs a decision**);
-   OIDC single sign-on (**needs a decision**: which provider first).
-6. **M2b onboarding (note 004).** Part of it now exists: AWS read-only discovery (stacks and
-   instances, not yet ECS and ECR) and GitHub connection are in the console. Re-scope O1 to O6
-   against what is built, then do ECS and ECR discovery and the plan and apply engine. The three
-   decisions at the end of note 004 are still open.
-7. **M4 onward** are outlined in `docs/ROADMAP.md`. Plan each when the one before it is done.
+1. **Finish M3: memory, PID and CPU limits for step containers** (slice 5). Defaults and how a step asks for more are a
+   compatibility question, so measure typical steps first, as for capabilities. Possible follow-up: run steps as the
+   workspace's owner, so `strict` needs no `DAC_OVERRIDE`.
+2. **Second user test with an administrator test user**, on an instance that can be reset: administrator-only pages,
+   approval rules, policy packs and runbook runs were not covered. **Needs a decision**: which instance.
+3. **Verify against real services**, as the maintainer allows: a GitHub webhook delivery and commit status, single
+   sign-on with a real provider, the other model providers, TLS behind a proxy, the demo stack teardown
+   (`deploy/aws/README.md`, never run).
+4. **Workflow canvas** follow-ups (note 044): run data per node, Team and sub-workflow nodes, re-run from a node.
+5. **Agent Studio**, the rest of note 045: unsaved drafts and model comparison in the builder, publishing (agent keys, MCP
+   tool, A2A card), code mode in a local sandbox.
+6. **Assistant**, open items of notes 052 and 053: a host shell mode and a microVM.
+7. **M4 security gates**: scanner steps in pipelines, SARIF findings, expiring waivers, SBOM and signing. Needs a design
+   note first.
+8. **Later:** audit forwarding to a SIEM with tamper evidence, a lead agent that hands out work, cost estimates, source
+   checkout for agent runs, Codex and Copilot as pipeline steps, M2b onboarding re-scoped (note 004), the light helper
+   model (note 038), Google Cloud and Azure (after the AWS work, note 040), M5 and M7.
 
 ## After M3 (outline only)
 
-M4 security gates, M5 progressive delivery, M6 AI agents and M7 migration are in the roadmap.
-Plan each when the one before it is done.
+M4 security gates, M5 progressive delivery, M6 AI agents and M7 migration are in the roadmap. Plan each when the one
+before it is done.

@@ -4,7 +4,7 @@ Each milestone has exit criteria. A milestone is done only when its criteria are
 demonstrated, not when the code exists. The order puts the trust model early because it is
 the project's differentiator.
 
-Status as of 2026-11-26: M0, M1, M2 and M2c (the console) are built; M3 slices 1 to 4 are built and slice 5 is half built
+Status as of 2026-11-27: M0, M1, M2 and M2c (the console) are built; M3 slices 1 to 4 are built and slice 5 is half built
 (capability drop done 2026-11-26, memory, PID and CPU limits not started); M4 and M6 are partly built through agents, traces, evals and the sandboxed assistant (see the sections below the
 table); M5 and M7 are not started. The current state, what is verified only against stand-ins, and the ordered next steps
 are in [PLAN.md](PLAN.md).
@@ -19,7 +19,7 @@ are in [PLAN.md](PLAN.md).
 | M3 | Trust and sandbox model | Per-step declared permissions; secrets scoped to steps; untrusted input isolated from secrets; audit log; a published threat model with tests that try to break it | In progress: slices 1 and 2 done (network permission, secrets scoped to steps); slices 3 (trust of the run: pull requests untrusted, pushes get secrets only where a repository's rule allows) and 4 (audit of secret grants, the secrets-plus-network combination and refusals; the log pages back with a cursor) built 2026-11-25; slice 5 half built: the capability drop is done (2026-11-26; every step drops all Linux capabilities, `relaxed` by default and `strict` by setting, per-step grants audited, measured on eleven real steps; see [note 005](design/005-threat-model.md)); memory, PID and CPU limits are not started. Separate from step containers, the assistant's sandbox (note 052) already drops capabilities and has no Docker socket |
 | M4 | Security gates | Scanner orchestration; findings normalized from SARIF; policy gates with expiring waivers; SBOM and image signing | Mostly not started. Policy packs (Trivy, Checkov, Conftest) check every blueprint preview (note 040) and Inspector and Guard findings are read in the console; scanner steps in pipelines, SARIF, waivers, SBOM and signing are open |
 | M5 | Progressive delivery | One declaration for canary and blue-green on Kubernetes with metric-driven rollback | Not started |
-| M6 | AI agents | Governed agent steps with scoped credentials and cost tracking; failure triage; fix suggestions as pull requests, never auto-applied | Largely built beyond the original wording: agent steps (note 007), agent graphs, teams, schedules, Agent Studio with six model providers, budgets and cost per agent, traces, evals with a publish gate, missions, runbooks, and the assistant as a sandboxed agent (notes 044 to 053). Open: eval attack suites and a pipeline eval step, failure triage as pull requests, Codex and Copilot as pipeline steps |
+| M6 | AI agents | Governed agent steps with scoped credentials and cost tracking; failure triage; fix suggestions as pull requests, never auto-applied | Largely built beyond the original wording: agent steps (note 007), agent graphs, teams, schedules, Agent Studio with six model providers, budgets and cost per agent, traces, evals with a publish gate, missions, runbooks, and the assistant as a sandboxed agent (notes 044 to 053). Open: failure triage as pull requests, Codex and Copilot as pipeline steps |
 | M7 | Migration and breadth | Importers for Jenkinsfile and GitHub Actions workflows; Bitbucket and GitLab triggers; additional cloud targets | Not started |
 
 ## Assistant as a colleague and Claude Code as the agent (notes 052 and 053)
@@ -105,7 +105,7 @@ one front door. See [note 039](design/039-more-blueprint-blocks.md).
 ## Removing what a blueprint built (note 041)
 
 Status: **built (2026-11-12).** A removal is a preview approved like a build: keep the data, or remove everything in two
-approved steps. Checked with tests, `tofu validate` and a browser walk against stand-ins; not yet against real AWS. See
+approved steps. Checked with tests, `tofu validate` and a browser walk against stand-ins, and later run on real AWS ([2026-11-27](testing/2026-11-27-uat-cloud-security.md)). See
 [note 041](design/041-removing-what-a-blueprint-built.md).
 
 ## Next: any resource, any cloud (note 040)
