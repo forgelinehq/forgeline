@@ -393,7 +393,7 @@ func (s *Server) handleDeleteSuite(w http.ResponseWriter, r *http.Request) {
 		s.defError(w, "suite", err)
 		return
 	}
-	if !s.mayChangeSuite(w, r, x.ID) {
+	if !s.mayDelete(w, r, "ai.eval.delete", "eval/"+x.ID, x.Name, x.CreatedBy) || !s.mayChangeSuite(w, r, x.ID) {
 		return
 	}
 	s.docs.Delete(ctx, kindEvalSuite, x.ID)

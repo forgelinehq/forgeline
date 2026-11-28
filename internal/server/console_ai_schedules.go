@@ -28,19 +28,20 @@ const (
 
 // TeamSchedule is a goal a team works on by itself.
 type TeamSchedule struct {
-	ID       string    `json:"id"`
-	Team     string    `json:"team"`
-	Goal     string    `json:"goal"`
-	Every    int       `json:"every_minutes,omitempty"`
-	Cron     string    `json:"cron,omitempty"`
-	TZ       string    `json:"tz,omitempty"`
-	RunAs    string    `json:"run_as"`
-	Paused   bool      `json:"paused,omitempty"`
-	By       string    `json:"by"`
-	At       time.Time `json:"at"`
-	LastAt   time.Time `json:"last_at,omitempty"` // when it last started a run by itself
-	LastRun  string    `json:"last_run,omitempty"`
-	LastNote string    `json:"last_note,omitempty"` // why the last time did not start a run
+	ID        string    `json:"id"`
+	Team      string    `json:"team"`
+	Goal      string    `json:"goal"`
+	Every     int       `json:"every_minutes,omitempty"`
+	Cron      string    `json:"cron,omitempty"`
+	TZ        string    `json:"tz,omitempty"`
+	RunAs     string    `json:"run_as"`
+	Paused    bool      `json:"paused,omitempty"`
+	By        string    `json:"by"` // who saved it last
+	CreatedBy string    `json:"created_by,omitempty"`
+	At        time.Time `json:"at"`
+	LastAt    time.Time `json:"last_at,omitempty"` // when it last started a run by itself
+	LastRun   string    `json:"last_run,omitempty"`
+	LastNote  string    `json:"last_note,omitempty"` // why the last time did not start a run
 }
 
 func (ts TeamSchedule) spec() schedule.Spec {
@@ -113,7 +114,7 @@ func (s *Server) handleCreateTeamSchedule(w http.ResponseWriter, r *http.Request
 	}
 	p := principalFrom(ctx)
 	ts := TeamSchedule{ID: t.ID + "-" + randomID()[:6], Team: t.ID, Goal: req.Goal, Every: req.Every, Cron: req.Cron, TZ: req.TZ, RunAs: req.RunAs,
-		Paused: req.Paused, By: p.Name, At: time.Now().UTC()}
+		Paused: req.Paused, By: p.Name, CreatedBy: p.Name, At: time.Now().UTC()}
 	ts.LastAt = ts.At // it waits for its first time instead of running at once
 	if err := s.docs.Put(ctx, kindTeamSchedule, ts.ID, ts); err != nil {
 		s.internalError(w, "saving the schedule", err)
@@ -160,6 +161,9 @@ func (s *Server) handleDeleteTeamSchedule(w http.ResponseWriter, r *http.Request
 	var ts TeamSchedule
 	if err := s.docs.Get(ctx, kindTeamSchedule, r.PathValue("sid"), &ts); err != nil {
 		s.defError(w, "schedule", err)
+		return
+	}
+	if !s.mayDelete(w, r, "ai.schedule.delete", "team/"+ts.Team, "this schedule", ts.CreatedBy) {
 		return
 	}
 	if err := s.docs.Delete(ctx, kindTeamSchedule, ts.ID); err != nil {
@@ -232,6 +236,8 @@ type scheduleItem struct {
 	LastAt   *time.Time  `json:"last_at,omitempty"`
 	LastRun  string      `json:"last_run,omitempty"`
 	LastNote string      `json:"last_note,omitempty"`
+	// CreatedBy is who made a team's schedule, so the console offers Delete only to them and to administrators.
+	CreatedBy string `json:"created_by,omitempty"`
 }
 
 func (s *Server) handleListSchedules(w http.ResponseWriter, r *http.Request) {
@@ -279,7 +285,7 @@ func (s *Server) handleListSchedules(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		it := scheduleItem{Kind: "team", ID: ts.ID, Name: t.Name, Target: "/teams/" + t.ID, Goal: ts.Goal, Every: ts.Every, Cron: ts.Cron, TZ: ts.TZ,
-			Describe: schedule.Describe(ts.spec()), RunAs: ts.RunAs, Paused: ts.Paused, Off: off, LastRun: ts.LastRun, LastNote: ts.LastNote}
+			Describe: schedule.Describe(ts.spec()), RunAs: ts.RunAs, Paused: ts.Paused, Off: off, LastRun: ts.LastRun, LastNote: ts.LastNote, CreatedBy: ts.CreatedBy}
 		if !ts.LastAt.IsZero() && ts.LastRun != "" {
 			t := ts.LastAt
 			it.LastAt = &t

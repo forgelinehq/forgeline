@@ -2,7 +2,7 @@
 // task for each member, the members work at the same time, and the lead writes the answer. Below the teams, every
 // agent with what it is doing now and its budget. Adding or changing a team happens in a side panel.
 import { h, icon, mount, pageHeader, relTime, spinner, errorBox, notice, toast, emptyState, drawer, field, confirmDialog } from '../lib/dom.js';
-import { get, post, put, del, atLeast } from '../lib/api.js';
+import { get, post, put, del, atLeast, mayDelete } from '../lib/api.js';
 import { navigate } from '../lib/router.js';
 import { session } from '../app.js';
 import { avatar } from './agents.js';
@@ -121,8 +121,8 @@ export function teamDrawer(t, agents, after) {
     err), {
     subtitle: 'A lead and up to eight members.',
     footer: (close) => [
-      t ? h('button', { class: 'btn-ghost mr-auto text-rose-600 dark:text-rose-400', type: 'button', onclick: async () => {
-        if (!await confirmDialog({ title: 'Remove ' + t.name + '?', body: 'Only the team goes. Its agents and its past runs stay.', confirmLabel: 'Remove', danger: true })) return;
+      t && mayDelete(session, t.created_by) ? h('button', { class: 'btn-ghost mr-auto text-rose-600 dark:text-rose-400', type: 'button', onclick: async () => {
+        if (!await confirmDialog({ title: 'Remove ' + t.name + '?', body: 'Its agents stay. Its schedules and past runs are deleted.', confirmLabel: 'Remove', danger: true })) return;
         try { await del('/v1/ai/teams/' + t.id); close(); toast('Removed', 'ok'); navigate('/team'); } catch (e) { mount(err, errorBox(e.message)); }
       } }, icon('trash', 'size-4'), 'Remove') : null,
       h('button', { class: 'btn-secondary', type: 'button', onclick: () => close() }, 'Cancel'),

@@ -29,7 +29,7 @@ and find out why it failed.
 | Check a pipeline file | Viewer | Saves nothing |
 | Create a pipeline, save a version, run, cancel a run, restore a version | Developer | A save is refused if someone saved after the version you started from |
 | Open a run's trace, ask the assistant about a failure | Developer | |
-| Delete a pipeline | Developer | Deletes its versions too; past runs stay in the run list |
+| Delete a pipeline | Developer | Only one they created; an administrator, any. Deletes its versions too; past runs stay in the run list |
 
 ## How it works
 
@@ -59,7 +59,7 @@ and find out why it failed.
 5. To try an older version, choose **History**, view it, and restore it if you want it back.
 6. If someone saved after you opened the pipeline, a **This pipeline changed** dialog offers **Keep editing**, **Load
    their version** (your edits stay on screen until you do) or **Overwrite**.
-7. Developers and administrators have a trash button that deletes the pipeline after they type its name.
+7. Whoever created the pipeline, and an administrator, have a trash button that deletes it after they type its name.
 
 ## Follow a run
 

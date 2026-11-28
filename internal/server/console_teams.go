@@ -46,6 +46,7 @@ type Team struct {
 	Purpose   string    `json:"purpose"`
 	Lead      string    `json:"lead"`
 	Members   []string  `json:"members"`
+	CreatedBy string    `json:"created_by,omitempty"` // empty on a team saved before this was kept
 	UpdatedBy string    `json:"updated_by"`
 	UpdatedAt time.Time `json:"updated_at"`
 	// UpdatedByRole is the author's role (design note 054); empty is an administrator.
@@ -205,6 +206,14 @@ func (s *Server) saveTeam(w http.ResponseWriter, r *http.Request, req teamReques
 	}
 	t.UpdatedBy, t.UpdatedByRole, t.UpdatedAt = principalFrom(ctx).Name, string(principalFrom(ctx).Role), time.Now().UTC()
 	if create {
+		t.CreatedBy = t.UpdatedBy
+	} else if old, err := s.loadTeam(ctx, t.ID); err != nil {
+		s.defError(w, "team", err)
+		return
+	} else {
+		t.CreatedBy = old.CreatedBy
+	}
+	if create {
 		if n, _ := s.docs.Count(ctx, kindTeam); n >= maxTeams {
 			writeError(w, http.StatusConflict, fmt.Sprintf("there are already %d teams", maxTeams))
 			return
@@ -278,6 +287,20 @@ func (s *Server) handleDeleteTeam(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		s.defError(w, "team", err)
 		return
+	}
+	if !s.mayDelete(w, r, "ai.team.delete", "team/"+t.ID, t.Name, t.CreatedBy) {
+		return
+	}
+	// Deleting a team removes its schedules, so one that somebody else made keeps the team from a developer.
+	schedulesOf, err := s.listTeamSchedules(ctx)
+	if err != nil {
+		s.internalError(w, "reading the schedules", err)
+		return
+	}
+	for _, ts := range schedulesOf {
+		if ts.Team == t.ID && !s.mayDelete(w, r, "ai.team.delete", "team/"+t.ID, t.Name+" while it has a schedule made by someone else", ts.CreatedBy) {
+			return
+		}
 	}
 	if s.teams.isBusy(t.ID) {
 		writeError(w, http.StatusConflict, t.Name+" is working on a goal; wait for it to finish")

@@ -1,5 +1,5 @@
 import { h, icon, mount, clear, pageHeader, relTime, absTime, emptyState, spinner, errorBox, notice, toast, modal, confirmDialog, field } from '../lib/dom.js';
-import { get, post, put, del, atLeast } from '../lib/api.js';
+import { get, post, put, del, atLeast, mayDelete } from '../lib/api.js';
 import { navigate } from '../lib/router.js';
 import { session } from '../app.js';
 
@@ -178,7 +178,7 @@ export async function skillPage({ params }) {
     const v = sk.versions.find(x => x.n === selected), prev = sk.versions.find(x => x.n === selected - 1);
     mount(el, pageHeader(sk.name, sk.description, h('a', { class: 'btn-secondary btn-sm', href: '#/agents?tab=skills' }, 'All skills'),
       writer && h('button', { class: 'btn-primary btn-sm', id: 'new-version', type: 'button', onclick: () => skillForm(sk, load) }, icon('edit', 'size-3.5'), 'Edit'),
-      writer && h('button', { class: 'btn-ghost btn-sm text-rose-600 dark:text-rose-400', type: 'button', onclick: async () => {
+      writer && mayDelete(session, sk.versions[0]?.by) && h('button', { class: 'btn-ghost btn-sm text-rose-600 dark:text-rose-400', type: 'button', onclick: async () => {
         if (!await confirmDialog({ title: 'Delete ' + sk.name + '?', body: 'Its history is deleted too. Skills an agent version uses cannot be deleted.', confirmLabel: 'Delete', danger: true })) return;
         try { await del('/v1/ai/skills/' + sk.id); toast('Deleted', 'ok'); navigate('/agents?tab=skills'); } catch (e) { toast(e.message, 'error'); }
       } }, icon('trash', 'size-3.5'), 'Delete')),
@@ -257,7 +257,7 @@ export async function agentPage({ params }) {
             try { await post('/v1/ai/agents/' + ag.id + '/restore'); toast('Restored. It is still turned off.', 'ok'); load(true); } catch (e) { toast(e.message, 'error'); }
           } }, icon('history', 'size-3.5'), 'Restore')),
         writer && !ag.archived_at && h('div', { class: 'flex w-full flex-wrap gap-2 sm:w-auto' },
-          h('button', { class: 'btn-ghost btn-sm text-rose-600 dark:text-rose-400', type: 'button', id: 'delete-agent', onclick: async () => {
+          mayDelete(session, ag.versions[0]?.by) && h('button', { class: 'btn-ghost btn-sm text-rose-600 dark:text-rose-400', type: 'button', id: 'delete-agent', onclick: async () => {
             if (!await confirmDialog({ title: 'Delete ' + ag.name + '?', body: 'It is turned off and moved to the archive. You can restore it for 30 days; after that it is deleted for good. Past runs and missions keep its name.', confirmLabel: 'Delete', danger: true })) return;
             try { await del('/v1/ai/agents/' + ag.id); toast(ag.name + ' moved to the archive', 'ok'); navigate('/agents'); } catch (e) { toast(e.message, 'error'); }
           } }, icon('trash', 'size-3.5'), 'Delete'),

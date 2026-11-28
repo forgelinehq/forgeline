@@ -25,8 +25,9 @@ with a company login instead of a password, see [Single sign-on](single-sign-on.
 | Action | Minimum role | Extra rule |
 | --- | --- | --- |
 | See runs, pipelines, infrastructure | Viewer | |
-| Run, cancel, edit and delete pipelines | Developer | |
-| Create, change and delete agents, skills, teams, workflows, schedules and evals; publish agent versions | Developer | What a developer wrote runs with at most a developer's rights ([note 054](../design/054-developers-write-agents.md)); approvals administrators set up stay theirs |
+| Run, cancel and edit pipelines | Developer | |
+| Delete a pipeline, agent, skill, team, workflow, schedule, eval suite or blueprint | Developer | Only what they created. An administrator deletes anything |
+| Create and change agents, skills, teams, workflows, schedules and evals; publish agent versions | Developer | What a developer wrote runs with at most a developer's rights ([note 054](../design/054-developers-write-agents.md)); approvals administrators set up stay theirs |
 | Write runbooks | Developer | A different administrator reviews them |
 | Budgets, publishing gates, webhook secrets, MCP servers, agent registries and pushes | Administrator | |
 | Propose cloud changes, ask the assistant | Developer | |

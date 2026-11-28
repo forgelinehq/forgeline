@@ -1,6 +1,6 @@
 import { h, icon, mount, clear, pageHeader, pill, relTime, absTime, emptyState, spinner, errorBox, notice, toast, modal, confirmDialog, field, duration, copyButton } from '../lib/dom.js';
 import { renderMarkdown } from '../lib/mdview.js';
-import { get, post, del, atLeast } from '../lib/api.js';
+import { get, post, del, atLeast, mayDelete } from '../lib/api.js';
 import { navigate } from '../lib/router.js';
 import { session } from '../app.js';
 import { layoutWorkflow, edgePath, runStatuses, edgeLive, NODE_W, NODE_H } from '../lib/wfgraph.js';
@@ -177,7 +177,7 @@ export async function workflowPage({ params }) {
       writer && h('a', { class: 'btn-secondary btn-sm', id: 'edit-canvas', href: '#/workflows/' + wf.id + '/canvas' }, icon('edit', 'size-3.5'), 'Edit on the canvas'),
       writer && !v.graph && h('button', { class: 'btn-secondary btn-sm', id: 'new-version', type: 'button', onclick: () => workflowForm(wf, agents, () => load(false), v) }, icon('plus', 'size-3.5'), 'New version'),
       writer && h('button', { class: 'btn-secondary btn-sm', type: 'button', onclick: async () => { try { await post('/v1/ai/workflows/' + wf.id + (wf.disabled ? '/enable' : '/disable')); load(true); } catch (e) { toast(e.message, 'error'); } } }, wf.disabled ? 'Turn on' : 'Turn off'),
-      writer && !wf.archived_at && h('button', { class: 'btn-ghost btn-sm text-rose-600 dark:text-rose-400', type: 'button', id: 'delete-workflow', onclick: async () => {
+      writer && !wf.archived_at && mayDelete(session, wf.versions[0]?.by) && h('button', { class: 'btn-ghost btn-sm text-rose-600 dark:text-rose-400', type: 'button', id: 'delete-workflow', onclick: async () => {
         if (!await confirmDialog({ title: 'Delete ' + wf.name + '?', body: 'It is turned off and moved to the archive. You can restore it for 30 days; after that it is deleted for good. Its past runs stay.', confirmLabel: 'Delete', danger: true })) return;
         try { await del('/v1/ai/workflows/' + wf.id); toast(wf.name + ' moved to the archive', 'ok'); navigate('/workflows'); } catch (e) { toast(e.message, 'error'); }
       } }, icon('trash', 'size-3.5'), 'Delete')),

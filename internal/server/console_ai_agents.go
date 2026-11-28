@@ -476,6 +476,9 @@ func (s *Server) handleDeleteSkill(w http.ResponseWriter, r *http.Request) {
 		s.defError(w, "skill", err)
 		return
 	}
+	if !s.mayDelete(w, r, "ai.skill.delete", "skill/"+id, sk.Name, sk.creator()) {
+		return
+	}
 	agents, err := s.listAgents(ctx)
 	if err != nil {
 		s.internalError(w, "reading the agents", err)

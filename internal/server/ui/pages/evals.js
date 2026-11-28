@@ -1,7 +1,8 @@
 // Agents › Evals (design note 050): suites of cases an agent must pass. A run asks the agent every case one to five
 // times with nothing that changes anything carried out; a case passes only if every attempt passes.
 import { h, icon, mount, pageHeader, relTime, absTime, emptyState, spinner, errorBox, notice, toast, drawer, field, confirmDialog } from '../lib/dom.js';
-import { get, post, put, del } from '../lib/api.js';
+import { get, post, put, del, mayDelete } from '../lib/api.js';
+import { session } from '../app.js';
 import { navigate } from '../lib/router.js';
 import { chipInput } from '../lib/controls.js';
 import { CHECKS, checkMeta, describeCheck, cleanCheck, scoreTone, attemptLine } from '../lib/evals.js';
@@ -88,7 +89,7 @@ export async function suitePage({ params, query }) {
       h('nav', { class: 'mb-2 text-sm', 'aria-label': 'Breadcrumb' }, h('a', { href: '#/evals', class: 'muted hover:underline' }, 'Evals'), h('span', { class: 'muted' }, ' › '), h('span', {}, x.name)),
       pageHeader(x.name, 'For ' + agent.name + ' · each case asked ' + (x.attempts === 1 ? 'once' : x.attempts + ' times') + ' · judge: ' + (x.judge || 'the assistant\'s model'),
         h('div', { class: 'flex flex-wrap items-center gap-2' }, version, model, runBtn,
-          h('button', { class: 'btn-ghost btn-sm text-rose-600 dark:text-rose-400', type: 'button', 'aria-label': 'Delete suite', title: 'Delete suite', onclick: async () => {
+          mayDelete(session, x.created_by) && h('button', { class: 'btn-ghost btn-sm text-rose-600 dark:text-rose-400', type: 'button', 'aria-label': 'Delete suite', title: 'Delete suite', onclick: async () => {
             if (!await confirmDialog({ title: 'Delete ' + x.name + '?', body: 'Its cases and runs are deleted. The agent is not changed.', confirmLabel: 'Delete', danger: true })) return;
             try { await del('/v1/ai/evals/' + x.id); navigate('/evals'); } catch (e) { toast(e.message, 'error'); }
           } }, icon('trash', 'size-4')))),

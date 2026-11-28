@@ -2,7 +2,7 @@
 // last time went, and pause, resume, edit and run now. A team's own page shows its schedules with the same drawer.
 
 import { h, icon, mount, pageHeader, relTime, absTime, spinner, errorBox, toast, emptyState, drawer, field, confirmDialog } from '../lib/dom.js';
-import { get, post, put, del, atLeast } from '../lib/api.js';
+import { get, post, put, del, atLeast, mayDelete } from '../lib/api.js';
 import { session } from '../app.js';
 import { scheduleField } from '../lib/schedulefield.js';
 import { describe } from '../lib/schedule.js';
@@ -35,7 +35,7 @@ export function teamScheduleDrawer(team, it, after) {
       it ? h('label', { class: 'flex items-center gap-2 text-sm' }, paused, 'Paused: skip its times until resumed') : null,
       err,
       h('div', { class: 'flex flex-wrap justify-between gap-2' },
-        it ? h('button', { class: 'btn-ghost btn-sm text-rose-600 dark:text-rose-400', type: 'button', id: 'ts-delete', onclick: async () => {
+        it && mayDelete(session, it.created_by) ? h('button', { class: 'btn-ghost btn-sm text-rose-600 dark:text-rose-400', type: 'button', id: 'ts-delete', onclick: async () => {
           if (!await confirmDialog({ title: 'Delete this schedule?', body: 'The team stops getting this goal. Its past runs stay.', confirmLabel: 'Delete', danger: true })) return;
           try { await del('/v1/ai/team-schedules/' + it.id); toast('Deleted', 'ok'); close(); after(); } catch (e) { toast(e.message, 'error'); }
         } }, icon('trash', 'size-3.5'), 'Delete') : h('span', {}),

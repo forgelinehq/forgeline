@@ -72,6 +72,9 @@ func (s *Server) handleArchiveAgent(w http.ResponseWriter, r *http.Request) {
 		s.defError(w, "agent", err)
 		return
 	}
+	if !s.mayDelete(w, r, "ai.agent.archive", "agent/"+a.ID, a.Name, a.creator()) {
+		return
+	}
 	if a.archived() {
 		writeError(w, http.StatusConflict, a.Name+" is already archived")
 		return
@@ -177,6 +180,9 @@ func (s *Server) handleArchiveWorkflow(w http.ResponseWriter, r *http.Request) {
 		s.defError(w, "workflow", err)
 		return
 	}
+	if !s.mayDelete(w, r, "ai.workflow.archive", "workflow/"+wf.ID, wf.Name, wf.creator()) {
+		return
+	}
 	if wf.ArchivedAt != nil {
 		writeError(w, http.StatusConflict, wf.Name+" is already archived")
 		return
@@ -242,4 +248,26 @@ func (s *Server) purgeArchivedWorkflows(ctx context.Context, now time.Time) (int
 		n++
 	}
 	return n, nil
+}
+
+// creator is who saved the first version; versions are never dropped from the front.
+func (a AIAgent) creator() string {
+	if len(a.Versions) == 0 {
+		return ""
+	}
+	return a.Versions[0].By
+}
+
+func (wf Workflow) creator() string {
+	if len(wf.Versions) == 0 {
+		return ""
+	}
+	return wf.Versions[0].By
+}
+
+func (sk AISkill) creator() string {
+	if len(sk.Versions) == 0 {
+		return ""
+	}
+	return sk.Versions[0].By
 }

@@ -26,7 +26,8 @@ underneath?"
 | --- | --- | --- |
 | See teams and their runs | Developer | |
 | Give a team a goal | Developer | 2000 characters at most; one run at a time per team |
-| Create, change or remove a team | Developer | A team has 1 to 8 members besides the lead; at most 50 teams; removal is refused while it is working |
+| Create or change a team | Developer | A team has 1 to 8 members besides the lead; at most 50 teams |
+| Remove a team | Developer | Only a team they created, with no schedule someone else made; an administrator, any. Refused while it is working |
 | Schedule a goal | Developer | See [Schedules](schedules.md) |
 
 ## How it works

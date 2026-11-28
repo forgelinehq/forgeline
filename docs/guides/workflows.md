@@ -29,7 +29,8 @@ someone when severity is high, a weekly review, a response to an alarm.
 | See workflows and runs | Developer | |
 | Start a run | Developer | One at a time per workflow: "this workflow already has a run in progress" |
 | Create, save a version, roll back, turn off or on | Developer | Agent versions are pinned at save. A workflow an administrator saved with a gated stage or a question is only an administrator's to change, and what an administrator turned off only an administrator turns on |
-| Delete (archive) or restore | Developer | Refused while a run is going or waiting: "<workflow> has a run that is running; let it finish or cancel it first" |
+| Delete (archive) | Developer | Only a workflow they created; an administrator, any. Refused while a run is going or waiting: "<workflow> has a run that is running; let it finish or cancel it first" |
+| Restore an archived workflow | Developer | |
 | Release a run waiting at a stage gate | Administrator | |
 | Answer a question in a graph run | Developer | If the node names answerers, only those people (an administrator not named is refused: "only <name> may answer this question"). If it names none, only an administrator: "an administrator answers this question". A person who may not answer sees "Waiting for an administrator to answer" and no answer box |
 | Cancel a run | Developer | Its starter, or an administrator: "only the person who started it, or an administrator, can cancel a run" |
