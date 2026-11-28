@@ -104,6 +104,8 @@ type RunViewJSON struct {
 	// Output is the end of what the run produced, or why it failed. It is text to show, never to act on.
 	Output string `json:"output,omitempty"`
 	Link   string `json:"link"`
+	// Graph is a workflow run drawn as nodes and wires.
+	Graph *RunViewGraph `json:"graph,omitempty"`
 }
 
 // RunViewStep is one step, node visit or team member's task.
@@ -199,7 +201,7 @@ func (s *Server) workflowRunView(ctx context.Context, id string) (RunViewJSON, e
 	if err != nil {
 		return RunViewJSON{}, err
 	}
-	v := RunViewJSON{Title: run.WorkflowName, Status: run.Status}
+	v := RunViewJSON{Title: run.WorkflowName, Status: run.Status, Graph: s.workflowRunGraph(ctx, run)}
 	for _, st := range run.Stages {
 		v.Steps = append(v.Steps, RunViewStep{Name: st.Name, Status: st.Status})
 		if st.Status == wfWaiting {

@@ -102,6 +102,10 @@ to the run. The assistant is told how it went when it finishes, fails or stops t
 is still running); **Carry on without waiting** tells it at once. It is told the outcome, not the run's output, which it
 reads for itself. A card for a team or workflow that changed since it was prepared is refused.
 
+A **workflow** run is drawn as a small graph, top to bottom: each node with how far it got, the wires the run went along,
+and the steps in order under it. It shows names and statuses only; what a node was given and produced is on the run's own
+page. A graph workflow deleted while its run is on a card shows the list of steps only.
+
 When one answer prepares several cards, they come **one at a time**: the next appears after you press Confirm or Dismiss
 on the one before, with a line saying how many there are. After the last one, your answers go back to the assistant as one
 message, so it carries on with the rest of what you asked.

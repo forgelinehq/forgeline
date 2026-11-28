@@ -11,6 +11,7 @@ import { stepLabel, stepsSummary, permissionWording, planItems, permissionChoice
 import { newQueue, queueView, decide, takeReply } from './cardqueue.js';
 import { MODES, modeFields, carryOutChoices, CARRY_OUT } from './modes.js';
 import { RUN_KINDS, followRun, outcomeWords } from './runfollow.js';
+import { runGraphView } from './rungraphview.js';
 
 // What the card's detail holds, by kind of action (note 028).
 const DETAIL_LABEL = { save_skill: 'Show the steps', save_agent: 'Show the instructions', save_workflow: 'Show the stages', run_team: 'Show the goal' };
@@ -268,7 +269,8 @@ function build(close, role) {
     const head = h('div', { class: 'flex flex-wrap items-center gap-2' });
     const body = h('div', { class: 'space-y-2' });
     const opened = new Set();
-    let waiting = !!settled;
+    const keptOpen = (name, forced) => ({ open: opened.has(name) || !!forced, ontoggle: (e) => { if (e.target.open) opened.add(name); else opened.delete(name); } });
+    let waiting = !!settled, scrolled = [0, 0];
     const tell = (state) => { if (!waiting) return; waiting = false; skip?.remove(); settled(outcomeWords(state)); };
     const skip = settled ? h('button', { type: 'button', class: 'btn-ghost btn-sm', 'data-run-skip': '', onclick: () => tell('running') }, 'Carry on without waiting') : null;
     mount(head, icon('play', 'size-4 shrink-0'), h('span', { class: 'min-w-0 flex-1 text-sm font-semibold' }, a.title || 'Run'));
@@ -279,12 +281,19 @@ function build(close, role) {
       show: (v) => {
         box.setAttribute('data-run-status', v.status);
         mount(head, icon('play', 'size-4 shrink-0'), h('span', { class: 'min-w-0 flex-1 text-sm font-semibold' }, v.title || a.title || 'Run'), h('span', { class: RUN_PILL[v.status] || 'pill-idle' }, RUN_WORD[v.status] || v.status));
+        const steps = h('ul', { class: 'space-y-1' }, (v.steps || []).map(s => h('li', { class: 'flex items-center gap-2' }, runStepIcon(s.status), h('span', { class: 'min-w-0 flex-1 truncate' }, s.name), h('span', { class: 'muted' }, s.status))));
+        // A redraw keeps the graph where the person scrolled it.
+        const before = body.querySelector('[data-run-graph]');
+        if (before) scrolled = [before.scrollLeft, before.scrollTop];
+        const graph = v.graph?.nodes?.length ? runGraphView(v.graph) : null;
         mount(body,
-          h('ul', { class: 'space-y-1' }, (v.steps || []).map(s => h('li', { class: 'flex items-center gap-2' }, runStepIcon(s.status), h('span', { class: 'min-w-0 flex-1 truncate' }, s.name), h('span', { class: 'muted' }, s.status)))),
+          graph || steps,
+          graph && v.steps?.length ? h('details', keptOpen('steps'), h('summary', { class: 'cursor-pointer underline' }, 'Steps in order'), h('div', { class: 'mt-1' }, steps)) : null,
           v.waiting ? h('div', { class: amber }, icon('ask', 'size-4 shrink-0'), h('span', {}, v.waiting)) : null,
-          v.output ? h('details', { open: opened.has('output') || v.status === 'failed', ontoggle: (e) => { if (e.target.open) opened.add('output'); else opened.delete('output'); } },
+          v.output ? h('details', keptOpen('output', v.status === 'failed'),
             h('summary', { class: 'cursor-pointer underline' }, v.status === 'failed' ? 'Why it failed' : 'What it produced'),
             h('pre', { class: 'mt-1 max-h-60 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-slate-50 p-2 font-mono text-[11px] dark:bg-slate-800/60' }, v.output)) : null);
+        if (graph) [graph.scrollLeft, graph.scrollTop] = scrolled;
       },
       settled: tell,
       alive: () => box.isConnected,
