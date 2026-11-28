@@ -179,7 +179,7 @@ func (s *Server) containerEngine(ctx context.Context, p Principal, token string,
 	if err != nil {
 		return nil, "", err
 	}
-	full := []string{"exec", "-i", "-w", "/work", "-e", "HOME=/work/.agent", "-e", claudeTokenName, ctr, "claude"}
+	full := []string{"exec", "-i", "-w", "/work", "-e", "HOME=/work/.agent", "-e", engineEnv, "-e", claudeTokenName, ctr, "claude"}
 	full = append(full, args...)
 	cmd := s.engineCmd(ctx, "docker", full...)
 	cmd.Env = []string{"PATH=" + os.Getenv("PATH"), "HOME=" + os.Getenv("HOME"), claudeTokenName + "=" + token}

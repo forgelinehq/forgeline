@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/forgelinehq/forgeline/internal/authn"
 )
@@ -310,3 +311,118 @@ func fmtSscanf(s string, more, next *int) (int, error) {
 }
 
 func fmtSscanf2(s string, next *int) (int, error) { return fmt.Sscanf(s, "\"offset\": %d", next) }
+
+// A file the assistant made in this message and names in its answer gets a Download button without it having to offer it:
+// not an old file, not one it did not name, not twice, and nothing is started to look.
+func TestAFileTheAnswerNamesIsOfferedWhenItWasJustMade(t *testing.T) {
+	m, d := filesHarness(t)
+	known := d.onExec
+	listed := 0
+	d.onExec = func(args []string) ([]byte, string, error, bool) {
+		if args[len(args)-1] != sandboxFileList {
+			return known(args)
+		}
+		listed++
+		now, old := time.Now().Unix()+1, time.Now().Unix()-3600
+		var b strings.Builder
+		line := func(at int64, size int, p string) { fmt.Fprintf(&b, "%d.5\t%d\t%s\n", at, size, p) }
+		line(now, 1234, "/work/report.pdf")
+		line(now, 10, "/work/health.md")
+		line(now, 11, "/work/out/totals.csv")
+		line(now, 12, "/work/unnamed.md")
+		line(now, 62914560, "/work/huge.zip")
+		line(old, 13, "/work/old.md")
+		return []byte(b.String()), "", nil, true
+	}
+	offered := func(answer string, calls ...string) []string {
+		var got []string
+		for _, f := range m.run(m.dev, map[string]any{"message": "make me a report"}, append(calls, answer)...) {
+			if f["type"] == "CUSTOM" && f["name"] == "forgeline.file" {
+				got = append(got, f["value"].(map[string]any)["path"].(string))
+			}
+		}
+		return got
+	}
+	answer := "I wrote `/work/health.md`, the numbers are in out/totals.csv, and report.pdf, huge.zip and old.md are there too."
+
+	// No sandbox running: nothing is looked at, and none is started.
+	if got := offered(answer); len(got) != 0 || listed != 0 || len(d.find("run")) != 0 {
+		t.Fatalf("without a sandbox: offered %v, listed %d, started %v", got, listed, d.find("run"))
+	}
+	m.dev.expect(200, "GET", "/v1/assistant/files?path=%2Fwork%2Freport.pdf", nil) // starts the person's sandbox
+	got := offered(answer, lookupReply(offerFileTool, map[string]any{"path": "/work/report.pdf"}))
+	if want := "/work/report.pdf,/work/health.md,/work/out/totals.csv"; strings.Join(got, ",") != want {
+		t.Errorf("offered %v, want %s once each", got, want)
+	}
+	if aud := string(m.admin.expect(200, "GET", "/v1/audit?limit=100", nil)); !strings.Contains(aud, "named in the answer") {
+		t.Error("the offer is not in the audit log")
+	}
+	m.admin.expect(200, "PUT", "/v1/assistant/sandbox", map[string]any{"enabled": false})
+	before := listed
+	if got := offered(answer); len(got) != 0 || listed != before {
+		t.Errorf("with the sandbox off: %v", got)
+	}
+}
+
+func TestOnlyAFewNamedFilesAreOfferedAndAmbiguousNamesNeedTheirPath(t *testing.T) {
+	var b strings.Builder
+	for i := range 8 {
+		fmt.Fprintf(&b, "100.0\t1\t/work/f%d.txt\n", i)
+	}
+	b.WriteString("100.0\t1\t/work/a/README.md\n100.0\t1\t/work/b/README.md\n100.0\t1\t/work/Makefile\n99.0\t1\t/work/before.txt\nbroken\n100.0\t1\t/etc/passwd\n")
+	files := changedFiles(b.String(), time.Unix(100, 0))
+	if len(files) != 11 {
+		t.Fatalf("changed files: %+v", files)
+	}
+	m, d := filesHarness(t)
+	d.onExec = func([]string) ([]byte, string, error, bool) { return []byte(b.String()), "", nil, true }
+	p := Principal{UserID: "u1", Name: "uma", Role: authn.Developer}
+	name, _, _ := sandboxNames(p, defaultSandboxImage)
+	tokens, _, _ := sandboxNames(Principal{Name: "token"}, defaultSandboxImage)
+	d.exists = map[string]bool{name: true, tokens: true}
+	offered := func(who Principal, answer string) string {
+		sink := &lookupSink{}
+		m.srv.offerNamedFiles(t.Context(), who, time.Unix(100, 0), answer, sink)
+		var got []string
+		for _, o := range sink.offers {
+			got = append(got, strings.TrimPrefix(o.Path, "/work/"))
+		}
+		return strings.Join(got, ",")
+	}
+	// Two files share a name: only the path says which. A name with no extension needs its full path. Files a moment older
+	// than the message count, because a file's time is coarser than the clock; the cap is five.
+	for answer, want := range map[string]string{
+		"I changed README.md and the Makefile.":            "",
+		"I changed a/README.md.":                           "a/README.md",
+		"I wrote /work/Makefile.":                          "Makefile",
+		"See before.txt":                                   "before.txt",
+		"f0.txt f1.txt f2.txt f3.txt f4.txt f5.txt f6.txt": "f0.txt,f1.txt,f2.txt,f3.txt,f4.txt",
+	} {
+		if got := offered(p, answer); got != want {
+			t.Errorf("%q: offered %q, want %q", answer, got, want)
+		}
+	}
+	if got := offered(Principal{Name: "token"}, "See before.txt"); got != "" {
+		t.Errorf("no signed-in person: %q", got)
+	}
+	for _, tc := range []struct {
+		text, name string
+		want       bool
+	}{
+		{"see report.md.", "report.md", true},
+		{"(report.md)", "report.md", true},
+		{"**report.md**", "report.md", true},
+		{"report.md", "report.md", true},
+		{"old-report.md", "report.md", false},
+		{"report.mdx", "report.md", false},
+		{"report.md.bak", "report.md", false},
+		{"/etc/report.md", "report.md", false},
+		{"my.report.md", "report.md", false},
+		{"old-report.md and report.md", "report.md", true},
+		{"nothing", "report.md", false},
+	} {
+		if got := mentions(tc.text, tc.name); got != tc.want {
+			t.Errorf("mentions(%q, %q) = %v", tc.text, tc.name, got)
+		}
+	}
+}

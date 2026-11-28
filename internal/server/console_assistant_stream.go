@@ -279,6 +279,7 @@ func (s *Server) handleAssistantRun(w http.ResponseWriter, r *http.Request) {
 		lookups []string
 		err     error
 	)
+	asked := time.Now()
 	if be := s.loadAssistant(ctx).Backend; be == assistACP {
 		reply, err = s.askACP(ctx, job.p, conv, job.message, job.ctxText, s.lookupLines(ctx, job.p.Role), obs)
 	} else if be == assistEngine {
@@ -300,6 +301,8 @@ func (s *Server) handleAssistantRun(w http.ResponseWriter, r *http.Request) {
 	if streaming {
 		reply = strings.TrimSpace(streamed.String())
 	}
+	s.offerNamedFiles(ctx, job.p, asked, reply, sink)
+	flush()
 	var refs []chatRef
 	for _, id := range sink.proposals {
 		refs = append(refs, chatRef{Kind: "proposal", ID: id})

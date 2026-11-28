@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -146,6 +147,9 @@ func TestTheAgentEngineRunsClaudeWithForgelineAsItsToolsAndItsPermissionPrompt(t
 			t.Errorf("the program was given %s", k)
 		}
 	}
+	if !slices.Contains(seen.EnvKeys, "ENABLE_TOOL_SEARCH") {
+		t.Errorf("the program holds Forgeline's tools back: %v", seen.EnvKeys)
+	}
 	if !strings.Contains(seen.Cwd, "engine") || !strings.Contains(seen.Home, "engine") {
 		t.Errorf("workspace: cwd %s home %s", seen.Cwd, seen.Home)
 	}
@@ -154,7 +158,7 @@ func TestTheAgentEngineRunsClaudeWithForgelineAsItsToolsAndItsPermissionPrompt(t
 	matches, _ := filepath.Glob(filepath.Join(m.srv.cfg.DataDir, "engine", "*", "work", "args.json"))
 	argl, _ := os.ReadFile(matches[0])
 	line := strings.Split(strings.TrimSpace(string(argl)), "\n")[0]
-	for _, want := range []string{"--permission-prompt-tool", "mcp__forgeline__approve", "--strict-mcp-config", "--output-format", "stream-json", "--include-partial-messages"} {
+	for _, want := range []string{"--permission-prompt-tool", "mcp__forgeline__approve", "--strict-mcp-config", "--output-format", "stream-json", "--include-partial-messages", "--disallowedTools", "AskUserQuestion", "ScheduleWakeup", "Monitor"} {
 		if !strings.Contains(line, want) {
 			t.Errorf("the program was not started with %s: %s", want, line)
 		}

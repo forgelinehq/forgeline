@@ -115,7 +115,7 @@ func TestTheAgentRunsInTheSandboxContainerAndReachesForgelineThroughASocket(t *t
 	}
 	started = *startedP
 	line := strings.Join(started, " ")
-	for _, want := range []string{"docker exec -i -w /work", "-e HOME=/work/.agent", "-e " + claudeTokenName + " ", "--permission-prompt-tool mcp__forgeline__approve", "--append-system-prompt-file /run/forgeline/system-", "/opt/forgeline/forgeline", "FORGELINE_MCP_SOCKET", "/run/forgeline/engine.sock"} {
+	for _, want := range []string{"docker exec -i -w /work", "-e HOME=/work/.agent", "-e ENABLE_TOOL_SEARCH=false", "-e " + claudeTokenName + " ", "--permission-prompt-tool mcp__forgeline__approve", "--append-system-prompt-file /run/forgeline/system-", "/opt/forgeline/forgeline", "FORGELINE_MCP_SOCKET", "/run/forgeline/engine.sock"} {
 		if !strings.Contains(line, want) {
 			t.Errorf("the program was not started with %q:\n%s", want, line)
 		}
