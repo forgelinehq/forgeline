@@ -52,7 +52,8 @@ The sandbox has no way out of its own and no credentials, so a PDF, a CSV or a r
 fetch it.
 
 1. Ask for it: "build the PDF and give it to me".
-2. The assistant checks that the file is there and puts a **Download** card in the chat.
+2. The assistant checks that the file is there and puts a **Download** card in the chat. A file it changed while answering
+   and names in the answer gets a card by itself, at most five per answer. Two files with the same name need the path.
 3. Press it and the browser saves the file, fetched as you. The same list is at `GET /v1/assistant/files`.
 
 Rules for downloads:

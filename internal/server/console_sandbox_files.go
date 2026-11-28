@@ -9,6 +9,7 @@ import (
 	"mime"
 	"net/http"
 	"path"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -221,6 +222,96 @@ func (s *Server) handleSandboxFiles(w http.ResponseWriter, r *http.Request) {
 	waitErr := cmd.Wait()
 	ok := copyErr == nil && waitErr == nil && n == f.Size
 	s.auditReq(r, "assistant.file.download", "sandbox"+f.Path, fmt.Sprintf("%d bytes", n), ok)
+}
+
+const maxNamedOffers = 5
+
+// mayNameAFile is whether an answer is worth looking at the sandbox for: it holds a path under /work or something like
+// "report.pdf".
+var mayNameAFile = regexp.MustCompile(`/work/|[\w-]\.[A-Za-z][A-Za-z0-9]{1,7}\b`)
+
+// offerNamedFiles offers what the assistant made and named without offering it: a file under /work that changed during this
+// message and that the answer mentions. It only looks when the sandbox is already running, and starts nothing.
+func (s *Server) offerNamedFiles(ctx context.Context, p Principal, since time.Time, answer string, sink *lookupSink) {
+	if p.UserID == "" || !mayNameAFile.MatchString(answer) || !s.loadSandbox(ctx).Enabled {
+		return
+	}
+	ctr := ""
+	for _, image := range []string{defaultSandboxImage, engineImage} {
+		name, _, _ := sandboxNames(p, image)
+		if out, _, err := s.run(ctx, "docker", "inspect", "-f", "{{.State.Running}}", name); err == nil && strings.TrimSpace(string(out)) == "true" {
+			ctr = name
+			break
+		}
+	}
+	if ctr == "" {
+		return
+	}
+	out, _, err := s.run(ctx, "docker", "exec", ctr, "sh", "-c", sandboxFileList)
+	if err != nil {
+		return
+	}
+	// A file's time can be a little coarser than the clock the message was timed with.
+	changed := changedFiles(string(out), since.Add(-time.Second))
+	names := map[string]int{}
+	for _, f := range changed {
+		names[f.Name]++
+	}
+	offered := map[string]bool{}
+	for _, o := range sink.offers {
+		offered[o.Path] = true
+	}
+	added := 0
+	for _, f := range changed {
+		rel := strings.TrimPrefix(f.Path, "/work/")
+		// A bare name counts only with an extension, and only when one changed file has it.
+		named := mentions(answer, f.Path) || strings.Contains(rel, "/") && mentions(answer, rel) ||
+			path.Ext(f.Name) != "" && names[f.Name] == 1 && mentions(answer, f.Name)
+		if !named || offered[f.Path] || f.Size > maxDownloadBytes || added == maxNamedOffers {
+			continue
+		}
+		added++
+		sink.offers = append(sink.offers, fileOffer{sandboxFile: f})
+		_ = s.audit(ctx, p, "", "assistant.file.offer", "sandbox"+f.Path, fmt.Sprintf("%d bytes, named in the answer", f.Size), true)
+	}
+}
+
+// changedFiles reads the output of sandboxFileList and keeps the files changed at or after since.
+func changedFiles(list string, since time.Time) []sandboxFile {
+	var files []sandboxFile
+	for _, line := range strings.Split(list, "\n") {
+		parts := strings.SplitN(line, "\t", 3)
+		if len(parts) != 3 {
+			continue
+		}
+		secs, err := strconv.ParseFloat(parts[0], 64)
+		size, serr := strconv.ParseInt(parts[1], 10, 64)
+		if p, perr := cleanSandboxPath(parts[2]); err == nil && serr == nil && perr == nil && secs >= float64(since.UnixNano())/1e9 {
+			files = append(files, sandboxFile{Path: p, Name: path.Base(p), Size: size})
+		}
+	}
+	return files
+}
+
+// mentions says whether text names this file and not a longer name or path that contains it.
+func mentions(text, name string) bool {
+	part := func(b byte) bool {
+		return b == '_' || b == '-' || b == '/' || b >= '0' && b <= '9' || b >= 'a' && b <= 'z' || b >= 'A' && b <= 'Z'
+	}
+	for from := 0; ; {
+		i := strings.Index(text[from:], name)
+		if i < 0 {
+			return false
+		}
+		start, end := from+i, from+i+len(name)
+		// A full stop ends a sentence unless more of a name follows it.
+		before := start == 0 || !part(text[start-1]) && text[start-1] != '.'
+		after := end == len(text) || !part(text[end]) && !(text[end] == '.' && end+1 < len(text) && part(text[end+1]))
+		if before && after {
+			return true
+		}
+		from = start + 1
+	}
 }
 
 // lookupOfferFile is the tool: it checks the file is there and shows the person a Download button.

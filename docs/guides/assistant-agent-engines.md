@@ -38,7 +38,9 @@ message to message.
    to message.
 3. Forgeline is its tools and its permission prompt: it can look at AWS, Kubernetes, findings and runs, keep memory, and
    prepare cards, and each of those keeps its role checks and audit entry. Its own **Bash, Edit and Write ask you on a
-   card** with the exact command first; say no and it does not run.
+   card** with the exact command first; say no and it does not run. All of Forgeline's tools are loaded from the start of
+   a message, and Claude Code's tools that mean nothing in one answer (timers, worktrees, messages to other sessions) are
+   turned off.
 
 It needs the `claude` program on the server and a Claude Code token (the same one agent steps use) or the server user's
 login. With the **sandbox on** (**Settings → AI → Assistant permissions**) the whole of Claude Code runs inside your sandbox
