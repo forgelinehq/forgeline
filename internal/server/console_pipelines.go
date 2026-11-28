@@ -352,6 +352,17 @@ func (s *Server) handleUpdatePipeline(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleDeletePipeline(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
+	var sp SavedPipeline
+	if err := s.docs.Get(r.Context(), kindPipeline, id, &sp); errors.Is(err, docstore.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "no such pipeline")
+		return
+	} else if err != nil {
+		s.internalError(w, "reading the pipeline", err)
+		return
+	}
+	if !s.mayDelete(w, r, "pipeline.delete", "pipeline/"+id, "the pipeline "+id, sp.CreatedBy) {
+		return
+	}
 	if err := s.docs.Delete(r.Context(), kindPipeline, id); errors.Is(err, docstore.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "no such pipeline")
 		return

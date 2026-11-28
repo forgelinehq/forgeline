@@ -26,6 +26,7 @@ Use it to see what will run when, pause something, or run it now.
 | See schedules | Developer | |
 | Preview the next times | Developer | Saves nothing |
 | Pause, Resume, Change, Run now | Developer | **Run now** runs as you. A workflow with an administrator's approval step is paused and resumed by an administrator |
+| Delete a team schedule | Developer | Only one they created; an administrator, any |
 | Add a schedule to a team | Developer | At most 10 per team; runs as a viewer or a developer, never an administrator |
 
 ## How it works

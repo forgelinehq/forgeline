@@ -148,3 +148,24 @@ func (s *Server) mayChangeSuite(w http.ResponseWriter, r *http.Request, suite st
 	writeError(w, http.StatusForbidden, "this suite is the publishing gate of "+strings.Join(agents, ", ")+", so only an administrator changes it")
 	return false
 }
+
+// Deleting (design note 054): a developer deletes only what they created; an administrator deletes anything. The creator
+// is who saved the first version. A record that does not say who created it is an administrator's to delete.
+
+func ownsIt(p Principal, creator string) bool {
+	return p.Role.AtLeast(authn.Admin) || creator != "" && creator == p.Name
+}
+
+// mayDelete answers 403 and returns false when this person may not delete what creator made.
+func (s *Server) mayDelete(w http.ResponseWriter, r *http.Request, action, target, name, creator string) bool {
+	if ownsIt(principalFrom(r.Context()), creator) {
+		return true
+	}
+	who := "an administrator"
+	if creator != "" {
+		who = creator + " or an administrator"
+	}
+	s.auditReq(r, action, target, "refused: not the creator", false)
+	writeError(w, http.StatusForbidden, "only "+who+" can delete "+name)
+	return false
+}

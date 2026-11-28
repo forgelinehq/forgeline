@@ -83,6 +83,11 @@ export const put = (p, b) => api('PUT', p, b);
 export const patch = (p, b) => api('PATCH', p, b);
 export const del = (p) => api('DELETE', p);
 
+/** Whether this person may delete what creator made: their own, or anything for an administrator. */
+export function mayDelete(user, creator) {
+  return atLeast(user.role, 'admin') || (!!creator && creator === user.name);
+}
+
 /** Whether a role meets a minimum. Mirrors the server, which is the real check. */
 export function atLeast(role, min) {
   const rank = { viewer: 1, developer: 2, admin: 3 };

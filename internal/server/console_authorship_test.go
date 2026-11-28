@@ -101,7 +101,7 @@ func TestADeveloperWritesButNeverBorrowsRights(t *testing.T) {
 
 func TestApprovalsAdministratorsSetUpStayTheirs(t *testing.T) {
 	m := newMCPHarness(t)
-	a := newAgent(t, m.admin, agentBody("Reviewer", nil, nil, "T0"))
+	a := newAgent(t, m.dev, agentBody("Reviewer", nil, nil, "T0")) // a developer's own, so they may delete it
 
 	// Turned off by an administrator: a developer cannot turn it on, also not by turning it off again first.
 	m.admin.expect(200, "POST", "/v1/ai/agents/"+a.ID+"/disable", map[string]any{})
@@ -140,7 +140,7 @@ func TestApprovalsAdministratorsSetUpStayTheirs(t *testing.T) {
 	gated := wfBody("Release", []WFStage{{Steps: []WFStep{step(other.ID, "look")}}, {Gate: true, Steps: []WFStep{step(other.ID, "act")}}})
 	w := newWorkflow(t, m.admin, gated)
 	open := wfBody("Release", []WFStage{{Steps: []WFStep{step(other.ID, "act now")}}})
-	for _, c := range [][2]string{{"POST", "/versions"}, {"POST", "/rollback"}, {"POST", "/disable"}, {"POST", "/enable"}, {"DELETE", ""}, {"POST", "/schedule/pause"}} {
+	for _, c := range [][2]string{{"POST", "/versions"}, {"POST", "/rollback"}, {"POST", "/disable"}, {"POST", "/enable"}, {"POST", "/schedule/pause"}} {
 		var body any = map[string]any{}
 		if c[1] == "/versions" {
 			body = open
@@ -161,5 +161,9 @@ func TestApprovalsAdministratorsSetUpStayTheirs(t *testing.T) {
 	own := newWorkflow(t, m.dev, gated)
 	open["name"] = "My release"
 	m.dev.expect(201, "POST", "/v1/ai/workflows/"+own.ID+"/versions", open)
-	m.dev.expect(200, "DELETE", "/v1/ai/workflows/"+own.ID, nil)
+	// Until an administrator puts an approval step on it: then it is not theirs to delete either.
+	m.admin.expect(201, "POST", "/v1/ai/workflows/"+own.ID+"/versions", gated)
+	m.dev.expect(403, "DELETE", "/v1/ai/workflows/"+own.ID, nil)
+	m.dev.expect(201, "POST", "/v1/ai/workflows", func() map[string]any { gated["name"] = "Another"; return gated }())
+	m.dev.expect(200, "DELETE", "/v1/ai/workflows/another", nil)
 }

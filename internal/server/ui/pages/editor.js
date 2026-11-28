@@ -1,5 +1,5 @@
 import { h, icon, mount, pill, relTime, absTime, pageHeader, errorBox, notice, spinner, toast, modal, confirmDialog, field, copyButton } from '../lib/dom.js';
-import { get, post, put, del, atLeast } from '../lib/api.js';
+import { get, post, put, del, atLeast, mayDelete } from '../lib/api.js';
 import { navigate } from '../lib/router.js';
 import { dag } from '../lib/dag.js';
 import { session } from '../app.js';
@@ -262,7 +262,7 @@ export async function pipelineEditorPage({ params }) {
       !isNew && h('button', { class: 'btn-ghost', type: 'button', onclick: history }, icon('history', 'size-4'), 'History'),
       canEdit && h('button', { class: 'btn-secondary', type: 'button', disabled: !can || !dirty() || invalid, onclick: () => save(false) }, icon('check', 'size-4'), isNew ? 'Create' : 'Save'),
       canEdit && h('button', { class: 'btn-primary', type: 'button', disabled: !can || invalid || (isNew ? false : false), onclick: () => (dirty() ? save(true) : runSaved()) }, icon('play', 'size-3.5'), dirty() ? (isNew ? 'Create & run' : 'Save & run') : 'Run'),
-      !isNew && canEdit && h('button', { class: 'btn-ghost text-rose-600 dark:text-rose-400', type: 'button', onclick: remove, 'aria-label': 'Delete pipeline' }, icon('trash', 'size-4')));
+      !isNew && canEdit && mayDelete(session, saved?.created_by) && h('button', { class: 'btn-ghost text-rose-600 dark:text-rose-400', type: 'button', onclick: remove, 'aria-label': 'Delete pipeline' }, icon('trash', 'size-4')));
 
     const panels = [];
     if (!r) panels.push(h('div', { class: 'card card-pad muted text-sm' }, 'Checking…'));

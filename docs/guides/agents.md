@@ -27,8 +27,9 @@ Use agents to give a repeatable job a fixed shape: "explain failed runs", "watch
 | See agents and talk to one | Developer | It answers with its own tools, as you |
 | Create an agent, save a new version, roll back | Developer | A version a developer saved runs with at most a developer's rights, whoever runs it ([why](../design/054-developers-write-agents.md)). With a publishing gate, only an administrator rolls back |
 | Turn an agent off or on | Developer | What an administrator turned off, only an administrator turns on |
-| Delete (archive) or restore an agent | Developer | |
-| Create or change a skill | Developer | Skills are listed on the Agents page; a skill no agent version uses can be deleted |
+| Delete (archive) an agent | Developer | Only one they created; an administrator, any |
+| Restore an archived agent | Developer | |
+| Create or change a skill | Developer | Skills are listed on the Agents page; a skill no agent version uses can be deleted, by the developer who created it or an administrator |
 | Set which agent reports to which | Developer | Describes the team; gives no agent power over another |
 
 ## How it works
