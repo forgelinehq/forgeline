@@ -319,6 +319,9 @@ func (s *Server) askEngine(ctx context.Context, p Principal, conv, message, page
 	}
 	args := []string{"-p", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--max-turns", fmt.Sprint(maxTurns),
 		"--strict-mcp-config", "--mcp-config", string(mcpCfg),
+		// No settings file is read, from the workspace or the program's home. Both are folders that commands in the sandbox can
+		// write (run_shell asks nobody), and a settings file there could allow Bash without a card or run a hook by itself.
+		"--setting-sources", "",
 		"--permission-prompt-tool", "mcp__forgeline__" + engineApproveTool,
 		"--allowedTools", "Read", "Glob", "Grep", "TodoWrite", "mcp__forgeline",
 		"--disallowedTools"}
