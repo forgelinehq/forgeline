@@ -163,6 +163,10 @@ func TestTheAgentEngineRunsClaudeWithForgelineAsItsToolsAndItsPermissionPrompt(t
 			t.Errorf("the program was not started with %s: %s", want, line)
 		}
 	}
+	// No settings file is read: args.json holds the arguments as JSON, so the empty value is visible.
+	if !strings.Contains(line, `"--setting-sources", ""`) {
+		t.Errorf("the program may read settings files that sandbox commands can write: %s", line)
+	}
 	for _, bad := range []string{"dangerously-skip-permissions", `"Bash"`, `"Write"`} {
 		if strings.Contains(line, bad) {
 			t.Errorf("the program was started with %s", bad)

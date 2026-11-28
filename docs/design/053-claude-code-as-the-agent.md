@@ -49,6 +49,12 @@ Not built, in this order:
 
 ## Security notes
 
+- Claude Code is started with `--setting-sources ""`, so it reads no settings file (2026-11-28). The workspace and the
+  program's home are both under `/work`, which sandbox commands write without a card. Tried with Claude Code 2.1.332 and a
+  stand-in model: a `permissions.allow` entry in `.claude/settings.local.json` or the home's `.claude/settings.json` ran
+  Bash with no card, and a `SessionStart` hook in either folder ran with no card. With the option, none of them did.
+  What an approved command runs (a script, a shell profile, a git hook in `/work`) can still be changed by earlier
+  sandbox commands: a card covers the command, not the files behind it.
 - The loopback endpoint trusts the run token and the machine. A process on the same machine that learns a token can call the
   person's tools for the length of a run: it is random, never logged, and removed when the run ends.
 - Claude Code's tools on the host are only as safe as the person's answer on each card until step 1 is done. The settings page says
