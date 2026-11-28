@@ -139,6 +139,7 @@ type Server struct {
 	engineBase  string                                             // overrides it in tests
 	engineExec  func(context.Context, string, ...string) *exec.Cmd // tests replace how the agent program is started
 	approvals   approvalBook                                       // read calls waiting for the person who asked to approve them
+	chatAllow   chatAllowances                                     // sandbox commands and file changes allowed for the rest of a chat
 	azureInv    invCache                                           // Azure inventories, by subscription set
 	integTests  integTestStore                                     // the last test of each integration, kept in memory
 	wf          wfEngine

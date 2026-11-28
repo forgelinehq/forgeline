@@ -261,7 +261,7 @@ func (s *Server) handleAssistantRun(w http.ResponseWriter, r *http.Request) {
 	ctx = context.WithValue(ctx, permAskerKey{}, permAsker(func(req permRequest) (string, error) {
 		return s.askPermission(r.Context(), job.p, req, func(id string, wait time.Duration) {
 			out.send("CUSTOM", map[string]any{"name": "forgeline.permission", "value": map[string]any{
-				"id": id, "tool": req.Tool, "command": truncate(req.Command, 600), "account": req.Account, "why": req.Why, "pattern": req.Pattern, "actions": req.Actions, "expiresInSeconds": int(wait.Seconds())}})
+				"id": id, "tool": req.Tool, "command": cutShown(req.Command), "scope": req.Scope, "note": req.Note, "account": req.Account, "why": req.Why, "pattern": req.Pattern, "actions": req.Actions, "expiresInSeconds": int(wait.Seconds())}})
 		}, func(id, decision string) {
 			out.send("CUSTOM", map[string]any{"name": "forgeline.permission_decided", "value": map[string]any{"id": id, "decision": decision}})
 		})

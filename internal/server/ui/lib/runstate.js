@@ -33,7 +33,7 @@ export function applyEvent(run, ev) {
         if (q) { q.answer = String(v.answer || ''); q.state = q.answer ? 'answered' : 'expired'; }
       } else if (ev.name === 'forgeline.permission' && v.id && !run.permissions.some(x => x.id === v.id)) {
         // The assistant wants to change something and shows the exact command (design note 052, slice 2).
-        run.permissions.push({ id: String(v.id), tool: String(v.tool || ''), command: String(v.command || ''), account: String(v.account || ''), why: String(v.why || ''), pattern: String(v.pattern || ''), actions: (Array.isArray(v.actions) ? v.actions : []).map(planAction), seconds: Number(v.expiresInSeconds) || 0, state: 'waiting', decision: '' });
+        run.permissions.push({ id: String(v.id), tool: String(v.tool || ''), command: String(v.command || ''), account: String(v.account || ''), why: String(v.why || ''), pattern: String(v.pattern || ''), scope: String(v.scope || ''), note: v.note === true, actions: (Array.isArray(v.actions) ? v.actions : []).map(planAction), seconds: Number(v.expiresInSeconds) || 0, state: 'waiting', decision: '' });
       } else if (ev.name === 'forgeline.permission_decided') {
         const x = run.permissions.find(p => p.id === v.id);
         if (x) { x.decision = String(v.decision || ''); x.state = ['approve', 'always', 'deny', 'expired'].includes(x.decision) ? x.decision : 'deny'; }

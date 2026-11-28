@@ -188,7 +188,7 @@ func (s *Server) lookupApprovePlan(ctx context.Context, raw json.RawMessage) (st
 		return "", errors.New("title: say in a few words what the plan does")
 	}
 	summary := fmt.Sprintf("%s (%d actions)", title, len(actions))
-	choice, err := permAskerFrom(ctx)(permRequest{Tool: approvePlanTool, Command: summary, Actions: actions,
+	choice, err := permAskerFrom(ctx)(permRequest{Tool: approvePlanTool, Command: summary, Actions: actions, Note: true,
 		Why: "each of these runs once, exactly as shown, in this reply, without asking again. Anything else asks as usual"})
 	if err != nil || choice != decisionOnce {
 		_ = s.audit(ctx, p, "", "assistant.plan.approve", approvePlanTool, "refused: "+summary, false)

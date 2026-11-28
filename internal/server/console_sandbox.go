@@ -115,7 +115,8 @@ func sandboxRunArgs(name, volume, owner, image, network, runtime string, extra .
 }
 
 func (s *Server) ensureSandbox(ctx context.Context, p Principal, image string, st SandboxSettings) (string, error) {
-	return s.ensureSandboxWith(ctx, p, image, st)
+	// The agent's own folder (its sign-in and sessions) is in /work: this container sees an empty, read-only one over it.
+	return s.ensureSandboxWith(ctx, p, image, st, "--tmpfs", "/work/.agent:ro,size=1m")
 }
 
 func (s *Server) ensureSandboxWith(ctx context.Context, p Principal, image string, st SandboxSettings, extra ...string) (string, error) {
@@ -208,6 +209,9 @@ func (s *Server) lookupRunShell(ctx context.Context, raw json.RawMessage) (strin
 	if a.Image == "" {
 		a.Image = defaultSandboxImage
 	}
+	if a.Image == engineImage {
+		return "", errors.New("image: that container is the agent's own; pick another image")
+	}
 	if !sandboxImageRE.MatchString(a.Image) {
 		return "", errors.New("image: a Docker image name such as ubuntu:24.04, python:3.13 or node:22")
 	}
@@ -216,6 +220,11 @@ func (s *Server) lookupRunShell(ctx context.Context, raw json.RawMessage) (strin
 	if len(a.Secrets) > 0 {
 		var err error
 		if env, values, err = s.sandboxSecrets(ctx, p, a.Secrets, a.Command); err != nil {
+			return "", err
+		}
+	}
+	if len(a.Secrets) == 0 { // a command with secrets was shown on the card that gave them
+		if err := s.askShell(ctx, p, a.Command, a.Image); err != nil {
 			return "", err
 		}
 	}
@@ -293,7 +302,7 @@ func (s *Server) sandboxSecrets(ctx context.Context, p Principal, names []string
 		return nil, nil, refuse("giving a secret to the sandbox needs the person's approval and nobody is here to give it; ask in the chat")
 	}
 	sort.Strings(names)
-	choice, aerr := ask(permRequest{Tool: runShellTool, Command: truncate(command, 600), Why: "this gives the secrets " + strings.Join(names, ", ") + " to the command, which can use them for anything they allow"})
+	choice, aerr := ask(permRequest{Tool: runShellTool, Command: cutShown(command), Note: true, Why: "this gives the secrets " + strings.Join(names, ", ") + " to the command, which can use them for anything they allow"})
 	if aerr != nil || choice != decisionOnce {
 		msg := "you said no, so it did not run"
 		if aerr != nil {

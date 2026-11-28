@@ -3,7 +3,9 @@ package server
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 )
@@ -36,6 +38,7 @@ type pendingApproval struct {
 	kind   string      // "" for a read that needs approval, "permission" for a change the assistant asks to make, "question" for ask_user (note 052)
 	always bool        // a permission the person may answer "always" to
 	answer chan string // approve or deny; for a question, the person's answer
+	note   string      // what the person wrote with a no; set before the answer is sent
 }
 
 type approvalBook struct {
@@ -78,11 +81,12 @@ func (b *approvalBook) waiting(id, who string) (exists, always bool) {
 
 // resolveApproval answers an approval or a permission (never a question). "always" is only for a permission that
 // offered it.
-func (b *approvalBook) resolveApproval(id, who, decision string) bool {
+func (b *approvalBook) resolveApproval(id, who, decision, note string) bool {
 	b.mu.Lock()
 	p, ok := b.pending[id]
 	if ok && p.who == who && (p.kind == "" || p.kind == "permission") && (decision != decisionAlways || p.kind == "permission" && p.always) {
 		delete(b.pending, id)
+		p.note = note
 	} else {
 		ok = false
 	}
@@ -136,6 +140,7 @@ func (s *Server) askToApprove(ctx context.Context, p Principal, c lookupCall, sh
 func (s *Server) handleAssistantApproval(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Decision string `json:"decision"`
+		Feedback string `json:"feedback"` // with a no: what to do instead
 	}
 	if !readJSON(w, r, &req) {
 		return
@@ -151,7 +156,12 @@ func (s *Server) handleAssistantApproval(w http.ResponseWriter, r *http.Request)
 			return
 		}
 	}
-	if !s.approvals.resolveApproval(r.PathValue("id"), p.Name, req.Decision) {
+	note := strings.TrimSpace(req.Feedback)
+	if note != "" && req.Decision != "deny" || len(note) > maxAnswerLen {
+		writeError(w, http.StatusBadRequest, fmt.Sprintf("feedback goes with a no, in at most %d characters", maxAnswerLen))
+		return
+	}
+	if !s.approvals.resolveApproval(r.PathValue("id"), p.Name, req.Decision, note) {
 		writeError(w, http.StatusNotFound, "no question of yours is waiting for that answer (it may have expired)")
 		return
 	}
@@ -164,7 +174,7 @@ func (b *approvalBook) approveWaitingEngine(who string) int {
 	b.mu.Lock()
 	var ids []string
 	for id, p := range b.pending {
-		if p.who == who && p.kind == "permission" && engineTools[p.tool] {
+		if p.who == who && p.kind == "permission" && (engineTools[p.tool] || p.tool == shellCardTool) {
 			ids = append(ids, id)
 		}
 	}

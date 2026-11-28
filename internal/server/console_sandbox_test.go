@@ -104,6 +104,31 @@ func sandboxHarness(t *testing.T) (*mcpHarness, *dockerStub) {
 
 func shell(args map[string]any) string { return lookupReply(runShellTool, args) }
 
+// askAllowing sends one tool call as a person in the chat who answers yes to every card.
+func (m *mcpHarness) askAllowing(c *browser, reply string) []map[string]any {
+	m.t.Helper()
+	st := m.streamScript(c, reply, "Done.")
+	for deadline := time.Now().Add(10 * time.Second); ; time.Sleep(5 * time.Millisecond) {
+		select {
+		case <-st.done:
+			return frames(m.t, st.body)
+		default:
+		}
+		if time.Now().After(deadline) {
+			m.t.Fatal("the stream did not finish")
+		}
+		m.srv.approvals.mu.Lock()
+		waiting := map[string]string{}
+		for id, p := range m.srv.approvals.pending {
+			waiting[id] = p.who
+		}
+		m.srv.approvals.mu.Unlock()
+		for id, who := range waiting {
+			m.srv.approvals.resolveApproval(id, who, decisionOnce, "")
+		}
+	}
+}
+
 func TestTheSandboxIsOffUntilAnAdministratorTurnsItOn(t *testing.T) {
 	m, d := sandboxHarness(t)
 	if help := m.srv.lookupHelp(context.Background(), "developer"); strings.Contains(help, runShellTool) {
@@ -134,13 +159,13 @@ func TestTheSandboxContainerIsHardenedAndTheCommandIsNotRunByAHostShell(t *testi
 	m, d := sandboxHarness(t)
 	m.admin.expect(200, "PUT", "/v1/assistant/sandbox", map[string]any{"enabled": true})
 	cmd := `echo "$(whoami)"; apt-get install -y python3 && python3 -c 'print(1)' | tee /work/out.txt`
-	m.ask(m.dev, shell(map[string]any{"command": cmd, "timeout_seconds": 200}))
+	m.askAllowing(m.dev, shell(map[string]any{"command": cmd, "timeout_seconds": 200}))
 	runs := d.find("run")
 	if len(runs) != 1 {
 		t.Fatalf("docker run calls: %v", runs)
 	}
 	line := " " + strings.Join(runs[0], " ") + " "
-	for _, want := range []string{" -d ", " --cap-drop ALL ", " --security-opt no-new-privileges ", " --memory 2g ", " --pids-limit 512 ", " --cpus 2 ", " --network bridge ", " --label forgeline.sandbox=1 ", " ubuntu:24.04 sleep infinity "} {
+	for _, want := range []string{" -d ", " --cap-drop ALL ", " --security-opt no-new-privileges ", " --memory 2g ", " --pids-limit 512 ", " --cpus 2 ", " --network bridge ", " --label forgeline.sandbox=1 ", " --tmpfs /work/.agent:ro,size=1m ", " ubuntu:24.04 sleep infinity "} {
 		if !strings.Contains(line, want) {
 			t.Errorf("docker run lacks %q: %s", want, line)
 		}
@@ -174,23 +199,23 @@ func TestTheSandboxContainerIsHardenedAndTheCommandIsNotRunByAHostShell(t *testi
 		t.Errorf("a 200 second command was not given more than the usual host command limit: %v", d.limits[len(d.limits)-1])
 	}
 	// A second call reuses the container; a different image is a different container; gVisor is used when Docker has it.
-	m.ask(m.dev, shell(map[string]any{"command": "ls"}))
+	m.askAllowing(m.dev, shell(map[string]any{"command": "ls"}))
 	if len(d.find("run")) != 1 {
 		t.Error("a running sandbox was started again")
 	}
-	m.ask(m.dev, shell(map[string]any{"command": "ls", "image": "python:3.13"}))
+	m.askAllowing(m.dev, shell(map[string]any{"command": "ls", "image": "python:3.13"}))
 	if r := d.find("run"); len(r) != 2 || r[1][len(r[1])-3] != "python:3.13" {
 		t.Errorf("another image: %v", r)
 	}
 	d.runtimes = `{"runc":{},"runsc":{"path":"/usr/bin/runsc"}}`
 	d.exists = nil
-	m.ask(m.dev, shell(map[string]any{"command": "ls", "image": "node:22"}))
+	m.askAllowing(m.dev, shell(map[string]any{"command": "ls", "image": "node:22"}))
 	if r := d.find("run"); !strings.Contains(" "+strings.Join(r[len(r)-1], " ")+" ", " --runtime runsc ") {
 		t.Errorf("gVisor was not used: %v", r[len(r)-1])
 	}
 	m.admin.expect(200, "PUT", "/v1/assistant/sandbox", map[string]any{"network": "none"})
 	d.exists = nil
-	m.ask(m.dev, shell(map[string]any{"command": "ls", "image": "golang:1.27"}))
+	m.askAllowing(m.dev, shell(map[string]any{"command": "ls", "image": "golang:1.27"}))
 	if r := d.find("run"); !strings.Contains(" "+strings.Join(r[len(r)-1], " ")+" ", " --network none ") {
 		t.Errorf("network none: %v", r[len(r)-1])
 	}
@@ -211,7 +236,7 @@ func TestShellArgumentsAreChecked(t *testing.T) {
 		{map[string]any{"command": "ls", "image": "UPPER:case"}, "image:"},
 		{map[string]any{"command": "ls", "secrets": []string{"A", "B", "C", "D", "E", "F", "G", "H", "I"}}, "secrets: at most"},
 	} {
-		m.ask(m.dev, shell(c.args))
+		m.askAllowing(m.dev, shell(c.args))
 		if res := m.llm.lastUser(1); !strings.Contains(res, c.want) {
 			t.Errorf("%v: want %q in %s", c.args, c.want, res)
 		}
@@ -222,23 +247,23 @@ func TestShellArgumentsAreChecked(t *testing.T) {
 	// Exit codes, timeouts and output.
 	d.exitErr = exec.Command("sh", "-c", "exit 3").Run()
 	d.out, d.stderr = "partial\n", "boom"
-	m.ask(m.dev, shell(map[string]any{"command": "false"}))
+	m.askAllowing(m.dev, shell(map[string]any{"command": "false"}))
 	if res := m.llm.lastUser(1); !strings.Contains(res, "Exit 3.") || !strings.Contains(res, "partial") || !strings.Contains(res, "boom") {
 		t.Errorf("exit 3: %s", res)
 	}
 	d.exitErr = exec.Command("sh", "-c", "exit 124").Run()
-	m.ask(m.dev, shell(map[string]any{"command": "sleep 999", "timeout_seconds": 5}))
+	m.askAllowing(m.dev, shell(map[string]any{"command": "sleep 999", "timeout_seconds": 5}))
 	if res := m.llm.lastUser(1); !strings.Contains(res, "Timed out after 5 seconds") {
 		t.Errorf("timeout: %s", res)
 	}
 	d.exitErr, d.stderr = nil, ""
 	d.out = strings.Repeat("a", maxShellOutput) + "MIDDLE" + strings.Repeat("z", maxShellOutput)
-	m.ask(m.dev, shell(map[string]any{"command": "yes"}))
+	m.askAllowing(m.dev, shell(map[string]any{"command": "yes"}))
 	if res := m.llm.lastUser(1); !strings.Contains(res, "bytes left out") || strings.Contains(res, "MIDDLE") || len(res) > 2*maxShellOutput {
 		t.Errorf("long output: %d bytes", len(res))
 	}
 	d.out = "token: ghp_abcdefghijklmnopqrstuvwxyz0123456789 and aws_secret_access_key=abcdEFGHijkl1234\n"
-	m.ask(m.dev, shell(map[string]any{"command": "env"}))
+	m.askAllowing(m.dev, shell(map[string]any{"command": "env"}))
 	if res := m.llm.lastUser(1); strings.Contains(res, "ghp_abcdef") || strings.Contains(res, "abcdEFGHijkl1234") {
 		t.Errorf("credentials in output: %s", res)
 	}

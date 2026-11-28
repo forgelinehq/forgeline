@@ -206,16 +206,28 @@ func (s *Server) enginePermission(run *engineRun, raw json.RawMessage) string {
 		b, _ := json.Marshal(map[string]any{"behavior": "allow", "updatedInput": in.Input})
 		return string(b)
 	}
+	inSandbox := s.engineInContainer(run.ctx)
+	key := chatKey(run.ctx, run.p)
+	if inSandbox && s.chatAllow.covers(key, in.ToolName, in.Input) {
+		_ = s.audit(run.ctx, run.p, "", "assistant.engine.tool", in.ToolName, "allowed for this chat: "+truncate(describeEngineTool(in.ToolName, in.Input), 300), true)
+		b, _ := json.Marshal(map[string]any{"behavior": "allow", "updatedInput": in.Input})
+		return string(b)
+	}
 	ask := permAskerFrom(run.ctx)
 	if ask == nil {
 		return deny("nobody is here to approve " + in.ToolName + ", so it did not run")
 	}
 	why := "the agent wants to run its own " + in.ToolName + " tool in your sandbox. Autopilot runs these without asking"
-	if !s.engineInContainer(run.ctx) {
+	if !inSandbox {
 		why = "the agent wants to run its own " + in.ToolName + " tool on the server itself, as the server's user. Autopilot does not cover that; turn on the sandbox to run it in a container"
 	}
-	choice, err := ask(permRequest{Tool: in.ToolName, Command: describeEngineTool(in.ToolName, in.Input), Why: why})
-	if err != nil || choice == decisionDenied {
+	var rule, label string
+	if inSandbox && key != "" { // on the server itself every call is asked
+		rule, label = chatRule(in.ToolName, in.Input)
+	}
+	choice, err := ask(permRequest{Tool: in.ToolName, Command: cutShown(describeEngineTool(in.ToolName, in.Input)), Why: why,
+		Pattern: label, Scope: scopeChat, Note: true, Actions: shownAction(in.ToolName, in.Input)})
+	if err != nil || choice != decisionOnce && (choice != decisionAlways || rule == "") {
 		msg := "the person said no, so it did not run"
 		if err != nil {
 			msg = err.Error()
@@ -223,7 +235,12 @@ func (s *Server) enginePermission(run *engineRun, raw json.RawMessage) string {
 		_ = s.audit(run.ctx, run.p, "", "assistant.engine.tool", in.ToolName, "refused: "+truncate(describeEngineTool(in.ToolName, in.Input), 300), false)
 		return deny(msg)
 	}
-	_ = s.audit(run.ctx, run.p, "", "assistant.engine.tool", in.ToolName, "approved: "+truncate(describeEngineTool(in.ToolName, in.Input), 300), true)
+	how := "approved: "
+	if choice == decisionAlways {
+		s.chatAllow.add(key, rule)
+		how = "approved, and allowed for this chat: "
+	}
+	_ = s.audit(run.ctx, run.p, "", "assistant.engine.tool", in.ToolName, how+truncate(describeEngineTool(in.ToolName, in.Input), 300), true)
 	b, _ := json.Marshal(map[string]any{"behavior": "allow", "updatedInput": in.Input})
 	return string(b)
 }
@@ -253,7 +270,7 @@ const engineSystem = `You are the assistant built into Forgeline, a self-hostabl
 
 How Forgeline works for you:
 - Forgeline's tools run as the signed-in person with their role, and every use is audited. A change to AWS shows the person the exact command and waits for their answer. Do not try to get around that.
-- Your own Bash, Edit and Write show the person a card with the exact action and wait for their answer. Your workspace is the current directory and it is kept between conversations.
+- Your own Bash, Edit and Write, and run_shell, show the person a card with the exact action and wait for their answer (they may allow it for the whole chat). If they say no with a note, do what the note says. Your workspace is the current directory and it is kept between conversations.
 - A job that needs two or more of your own commands or file writes starts with approve_plan: call it before the first Bash, Write or Edit, so the person answers once. Put every step on it, the file writes too with their whole content (a script you are going to run is a Write on the plan, ahead of the command that runs it). Then do the steps exactly as listed.
 - A file made for the person (a report, a table, a document): hand it over with offer_file, or name it in your answer, and they get a Download button.
 - To change Forgeline itself use forgeline_api: it calls the console's own API as the person (read anything; update, version, archive or delete agents, skills, teams, workflows, pipelines and memory), so update what exists instead of creating a copy. It asks first, or runs at once under autopilot. Use prepare_action for a new pipeline, skill, agent or workflow when you want the person to see the exact file on a card, and to turn on a capability. The answer comes back as their next message; never ask them to tell you.

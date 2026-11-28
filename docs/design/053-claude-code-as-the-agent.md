@@ -53,8 +53,18 @@ A job with several commands stopped on a card for each. The tool `approve_plan` 
 Write path and content; Edit path, old and new text), shows all of them on one card, and records what was approved for the
 message being answered. The permission prompt then allows a call once per listed item, only if every argument that changes
 what happens is identical. The maintainer approved this rule on 2026-11-28. Not covered: web fetches, ACP agents, the host
-(sandbox off), and anything that already has its own card. `run_shell` still runs in the sandbox without a card
-(note 052, decision B), so these cards limit the agent's own tools, not what can happen inside the container.
+(sandbox off), and anything that already has its own card. A plan does not cover `run_shell`, which asks by itself (below).
+
+## Built (2026-11-28): permissions as in other coding agents
+
+The maintainer asked that the assistant behave like Claude Code, GitHub Copilot CLI or OpenClaw. Their documentation was
+read the same day. What they share, now here, following Claude Code where they differ: a card offers once, for the session
+(here the chat) or no with a note; file changes are shown; commands that only read run; sensitive paths ask every time; one
+permission system for every way of running a command. This **replaces note 052's decision B**: `run_shell` no longer runs
+whatever it is given, and its containers see an empty folder over `/work/.agent`. Differences kept: allowances last for one
+chat (Claude Code saves command rules per project), nothing is offered for the server's own shell, and AWS changes,
+secrets and changes to Forgeline keep their own rules. ACP agents' cards are unchanged. A container already running when
+the server is updated keeps its old mounts until it is removed.
 
 ## Security notes
 
