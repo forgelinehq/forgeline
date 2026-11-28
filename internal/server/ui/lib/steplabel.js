@@ -111,6 +111,14 @@ export function planItems(actions) {
   });
 }
 
+/** The buttons of a permission card: what yes means, and what "always" would allow, if it can be offered. */
+export function permissionChoices(x) {
+  const yes = x.tool === 'approve_plan' ? 'Approve all ' + (x.actions || []).length : 'Allow once';
+  if (!x.pattern) return { yes, always: '', code: '', title: '', allowed: '' };
+  if (x.scope === 'chat') return { yes, always: 'Allow for this chat ', code: x.pattern, title: 'Until you start a new chat', allowed: 'Allowed for this chat' };
+  return { yes, always: 'Always allow ', code: x.pattern, title: 'You can remove this rule under Settings › Assistant permissions', allowed: 'Allowed, and always for this kind' };
+}
+
 /**
  * What a permission card says. It depends on what is being asked: a command for the agent's shell, a file change, a web
  * request, an AWS change, or secrets for a command in the sandbox. It is only about AWS when it is an AWS change.
@@ -118,6 +126,7 @@ export function planItems(actions) {
 export function permissionWording(x) {
   const t = x.tool || '';
   if (t === 'approve_plan') return { title: 'Approve this plan?', lead: 'The agent wants to do all of this. One answer covers every item below, so read them. Nothing has run yet.' };
+  if (t === 'sandbox_command') return { title: 'Allow this command?', lead: 'The assistant wants to run this in its sandbox. Nothing has run yet.' };
   if (t === 'run_shell') return { title: 'Give secrets to this command?', lead: 'The assistant wants to run this in its sandbox, with secrets from your vault. Nothing has run yet.' };
   if (t === 'Bash') return { title: 'Allow this command?', lead: 'The agent wants to run this command. Nothing has run yet.' };
   if (FILE_TOOLS.includes(t)) return { title: 'Allow this file change?', lead: 'The agent wants to change a file in its workspace. Nothing has changed yet.' };

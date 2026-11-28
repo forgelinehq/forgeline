@@ -308,7 +308,7 @@ func (s *Server) permitChange(ctx context.Context, account string, args []string
 	if ask == nil {
 		return refuse("this change needs the person's approval and nobody is here to give it; ask in the chat, or propose it")
 	}
-	choice, err := ask(permRequest{Tool: "call_aws", Command: command, Account: account, Why: dec.Why, Pattern: alwaysPattern(command)})
+	choice, err := ask(permRequest{Tool: "call_aws", Command: command, Account: account, Why: dec.Why, Pattern: alwaysPattern(command), Note: true})
 	if err != nil || choice == decisionDenied {
 		msg := "you said no, so it did not run"
 		if err != nil {

@@ -7,7 +7,7 @@ import { pageContext as contextOf } from './pagectx.js';
 import { renderReply } from './mdview.js';
 import { newRun, applyEvent, progressLabel } from './runstate.js';
 import { dockWidth, wideDockWidth, floatRect, readPrefs } from './panelgeom.js';
-import { stepLabel, stepsSummary, permissionWording, planItems } from './steplabel.js';
+import { stepLabel, stepsSummary, permissionWording, planItems, permissionChoices } from './steplabel.js';
 import { newQueue, queueView, decide, takeReply } from './cardqueue.js';
 import { RUN_KINDS, followRun, outcomeWords } from './runfollow.js';
 
@@ -207,29 +207,36 @@ function build(close, role) {
   const shownText = 'w-full overflow-auto whitespace-pre-wrap break-words rounded-lg bg-white/70 p-2 font-mono text-[11px] dark:bg-slate-900/50';
 
   /**
-   * A change the assistant wants to make, with the exact command. Nothing runs until you answer: once, always for this
-   * kind of command (shown, and listed under Settings › Assistant permissions where you can remove it), or no.
+   * A change the assistant wants to make, with the exact command or the file's content. Nothing runs until you answer:
+   * once, for the rest of this chat or this kind of command (shown on the button), or no, with a note if you like.
    */
   function permissionCard(x) {
     const send = async (e, decision) => {
       const box = e.currentTarget.closest('[data-permission-id]');
-      box.querySelectorAll('button').forEach(b => { b.disabled = true; });
-      try { await post('/v1/assistant/approvals/' + encodeURIComponent(x.id), { decision }); }
-      catch (err) { toast(err.message, 'error'); box.querySelectorAll('button').forEach(b => { b.disabled = false; }); }
+      const controls = () => box.querySelectorAll('button,input');
+      const feedback = decision === 'deny' ? (box.querySelector('input')?.value || '').trim() : '';
+      controls().forEach(b => { b.disabled = true; });
+      try { await post('/v1/assistant/approvals/' + encodeURIComponent(x.id), feedback ? { decision, feedback } : { decision }); }
+      catch (err) { toast(err.message, 'error'); controls().forEach(b => { b.disabled = false; }); }
     };
+    const plan = x.tool === 'approve_plan';
+    const choices = permissionChoices(x);
+    const note = x.note ? h('input', { class: 'input min-w-0 flex-1 text-sm', type: 'text', maxlength: '1000', placeholder: 'If not, say what to do instead (optional)', 'aria-label': 'What to do instead', 'data-permission-note': x.id }) : null;
+    note?.addEventListener('keydown', (e) => { if (e.key === 'Enter' && note.value.trim()) { e.preventDefault(); send(e, 'deny'); } });
     return h('div', { class: amber + ' flex-col', 'data-permission-id': x.id, role: 'group', 'aria-label': 'Allow this change?' },
       h('div', { class: 'flex items-center gap-2 font-semibold' }, icon('shield', 'size-4 shrink-0'), permissionWording(x).title),
       h('div', { class: 'text-sm' }, permissionWording(x).lead),
       x.actions.length
         ? h('ol', { class: 'max-h-96 w-full space-y-2 overflow-auto', 'data-permission-plan': String(x.actions.length) },
-          h('li', { class: 'text-sm font-semibold' }, x.command),
-          planItems(x.actions).map(i => h('li', { class: 'space-y-1' }, h('div', { class: 'break-all text-xs font-semibold' }, i.label), h('pre', { class: shownText }, i.text))))
-        : h('pre', { class: 'max-h-32 ' + shownText, 'data-permission-command': '' }, x.command),
+          plan ? h('li', { class: 'text-sm font-semibold' }, x.command) : null,
+          planItems(x.actions).map(i => h('li', { class: 'space-y-1' }, h('div', { class: 'break-all text-xs font-semibold' }, plan ? i.label : i.label.replace(/^1\. /, '')), h('pre', { class: shownText }, i.text))))
+        : h('pre', { class: 'max-h-64 ' + shownText, 'data-permission-command': '' }, x.command),
       x.why ? h('div', { class: 'muted text-xs' }, x.why + '.') : null,
       h('div', { class: 'flex flex-wrap gap-2' },
-        h('button', { type: 'button', class: 'btn-primary btn-sm', 'data-permission': 'approve', onclick: (e) => send(e, 'approve') }, x.actions.length ? 'Approve all ' + x.actions.length : 'Allow once'),
-        x.pattern ? h('button', { type: 'button', class: 'btn-secondary btn-sm', 'data-permission': 'always', title: 'You can remove this rule under Settings › Assistant permissions', onclick: (e) => send(e, 'always') }, 'Always allow ', h('code', { class: 'ml-1 font-mono text-[11px]' }, x.pattern)) : null,
-        h('button', { type: 'button', class: 'btn-ghost btn-sm', 'data-permission': 'deny', onclick: (e) => send(e, 'deny') }, 'Deny')));
+        h('button', { type: 'button', class: 'btn-primary btn-sm', 'data-permission': 'approve', onclick: (e) => send(e, 'approve') }, choices.yes),
+        choices.always ? h('button', { type: 'button', class: 'btn-secondary btn-sm', 'data-permission': 'always', title: choices.title, onclick: (e) => send(e, 'always') }, choices.always, h('code', { class: 'ml-1 break-all font-mono text-[11px]' }, choices.code)) : null,
+        note ? null : h('button', { type: 'button', class: 'btn-ghost btn-sm', 'data-permission': 'deny', onclick: (e) => send(e, 'deny') }, 'Deny')),
+      note ? h('div', { class: 'flex w-full gap-2' }, note, h('button', { type: 'button', class: 'btn-ghost btn-sm', 'data-permission': 'deny', onclick: (e) => send(e, 'deny') }, 'Deny')) : null);
   }
 
   /** The plan as a checklist: done, doing now, still to do. */
@@ -391,7 +398,7 @@ function build(close, role) {
       }),
       run.permissions.map(x => {
         if (x.state === 'waiting') { const k = 'permission:' + x.id; if (!cards.has(k)) cards.set(k, permissionCard(x)); return cards.get(k); }
-        const said = { approve: 'Allowed once', always: 'Allowed, and always for this kind', deny: 'Not allowed', expired: 'No answer, so it did not run' }[x.state] || x.state;
+        const said = { approve: 'Allowed once', always: permissionChoices(x).allowed || 'Allowed', deny: 'Not allowed', expired: 'No answer, so it did not run' }[x.state] || x.state;
         if (x.actions.length && x.state === 'approve') return h('div', { class: 'text-sm', 'data-permission-done': x.id }, h('b', {}, 'Plan approved: '), x.command);
         return h('div', { class: 'text-sm', 'data-permission-done': x.id }, h('b', {}, said + ': '), h('code', { class: 'break-all font-mono text-[11px]' }, x.command));
       }),

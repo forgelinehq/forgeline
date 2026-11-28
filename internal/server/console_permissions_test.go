@@ -260,19 +260,19 @@ func TestAlwaysIsOnlyForAPermissionThatOfferedIt(t *testing.T) {
 	noAlways := &pendingApproval{who: "dev", kind: "permission", answer: make(chan string, 1)}
 	question := &pendingApproval{who: "dev", kind: "question", answer: make(chan string, 1)}
 	rid, pid, nid, qid := b.add(read), b.add(perm), b.add(noAlways), b.add(question)
-	if b.resolveApproval(rid, "dev", decisionAlways) || b.resolveApproval(nid, "dev", decisionAlways) {
+	if b.resolveApproval(rid, "dev", decisionAlways, "") || b.resolveApproval(nid, "dev", decisionAlways, "") {
 		t.Error("always was accepted where it was not offered")
 	}
-	if b.resolveApproval(qid, "dev", "approve") {
+	if b.resolveApproval(qid, "dev", "approve", "") {
 		t.Error("a question was answered as an approval")
 	}
-	if b.resolveApproval(pid, "other", decisionAlways) {
+	if b.resolveApproval(pid, "other", decisionAlways, "") {
 		t.Error("someone else answered")
 	}
-	if !b.resolveApproval(pid, "dev", decisionAlways) || <-perm.answer != decisionAlways {
+	if !b.resolveApproval(pid, "dev", decisionAlways, "") || <-perm.answer != decisionAlways {
 		t.Error("always was refused where it was offered")
 	}
-	if !b.resolveApproval(rid, "dev", "approve") || !b.resolveApproval(nid, "dev", "deny") {
+	if !b.resolveApproval(rid, "dev", "approve", "") || !b.resolveApproval(nid, "dev", "deny", "") {
 		t.Error("plain answers were refused")
 	}
 }

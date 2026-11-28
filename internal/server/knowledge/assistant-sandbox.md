@@ -25,7 +25,7 @@ project.
 | Action | Minimum role | Extra rule |
 | --- | --- | --- |
 | Turn the sandbox on, or choose no network | Administrator | Off until then |
-| Use it in the chat | Developer | Only the person in the chat; agents and workflows cannot |
+| Use it in the chat | Developer | Only the person in the chat, who approves commands; agents and workflows cannot |
 | Reset your sandbox (**Reset my sandbox**) | Developer | Removes your containers and your `/work` folder |
 | Give a command a vault secret | Administrator | Sees the command and the secret's name on a card, answers once |
 | Download a file from `/work` | Developer | Your own `/work` only |
@@ -37,6 +37,10 @@ project.
 2. It can `apt install`, `pip install`, `npm install`, `curl`, clone, build and run anything, in any language, and use any
    Docker image (`python:3.13`, `node:22`, `golang`).
 3. The container is removed after 30 minutes unused. Its `/work` folder stays until you reset it.
+4. A single command that only looks (`ls`, `cat`, `grep`, `head`, `wc` and the like) runs at once. Anything else shows an
+   **Allow this command?** card: allow it once, for this chat, or deny it with a note
+   ([how the cards work](assistant-agent-engines.md#answer-a-permission-card)). Autopilot runs it without a card.
+5. These commands do not see `/work/.agent`, where an agent keeps its sign-in and sessions: they find it empty.
 
 ![The assistant ran code in its sandbox]({{ '/console/assistant-sandbox.png' | relative_url }})
 

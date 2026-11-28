@@ -124,7 +124,7 @@ func (s *Server) gateForgelineWrite(ctx context.Context, p Principal, method, pa
 	if ask == nil {
 		return errors.New("this change needs the person's approval and nobody is here to give it")
 	}
-	choice, err := ask(permRequest{Tool: forgelineAPITool, Command: detail, Why: "the assistant wants to change this in Forgeline, as you. Autopilot makes these without asking"})
+	choice, err := ask(permRequest{Tool: forgelineAPITool, Command: detail, Note: true, Why: "the assistant wants to change this in Forgeline, as you. Autopilot makes these without asking"})
 	if err != nil || choice == decisionDenied {
 		_ = s.audit(ctx, p, "", "assistant.api", method+" "+path, "refused", false)
 		if err != nil {

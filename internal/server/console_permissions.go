@@ -181,7 +181,9 @@ func (s *Server) ownApproval(ctx context.Context, account string) bool {
 // permAsk is what the person is shown when the assistant wants to change something.
 type permRequest struct {
 	Tool, Command, Account, Why, Pattern string       // Pattern is what "always" would allow; "" when it cannot be
-	Actions                              []planAction // for a plan: everything it covers, shown in full
+	Actions                              []planAction // for a plan or a file change: what it covers, shown on the card
+	Scope                                string       // "chat" when "always" means for the rest of this chat
+	Note                                 bool         // a no may carry the person's note to whoever asked
 }
 
 type permAsker func(permRequest) (decision string, err error)
@@ -207,6 +209,9 @@ func (s *Server) askPermission(ctx context.Context, p Principal, req permRequest
 	select {
 	case d := <-pa.answer:
 		decided(id, d)
+		if d == decisionDenied && pa.note != "" {
+			return d, errors.New("the person said no, so it did not run. They wrote: " + pa.note)
+		}
 		return d, nil
 	case <-t.C:
 		decided(id, "expired")
