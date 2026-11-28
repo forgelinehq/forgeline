@@ -197,6 +197,10 @@ func (s *Server) enginePermission(run *engineRun, raw json.RawMessage) string {
 	if json.Unmarshal(raw, &in) != nil || in.ToolName == "" {
 		return deny("the request could not be read")
 	}
+	if modeFrom(run.ctx) == modePlan && !planModeReads[in.ToolName] {
+		_ = s.audit(run.ctx, run.p, "", "assistant.mode.refused", "assistant", "plan only: "+truncate(describeEngineTool(in.ToolName, in.Input), 300), false)
+		return deny(errPlanOnly.Error())
+	}
 	if s.autopilotApproves(run.ctx, run.p, gateRequest{Kind: gateAgentTool, Tool: in.ToolName, Detail: describeEngineTool(in.ToolName, in.Input)}) {
 		b, _ := json.Marshal(map[string]any{"behavior": "allow", "updatedInput": in.Input})
 		return string(b)
@@ -207,6 +211,11 @@ func (s *Server) enginePermission(run *engineRun, raw json.RawMessage) string {
 		return string(b)
 	}
 	inSandbox := s.engineInContainer(run.ctx)
+	if rule, _ := chatRule(in.ToolName, in.Input); inSandbox && rule == ruleEdits && modeFrom(run.ctx) == modeEdits {
+		_ = s.audit(run.ctx, run.p, "", "assistant.engine.tool", in.ToolName, "accepted with file changes on: "+truncate(describeEngineTool(in.ToolName, in.Input), 300), true)
+		b, _ := json.Marshal(map[string]any{"behavior": "allow", "updatedInput": in.Input})
+		return string(b)
+	}
 	key := chatKey(run.ctx, run.p)
 	if inSandbox && s.chatAllow.covers(key, in.ToolName, in.Input) {
 		_ = s.audit(run.ctx, run.p, "", "assistant.engine.tool", in.ToolName, "allowed for this chat: "+truncate(describeEngineTool(in.ToolName, in.Input), 300), true)
@@ -304,7 +313,7 @@ func (s *Server) askEngine(ctx context.Context, p Principal, conv, message, page
 	engineRuns.mu.Unlock()
 	defer func() { engineRuns.mu.Lock(); delete(engineRuns.m, tok); engineRuns.mu.Unlock() }()
 
-	system := engineSystem
+	system := engineSystem + modeGuidance(ctx)
 	if mt := memTurnFrom(ctx); mt != nil && mt.block != "" {
 		system += "\n\n<memory>\n" + memoryPreamble + strings.ReplaceAll(mt.block, "</memory>", "") + "</memory>"
 	}

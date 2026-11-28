@@ -106,6 +106,19 @@ When one answer prepares several cards, they come **one at a time**: the next ap
 on the one before, with a line saying how many there are. After the last one, your answers go back to the assistant as one
 message, so it carries on with the rest of what you asked.
 
+## Choose how it works
+
+Under the message box, pick how the assistant works on your next message. A new chat starts at **Ask**.
+
+| Mode | What it does |
+| --- | --- |
+| **Ask** | Shows a card before it changes anything |
+| **Accept edits** | With [Claude Code as the agent](assistant-agent-engines.md) in the sandbox, file changes under `/work` run without a card. Hidden files, commands and every other change still ask. With another model or agent it works like **Ask** |
+| **Plan only** | Looks things up and answers with a plan. The server refuses every change: file writes, commands that do more than look, cards, proposals, changes to Forgeline, memory notes and plugin tools. Reading a web page still asks |
+| **Autopilot** | Keeps going without asking, within [its rules](assistant-permissions-and-autopilot.md) |
+
+When a plan is ready, choose **Carry out, asking as I go** or **Carry out, accepting file changes**.
+
 ## Plans, questions and long results
 
 - **Plans.** For anything that takes several steps the assistant shows a checklist that it ticks off as it works. A

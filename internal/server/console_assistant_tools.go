@@ -263,6 +263,10 @@ func looksLikeCall(reply string) bool {
 // runLookup runs one lookup as the given person. The result is text to be shown to the model as
 // untrusted data.
 func (s *Server) runLookup(ctx context.Context, p Principal, c lookupCall) (string, error) {
+	if modeFrom(ctx) == modePlan && changesInPlanMode(c) {
+		_ = s.audit(ctx, p, "", "assistant.mode.refused", "assistant", "plan only: "+truncate(lookupDetail(c), 300), false)
+		return "", errPlanOnly
+	}
 	if strings.HasPrefix(c.Tool, mcpToolPrefix) {
 		if !p.Role.AtLeast(authn.Developer) {
 			return "", fmt.Errorf("%s is not available to your role", c.Tool)
