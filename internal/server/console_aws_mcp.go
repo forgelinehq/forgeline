@@ -456,6 +456,7 @@ type lookupSink struct {
 	actions                 []AssistAction
 	files                   []memFileEvent // memory files the assistant wrote or removed, for the card
 	offers                  []fileOffer    // files in the sandbox the assistant offered, for the Download card
+	plan                    planGrant      // commands and file writes the person approved together, for this message only
 }
 
 func (s *Server) handleListProposals(w http.ResponseWriter, r *http.Request) {

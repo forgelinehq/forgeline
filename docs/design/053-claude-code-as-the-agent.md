@@ -47,6 +47,15 @@ Not built, in this order:
 4. **Other engines**: Codex CLI, the Copilot CLI and **Google's Antigravity CLI (`agy`)** through the same two seams (tools over MCP, permission prompt). Google replaced Gemini CLI with Antigravity CLI on 2026-06-18 for unpaid-tier and Google One users, so Antigravity is the Google engine to build, not Gemini CLI. The maintainer has `agy` set up with a Gemini Pro plan. To check before building: whether `agy` runs headless, takes MCP servers, and has a permission-prompt hook like Claude Code's `--permission-prompt-tool`; if it has no prompt hook, its tools can only be limited to the sandbox container, not asked one by one.
 5. **Memory**: Claude Code's own memory and CLAUDE.md in the person's home, next to Forgeline's memory files.
 
+## Built (2026-11-28): one approval for a plan
+
+A job with several commands stopped on a card for each. The tool `approve_plan` takes up to 20 exact actions (Bash command;
+Write path and content; Edit path, old and new text), shows all of them on one card, and records what was approved for the
+message being answered. The permission prompt then allows a call once per listed item, only if every argument that changes
+what happens is identical. The maintainer approved this rule on 2026-11-28. Not covered: web fetches, ACP agents, the host
+(sandbox off), and anything that already has its own card. `run_shell` still runs in the sandbox without a card
+(note 052, decision B), so these cards limit the agent's own tools, not what can happen inside the container.
+
 ## Security notes
 
 - Claude Code is started with `--setting-sources ""`, so it reads no settings file (2026-11-28). The workspace and the

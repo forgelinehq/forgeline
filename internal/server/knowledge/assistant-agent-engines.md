@@ -49,6 +49,19 @@ Forgeline's tools reach it through a socket, not the network. The first message 
 minutes. This needs a Claude Code token (the secret `CLAUDE_CODE_OAUTH_TOKEN`). With the sandbox off it runs on the server itself, as the
 server's user, so approve each command as you would in a terminal.
 
+### One approval for a plan
+
+When a job needs several commands or file writes, Claude Code in the sandbox can ask for them together.
+
+1. It shows an **Approve this plan?** card listing every command and file write in full.
+2. Read them, then choose **Approve all** or **Deny**.
+3. Each approved item runs once without another card, in that reply only.
+
+A plan covers only Claude Code's own Bash, Write and Edit, at most 20 items, with files under `/work` (not `/work/.agent`).
+A call that differs by one character, runs in the background or is not listed asks by itself, as do web fetches, AWS
+changes, changes to Forgeline and secrets. It is not offered with the sandbox off or to an agent over ACP. An approved
+command runs whatever the files it uses hold at that moment.
+
 ### An agent over ACP
 
 Under **Settings → AI → Assistant model**, choose **An agent over ACP**, then **Antigravity CLI (agy)**, **GitHub Copilot CLI**,
@@ -91,7 +104,10 @@ ways, shown on the same page for the agent you chose:
 ## Security model
 
 - Forgeline's tools keep their role checks and audit entries when an agent calls them.
-- The agent's own Bash, Edit and Write ask you on a card with the exact command, unless autopilot is on inside the sandbox.
+- The agent's own Bash, Edit and Write ask you on a card with the exact command, unless autopilot is on inside the sandbox
+  or you approved that exact action on a plan.
+- Commands the assistant runs through Forgeline's own `run_shell` tool run in the [sandbox](assistant-sandbox.md) without a
+  card: the container is the limit there. The cards above cover the agent's own tools.
 - Installing is always a card you confirm, and only an administrator can.
 - Agent sign-in lives in the sandbox (`/work/.agent`), which downloads never reach.
 

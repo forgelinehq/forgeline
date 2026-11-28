@@ -180,7 +180,8 @@ func (s *Server) ownApproval(ctx context.Context, account string) bool {
 
 // permAsk is what the person is shown when the assistant wants to change something.
 type permRequest struct {
-	Tool, Command, Account, Why, Pattern string // Pattern is what "always" would allow; "" when it cannot be
+	Tool, Command, Account, Why, Pattern string       // Pattern is what "always" would allow; "" when it cannot be
+	Actions                              []planAction // for a plan: everything it covers, shown in full
 }
 
 type permAsker func(permRequest) (decision string, err error)

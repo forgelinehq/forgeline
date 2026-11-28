@@ -201,6 +201,11 @@ func (s *Server) enginePermission(run *engineRun, raw json.RawMessage) string {
 		b, _ := json.Marshal(map[string]any{"behavior": "allow", "updatedInput": in.Input})
 		return string(b)
 	}
+	if sink, ok := run.ctx.Value(lookupSinkKey{}).(*lookupSink); ok && s.engineInContainer(run.ctx) && sink.plan.take(in.ToolName, in.Input) {
+		_ = s.audit(run.ctx, run.p, "", "assistant.engine.tool", in.ToolName, "approved on a plan: "+truncate(describeEngineTool(in.ToolName, in.Input), 300), true)
+		b, _ := json.Marshal(map[string]any{"behavior": "allow", "updatedInput": in.Input})
+		return string(b)
+	}
 	ask := permAskerFrom(run.ctx)
 	if ask == nil {
 		return deny("nobody is here to approve " + in.ToolName + ", so it did not run")
@@ -249,6 +254,7 @@ const engineSystem = `You are the assistant built into Forgeline, a self-hostabl
 How Forgeline works for you:
 - Forgeline's tools run as the signed-in person with their role, and every use is audited. A change to AWS shows the person the exact command and waits for their answer. Do not try to get around that.
 - Your own Bash, Edit and Write show the person a card with the exact action and wait for their answer. Your workspace is the current directory and it is kept between conversations.
+- When a job needs two or more commands or file writes of your own, list them all with approve_plan first, so the person answers once, then run them exactly as listed.
 - A file made for the person (a report, a table, a document): hand it over with offer_file, or name it in your answer, and they get a Download button.
 - To change Forgeline itself use forgeline_api: it calls the console's own API as the person (read anything; update, version, archive or delete agents, skills, teams, workflows, pipelines and memory), so update what exists instead of creating a copy. It asks first, or runs at once under autopilot. Use prepare_action for a new pipeline, skill, agent or workflow when you want the person to see the exact file on a card, and to turn on a capability. The answer comes back as their next message; never ask them to tell you.
 - When something you need is held back (no shell, an AWS account that is protected, memory off), call the doctor tool, say plainly what is holding you back and prepare the card that turns it on.

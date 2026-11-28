@@ -43,6 +43,22 @@ dec = json.loads(rpc('tools/call', {'name': 'approve', 'arguments': {'tool_name'
 print(json.dumps({'type': 'result', 'subtype': 'success', 'is_error': False, 'result': 'in container: ' + dec['behavior'] + ' ' + str(len(tools)) + ' tools; token=' + os.environ.get('CLAUDE_CODE_OAUTH_TOKEN', '')[:6], 'session_id': 'c-1'}), flush=True)
 `
 
+// engineStandIn runs the program in bin where the server would have run claude in the container.
+func engineStandIn(dir, bin string, started *[]string) func(context.Context, string, ...string) *exec.Cmd {
+	return func(ctx context.Context, name string, args ...string) *exec.Cmd {
+		*started = append([]string{name}, args...)
+		i := 0
+		for j, a := range args {
+			if a == "claude" && j > 0 && args[j-1] != "-e" {
+				i = j
+			}
+		}
+		cmd := exec.CommandContext(ctx, filepath.Join(bin, "claude"), args[i+1:]...)
+		cmd.Dir = dir
+		return cmd
+	}
+}
+
 // containerEngineHarness is a server with the sandbox on and the agent set to run in it, with a stand-in program.
 func containerEngineHarness(t *testing.T) (*mcpHarness, *dockerStub, *[]string) {
 	t.Helper()
@@ -57,18 +73,7 @@ func containerEngineHarness(t *testing.T) (*mcpHarness, *dockerStub, *[]string) 
 	t.Cleanup(func() { os.RemoveAll(short) })
 	m.srv.cfg.DataDir = short
 	started := new([]string)
-	m.srv.engineExec = func(ctx context.Context, name string, args ...string) *exec.Cmd {
-		*started = append([]string{name}, args...)
-		i := 0
-		for j, a := range args {
-			if a == "claude" && j > 0 && args[j-1] != "-e" {
-				i = j
-			}
-		}
-		cmd := exec.CommandContext(ctx, filepath.Join(bin, "claude"), args[i+1:]...)
-		cmd.Dir = short
-		return cmd
-	}
+	m.srv.engineExec = engineStandIn(short, bin, started)
 	if _, _, err := m.srv.putSecret(t.Context(), "ada", claudeTokenName, "sk-ant-oat01-test-token-0123456789", "t"); err != nil {
 		t.Fatal(err)
 	}

@@ -7,7 +7,7 @@ import { pageContext as contextOf } from './pagectx.js';
 import { renderReply } from './mdview.js';
 import { newRun, applyEvent, progressLabel } from './runstate.js';
 import { dockWidth, wideDockWidth, floatRect, readPrefs } from './panelgeom.js';
-import { stepLabel, stepsSummary, permissionWording } from './steplabel.js';
+import { stepLabel, stepsSummary, permissionWording, planItems } from './steplabel.js';
 import { newQueue, queueView, decide, takeReply } from './cardqueue.js';
 import { RUN_KINDS, followRun, outcomeWords } from './runfollow.js';
 
@@ -204,6 +204,8 @@ function build(close, role) {
     return box;
   }
 
+  const shownText = 'w-full overflow-auto whitespace-pre-wrap break-words rounded-lg bg-white/70 p-2 font-mono text-[11px] dark:bg-slate-900/50';
+
   /**
    * A change the assistant wants to make, with the exact command. Nothing runs until you answer: once, always for this
    * kind of command (shown, and listed under Settings › Assistant permissions where you can remove it), or no.
@@ -218,10 +220,14 @@ function build(close, role) {
     return h('div', { class: amber + ' flex-col', 'data-permission-id': x.id, role: 'group', 'aria-label': 'Allow this change?' },
       h('div', { class: 'flex items-center gap-2 font-semibold' }, icon('shield', 'size-4 shrink-0'), permissionWording(x).title),
       h('div', { class: 'text-sm' }, permissionWording(x).lead),
-      h('pre', { class: 'max-h-32 w-full overflow-auto whitespace-pre-wrap break-words rounded-lg bg-white/70 p-2 font-mono text-[11px] dark:bg-slate-900/50', 'data-permission-command': '' }, x.command),
+      x.actions.length
+        ? h('ol', { class: 'max-h-96 w-full space-y-2 overflow-auto', 'data-permission-plan': String(x.actions.length) },
+          h('li', { class: 'text-sm font-semibold' }, x.command),
+          planItems(x.actions).map(i => h('li', { class: 'space-y-1' }, h('div', { class: 'break-all text-xs font-semibold' }, i.label), h('pre', { class: shownText }, i.text))))
+        : h('pre', { class: 'max-h-32 ' + shownText, 'data-permission-command': '' }, x.command),
       x.why ? h('div', { class: 'muted text-xs' }, x.why + '.') : null,
       h('div', { class: 'flex flex-wrap gap-2' },
-        h('button', { type: 'button', class: 'btn-primary btn-sm', 'data-permission': 'approve', onclick: (e) => send(e, 'approve') }, 'Allow once'),
+        h('button', { type: 'button', class: 'btn-primary btn-sm', 'data-permission': 'approve', onclick: (e) => send(e, 'approve') }, x.actions.length ? 'Approve all ' + x.actions.length : 'Allow once'),
         x.pattern ? h('button', { type: 'button', class: 'btn-secondary btn-sm', 'data-permission': 'always', title: 'You can remove this rule under Settings › Assistant permissions', onclick: (e) => send(e, 'always') }, 'Always allow ', h('code', { class: 'ml-1 font-mono text-[11px]' }, x.pattern)) : null,
         h('button', { type: 'button', class: 'btn-ghost btn-sm', 'data-permission': 'deny', onclick: (e) => send(e, 'deny') }, 'Deny')));
   }
@@ -386,6 +392,7 @@ function build(close, role) {
       run.permissions.map(x => {
         if (x.state === 'waiting') { const k = 'permission:' + x.id; if (!cards.has(k)) cards.set(k, permissionCard(x)); return cards.get(k); }
         const said = { approve: 'Allowed once', always: 'Allowed, and always for this kind', deny: 'Not allowed', expired: 'No answer, so it did not run' }[x.state] || x.state;
+        if (x.actions.length && x.state === 'approve') return h('div', { class: 'text-sm', 'data-permission-done': x.id }, h('b', {}, 'Plan approved: '), x.command);
         return h('div', { class: 'text-sm', 'data-permission-done': x.id }, h('b', {}, said + ': '), h('code', { class: 'break-all font-mono text-[11px]' }, x.command));
       }),
       run.memFiles.map((f, i) => h('div', { class: 'text-sm', 'data-memory-file': String(i) }, icon('sparkle', 'mr-1 inline size-3.5 text-brand-600 dark:text-brand-300'),
