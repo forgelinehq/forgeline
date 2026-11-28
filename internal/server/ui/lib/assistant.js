@@ -9,6 +9,7 @@ import { newRun, applyEvent, progressLabel } from './runstate.js';
 import { dockWidth, wideDockWidth, floatRect, readPrefs } from './panelgeom.js';
 import { stepLabel, stepsSummary, permissionWording, planItems, permissionChoices } from './steplabel.js';
 import { newQueue, queueView, decide, takeReply } from './cardqueue.js';
+import { MODES, modeFields, carryOutChoices, CARRY_OUT } from './modes.js';
 import { RUN_KINDS, followRun, outcomeWords } from './runfollow.js';
 
 // What the card's detail holds, by kind of action (note 028).
@@ -75,6 +76,8 @@ function build(close, role) {
   let busy = false, ready = null;
   // Autopilot (design note 052, slice 4): on for this conversation only, with an envelope the server enforces.
   let apOn = false, apAllowed = true, apLeft = null;
+  // How to work on the next message (design note 053). Like autopilot, it never carries over to another conversation.
+  let workMode = 'ask';
 
   const refreshCtx = () => { ctxLabel.textContent = pageContext().label; };
   refreshCtx();
@@ -447,6 +450,8 @@ function build(close, role) {
     const q = (question ?? input.value).trim();
     if (!q || busy) return;
     if (!history.length) list.replaceChildren();
+    list.querySelector('[data-carry-out]')?.remove();
+    const sentMode = apOn ? 'autopilot' : workMode;
     busy = true; sendBtn.disabled = true; input.value = '';
     const run = newRun(), opened = new Set(), cards = new Map(), ctl = new AbortController();
     const host = h('div', { 'data-turn': 'assistant' });
@@ -460,7 +465,7 @@ function build(close, role) {
     const c = pageContext();
     try {
       const body = { message: q, history, conversationId: conversation, context: { kind: c.kind, id: c.id, path: c.path, label: c.where } };
-      if (apOn) body.autopilot = limitsBody();
+      Object.assign(body, modeFields(workMode, apOn, limitsBody()));
       await streamPost('/v1/assistant/runs', body, (ev) => { applyEvent(run, ev); if (run.autopilot) { apLeft = run.autopilot; if (run.autopilot.state === 'off') apOn = false; drawAutopilot(); } draw(); }, ctl.signal);
       if (run.status === 'running') { run.status = 'error'; run.error = 'The connection closed before the assistant finished.'; }
     } catch (e) {
@@ -471,6 +476,11 @@ function build(close, role) {
     if (run.conversation) conversation = run.conversation;
     if (run.status === 'finished') history.push({ role: 'user', content: q }, { role: 'assistant', content: run.text });
     busy = false; sendBtn.disabled = false; input.focus();
+    const choices = carryOutChoices(sentMode, run.status);
+    if (choices.length) {
+      list.append(h('div', { class: 'flex flex-wrap gap-2', 'data-carry-out': '' }, choices.map(c => h('button', { type: 'button', class: c.mode === 'ask' ? 'btn-primary btn-sm' : 'btn-secondary btn-sm', 'data-carry-out-mode': c.mode, onclick: () => { setMode(c.mode); ask(CARRY_OUT); } }, c.label))));
+      list.scrollTop = list.scrollHeight;
+    }
     if (queued) { const q2 = queued; queued = ''; ask(q2); }
   }
 
@@ -506,7 +516,7 @@ function build(close, role) {
     try { c = await get('/v1/assistant/conversations/' + encodeURIComponent(id)); } catch (e) { return toast(e.message, 'error'); }
     history.length = 0;
     for (const m of c.messages) history.push({ role: m.role, content: m.text });
-    conversation = c.id; apOn = false; apLeft = null; drawAutopilot(); // autopilot never carries over to another conversation
+    conversation = c.id; apOn = false; apLeft = null; workMode = 'ask'; drawAutopilot(); // a mode never carries over to another conversation
     restore();
   }
 
@@ -518,7 +528,7 @@ function build(close, role) {
   const apLimitBtn = h('button', { class: 'btn-ghost btn-sm text-xs', type: 'button', id: 'assistant-autopilot-limit-btn', onclick: () => { apLimits.classList.toggle('hidden'); apLimits.classList.toggle('flex'); } }, 'Set a limit');
   const limitsBody = () => { const o = {}; if (Number(apMin.value) > 0) o.minutes = Number(apMin.value); if (Number(apSteps.value) > 0) o.steps = Number(apSteps.value); return o; };
   const apBtn = h('button', { class: 'btn-ghost btn-sm', type: 'button', id: 'assistant-autopilot', role: 'switch', 'aria-checked': 'false', title: 'Let the assistant keep working without stopping to ask, until you stop it. Inside the sandbox its commands run without a card; it still asks before anything on a protected account, IAM, or a rule that says no.', onclick: async () => {
-    apOn = !apOn; apLeft = null; drawAutopilot();
+    apOn = !apOn; apLeft = null; if (apOn) workMode = 'ask'; drawAutopilot();
     if (apOn && conversation) { // switched on mid-conversation, maybe mid-answer: tell the server now
       try { await post('/v1/assistant/autopilot/start', { conversation, ...limitsBody() }); } catch (e) { toast(e.message, 'error'); apOn = false; drawAutopilot(); }
     } else if (!apOn && conversation) { try { await post('/v1/assistant/autopilot/stop', { conversation }); } catch { /* it ends with the next message anyway */ } }
@@ -527,9 +537,22 @@ function build(close, role) {
     apOn = false; drawAutopilot();
     try { await post('/v1/assistant/autopilot/stop', { conversation }); } catch (e) { toast(e.message, 'error'); }
   } }, icon('stop', 'size-3'), 'Stop autopilot');
-  const apBar = h('div', { class: 'mt-1.5 flex flex-wrap items-center gap-2 px-1', id: 'assistant-autopilot-bar' }, apBtn, apStop, apLimitBtn, apLimits);
+  const apBar = h('div', { class: 'flex flex-wrap items-center gap-2', id: 'assistant-autopilot-bar' }, apBtn, apStop, apLimitBtn, apLimits);
+  /** Choosing a mode switches autopilot off: only one way of working is on at a time. */
+  function setMode(mode) {
+    workMode = mode;
+    if (apOn) { apOn = false; apLeft = null; if (conversation) post('/v1/assistant/autopilot/stop', { conversation }).catch(() => { /* it ends with the next message anyway */ }); }
+    drawAutopilot();
+  }
+  const modeBtns = MODES.map(m => h('button', { type: 'button', role: 'radio', 'data-work-mode': m.id, title: m.title, onclick: () => setMode(m.id) }, m.label));
+  const modeBar = h('div', { class: 'flex rounded-lg border border-slate-200 p-0.5 dark:border-slate-700', role: 'radiogroup', 'aria-label': 'How the assistant works' }, modeBtns);
   /** The switch, and while it is on, what is left of a limit if one was set. */
   function drawAutopilot() {
+    for (const b of modeBtns) {
+      const on = !apOn && b.getAttribute('data-work-mode') === workMode;
+      b.setAttribute('aria-checked', String(on));
+      b.className = 'rounded-md px-2 py-1 text-xs font-medium ' + (on ? 'bg-brand-50 text-brand-700 dark:bg-brand-500/15 dark:text-brand-200' : 'muted hover:bg-slate-100 dark:hover:bg-slate-800');
+    }
     apBar.classList.toggle('hidden', !apAllowed);
     apBtn.setAttribute('aria-checked', String(apOn));
     apStop.classList.toggle('hidden', !apOn);
@@ -549,7 +572,7 @@ function build(close, role) {
   get('/v1/assistant/autopilot').then(r => { apAllowed = r.allowed !== false; drawAutopilot(); }).catch(() => drawAutopilot());
   const form = h('form', { class: 'shrink-0 border-t border-slate-200 p-3 dark:border-slate-800', onsubmit: (e) => { e.preventDefault(); ask(); } },
     h('div', { class: 'flex items-end gap-2 rounded-2xl border border-slate-300 bg-white p-1.5 pl-3 shadow-sm focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-500/25 dark:border-slate-700 dark:bg-slate-900' }, input, sendBtn),
-    apBar,
+    h('div', { class: 'mt-1.5 flex flex-wrap items-center gap-2 px-1' }, modeBar, apBar),
     h('div', { class: 'muted mt-1.5 px-1 text-[11px]' }, 'Enter to send, Shift and Enter for a new line. Every answer is saved in your conversations.'));
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); form.requestSubmit(); } });
 
@@ -567,7 +590,7 @@ function build(close, role) {
       h('span', { class: 'flex size-8 shrink-0 items-center justify-center rounded-lg bg-brand-600 text-white' }, icon('sparkle', 'size-4')),
       h('div', { class: 'min-w-0' }, h('div', { class: 'font-display text-[15px] font-bold leading-tight' }, 'Assistant'), h('div', { class: 'muted truncate text-xs' }, 'Looking at ', ctxLabel))),
     h('div', { class: 'flex items-center gap-0.5' },
-      h('button', { class: 'btn-ghost btn-sm', type: 'button', id: 'assistant-new', title: 'Start a new conversation', onclick: () => { history.length = 0; conversation = ''; apOn = false; apLeft = null; drawAutopilot(); empty(); } }, icon('plus', 'size-3.5'), h('span', { class: 'hidden sm:inline' }, 'New')),
+      h('button', { class: 'btn-ghost btn-sm', type: 'button', id: 'assistant-new', title: 'Start a new conversation', onclick: () => { history.length = 0; conversation = ''; apOn = false; apLeft = null; workMode = 'ask'; drawAutopilot(); empty(); } }, icon('plus', 'size-3.5'), h('span', { class: 'hidden sm:inline' }, 'New')),
       hdrBtn({ id: 'assistant-history', 'aria-label': 'Your past conversations', onclick: showHistory }, 'history'),
       h('span', { class: 'mx-1 h-5 w-px bg-slate-200 dark:bg-slate-700', 'aria-hidden': 'true' }),
       wideBtn, modeBtn,

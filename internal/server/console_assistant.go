@@ -257,6 +257,9 @@ type chatRequest struct {
 	ConversationID string `json:"conversationId"`
 	// Autopilot is present while the person has it switched on for this conversation (note 052).
 	Autopilot *autopilotRequest `json:"autopilot"`
+	// Mode is how to work on this message: "" asks before changes, "edits" accepts file changes in the sandbox, "plan"
+	// changes nothing.
+	Mode string `json:"mode"`
 }
 
 // ChatReply is the assistant's answer.
@@ -296,6 +299,7 @@ type chatJob struct {
 	message   string // the question as asked
 	setup     string // what the server says about this installation
 	autopilot *autopilotRequest
+	mode      string // ask (empty), edits or plan
 }
 
 // prepareChat applies the rate limit and every check on the request. It has already written the
@@ -317,6 +321,14 @@ func (s *Server) prepareChat(w http.ResponseWriter, r *http.Request) (chatJob, b
 		return chatJob{}, false
 	case len(req.Message) > maxAssistMessage:
 		writeError(w, http.StatusBadRequest, fmt.Sprintf("the question is longer than %d characters", maxAssistMessage))
+		return chatJob{}, false
+	}
+	switch {
+	case req.Mode != modeAsk && req.Mode != modeEdits && req.Mode != modePlan:
+		writeError(w, http.StatusBadRequest, "mode: edits, plan, or nothing to be asked")
+		return chatJob{}, false
+	case req.Mode == modePlan && req.Autopilot != nil:
+		writeError(w, http.StatusBadRequest, "plan only changes nothing, so autopilot cannot be on with it")
 		return chatJob{}, false
 	}
 	st := s.loadAssistant(r.Context())
@@ -356,7 +368,7 @@ func (s *Server) prepareChat(w http.ResponseWriter, r *http.Request) (chatJob, b
 		turns = turns[1:]
 	}
 	turns = append(turns, chatTurn{Role: "user", Content: req.Message})
-	return chatJob{p: p, turns: turns, ctxText: ctxText, ctxNote: ctxNote, asked: len(req.Message), conv: req.ConversationID, message: req.Message, setup: s.setupText(r.Context(), p), autopilot: req.Autopilot}, true
+	return chatJob{p: p, turns: turns, ctxText: ctxText, ctxNote: ctxNote, asked: len(req.Message), conv: req.ConversationID, message: req.Message, setup: s.setupText(r.Context(), p), autopilot: req.Autopilot, mode: req.Mode}, true
 }
 
 func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
@@ -483,7 +495,7 @@ func (s *Server) askAssistant(ctx context.Context, role authn.Role, turns []chat
 		ctx = context.WithValue(ctx, nativeToolsKey{}, buildNativeSet(lines)) // sent as real tool definitions where the provider has them
 	}
 	if role != "" {
-		system += workGuidance(ctx)
+		system += workGuidance(ctx) + modeGuidance(ctx)
 		if scopeFrom(ctx) == nil && !s.loadSandbox(ctx).Enabled {
 			system += "\n\nYou do have a shell, but it is switched off: it is a sandbox container where you can install anything and run commands or code in any language. When someone asks for a shell, or a task needs one, say that an administrator can turn it on under Settings › AI › Assistant permissions, and do what you can without it meanwhile."
 		}

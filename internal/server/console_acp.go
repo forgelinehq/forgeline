@@ -447,7 +447,7 @@ func (s *Server) saveACPSession(ctx context.Context, conv, harness, sid string) 
 // engineInstructions is what the agent is told about Forgeline, the person's notes and the page they are on, sent with the
 // message because an ACP agent has its own system prompt.
 func (s *Server) engineInstructions(ctx context.Context, pageContext string) string {
-	sys := engineSystem
+	sys := engineSystem + modeGuidance(ctx)
 	if mt := memTurnFrom(ctx); mt != nil && mt.block != "" {
 		sys += "\n\n<memory>\n" + memoryPreamble + strings.ReplaceAll(mt.block, "</memory>", "") + "</memory>"
 	}
@@ -628,6 +628,10 @@ func (s *Server) acpPermission(run *engineRun, params json.RawMessage, isOwn fun
 	desc := in.ToolCall.Title
 	if c, ok := in.ToolCall.RawInput["command"].(string); ok && c != "" {
 		desc = c
+	}
+	if modeFrom(run.ctx) == modePlan && in.ToolCall.Kind != "fetch" {
+		_ = s.audit(run.ctx, run.p, "", "assistant.mode.refused", "assistant", "plan only: "+truncate(desc, 300), false)
+		return pick("reject_once", "reject_always")
 	}
 	if s.autopilotApproves(run.ctx, run.p, gateRequest{Kind: gateAgentTool, Tool: tool, Detail: desc}) {
 		return pick("allow_once", "allow_always")

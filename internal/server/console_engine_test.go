@@ -46,6 +46,7 @@ out = 'hello' if dec['behavior'] == 'allow' else 'denied: ' + dec.get('message',
 ev({'type': 'message_start', 'message': {'role': 'assistant'}})
 text('Done: '); text(out)
 print(json.dumps({'type': 'user', 'message': {'content': [{'type': 'tool_result', 'tool_use_id': 'tu1', 'content': out}]}}), flush=True)
+open('system.txt', 'w').write(open(args[args.index('--append-system-prompt-file') + 1]).read())
 open('seen.json', 'w').write(json.dumps({'tools': tools, 'list': res, 'decision': dec, 'prompt': prompt, 'cwd': os.getcwd(), 'home': os.environ.get('HOME'), 'env_keys': sorted(os.environ.keys())}))
 print(json.dumps({'type': 'result', 'subtype': 'success', 'is_error': False, 'result': 'Done: ' + out, 'session_id': sid}), flush=True)
 `

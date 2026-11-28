@@ -66,6 +66,15 @@ chat (Claude Code saves command rules per project), nothing is offered for the s
 secrets and changes to Forgeline keep their own rules. ACP agents' cards are unchanged. A container already running when
 the server is updated keeps its old mounts until it is removed.
 
+## Built (2026-11-29): modes
+
+The mode switch other coding agents have: ask, accept edits, plan only, and autopilot (its own switch, which takes the
+others' place). The mode is sent with each message and lives only in the open chat. Plan only is refused at the two places
+every call passes (Forgeline's tool dispatch and the permission prompt), before autopilot, plans and chat allowances; what
+is not known to only look is refused. Accept edits covers the engine's Write and Edit under `/work` outside hidden files;
+unlike Claude Code it does not also accept `mkdir`, `mv` or `rm`. For an ACP agent only plan only applies, and only to what
+the agent asks permission for.
+
 ## Security notes
 
 - Claude Code is started with `--setting-sources ""`, so it reads no settings file (2026-11-28). The workspace and the
