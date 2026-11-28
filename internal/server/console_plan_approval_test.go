@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -276,5 +277,32 @@ func TestOnlyWhatACardCanShowInFullGoesOnAPlan(t *testing.T) {
 	ok := []map[string]any{bash("set -e\n\tls -la | grep é"), file("/work/a b.txt"), {"tool": "Edit", "file_path": "/work/a", "old_string": "a", "new_string": ""}}
 	if got, err := readPlan(ok); err != nil || len(got) != 3 {
 		t.Errorf("a good plan: %v %v", got, err)
+	}
+}
+
+// The model is told about an argument only if the tool's schema has it, and the schema is read from the first example in the
+// help: every field a plan item can have must be there.
+func TestThePlanToolsSchemaNamesEveryFieldOfAnItem(t *testing.T) {
+	var help string
+	for _, l := range assistantLookups() {
+		if l.name == approvePlanTool {
+			help = l.help
+		}
+	}
+	schema, _ := schemaFromHelp(help)
+	actions, _ := schema["properties"].(map[string]any)["actions"].(map[string]any)
+	items, _ := actions["items"].(map[string]any)
+	props, _ := items["properties"].(map[string]any)
+	typ := reflect.TypeOf(planAction{})
+	for i := range typ.NumField() {
+		name, _, _ := strings.Cut(typ.Field(i).Tag.Get("json"), ",")
+		p, ok := props[name].(map[string]any)
+		want := "string"
+		if typ.Field(i).Type.Kind() == reflect.Bool {
+			want = "boolean"
+		}
+		if !ok || p["type"] != want {
+			t.Errorf("%s: %v, want a %s", name, props[name], want)
+		}
 	}
 }
