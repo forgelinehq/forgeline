@@ -30,6 +30,7 @@ const VERBS = {
   run_runbook: ['Ran a runbook', 'Running a runbook'],
   ask_user: ['Asked you a question', 'Asking you a question'],
   run_shell: ['Ran a command in its sandbox', 'Running a command in its sandbox'],
+  approve_plan: ['Asked you to approve a plan', 'Waiting for you to approve its plan'],
   offer_file: ['Offered a file for download', 'Offering a file for download'],
   org_memory: ['Read the organisation’s notes', 'Reading the organisation’s notes'],
   update_plan: ['Updated its plan', 'Updating its plan'],
@@ -100,12 +101,23 @@ export function stepsSummary(steps) {
 
 const FILE_TOOLS = ['Write', 'Edit', 'MultiEdit', 'NotebookEdit'];
 
+/** Each item of a plan as a heading and the whole text it covers: nothing is shortened. */
+export function planItems(actions) {
+  return (actions || []).map((a, i) => {
+    const n = (i + 1) + '. ';
+    if (a.tool === 'Bash') return { label: n + 'Run a command', text: a.command };
+    if (a.tool === 'Write') return { label: n + 'Write ' + a.path, text: a.content };
+    return { label: n + 'Edit ' + a.path + (a.replaceAll ? ' (every occurrence)' : ''), text: 'Replace:\n' + a.old + '\n\nWith:\n' + a.new };
+  });
+}
+
 /**
  * What a permission card says. It depends on what is being asked: a command for the agent's shell, a file change, a web
  * request, an AWS change, or secrets for a command in the sandbox. It is only about AWS when it is an AWS change.
  */
 export function permissionWording(x) {
   const t = x.tool || '';
+  if (t === 'approve_plan') return { title: 'Approve this plan?', lead: 'The agent wants to do all of this. One answer covers every item below, so read them. Nothing has run yet.' };
   if (t === 'run_shell') return { title: 'Give secrets to this command?', lead: 'The assistant wants to run this in its sandbox, with secrets from your vault. Nothing has run yet.' };
   if (t === 'Bash') return { title: 'Allow this command?', lead: 'The agent wants to run this command. Nothing has run yet.' };
   if (FILE_TOOLS.includes(t)) return { title: 'Allow this file change?', lead: 'The agent wants to change a file in its workspace. Nothing has changed yet.' };

@@ -40,6 +40,7 @@ const TOOLS = {
   guard_findings: ['security', 'Read security findings'],
   inspector_findings: ['security', 'Read Amazon Inspector findings'],
   run_shell: ['work', 'Run commands and code in its own sandbox'],
+  approve_plan: ['work', 'Ask you once for several of its commands and file writes'],
   offer_file: ['work', 'Hand you a file it made in its sandbox, as a download'],
   org_memory: ['work', 'Read the organisation’s shared notes (read only)'],
   ask_user: ['work', 'Ask you a question when it needs an answer'],

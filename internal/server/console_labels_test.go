@@ -11,7 +11,7 @@ import (
 // The plain-words labels for assistant steps (ui/lib/steplabel.js) and agent tools (ui/lib/tools.js)
 // are DOM-free, so they run under Node. Skipped where Node is not installed.
 const labelCases = `
-import { stepLabel, stepsSummary, permissionWording } from './steplabel.mjs';
+import { stepLabel, stepsSummary, permissionWording, planItems } from './steplabel.mjs';
 import { toolInfo, groupTools, plainHelp, TOOL_GROUPS, TIERS, tierTitle } from './tools.mjs';
 import { NAMES } from './names.mjs';
 
@@ -44,10 +44,16 @@ for (const [x, title, mustHave, mustNot] of [
   [{ tool: 'call_aws', account: '111122223333' }, 'Allow this change?', 'AWS account 111122223333', null],
   [{ tool: 'run_shell' }, 'Give secrets to this command?', 'secrets', 'AWS'],
   [{ tool: 'Mystery' }, 'Allow this?', 'Mystery', 'AWS'],
+  [{ tool: 'approve_plan' }, 'Approve this plan?', 'every item', 'AWS'],
 ]) {
   const w = permissionWording(x);
   if (w.title !== title || !w.lead.includes(mustHave) || (mustNot && w.lead.includes(mustNot))) { failed++; console.error('FAIL card wording for ' + x.tool + ': ' + JSON.stringify(w)); }
 }
+
+// A plan shows each item whole.
+const long = 'x'.repeat(5000);
+eq('plan items', planItems([{ tool: 'Bash', command: long }, { tool: 'Write', path: '/work/a', content: 'one\ntwo' }, { tool: 'Edit', path: '/work/a', old: 'one', new: '1', replaceAll: true }, { tool: 'Edit', path: '/work/b', old: 'o', new: 'n' }]),
+  [{ label: '1. Run a command', text: long }, { label: '2. Write /work/a', text: 'one\ntwo' }, { label: '3. Edit /work/a (every occurrence)', text: 'Replace:\none\n\nWith:\n1' }, { label: '4. Edit /work/b', text: 'Replace:\no\n\nWith:\nn' }]);
 
 // Every tool the server offers has a plain title and a real group (not Other).
 for (const n of NAMES) {
